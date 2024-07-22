@@ -24,10 +24,9 @@
 static bool onItemPlace(struct server_local* s, struct item_data* it,
 						struct block_info* where, struct block_info* on,
 						enum side on_side) {
-	//health test - eating cooked porkchop adds 2 hearts 
 	if (s->player.health >= MAX_PLAYER_HEALTH) return false;
 
-	server_local_set_player_health(s, s->player.health+32);
+	server_local_set_player_health(s, s->player.health+4*HEALTH_PER_HEART);
 	return true;
 }
 
