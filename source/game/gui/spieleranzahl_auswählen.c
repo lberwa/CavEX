@@ -111,6 +111,9 @@ static void screen_spieleranzahl_auswählen_render2D(struct screen* s, int width
 
     gutil_bg();  // Hintergrund zeichnen
 
+	//gfx_bind_texture(&texture_gui2);
+	//gutil_texquad(0, 0, 0, 62, 122, 149-62, width, height);
+
     int start_y = height / 3;   // Start Y für erste Option
     int line_height = 50;       // Abstand zwischen den Optionen
 
@@ -130,6 +133,9 @@ static void screen_spieleranzahl_auswählen_render2D(struct screen* s, int width
         int y = start_y + i * line_height;
         gutil_text((width-300)/2, y, (char*)menu_options[i], 20, true);
     }
+
+	//gfx_bind_texture(&texture_gui2);
+	//gutil_texquad(100, 100, 0, 43, 200, 62-43, 200, 19);
 
     // Steuerungs-Icons unten
     int icon_offset = 32;
