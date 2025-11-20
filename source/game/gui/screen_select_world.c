@@ -153,8 +153,8 @@ static void screen_sworld_update(struct screen* s, float dt) {
 		screen_set(&screen_load_world);
 	}
 
-	if(input_pressed(IB_HOME))
-		gstate.quit = true;
+	if(input_pressed(IB_BACK))
+		screen_back();
 }
 
 static void screen_sworld_render2D(struct screen* s, int width, int height) {

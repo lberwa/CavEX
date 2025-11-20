@@ -42,6 +42,7 @@ enum input_button {
 	IB_GUI_CLICK,
 	IB_GUI_CLICK_ALT,
 	IB_SCREENSHOT,
+	IB_BACK,
 };
 
 enum input_category {

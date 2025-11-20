@@ -64,6 +64,9 @@ struct tex_gfx texture_armor_iron2;
 struct tex_gfx texture_armor_diamond1;
 struct tex_gfx texture_armor_diamond2;
 
+//struct tex_gfx texture_button;
+//struct tex_gfx texture_buttonlight;
+
 #define distance_2d(x1, y1, x2, y2)                                            \
 	(((x1) - (x2)) * ((x1) - (x2)) + ((y1) - (y2)) * ((y1) - (y2)))
 
@@ -155,6 +158,9 @@ void tex_init() {
 					  TEX_FMT_RGBA16, false);
 
 	tex_gfx_load_file(&texture_mob_char, "mob/char.png", TEX_FMT_RGBA16, false);
+
+	//tex_gfx_load_file(&texture_button, "button.png", TEX_FMT_RGBA16, false);
+	//tex_gfx_load_file(&texture_buttonlight, "buttonlight.png", TEX_FMT_RGBA16, false);
 
 	size_t fog_size = 128;
 	uint8_t* fog = malloc(fog_size * fog_size * 4);
