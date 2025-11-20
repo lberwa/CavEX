@@ -22,7 +22,9 @@
 
 #include <stdbool.h>
 
-#include "../../cglm/cglm.h"
+#include "cglm/cglm.h"
+
+#define MAX_SCREEN_STACK 16 
 
 struct screen {
 	void (*reset)(struct screen* s, int width, int height);
@@ -34,7 +36,13 @@ struct screen {
 
 extern struct screen screen_ingame;
 extern struct screen screen_load_world;
+
 extern struct screen screen_select_world;
+extern struct screen screen_select_world2; //TODO: rename
+extern struct screen spieleranzahl_auswählen;
+extern struct screen screen_controllerauswahl;
+extern struct screen screen_init_bg;
+
 extern struct screen screen_inventory;
 extern struct screen screen_crafting;
 extern struct screen screen_furnace;
@@ -44,6 +52,11 @@ extern struct screen screen_sign;
 extern struct screen screen_pause;
 
 void screen_set(struct screen* s);
+
+void screen_set(struct screen* s);
+void menu_screen_set(struct screen* s);
+void screen_back(void);
+
 
 void screen_crafting_set_windowc(uint8_t container);
 void screen_furnace_set_windowc(uint8_t container);

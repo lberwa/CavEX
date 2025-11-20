@@ -32,13 +32,18 @@
 #include "camera.h"
 #include "gui/screen.h"
 
-#define GAME_NAME "fCavEX"
+#define GAME_NAME "ffCavEX"
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 3
 #define VERSION_PATCH 0
 #define VERSION_FORK  2
 
 struct game_state {
+	//bool bg_init_first;
+	int gerenderte_splitscreen_anzahl; 
+	int height2_icon;
+	bool game_run;
+	int num_players; 
 	sig_atomic_t quit;
 	struct random_gen rand_src;
 	struct config config_user;
@@ -83,6 +88,11 @@ struct game_state {
 	int oxygen;
 };
 
+#ifdef NDEBUG // for bg_init debugging
 extern struct game_state gstate;
+extern ptime_t global_last_pos_update;
+extern struct client_rpc* global_call_type;
+extern struct thread_channel clin_inbox;
+#endif
 
 #endif

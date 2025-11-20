@@ -30,7 +30,7 @@
 
 #define FIFO_SIZE (256 * 1024)
 
-static GXRModeObj* screenMode; // TODO: rename
+/*static*/ GXRModeObj* screenMode; // TODO: rename
 static void* frameBuffer[3];
 static mqmsg_t frame = NULL;
 static mqbox_t frame_draw;

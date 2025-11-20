@@ -21,6 +21,10 @@
 
 #include "../../platform/gfx.h"
 #include "../game_state.h"
+#include "screen.h"
+
+struct screen* screen_stack[MAX_SCREEN_STACK];
+int screen_stack_top = -1;
 
 void screen_set(struct screen* s) {
 	assert(s);
@@ -28,3 +32,34 @@ void screen_set(struct screen* s) {
 	if(s->reset)
 		s->reset(s, gfx_width(), gfx_height());
 }
+
+void screen_back() {
+    if(screen_stack_top > 0) {
+        screen_stack_top--;
+        struct screen* s = screen_stack[screen_stack_top];
+        gstate.current_screen = s;
+
+        if(s->reset)
+            s->reset(s, gfx_width(), gfx_height());
+    }
+}
+
+
+
+void menu_screen_set(struct screen* s) {
+    assert(s);
+    
+    for(int i=0; i<=screen_stack_top; i++) {
+        if(screen_stack[i] == s) return; // Schon im Stack
+    }
+
+    if(screen_stack_top < MAX_SCREEN_STACK - 1) {
+        screen_stack[++screen_stack_top] = s;
+    }
+
+    gstate.current_screen = s;
+
+    if(s->reset)
+        s->reset(s, gfx_width(), gfx_height());
+}
+
