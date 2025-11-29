@@ -92,7 +92,8 @@ extern struct tex_gfx texture_armor_diamond2;
 
 //extern struct tex_gfx texture_button;
 //extern struct tex_gfx texture_buttonlight;
-extern struct tex_gfx texture_bg;
+extern struct tex_gfx texture_bg2;
+extern struct tex_gfx texture_bg[12];
 
 void tex_init_pre(void);
 void tex_init(void);

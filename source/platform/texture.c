@@ -64,10 +64,11 @@ struct tex_gfx texture_armor_iron1;
 struct tex_gfx texture_armor_iron2;
 struct tex_gfx texture_armor_diamond1;
 struct tex_gfx texture_armor_diamond2;
+struct tex_gfx texture_bg[12];
 
 //struct tex_gfx texture_button;
 //struct tex_gfx texture_buttonlight;
-struct tex_gfx texture_bg;
+struct tex_gfx texture_bg2;
 
 #define distance_2d(x1, y1, x2, y2)                                            \
 	(((x1) - (x2)) * ((x1) - (x2)) + ((y1) - (y2)) * ((y1) - (y2)))
@@ -165,7 +166,25 @@ void tex_init() {
 
 	//tex_gfx_load_file(&texture_button, "button.png", TEX_FMT_RGBA16, false);
 	//tex_gfx_load_file(&texture_buttonlight, "buttonlight.png", TEX_FMT_RGBA16, false);
-	tex_gfx_load_file(&texture_bg, "bg.png", TEX_FMT_RGBA16, false);
+	tex_gfx_load_file(&texture_bg2, "bg.png", TEX_FMT_RGBA16, false);
+
+	//tex_gfx_load_file(&texture_bg[1], "bg1.png", TEX_FMT_RGB16, false);
+	//tex_gfx_load_file(&texture_bg[2], "bg2.png", TEX_FMT_RGB16, false);
+	
+	tex_gfx_load_file(&texture_bg[0],  "bg1.png",  TEX_FMT_RGB16, false);
+	tex_gfx_load_file(&texture_bg[1],  "bg2.png",  TEX_FMT_RGB16, false);
+	tex_gfx_load_file(&texture_bg[2],  "bg3.png",  TEX_FMT_RGB16, false);
+	tex_gfx_load_file(&texture_bg[3],  "bg4.png",  TEX_FMT_RGB16, false);
+	tex_gfx_load_file(&texture_bg[4],  "bg5.png",  TEX_FMT_RGB16, false);
+	tex_gfx_load_file(&texture_bg[5],  "bg6.png",  TEX_FMT_RGB16, false);
+	tex_gfx_load_file(&texture_bg[6],  "bg7.png",  TEX_FMT_RGB16, false);
+	tex_gfx_load_file(&texture_bg[7],  "bg8.png",  TEX_FMT_RGB16, false);
+	tex_gfx_load_file(&texture_bg[8],  "bg9.png",  TEX_FMT_RGB16, false);
+	tex_gfx_load_file(&texture_bg[9],  "bg10.png", TEX_FMT_RGB16, false);
+	tex_gfx_load_file(&texture_bg[10], "bg11.png", TEX_FMT_RGB16, false);
+	tex_gfx_load_file(&texture_bg[11], "bg12.png", TEX_FMT_RGB16, false);
+
+
 
 	size_t fog_size = 128;
 	uint8_t* fog = malloc(fog_size * fog_size * 4);

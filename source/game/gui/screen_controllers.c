@@ -149,7 +149,7 @@ static int propo(int x, int y, int sx) {
 static void screen_controllerauswahl_render2D(struct screen* s, int width, int height) {
     gutil_bg();
 
-    gfx_bind_texture(&texture_bg);
+    gfx_bind_texture(&texture_bg2);
 	gutil_texquad(0, 0, 0, 0, 380, 216, width, height);
 
 
