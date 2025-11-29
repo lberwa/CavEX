@@ -244,9 +244,10 @@ static void screen_initbg_update(struct screen* s, float dt) {
 
     }
 
-	if(input_pressed(IB_HOME))
+	#ifdef NDEBUG
+	if(input_pressed(IB_HOME, 1))
         gstate.quit = true;
-
+	#endif
 }
 
 static void screen_initbg_render2D(struct screen* s, int width, int height) {

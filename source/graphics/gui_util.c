@@ -25,11 +25,13 @@
 #include "render_block.h"
 #include "texture_atlas.h"
 
+static int gutil_text_collor;
+
 int gutil_control_icon(int x, enum input_button b, const char* str) {
 	int symbol, symbol_help;
 	enum input_category category;
 
-	if(!input_symbol(b, &symbol, &symbol_help, &category))
+	if(!input_symbol(b, &symbol, &symbol_help, &category, 1))
 		return 0;
 
 	gfx_bind_texture(&texture_controls);
@@ -177,11 +179,20 @@ static const uint8_t chat_colors[16][3] = {
 	{0xFF, 0xFF, 0xFF},
 };
 
+int gutil_text_col(int col) {
+	if (col < 0 || col > 15)
+		return gutil_text_collor;
+	else {
+		gutil_text_collor = col;
+		return gutil_text_collor;
+	}
+}
+
 void gutil_text(int x, int y, const char* str, int scale, bool shadow) {
 	gfx_bind_texture(&texture_font);
 
 	int skip = 0;
-	int col = 15;
+	int col = gutil_text_collor;//15
 
 	while(*str) {
 		if(*str == '\247')
@@ -279,4 +290,45 @@ void gutil_draw_item(struct item_data* item, int x, int y, int layer) {
 		gutil_text(17 * GFX_GUI_SCALE - gutil_font_width(tmp, 8 * GFX_GUI_SCALE) + x, y + 9 * GFX_GUI_SCALE, tmp, 8 * GFX_GUI_SCALE,
 				   true);
 	}
+}
+
+void gutil_window(int x, int y, int width, int height, char title[]) {
+	gfx_bind_texture(&texture_gui2);
+
+	gutil_texquad(x+5, y+5, 15, 121, 15, 15, width-10, height-10);// black background
+
+
+
+	gutil_texquad(x, y + 117-82, 0, 137, 12, 1, 12, height - ((196-183) + (117-82)));//   	←
+
+	gutil_texquad(x + 12, y+height-(196-183), 42, 183, 1, 196-183,
+				  height - ((110-96) + 12), 196-183); //		 			    			↓
+
+	gutil_texquad(x + height - (110-96), y + 117-82, 96, 138, 110-96, 1,
+				  110-96, height - ((196-183) + (117-82))); //		 				 		→
+
+	gutil_texquad(x + 12, y, 36, 82, 1, 117 - 82, width - ((110-96) + 12), 117-82);//		↑
+
+
+
+	gutil_texquad(x, y, 0, 82, 13, 118-82, 13, 118-82);// 						 	 		↑←
+	
+	gutil_texquad(x, y+height-(196-182), 0, 182, 13, 196-182, 13, 
+				  y+height - (y+height - (196-182)));//								 		↓←
+	
+	gutil_texquad(x+width-(110-95), y+height-(196-182), 95, 182, 110-95, 196-182,
+				  x+width - (x+width-(110-95)), y+height - (y+height-(196-182)));//	 		↓→
+	
+	gutil_texquad(x+width-(110-95), y, 95, 82, 110-95 ,118-82,
+				  x+width - (x+width-(110-95)), 118-82);//					 		 		↑→
+
+	int skale = 16;
+	int middle = x + width / 2;
+
+	int w = gutil_font_width(title, skale);
+
+	gutil_text_col(0);
+	gutil_text(middle - w/2, y + 10, title, skale, true);
+	gutil_text_col(15);
+	
 }

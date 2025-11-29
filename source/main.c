@@ -328,7 +328,7 @@ int main(void) {
 			gstate.current_screen->render2D(gstate.current_screen, gfx_width(),
 											gfx_height());
 
-		if(input_pressed(IB_SCREENSHOT)) {
+		if(input_pressed(IB_SCREENSHOT, 1)) {
 			size_t width, height;
 			gfx_copy_framebuffer(NULL, &width, &height);
 
