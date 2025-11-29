@@ -27,13 +27,13 @@ int total_width ;
 
 void draw_panorama() {
 	total_width = 0;
-	for (int i=0; i<12; i++) {
-	total_width += w[i];
+	for (int i=0; i<6; i++) {
+		total_width += w[i];
 	}
 
     float x = -scroll_x;
 
-    for(int i=0; i<12; i++) {
+    for(int i=0; i<6; i++) {
         gfx_bind_texture(&texture_bg[i]);
 
         gutil_texquad(
@@ -52,6 +52,36 @@ void draw_panorama() {
         );
 
         x += w[i];
+    }
+
+
+	total_width = 0;
+	for (int i=0; i<6; i++) {
+		total_width += w[i+6];
+	}
+
+    x = -scroll_x;
+
+    for(int i=0; i<6; i++) {
+		int i6 = i + 6;
+        gfx_bind_texture(&texture_bg[i6]);
+
+        gutil_texquad(
+            (int)x, h[1],      // Position auf dem Bildschirm
+            0, 0,           // Texture-Start
+            w[i6], h[i6],     // Texture-Dimension
+            w[i6], h[i6]     // Quad-Dimension
+        );
+
+        // Wrap-Kopie:
+        gutil_texquad(
+            (int)(x + total_width), h[1],
+            0, 0,
+            w[i6], h[i6],
+            w[i6], h[i6]
+        );
+
+        x += w[i6];
     }
 
     scroll_x += speed;

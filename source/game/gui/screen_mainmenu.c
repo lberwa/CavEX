@@ -212,7 +212,7 @@ static void screen_sworld_render2D2(struct screen* s, int width, int height) { /
 gutil_bg();
 //_3d_bg();
 
-gfx_bind_texture(&texture_bg);
+gfx_bind_texture(&texture_bg2);
 	gutil_texquad(0, 0, 0, 0, 380, 216, width, height);
 
 

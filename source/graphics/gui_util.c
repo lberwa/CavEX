@@ -25,7 +25,7 @@
 #include "render_block.h"
 #include "texture_atlas.h"
 
-static int gutil_text_collor;
+static int gutil_text_collor = 15;
 
 int gutil_control_icon(int x, enum input_button b, const char* str) {
 	int symbol, symbol_help;
@@ -327,8 +327,9 @@ void gutil_window(int x, int y, int width, int height, char title[]) {
 
 	int w = gutil_font_width(title, skale);
 
+	int bfor_collor = gutil_text_col(100);
 	gutil_text_col(0);
-	gutil_text(middle - w/2, y + 10, title, skale, true);
-	gutil_text_col(15);
+	gutil_text(middle - w/2, y + 10, title, skale, false);
+	gutil_text_col(bfor_collor);
 	
 }
