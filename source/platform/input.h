@@ -56,12 +56,12 @@ void input_init(void);
 void input_poll(void);
 
 bool input_symbol(enum input_button b, int* symbol, int* symbol_help,
-				  enum input_category* category);
-bool input_pressed(enum input_button b);
-bool input_released(enum input_button b);
-bool input_held(enum input_button b);
-bool input_joystick(float dt, float* x, float* y);
+				  enum input_category* category, int player);
+bool input_pressed(enum input_button b, int player);
+bool input_released(enum input_button b, int player);
+bool input_held(enum input_button b, int player);
+bool input_joystick(float dt, float* x, float* y, int player);
 void input_pointer_enable(bool enable);
-bool input_pointer(float* x, float* y, float* angle);
+bool input_pointer(float* x, float* y, float* angle, int player);
 
 #endif

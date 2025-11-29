@@ -43,7 +43,7 @@ static void screen_pause_reset(struct screen* s, int width, int height) {
 }
 
 static void screen_pause_update(struct screen* s, float dt) {
-	if(input_pressed(IB_HOME)) {
+	if(input_pressed(IB_HOME, 1)) {
 		svin_rpc_send(&(struct server_rpc) {
 			.type = SRPC_TOGGLE_PAUSE,
 		});
@@ -52,7 +52,7 @@ static void screen_pause_update(struct screen* s, float dt) {
 		screen_set(&screen_ingame);
 	}
 
-	if(input_pressed(IB_INVENTORY)) {
+	if(input_pressed(IB_INVENTORY, 1)) {
 		svin_rpc_send(&(struct server_rpc) {
 			.type = SRPC_TOGGLE_PAUSE,
 		});

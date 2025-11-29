@@ -92,7 +92,7 @@ void input_pointer_enable(bool enable) {
 	input_pointer_enabled = enable;
 }
 
-bool input_pointer(float* x, float* y, float* angle) {
+bool input_pointer(float* x, float* y, float* angle, int player) {
 	double x2, y2;
 	glfwGetCursorPos(window, &x2, &y2);
 	*x = x2;
@@ -102,7 +102,7 @@ bool input_pointer(float* x, float* y, float* angle) {
 		&& y2 < gfx_height();
 }
 
-void input_native_joystick(float dt, float* dx, float* dy) {
+void input_native_joystick(float dt, float* dx, float* dy, int player) {
 	if(!input_pointer_enabled) {
 		double x2, y2;
 		glfwGetCursorPos(window, &x2, &y2);
@@ -353,7 +353,7 @@ bool input_native_key_any(int* key) {
 
 void input_pointer_enable(bool enable) { }
 
-bool input_pointer(float* x, float* y, float* angle) {
+bool input_pointer(float* x, float* y, float* angle, int player) {
 	struct ir_t ir;
 	WPAD_IR(WPAD_CHAN_0, &ir);
 	*x = ir.x;
@@ -407,7 +407,7 @@ static const char* input_config_translate(enum input_button key) {
 }
 
 bool input_symbol(enum input_button b, int* symbol, int* symbol_help,
-				  enum input_category* category) {
+				  enum input_category* category, int player) {
 	const char* key = input_config_translate(b);
 
 	if(!key)
@@ -440,7 +440,7 @@ bool input_symbol(enum input_button b, int* symbol, int* symbol_help,
 	return has_any;
 }
 
-bool input_pressed(enum input_button b) {
+bool input_pressed(enum input_button b, int player) {// TODO: more players
 	const char* key = input_config_translate(b);
 
 	if(!key)
@@ -471,7 +471,7 @@ bool input_pressed(enum input_button b) {
 	return any_pressed && !any_held && !any_released;
 }
 
-bool input_released(enum input_button b) {
+bool input_released(enum input_button b,int player) {// TODO: more players
 	const char* key = input_config_translate(b);
 
 	if(!key)
@@ -502,7 +502,7 @@ bool input_released(enum input_button b) {
 	return !any_pressed && !any_held && any_released;
 }
 
-bool input_held(enum input_button b) {
+bool input_held(enum input_button b, int player) {// TODO: more players
 	const char* key = input_config_translate(b);
 
 	if(!key)
@@ -530,7 +530,7 @@ bool input_held(enum input_button b) {
 	return any_pressed || any_held;
 }
 
-bool input_joystick(float dt, float* x, float* y) {
+bool input_joystick(float dt, float* x, float* y, int player) {
 	input_native_joystick(dt, x, y);
 	return true;
 }

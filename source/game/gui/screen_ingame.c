@@ -181,7 +181,7 @@ void screen_ingame_render3D(struct screen* s, mat4 view) {
 static void screen_ingame_update(struct screen* s, float dt) {
 	// left click interaction
 	if (gstate.camera_hit.entity_hit
-	    && input_pressed(IB_ACTION1)
+	    && input_pressed(IB_ACTION1, 1)
 	    && !gstate.digging.active)
 	{
 	    struct entity **ptr = dict_entity_get(
@@ -207,7 +207,7 @@ static void screen_ingame_update(struct screen* s, float dt) {
 
 	// right click interaction met entity via dict_entity_get
 	if (gstate.camera_hit.entity_hit
-	    && input_pressed(IB_ACTION2)
+	    && input_pressed(IB_ACTION2, 1)
 	    && !gstate.digging.active)
 	{
 	    struct entity **ptr = dict_entity_get(
@@ -232,7 +232,7 @@ static void screen_ingame_update(struct screen* s, float dt) {
 
 
 // block place
-	if(gstate.camera_hit.hit && input_pressed(IB_ACTION2)
+	if(gstate.camera_hit.hit && input_pressed(IB_ACTION2, 1)
 	   && !gstate.digging.active) {
 		svin_rpc_send(&(struct server_rpc) {
 			.type = SRPC_BLOCK_PLACE,
@@ -294,10 +294,10 @@ static void screen_ingame_update(struct screen* s, float dt) {
 			gstate.digging.active = false;
 		}
 
-		if(input_released(IB_ACTION1))
+		if(input_released(IB_ACTION1, 1))
 			gstate.digging.active = false;
 	} else {
-		if(gstate.camera_hit.hit && input_held(IB_ACTION1)
+		if(gstate.camera_hit.hit && input_held(IB_ACTION1, 1)
 		   && time_diff_ms(gstate.digging.cooldown, time_get()) >= 250) {
 			gstate.digging.active = true;
 			gstate.digging.start = time_get();
@@ -316,7 +316,7 @@ static void screen_ingame_update(struct screen* s, float dt) {
 		}
 	}
 
-	if(input_held(IB_ACTION1)
+	if(input_held(IB_ACTION1, 1)
 	   && time_diff_s(gstate.held_item_animation.punch.start, time_get())
 		   >= 0.2F) {
 		gstate.held_item_animation.punch.start = time_get();
@@ -353,7 +353,7 @@ static void screen_ingame_update(struct screen* s, float dt) {
 	bool old_item_exists = inventory_get_hotbar_item(
 		windowc_get_latest(gstate.windows[WINDOWC_INVENTORY]), NULL);
 
-	if(input_pressed(IB_SCROLL_LEFT)) {
+	if(input_pressed(IB_SCROLL_LEFT, 1)) {
 		size_t next_slot = (slot == 0) ? INVENTORY_SIZE_HOTBAR - 1 : slot - 1;
 		inventory_set_hotbar(
 			windowc_get_latest(gstate.windows[WINDOWC_INVENTORY]), next_slot);
@@ -376,7 +376,7 @@ static void screen_ingame_update(struct screen* s, float dt) {
 		});
 	}
 
-	if(input_pressed(IB_SCROLL_RIGHT)) {
+	if(input_pressed(IB_SCROLL_RIGHT, 1)) {
 		size_t next_slot = (slot == INVENTORY_SIZE_HOTBAR - 1) ? 0 : slot + 1;
 		inventory_set_hotbar(
 			windowc_get_latest(gstate.windows[WINDOWC_INVENTORY]), next_slot);
@@ -399,7 +399,7 @@ static void screen_ingame_update(struct screen* s, float dt) {
 		});
 	}
 
-	if(input_pressed(IB_HOME)) {
+	if(input_pressed(IB_HOME, 1)) {
 		screen_set(&screen_pause);
 		gstate.paused = true;
 
@@ -408,7 +408,7 @@ static void screen_ingame_update(struct screen* s, float dt) {
 		});
 	}
 
-	if(input_pressed(IB_INVENTORY))
+	if(input_pressed(IB_INVENTORY, 1))
 		screen_set(&screen_inventory);
 }
 

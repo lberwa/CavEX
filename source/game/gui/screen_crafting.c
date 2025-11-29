@@ -98,7 +98,7 @@ static void screen_crafting_reset(struct screen* s, int width, int height) {
 }
 
 static void screen_crafting_update(struct screen* s, float dt) {
-	if(input_pressed(IB_INVENTORY)) {
+	if(input_pressed(IB_INVENTORY, 1)) {
 		svin_rpc_send(&(struct server_rpc) {
 			.type = SRPC_WINDOW_CLOSE,
 			.payload.window_close.window = crafting_container,
@@ -107,7 +107,7 @@ static void screen_crafting_update(struct screen* s, float dt) {
 		screen_set(&screen_ingame);
 	}
 
-	if(input_pressed(IB_GUI_CLICK)) {
+	if(input_pressed(IB_GUI_CLICK, 1)) {
 		uint16_t action_id;
 		if(windowc_new_action(gstate.windows[crafting_container], &action_id,
 							  false, slots[selected_slot].slot)) {
@@ -119,7 +119,7 @@ static void screen_crafting_update(struct screen* s, float dt) {
 				.payload.window_click.slot = slots[selected_slot].slot,
 			});
 		}
-	} else if(input_pressed(IB_GUI_CLICK_ALT)) {
+	} else if(input_pressed(IB_GUI_CLICK_ALT, 1)) {
 		uint16_t action_id;
 		if(windowc_new_action(gstate.windows[crafting_container], &action_id,
 							  true, slots[selected_slot].slot)) {
@@ -133,7 +133,7 @@ static void screen_crafting_update(struct screen* s, float dt) {
 		}
 	}
 
-	pointer_available = input_pointer(&pointer_x, &pointer_y, &pointer_angle);
+	pointer_available = input_pointer(&pointer_x, &pointer_y, &pointer_angle, 1);
 
 	size_t slot_nearest[4]
 		= {selected_slot, selected_slot, selected_slot, selected_slot};
@@ -181,22 +181,22 @@ static void screen_crafting_update(struct screen* s, float dt) {
 		selected_slot = pointer_slot;
 		pointer_has_item = true;
 	} else {
-		if(input_pressed(IB_GUI_LEFT)) {
+		if(input_pressed(IB_GUI_LEFT, 1)) {
 			selected_slot = slot_nearest[0];
 			pointer_has_item = false;
 		}
 
-		if(input_pressed(IB_GUI_RIGHT)) {
+		if(input_pressed(IB_GUI_RIGHT, 1)) {
 			selected_slot = slot_nearest[1];
 			pointer_has_item = false;
 		}
 
-		if(input_pressed(IB_GUI_UP)) {
+		if(input_pressed(IB_GUI_UP, 1)) {
 			selected_slot = slot_nearest[2];
 			pointer_has_item = false;
 		}
 
-		if(input_pressed(IB_GUI_DOWN)) {
+		if(input_pressed(IB_GUI_DOWN, 1)) {
 			selected_slot = slot_nearest[3];
 			pointer_has_item = false;
 		}

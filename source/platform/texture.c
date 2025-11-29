@@ -36,6 +36,7 @@ struct tex_gfx texture_minecart;
 struct tex_gfx texture_creeper;
 struct tex_gfx texture_pig;
 struct tex_gfx texture_font;
+struct tex_gfx texture_black_font;
 struct tex_gfx texture_anim;
 struct tex_gfx texture_gui_inventory;
 struct tex_gfx texture_gui_crafting;
@@ -66,6 +67,7 @@ struct tex_gfx texture_armor_diamond2;
 
 //struct tex_gfx texture_button;
 //struct tex_gfx texture_buttonlight;
+struct tex_gfx texture_bg;
 
 #define distance_2d(x1, y1, x2, y2)                                            \
 	(((x1) - (x2)) * ((x1) - (x2)) + ((y1) - (y2)) * ((y1) - (y2)))
@@ -98,6 +100,8 @@ void tex_init() {
 
 	tex_gfx_load_file(&texture_font, "default.png", TEX_FMT_I8, false);
 	gutil_reset_font(&texture_font);
+
+	tex_gfx_load_file(&texture_black_font, "default_black.png", TEX_FMT_I8, false);
 
 	tex_gfx_load_file(&texture_anim, "anim.png", TEX_FMT_RGBA32, false);
 
@@ -161,6 +165,7 @@ void tex_init() {
 
 	//tex_gfx_load_file(&texture_button, "button.png", TEX_FMT_RGBA16, false);
 	//tex_gfx_load_file(&texture_buttonlight, "buttonlight.png", TEX_FMT_RGBA16, false);
+	tex_gfx_load_file(&texture_bg, "bg.png", TEX_FMT_RGBA16, false);
 
 	size_t fog_size = 128;
 	uint8_t* fog = malloc(fog_size * fog_size * 4);

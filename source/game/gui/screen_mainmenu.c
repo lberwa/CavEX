@@ -169,14 +169,14 @@ static void screen_sworld_update2(struct screen* s, float dt) { //TODO: rename
     }*/
 
     // Navigation
-    if(input_pressed(IB_GUI_UP) && gui_selection > 0)
+    if(input_pressed(IB_GUI_UP, 1) && gui_selection > 0)
         gui_selection--;
 
-    if(input_pressed(IB_GUI_DOWN) && gui_selection < 3)
+    if(input_pressed(IB_GUI_DOWN, 1) && gui_selection < 3)
         gui_selection++;
 
     // Aktion beim A-Knopf
-    if(input_pressed(IB_GUI_CLICK)) {
+    if(input_pressed(IB_GUI_CLICK, 1)) {
         switch(gui_selection) {
             case 0: // Start 
 			menu_screen_set(&spieleranzahl_auswählen);
@@ -202,7 +202,7 @@ static void screen_sworld_update2(struct screen* s, float dt) { //TODO: rename
     }
 
     // Home-Button beendet das Spiel
-    if(input_pressed(IB_HOME))
+    if(input_pressed(IB_HOME, 1))
         gstate.quit = true;
 }
 
@@ -212,10 +212,46 @@ static void screen_sworld_render2D2(struct screen* s, int width, int height) { /
 gutil_bg();
 //_3d_bg();
 
+gfx_bind_texture(&texture_bg);
+	gutil_texquad(0, 0, 0, 0, 380, 216, width, height);
 
-int start_y = height / 3; // Startposition Y
+
+//int start_y2 = height / 3; // Startposition Y
 int line_height = 50;
 
+int start_y = height / 3;
+int button_height = 40;
+int button_width  = 300;
+int button_spacing = 20;
+
+
+
+for(int i = 0; i < 4; i++) {
+    int y = start_y + i * (button_height + button_spacing);
+
+    bool selected = (gui_selection == i);
+
+    // Texcoords für hell/dunkel
+    int tex_x = 0;
+    int tex_y = selected ? 62 : 42; // hell : dunkel
+    int tex_w = 200;
+    int tex_h = 20;
+
+    // Button skalieren auf 300x40
+	gfx_bind_texture(&texture_gui2);
+    gutil_texquad((width - button_width) / 2, y, tex_x, tex_y, 
+				  					 tex_w, tex_h, button_width, button_height);
+
+
+	//int y = start_y + i*line_height;
+    gutil_text((width/2) - (gutil_font_width(menu_options[i], 20)/2),
+									 y + 10, menu_options[i], 20, true);
+
+	
+}
+
+
+/*
 // Highlight je nach Auswahl
 if(gui_selection == 0)
     gutil_texquad_col((width-300)/2-10, start_y-5, 0,0,0,0, 320, line_height, 128,128,128,255);
@@ -225,19 +261,14 @@ else if(gui_selection == 2)
     gutil_texquad_col((width-300)/2-10, start_y + 2*line_height-5, 0,0,0,0, 320, line_height, 128,128,128,255);
 else if(gui_selection == 3)
     gutil_texquad_col((width-300)/2-10, start_y + 3*line_height-5, 0,0,0,0, 320, line_height, 128,128,128,255);
+	*/
 
 // Text für alle Optionen
-for(int i=0; i<4; i++) {
-    int y = start_y + i*line_height;
-    gutil_text((width-300)/2, y, menu_options[i], 20, true);
-}
-
-
 // Steuerungs-Icons
 int icon_offset = 32;
 icon_offset += gutil_control_icon(icon_offset, IB_GUI_UP, "Change selection");
 icon_offset += gutil_control_icon(icon_offset, IB_GUI_CLICK, "Select option");
-icon_offset += gutil_control_icon(icon_offset, IB_HOME, "Quit");
+
 
 
 /*    gutil_bg();
