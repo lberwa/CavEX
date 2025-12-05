@@ -26,10 +26,6 @@
 #include "../../util.h"
 #include "../game_state.h"
 #include "screen.h"
-#include "../../graphics/background/background.h"
-
-//#include "../../menu/menu.h"
-#include "screen_select_world.h"
 
 #include <assert.h>
 #include <dirent.h>
@@ -38,20 +34,6 @@
 #include <time.h>
 #include "my_text_renderer.h"
 #include <gccore.h>
-//#include <wiiuse/wpad.h>
-/*enum screen_exit_reason {
-    SCREEN_NONE,
-    SCREEN_WORLD_SELECTED,
-    SCREEN_HOME_PRESSED
-};*/
-
-enum screen_exit_reason {
-    SCREEN_NONE,
-    SCREEN_WORLD_SELECTED,
-    SCREEN_HOME_PRESSED
-};
-
-//#define exit_reason screen_exit_reason
 
 static const char* menu_options[4] = {
     "Start",
@@ -60,114 +42,18 @@ static const char* menu_options[4] = {
     "Beenden"
 };
 
-
-static struct stack* worlds = NULL;
-
 static size_t gui_selection;
-static int scroll_offset;
-static int wpad_pressed;
-
-static int top_visible;
-static int bottom_visible;
-static int height_visible;
-//static int entry_height = 72;
-static int side_padding = 4;
-//static int exit_reason;
-
-struct world_option {
-	string_t name;
-	string_t directory;
-	string_t path;
-	int64_t last_access;
-	int64_t byte_size;
-};
 
 static void screen_sworld_reset2(struct screen* s, int width, int height) { //TODO: rename
-
-
 	gstate.game_run = false;
 	gstate.num_players = 1;
 	input_pointer_enable(true);
 
 	if(gstate.local_player)
 		gstate.local_player->data.local_player.capture_input = false;
-/*
-	if(worlds) {
-		while(!stack_empty(worlds)) {
-			struct world_option opt;
-			stack_pop(worlds, &opt);
-			string_clear(opt.name);
-			string_clear(opt.directory);
-			string_clear(opt.path);
-		}
-
-		stack_destroy(worlds);
-		free(worlds);
-		worlds = NULL;
-	}
-
-	worlds = malloc(sizeof(struct stack));
-	stack_create(worlds, 8, sizeof(struct world_option));
-
-	const char* saves_path
-		= config_read_string(&gstate.config_user, "paths.worlds", "saves");
-
-	DIR* d = opendir(saves_path);
-
-	if(d) {
-		struct dirent* dir;
-		while((dir = readdir(d))) {
-			if(dir->d_type & DT_DIR && *dir->d_name != '.') {
-				struct world_option opt;
-				string_init_printf(opt.path, "%s/%s", saves_path, dir->d_name);
-
-				struct level_archive la;
-				if(level_archive_create(&la, opt.path)) {
-					char name[64];
-
-					if(!level_archive_read(&la, LEVEL_NAME, name, sizeof(name)))
-						strcpy(name, "Missing name");
-
-					string_init_set_str(opt.name, name);
-					string_init_set_str(opt.directory, dir->d_name);
-
-					if(!level_archive_read(&la, LEVEL_DISK_SIZE, &opt.byte_size,
-										   0))
-						opt.byte_size = 0;
-
-					if(!level_archive_read(&la, LEVEL_LAST_PLAYED,
-										   &opt.last_access, 0))
-						opt.last_access = 0;
-
-					opt.last_access /= 1000;
-
-					level_archive_destroy(&la);
-					stack_push(worlds, &opt);
-				} else {
-					string_clear(opt.path);
-				}
-			}
-		}
-
-		closedir(d);
-	}
-*/
-
-	gui_selection = 0;
-	scroll_offset = side_padding;
-	top_visible = height * 0.133F;
-	bottom_visible = height - 64;
-	height_visible = bottom_visible - height * 0.133F;
-	
 }
 
 static void screen_sworld_update2(struct screen* s, float dt) { //TODO: rename
-
-
-/*    for (int ch = 0; ch < WPAD_MAX_WIIMOTES; ch++) {
-        u32 wpad_pressed = WPAD_ButtonsDown(ch);
-    }*/
-
     // Navigation
     if(input_pressed(IB_GUI_UP, 1) && gui_selection > 0)
         gui_selection--;
@@ -179,16 +65,15 @@ static void screen_sworld_update2(struct screen* s, float dt) { //TODO: rename
     if(input_pressed(IB_GUI_CLICK, 1)) {
         switch(gui_selection) {
             case 0: // Start 
-			menu_screen_set(&spieleranzahl_auswählen);
-            /*	menu_screen_set(&spieleranzahl_auswählen);
-	        if (exit_reason == SCREEN_WORLD_SELECTED) {
-		    exit_reason = SCREEN_NONE;
-		    // zurück zu main.c
-		} else if (exit_reason == SCREEN_HOME_PRESSED) {
-		    exit_reason = SCREEN_NONE;
-		    // Menü bleibt aktiv
-		}
-                break;*/
+				#ifdef PLATFORM_WII
+				menu_screen_set(&spieleranzahl_auswählen);
+                #endif
+				
+				#ifdef PLATFORM_PC
+				menu_screen_set(&screen_select_world);
+				#endif
+
+				break;
             case 1: // Server
                 //server_menu();
                 break;
@@ -209,93 +94,42 @@ static void screen_sworld_update2(struct screen* s, float dt) { //TODO: rename
 
 static void screen_sworld_render2D2(struct screen* s, int width, int height) { //TODO: rename
 
-gutil_bg();
-//_3d_bg();
+	gutil_bg();
+	gutil_bg_panorama();
 
-gfx_bind_texture(&texture_bg2);
-	gutil_texquad(0, 0, 0, 0, 380, 216, width, height);
-
-
-//int start_y2 = height / 3; // Startposition Y
-int line_height = 50;
-
-int start_y = height / 3;
-int button_height = 40;
-int button_width  = 300;
-int button_spacing = 20;
+	int start_y = height / 3;
+	int button_height = 40;
+	int button_width  = 300;
+	int button_spacing = 20;
 
 
 
-for(int i = 0; i < 4; i++) {
-    int y = start_y + i * (button_height + button_spacing);
+	for(int i = 0; i < 4; i++) {
+	    int y = start_y + i * (button_height + button_spacing);
 
-    bool selected = (gui_selection == i);
+    	bool selected = (gui_selection == i);
 
-    // Texcoords für hell/dunkel
-    int tex_x = 0;
-    int tex_y = selected ? 62 : 42; // hell : dunkel
-    int tex_w = 200;
-    int tex_h = 20;
+    	// Texcoords für hell/dunkel
+    	int tex_x = 0;
+    	int tex_y = selected ? 62 : 42; // hell : dunkel
+    	int tex_w = 200;
+    	int tex_h = 20;
 
-    // Button skalieren auf 300x40
-	gfx_bind_texture(&texture_gui2);
-    gutil_texquad((width - button_width) / 2, y, tex_x, tex_y, 
-				  					 tex_w, tex_h, button_width, button_height);
+    	// Button skalieren auf 300x40
+		gfx_bind_texture(&texture_gui2);
+    	gutil_texquad((width - button_width) / 2, y, tex_x, tex_y, 
+					  					 tex_w, tex_h, button_width, button_height);
 
 
-	//int y = start_y + i*line_height;
-    gutil_text((width/2) - (gutil_font_width(menu_options[i], 20)/2),
+		//int y = start_y + i*line_height;
+    	gutil_text((width/2) - (gutil_font_width(menu_options[i], 20)/2),
 									 y + 10, menu_options[i], 20, true);
 
-	
-}
+	}
 
-
-/*
-// Highlight je nach Auswahl
-if(gui_selection == 0)
-    gutil_texquad_col((width-300)/2-10, start_y-5, 0,0,0,0, 320, line_height, 128,128,128,255);
-else if(gui_selection == 1)
-    gutil_texquad_col((width-300)/2-10, start_y + line_height-5, 0,0,0,0, 320, line_height, 128,128,128,255);
-else if(gui_selection == 2)
-    gutil_texquad_col((width-300)/2-10, start_y + 2*line_height-5, 0,0,0,0, 320, line_height, 128,128,128,255);
-else if(gui_selection == 3)
-    gutil_texquad_col((width-300)/2-10, start_y + 3*line_height-5, 0,0,0,0, 320, line_height, 128,128,128,255);
-	*/
-
-// Text für alle Optionen
-// Steuerungs-Icons
-int icon_offset = 32;
-icon_offset += gutil_control_icon(icon_offset, IB_GUI_UP, "Change selection");
-icon_offset += gutil_control_icon(icon_offset, IB_GUI_CLICK, "Select option");
-
-
-
-/*    gutil_bg();
-
-    int start_y = height / 3; // Startposition Y
-    int line_height = 50;
-
-    for(size_t i = 0; i < 4; i++) {
-        int x = (width - 300) / 2; // Text zentrieren
-        int y = start_y + i * line_height;
-
-        // Highlight für ausgewählte Option
-        if(gui_selection == i) {
-            gutil_texquad_col(x-10, y-5, 0,0,0,0, 320, line_height, 128,128,128,255);
-        }
-
-        gutil_text(x, y, menu_options[i], 20, true);
-    }
-
-    // Steuerungs-Icons wie im Original
-    int icon_offset = 32;
-    icon_offset += gutil_control_icon(icon_offset, IB_GUI_UP, "Change selection");
-    icon_offset += gutil_control_icon(icon_offset, IB_GUI_CLICK, "Select option");
-    icon_offset += gutil_control_icon(icon_offset, IB_HOME, "Quit");
-
-*/
-
+	int icon_offset = 32;
+	icon_offset += gutil_control_icon(icon_offset, IB_GUI_UP, "Change selection");
+	icon_offset += gutil_control_icon(icon_offset, IB_GUI_CLICK, "Select option");
 }
 
 struct screen screen_select_world2 = { //TODO: rename

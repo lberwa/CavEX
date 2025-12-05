@@ -331,5 +331,86 @@ void gutil_window(int x, int y, int width, int height, char title[]) {
 	gutil_text_col(0);
 	gutil_text(middle - w/2, y + 10, title, skale, false);
 	gutil_text_col(bfor_collor);
-	
+}
+
+float scroll_x = 0.0f;
+float speed = 0.2f;
+
+int w[12] = {256,256,256,256,256,59,
+             256,256,256,256,256,59};
+
+int h[12] = {256,256,256,256,256,256,
+             194,194,194,194,194,194};
+
+int total_width;
+
+
+void gutil_bg_panorama() {
+	total_width = 0;
+	//			-------1------
+	for (int i=0; i<6; i++) {
+		total_width += w[i];
+	}
+
+    float x = -scroll_x;
+
+	int hp = 20;
+    
+	for(int i=0; i<6; i++) {
+        gfx_bind_texture(&texture_bg[i]);
+
+        gutil_texquad(
+            (int)x, 0,      		// Position auf dem Bildschirm
+            0, 0,           		// Texture-Start
+            w[i], h[i],     		// Texture-Dimension
+            w[i], h[i] + hp 		// Quad-Dimension
+        );
+
+        // Wrap-Kopie:
+        gutil_texquad(
+            (int)(x + total_width), 0,
+            0, 0,
+            w[i], h[i],
+            w[i], h[i] + hp
+        );
+
+        x += w[i];
+    }
+
+	//		--------2---------
+	total_width = 0;
+	for (int i=0; i<6; i++) {
+		total_width += w[i+6];
+	}
+
+    x = -scroll_x;
+
+	int hp2 = 12;
+
+    for(int i=0; i<6; i++) {
+		int i6 = i + 6;
+        gfx_bind_texture(&texture_bg[i6]);
+
+        gutil_texquad(
+            (int)x, h[1] + hp,      // Position auf dem Bildschirm
+            0, 0,           		// Texture-Start
+            w[i6], h[i6],     		// Texture-Dimension
+            w[i6], h[i6] + hp2     	// Quad-Dimension
+        );
+
+        // Wrap-Kopie:
+        gutil_texquad(
+            (int)(x + total_width), h[1] + hp,
+            0, 0,
+            w[i6], h[i6],
+            w[i6], h[i6] + hp2
+        );
+
+        x += w[i6];
+    }
+
+    scroll_x += speed;
+
+    if(scroll_x >= total_width)
+        scroll_x -= total_width;
 }
