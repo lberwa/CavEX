@@ -27,11 +27,8 @@
 #ifdef PLATFORM_WII
 #include <fat.h>
 #include <gccore.h> 
+#include <my_text_renderer.h>
 #endif
-
-/*#ifndef NDEBUG
-#define NDEBUG
-#endif*/
 
 #include "chunk_mesher.h"
 #include "daytime.h"
@@ -49,23 +46,16 @@
 #include "platform/gfx.h"
 #include "platform/input.h"
 #include "world.h"
-#include "graphics/background/background.h"
-#include <my_text_renderer.h>
 
 #include "cNBT/nbt.h"
 #include "cglm/cglm.h"
 #include "lodepng/lodepng.h"
 
 int main(void) {
-	// initialize terminal_text
-	//video_init_custom();
-	//terminal_clear();
-
 
 	float daytime, tick_delta;
 	bool render_world;
 
-	//gstate.bg_init_first = true;
 	gstate.quit = false;
 	gstate.camera = (struct camera) {
 		.x = 0, .y = 0, .z = 0, .rx = 0, .ry = 0, .controller = {0, 0, 0}};
@@ -99,24 +89,10 @@ int main(void) {
 	recipe_init();
 	gfx_setup();
 	
-	//new init terminal_text
-	//video_init_custom();
-	//terminal_clear();
-	//terminal_print("bg_init()");
-
 	menu_screen_set(&screen_select_world2);
-	//bg_init();
-	
-	/*
-	if (bg_init()) {
-	    terminal_print("bg_init() done");
-	} else {
-	    terminal_print("bg_init() failed");
-	}
-	*/
 
 	world_create(&gstate.world);
-	//terminal_print("world_create() done");
+
 	for(size_t k = 0; k < 256; k++)
 		gstate.windows[k] = NULL;
 
@@ -124,8 +100,6 @@ int main(void) {
 	svin_init();
 	chunk_mesher_init();
 	particle_init();
-	
-	//terminal_print("all inits");
 
 	dict_entity_init(gstate.entities);
 	gstate.local_player = NULL;
@@ -138,7 +112,7 @@ int main(void) {
 	ptime_t last_frame = time_get();
 	ptime_t last_tick = last_frame;
 
-	//terminal_print("starding main loop");
+
 
 	while(!gstate.quit) { // main loop
 		ptime_t this_frame = time_get();

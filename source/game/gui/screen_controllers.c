@@ -148,19 +148,13 @@ static int propo(int x, int y, int sx) {
 // -------------------------
 static void screen_controllerauswahl_render2D(struct screen* s, int width, int height) {
     gutil_bg();
-
-    gfx_bind_texture(&texture_bg2);
-	gutil_texquad(0, 0, 0, 0, 380, 216, width, height);
-
+    gutil_bg_panorama();
 
     // Menü rechts rendern
-    int line_height = 50;
 	int start_y = height / 3 + 15;
 	int button_height = 40;
 	int button_width  = 300;
 	int button_spacing = 20;
-
-
 
 	for(int i = 0; i < 2; i++) {
 	    int y = start_y + i * (button_height + button_spacing);
@@ -178,8 +172,6 @@ static void screen_controllerauswahl_render2D(struct screen* s, int width, int h
     	gutil_texquad(((width + width/2) - button_width) / 2, y, tex_x, tex_y, 
 				  					 tex_w, tex_h, button_width, button_height);
 
-
-		//int y = start_y + i*line_height;
     	gutil_text((((width + width/2) - button_width) / 2) 
                    + button_width/2 - (gutil_font_width(menu_options[i], 20)/2),
 									         y + 10, menu_options[i], 20, true);
@@ -263,17 +255,7 @@ static void screen_controllerauswahl_render2D(struct screen* s, int width, int h
             gutil_texquad(number_shift, number_start_y, 38, 129, 46-38, 137-129,
                           (46-38)*2, (137-129)*2);
         } 
-    }
-        
-    /*//debug informationen zu variable slot_count
-    gutil_text(50, 30, "Slots:", 20, true);
-
-    char tmp[2];
-    tmp[0] = '0' + slot_count;
-    tmp[1] = '\0';
-
-    gutil_text(120, 30, tmp, 20, true);
-    */    
+    } 
 
     // Steuerungs-Icons
     int icon_offset = 32;

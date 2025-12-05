@@ -37,10 +37,11 @@ void gutil_texquad_rt(int x, int y, int tx, int ty, int sx, int sy, int width,
 void gutil_texquad_rt_any(int x, int y, float angle, int tx, int ty, int sx,
 						  int sy, float width, float height);
 void gutil_bg(void);
+void gutil_bg_panorama(void);
 void gutil_reset_font(struct tex_gfx* tex);
 int  gutil_font_width(const char* str, int scale);
 void gutil_text(int x, int y, const char* str, int scale, bool shadow);
-int  gutil_text_col(int col);
+int  gutil_text_col(int col); 
 /*
 {0x00, 0x00, 0x00}, {0x00, 0x00, 0xAA}, {0x00, 0xAA, 0x00},
 {0x00, 0xAA, 0xAA}, {0xAA, 0x00, 0x00}, {0xAA, 0x00, 0xAA},
