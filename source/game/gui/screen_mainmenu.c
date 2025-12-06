@@ -43,6 +43,7 @@ static const char* menu_options[4] = {
 };
 
 static size_t gui_selection;
+static bool server_failed = false;
 
 static void screen_sworld_reset2(struct screen* s, int width, int height) { //TODO: rename
 	gstate.game_run = false;
@@ -75,8 +76,13 @@ static void screen_sworld_update2(struct screen* s, float dt) { //TODO: rename
 
 				break;
             case 1: // Server
-                //server_menu();
-                break;
+				if (gstate.network) {
+                	menu_screen_set(&screen_server);
+				} else {
+					
+				}
+				
+				break;
             case 2: // Einstellungen
                 //settings_menu();
                 break;

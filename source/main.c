@@ -28,6 +28,8 @@
 #include <fat.h>
 #include <gccore.h> 
 #include <my_text_renderer.h>
+
+#include <network.h>
 #endif
 
 #include "chunk_mesher.h"
@@ -51,7 +53,28 @@
 #include "cglm/cglm.h"
 #include "lodepng/lodepng.h"
 
+#ifdef PLATFORM_WII
+static void *xfb2 = NULL;
+
+static void *net_thread(void *arg) {
+    int ret = net_init();
+    if (ret >= 0)
+        *((int*)arg) = 1;   // net_ready setzen
+    return NULL;
+}
+
+GXRModeObj* rmode3;
+void* framebuffer3;
+#endif
+
 int main(void) {
+	//video_init_custom();
+	#ifdef PLATFORM_WII
+	VIDEO_Init();
+
+	rmode3 = VIDEO_GetPreferredMode(NULL);
+    framebuffer3 = MEM_K0_TO_K1(SYS_AllocateFramebuffer(rmode3));
+	#endif
 
 	float daytime, tick_delta;
 	bool render_world;
@@ -111,10 +134,62 @@ int main(void) {
 
 	ptime_t last_frame = time_get();
 	ptime_t last_tick = last_frame;
+	
+	#ifdef PLATFORM_WII
+	xfb2 = MEM_K0_TO_K1(SYS_AllocateFramebuffer(rmode3));
 
+	console_init(xfb2,20,20,rmode3->fbWidth,rmode3->xfbHeight,rmode3->fbWidth*VI_DISPLAY_PIX_SZ);
+	
+    static int net_ready = 0;
+    lwp_t thread;
+    LWP_CreateThread(
+        &thread,
+        net_thread,       // normale C-Funktion
+        &net_ready,       // Argument
+        NULL,             // Stackbase (NULL für automatisch)
+        0,                // Stackgröße (0 = default)
+        50                // Priorität
+    );
+	
+	
+	/*
+	xfb2 = MEM_K0_TO_K1(SYS_AllocateFramebuffer(rmode));
 
+	console_init(xfb2,20,20,rmode->fbWidth,rmode->xfbHeight,rmode->fbWidth*VI_DISPLAY_PIX_SZ);
+
+	//network
+	static int net_ready = 0;
+
+    lwp_t thread;
+    LWP_CreateThread(
+        &thread,
+        (void *(*)(void *))[](void *arg) -> void * {
+            int ret = net_init();
+            if (ret >= 0)
+                *((int*)arg) = 1;   // setzt net_ready
+            return NULL;
+        },
+        &net_ready,   // wird an arg übergeben
+        NULL,
+        0,
+        50
+    );
+	*/
+	#endif /*PLATFORM_WII*/
 
 	while(!gstate.quit) { // main loop
+		#ifdef PLATFORM_WII
+		if (net_ready)
+			gstate.network = true;
+		else
+			gstate.network = false;
+		#endif /*PLATFORM_WII*/
+
+		#ifdef PLATFORM_PC
+		//if conected //		TODO
+		gstate.network = true;
+		#endif /*PLATFORM_PC*/
+
 		ptime_t this_frame = time_get();
 		gstate.stats.dt = time_diff_s(last_frame, this_frame);
 		gstate.stats.fps = 1.0F / gstate.stats.dt;
