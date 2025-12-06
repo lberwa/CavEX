@@ -39,7 +39,7 @@
 #define VERSION_FORK  2
 
 struct game_state {
-	//bool bg_init_first;
+	bool network;
 	int gerenderte_splitscreen_anzahl; 
 	int height2_icon;
 	bool game_run;
