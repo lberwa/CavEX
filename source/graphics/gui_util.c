@@ -295,16 +295,15 @@ void gutil_draw_item(struct item_data* item, int x, int y, int layer) {
 void gutil_window(int x, int y, int width, int height, char title[]) {
 	gfx_bind_texture(&texture_gui2);
 
-	gutil_texquad(x+5, y+5, 15, 121, 15, 15, width-10, height-10);// black background
-
+	gutil_texquad(x+5, y+5, 15, 121, 15, 15, width-10, height-10); // black background
 
 
 	gutil_texquad(x, y + 117-82, 0, 137, 12, 1, 12, height - ((196-183) + (117-82)));//   	←
 
 	gutil_texquad(x + 12, y+height-(196-183), 42, 183, 1, 196-183,
-				  height - ((110-96) + 12), 196-183); //		 			    			↓
+				  width - ((110-96) + 12), 196-183); //		 			    				↓
 
-	gutil_texquad(x + height - (110-96), y + 117-82, 96, 138, 110-96, 1,
+	gutil_texquad(x + width - (110-96), y + 117-82, 96, 138, 110-96, 1,
 				  110-96, height - ((196-183) + (117-82))); //		 				 		→
 
 	gutil_texquad(x + 12, y, 36, 82, 1, 117 - 82, width - ((110-96) + 12), 117-82);//		↑

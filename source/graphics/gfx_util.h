@@ -30,7 +30,4 @@ void gutil_sky_box(mat4 view_matrix, float celestial_angle, vec3 color_top,
 void gutil_block_selection(mat4 view_matrix, struct block_info* this);
 void gutil_entity_selection(mat4 view_matrix, const struct entity *e);
 
-void gutil_window(int x, int y, int width, int height, char title[]);
-
-
 #endif

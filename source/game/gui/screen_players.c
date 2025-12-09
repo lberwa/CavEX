@@ -31,7 +31,6 @@ static int gui_selection = 0;
 
 // Reset-Funktion: Initialisiert den Screen
 static void screen_splayeranzahl_reset(struct screen* s, int width, int height) {
-    gui_selection = 0;
     input_pointer_enable(true);
 }
 
