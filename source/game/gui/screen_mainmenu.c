@@ -55,6 +55,13 @@ static void screen_sworld_reset2(struct screen* s, int width, int height) { //TO
 }
 
 static void screen_sworld_update2(struct screen* s, float dt) { //TODO: rename
+	if (server_failed) {
+
+	if (input_pressed(IB_ANY, 1)) 
+		server_failed = false;
+
+	} else {
+
     // Navigation
     if(input_pressed(IB_GUI_UP, 1) && gui_selection > 0)
         gui_selection--;
@@ -79,7 +86,7 @@ static void screen_sworld_update2(struct screen* s, float dt) { //TODO: rename
 				if (gstate.network) {
                 	menu_screen_set(&screen_server);
 				} else {
-					
+					server_failed = true;
 				}
 				
 				break;
@@ -91,6 +98,8 @@ static void screen_sworld_update2(struct screen* s, float dt) { //TODO: rename
                 break;
         }
     }
+
+	}
 
     // Home-Button beendet das Spiel
     if(input_pressed(IB_HOME, 1))
@@ -131,6 +140,17 @@ static void screen_sworld_render2D2(struct screen* s, int width, int height) { /
     	gutil_text((width/2) - (gutil_font_width(menu_options[i], 20)/2),
 									 y + 10, menu_options[i], 20, true);
 
+	}
+	
+	if (server_failed) {
+		int window_width = 220;
+		int wx = width / 2 - window_width / 2;
+		int wy = height/2 - 60;
+
+		gutil_window(wx, wy, window_width, 100, "Verbindungsfehler");
+
+		gutil_text(wx + 20, wy + 40, "Versuchen sie es", 16, false);
+		gutil_text(wx + 20, wy + 60, "später erneut.", 16, false);
 	}
 
 	int icon_offset = 32;
