@@ -7,19 +7,21 @@
 #include <string.h>
 #include <stdlib.h>
 #include <malloc.h>
+#include <ogc/lwp.h>
 
 #include "sound.h"
 #include "config.h"
 #include "game/game_state.h"
 
 #include "network/server_comunication.h"
-
 #include "my_text_renderer.h"
 
 typedef struct {
     u8 *data;
     u32 size;
 } wav_t;
+
+static lwp_t t;
 
 static float global_volume = 1.0f;      // 0.0 – 1.0
 static enum mp3_sound current_playing = -1;
@@ -258,14 +260,16 @@ void sound_init() {
     debug_send("alle initalisiert                  ");
 }
 
-static bool st_sound_play_bg(enum mp3_sound sound) {
-    char* path = sound_get_mp3_path(sound);
+enum mp3_sound w_sound;
+
+void* worker(void* arg) {
+    char* path = sound_get_mp3_path(w_sound);
     debug_send(path);
 
     FILE* musicFile = fopen(path, "rb");
     if(!musicFile) {
         debug_send("Failed to open MP3 file!");
-        return false;
+        //return false;
     }
     debug_send("MP3 file opened");
 
@@ -279,15 +283,21 @@ static bool st_sound_play_bg(enum mp3_sound sound) {
     if(!musicBuffer) {
         debug_send("Failed to allocate memory for MP3!");
         fclose(musicFile);
-        return false;
+        //return false;
     }
 
     size_t bytesRead = fread(musicBuffer, 1, musicFileSize, musicFile);
     fclose(musicFile);
     debug_send("MP3 file loaded into buffer");
 
-    // 5) Abspielen
     MP3Player_PlayBuffer(musicBuffer, bytesRead, NULL);
+    return NULL;
+}
+
+static bool st_sound_play_bg(enum mp3_sound sound) {
+    w_sound = sound;
+
+    LWP_CreateThread(&t, worker, NULL, NULL, 0, 64);
     debug_send("MP3 playback started");
     return true;
 }
@@ -309,7 +319,6 @@ void sound_set_volume_bg(float volume) {
 
 void sound_update() {
     if (music_run) {
-        debug_send("Sound Update läuft");
         if (!MP3Player_IsPlaying()) {
             debug_send("MP3 ist nicht am spielen, nächster Titel wird gestartet");
             bg_playlist_num++;

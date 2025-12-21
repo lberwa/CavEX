@@ -171,9 +171,10 @@ static void screen_sworld_update(struct screen* s, float dt) {
 		screen_set(&screen_load_world);
 	}
 
-	if(input_pressed(IB_BACK, 1))
+	if(input_pressed(IB_BACK, 1)) {
 		screen_back();
 		sound_play(pcm_click);
+	}
 }
 
 static void screen_sworld_render2D(struct screen* s, int width, int height) {
@@ -216,16 +217,15 @@ static void screen_sworld_render2D(struct screen* s, int width, int height) {
 				 string_get_cstr(opt.directory), tmp_time,
 				 opt.byte_size / 1000.0F / 1000.0F);
 
-		gutil_text((width - 218 * GFX_GUI_SCALE) / 2.0F + 3 * GFX_GUI_SCALE, top_visible + 14 * GFX_GUI_SCALE + offset, tmp, 8 * GFX_GUI_SCALE,
-				   true);
+		gutil_text((width - 218 * GFX_GUI_SCALE) / 2.0F + 3 * GFX_GUI_SCALE, 
+					top_visible + 14 * GFX_GUI_SCALE + offset, tmp, 8 * GFX_GUI_SCALE, true);
 		offset += entry_height;
 	}
 
 	gfx_scissor(false, 0, 0, 0, 0);
 
 	int icon_offset = 16 * GFX_GUI_SCALE;
-	icon_offset
-		+= gutil_control_icon(icon_offset, IB_GUI_UP, "Change selection");
+	icon_offset += gutil_control_icon(icon_offset, IB_GUI_UP, "Change selection");
 	icon_offset += gutil_control_icon(icon_offset, IB_GUI_CLICK, "Play world");
 	icon_offset += gutil_control_icon(icon_offset, IB_HOME, "Quit");
 }
