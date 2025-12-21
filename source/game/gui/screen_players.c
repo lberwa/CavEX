@@ -9,6 +9,9 @@
 #include "../../platform/gfx.h"
 #include "../../graphics/gfx_util.h"
 
+#include "../../sound.h"
+#include "../../network/server_comunication.h"
+
 #define MAX_WIIMOTES 4
 
 enum spieleranzahl_option {
@@ -28,10 +31,30 @@ static const char* menu_options[4] = {
 
 extern struct screen screen_controllerauswahl;
 static int gui_selection = 0;
-
+/*
+static enum mp3_sound bg_playlist[16] = {
+	mp3_bg1,
+	mp3_bg2,
+	mp3_bg3,
+	mp3_bg4,
+	mp3_bg5,
+	mp3_bg6,
+	mp3_bg7,
+	mp3_bg8,
+	mp3_bg9,
+	mp3_bg10,
+};
+*/
 // Reset-Funktion: Initialisiert den Screen
 static void screen_splayeranzahl_reset(struct screen* s, int width, int height) {
     input_pointer_enable(true);
+	/*
+	debug_send("Reset Spieleranzahl Screen");
+	sound_init();
+
+	debug_send("Spiele Hintergrundmusik im Spieleranzahl Screen");
+	sound_play_bg(bg_playlist);
+	*/
 }
 
 // Update-Funktion: Handhabt Navigation und Auswahl
@@ -53,6 +76,7 @@ static void screen_splayeranzahl_update(struct screen* s, float dt) {
     
 	    // Auswahl mit A
 	    if((wpad_pressed & WPAD_BUTTON_A)) {
+			sound_play(pcm_click);
 	        switch(gui_selection) {
 	            case ONE_PLAYER:
 	                gstate.num_players = 1;
@@ -76,6 +100,7 @@ static void screen_splayeranzahl_update(struct screen* s, float dt) {
 	
 	    // Home-Button zum Abbrechen
 	    if (wpad_pressed & WPAD_BUTTON_B) {
+			sound_play(pcm_click);
 	        screen_back();
 		return;
 		

@@ -6,11 +6,10 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-
-
 #define SERVER_PORT 12345
 
 static s32 sock = -1;
+
 bool server_init(int a, int b, int c, int d) {
 
     sock = net_socket(AF_INET, SOCK_STREAM, 0);
@@ -74,4 +73,42 @@ char* server_get_mac_address() {
         mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 
     return mac_str;
+}
+
+//-----------------
+//debugging
+//-----------------
+
+#define DEBUG_SERVER_PORT 12344
+
+static s32 dsock = -1;
+bool debug_init(int a, int b, int c, int d) {
+
+    dsock = net_socket(AF_INET, SOCK_STREAM, 0);
+    if(dsock < 0) {
+        return false;
+    }
+
+
+    struct sockaddr_in server;
+    memset(&server, 0, sizeof(server));
+    server.sin_family = AF_INET;
+    server.sin_port = DEBUG_SERVER_PORT; // network.h nimmt Port direkt als int
+    IP4_ADDR(&server.sin_addr, a,b,c,d);
+
+    if(net_connect(dsock, (struct sockaddr*)&server, sizeof(server)) < 0) {
+        net_close(dsock);
+        return false;
+    }
+    return true;
+}
+
+int debug_send(void *data) {
+    int send = net_send(dsock, data, strlen(data), 0);
+    return send;
+}
+
+int debug_close() {
+    int back = net_close(dsock);
+    return back;
 }

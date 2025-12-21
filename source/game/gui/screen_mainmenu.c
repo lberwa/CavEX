@@ -26,6 +26,7 @@
 #include "../../util.h"
 #include "../game_state.h"
 #include "screen.h"
+#include "../../sound.h"
 
 #include <assert.h>
 #include <dirent.h>
@@ -34,6 +35,9 @@
 #include <time.h>
 #include "my_text_renderer.h"
 #include <gccore.h>
+#include <stdbool.h>
+
+#include "my_text_renderer.h"
 
 static const char* menu_options[4] = {
     "Start",
@@ -45,19 +49,36 @@ static const char* menu_options[4] = {
 static size_t gui_selection;
 static bool server_failed = false;
 
+static enum mp3_sound bg_playlist[16] = {
+	mp3_bg1,
+	mp3_bg2,
+	mp3_bg3,
+	mp3_bg4,
+	mp3_bg5,
+	mp3_bg6,
+	mp3_bg7,
+	mp3_bg8,
+	mp3_bg9,
+	mp3_bg10,
+};
+
 static void screen_sworld_reset2(struct screen* s, int width, int height) { //TODO: rename
 	gstate.game_run = false;
 	gstate.num_players = 1;
+	server_failed = false;
 	input_pointer_enable(true);
 
 	if(gstate.local_player)
 		gstate.local_player->data.local_player.capture_input = false;
-}
 
+	sound_init();
+	sound_play_bg(bg_playlist);
+}
 static void screen_sworld_update2(struct screen* s, float dt) { //TODO: rename
 	if (server_failed) {
 
 	if (input_pressed(IB_ANY, 1)) 
+		sound_play(pcm_click);
 		server_failed = false;
 
 	} else {
@@ -71,16 +92,15 @@ static void screen_sworld_update2(struct screen* s, float dt) { //TODO: rename
 
     // Aktion beim A-Knopf
     if(input_pressed(IB_GUI_CLICK, 1)) {
+		sound_play(pcm_click);
         switch(gui_selection) {
             case 0: // Start 
 				#ifdef PLATFORM_WII
 				menu_screen_set(&spieleranzahl_auswählen);
                 #endif
-				
 				#ifdef PLATFORM_PC
 				menu_screen_set(&screen_select_world);
 				#endif
-
 				break;
             case 1: // Server
 				if (gstate.network) {
