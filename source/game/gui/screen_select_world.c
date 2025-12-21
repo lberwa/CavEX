@@ -27,6 +27,7 @@
 #include "../../util.h"
 #include "../game_state.h"
 #include "screen.h"
+#include "../../sound.h"
 
 #include <assert.h>
 #include <dirent.h>
@@ -51,6 +52,19 @@ struct world_option {
 	string_t path;
 	int64_t last_access;
 	int64_t byte_size;
+};
+
+static enum mp3_sound bg_playlist[16] = {
+	mp3_bg1,
+	mp3_bg2,
+	mp3_bg3,
+	mp3_bg4,
+	mp3_bg5,
+	mp3_bg6,
+	mp3_bg7,
+	mp3_bg8,
+	mp3_bg9,
+	mp3_bg10,
 };
 
 static void screen_sworld_reset(struct screen* s, int width, int height) {
@@ -124,6 +138,9 @@ static void screen_sworld_reset(struct screen* s, int width, int height) {
 	top_visible = height * 0.133F;
 	bottom_visible = height - 32 * GFX_GUI_SCALE;
 	height_visible = bottom_visible - height * 0.133F;
+
+	sound_init();
+	sound_play_bg(bg_playlist);
 }
 
 static void screen_sworld_update(struct screen* s, float dt) {
@@ -142,6 +159,7 @@ static void screen_sworld_update(struct screen* s, float dt) {
 			- (int)(gui_selection + 1) * entry_height;
 
 	if(stack_size(worlds) > 0 && input_pressed(IB_GUI_CLICK, 1)) {
+		sound_play(pcm_click);
 		struct world_option opt;
 		stack_at(worlds, &opt, gui_selection);
 
@@ -155,6 +173,7 @@ static void screen_sworld_update(struct screen* s, float dt) {
 
 	if(input_pressed(IB_BACK, 1))
 		screen_back();
+		sound_play(pcm_click);
 }
 
 static void screen_sworld_render2D(struct screen* s, int width, int height) {

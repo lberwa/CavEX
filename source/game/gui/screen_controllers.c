@@ -16,6 +16,7 @@
 #include "../../graphics/gfx_util.h"
 #include "../../platform/gfx.h"
 #include "../../graphics/gui_util.h"
+#include "../../sound.h"
 
 #define MAX_WIIMOTES 4
 
@@ -69,6 +70,7 @@ static void screen_controllerauswahl_update(struct screen* s, float dt) {
         // B = zurück
         if(wpad_pressed & WPAD_BUTTON_B) {
             screen_back();
+            sound_play(pcm_click);
         }
 
         // A = Menü bestätigen
@@ -78,6 +80,7 @@ static void screen_controllerauswahl_update(struct screen* s, float dt) {
                 if(controller_for_slot[i] == 0) all_filled = false;
 
             if(selected_menu == 0 && all_filled) {
+                sound_play(pcm_click);
                 menu_screen_set(&screen_select_world);
                 // Slots zurücksetzen für nächsten Besuch
                 for(int i=0; i<slot_count; i++) {
@@ -85,6 +88,7 @@ static void screen_controllerauswahl_update(struct screen* s, float dt) {
                     wiimote_assigned[i] = -1;
                 }
             } else if(selected_menu == 1) {
+                sound_play(pcm_click);
                 // Ändern: alles resetten
                 for(int i=0; i<slot_count; i++) {
                     controller_for_slot[i] = 0;
@@ -108,8 +112,7 @@ static void screen_controllerauswahl_update(struct screen* s, float dt) {
                 // ersten freien Slot suchen
                 for(int i=0;i<slot_count;i++) {
                     if(controller_for_slot[i]==0) {
-                        
-
+                        //sound_play(pcm_click);
                         u32 type;
                         int status = WPAD_Probe(ch, &type);
 
@@ -212,7 +215,7 @@ static void screen_controllerauswahl_render2D(struct screen* s, int width, int h
         }
         
         char text[64];
-        sprintf(text, "Spieler %d", i);
+        sprintf(text, "Spieler %d", i+1);
 
         gutil_window(slot_x, slot_y, slotwidth, slotheight, text);
 

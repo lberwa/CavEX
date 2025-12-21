@@ -25,11 +25,12 @@
 #include <time.h>
 
 #ifdef PLATFORM_WII
-#include <fat.h>
-#include <gccore.h> 
-#include <my_text_renderer.h>
-
-#include <network.h>
+	#include <fat.h>
+	#include <gccore.h> 
+	#ifdef NDEBUG
+		#include <my_text_renderer.h>
+	#endif
+	#include <network.h>
 #endif
 
 #include "chunk_mesher.h"
@@ -48,6 +49,8 @@
 #include "platform/gfx.h"
 #include "platform/input.h"
 #include "world.h"
+#include "sound.h"
+#include "network/server_comunication.h"
 
 #include "cNBT/nbt.h"
 #include "cglm/cglm.h"
@@ -65,6 +68,10 @@ static void *net_thread(void *arg) {
 
 GXRModeObj* rmode3;
 void* framebuffer3;
+#endif
+
+#ifdef NDEBUG
+bool debugsendfirst = false;
 #endif
 
 int main(void) {
@@ -150,35 +157,22 @@ int main(void) {
         0,                // Stackgröße (0 = default)
         50                // Priorität
     );
-	
-	
-	/*
-	xfb2 = MEM_K0_TO_K1(SYS_AllocateFramebuffer(rmode));
-
-	console_init(xfb2,20,20,rmode->fbWidth,rmode->xfbHeight,rmode->fbWidth*VI_DISPLAY_PIX_SZ);
-
-	//network
-	static int net_ready = 0;
-
-    lwp_t thread;
-    LWP_CreateThread(
-        &thread,
-        (void *(*)(void *))[](void *arg) -> void * {
-            int ret = net_init();
-            if (ret >= 0)
-                *((int*)arg) = 1;   // setzt net_ready
-            return NULL;
-        },
-        &net_ready,   // wird an arg übergeben
-        NULL,
-        0,
-        50
-    );
-	*/
 	#endif /*PLATFORM_WII*/
 
-	while(!gstate.quit) { // main loop
+	sound_init();
+
+	while(!gstate.quit) { // |-------------------| main loop |-------------------|
 		#ifdef PLATFORM_WII
+		#ifdef NDEBUG
+		if (gstate.network)
+		{
+			if (!debugsendfirst) {
+				debug_init(192,168,15,152);
+				debugsendfirst = true;
+			}
+		}
+		#endif /*NDEBUG*/
+
 		if (net_ready)
 			gstate.network = true;
 		else
@@ -394,6 +388,7 @@ int main(void) {
 			}
 		}
 
+		sound_update();
 		input_poll();
 		gfx_finish(true);
 	}
