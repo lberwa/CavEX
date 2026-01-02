@@ -26,6 +26,16 @@
 #include "../cglm/cglm.h"
 #include "../item/items.h"
 
+struct monster_frame {
+	int x;
+	int y;
+	int length;
+	void (*action)();
+	int next_frame;
+};
+
+extern struct monster_frame frames[256];
+
 struct camera;
 
 enum entity_type {

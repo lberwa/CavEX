@@ -25,6 +25,8 @@
 static uint8_t global_block_atlas[TEXAT_MAX];
 static uint8_t global_particle_atlas[TEXAT_MAX];
 
+static uint8_t global_atlas[TEXAT_MAX];
+
 static int clamp_n(int x, int n) {
 	if(x < 0)
 		return 0;

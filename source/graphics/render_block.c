@@ -751,7 +751,7 @@ size_t render_block_redstone_wire(struct displaylist* dl, struct block_info* thi
 
 		uint16_t a = 16, b = 16, c = 16, d = 16;
 
-		/*switch(this->block->metadata & 0x7) {
+		switch(this->block->metadata & 0x7) {
 			case 1: tex_rotate = 1; break;
 			case 2:
 				b = 272;
@@ -771,7 +771,7 @@ size_t render_block_redstone_wire(struct displaylist* dl, struct block_info* thi
 				c = 272;
 				d = 272;
 				break;
-		}*/
+		}
 
 		if(blocks[this->block->type]->render_block_data.rail_curved_possible) {
 			switch(this->block->metadata) {

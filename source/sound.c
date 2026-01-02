@@ -9,6 +9,11 @@
 #include <malloc.h>
 #include <ogc/lwp.h>
 
+#define __XSI_VISIBLE 600
+#define __POSIX_VISIBLE 200112
+#include <unistd.h>
+#include <time.h>
+
 #include "sound.h"
 #include "config.h"
 #include "game/game_state.h"
@@ -20,6 +25,11 @@ typedef struct {
     u8 *data;
     u32 size;
 } wav_t;
+
+
+
+
+
 
 static lwp_t t;
 
@@ -261,6 +271,63 @@ void sound_init() {
 }
 
 enum mp3_sound w_sound;
+/*
+#define BUFFER_SIZE 2048  // Beispielgröße
+static u8 buffer1[BUFFER_SIZE];
+static u8 buffer2[BUFFER_SIZE];
+
+void worker(MP3Player* player) {
+    u8* current = buffer1;
+    u8* next = buffer2;
+
+    MP3Player_Play(player);
+
+    while (MP3Player_IsPlaying(player)) {
+        // Fülle den nächsten Buffer, während der aktuelle läuft
+        if (MP3Player_NeedsData(player)) {
+            size_t read = MP3Player_Read(player, next, BUFFER_SIZE);
+            if (read == 0) break; // Ende erreicht
+            MP3Player_SubmitBuffer(player, next, read);
+        }
+
+        // Buffer wechseln
+        u8* tmp = current;
+        current = next;
+        next = tmp;
+
+        // Sehr kurz schlafen, damit CPU nicht blockiert
+        LWP_YieldThread();
+    }
+
+    // Wenn Ende erreicht, stoppen
+    MP3Player_Stop(player);
+    return;
+}
+*/
+/*#define MP3_CHUNK_SIZE (64*1024) // 64 KB
+
+void* worker(void* arg) {
+    const char* path = sound_get_mp3_path(w_sound);
+    FILE* f = fopen(path, "rb");
+    if(!f) { debug_send("Failed to open MP3"); return NULL; }
+
+    char* buffer = memalign(32, MP3_CHUNK_SIZE);
+    size_t read;
+
+    while((read = fread(buffer, 1, MP3_CHUNK_SIZE, f)) > 0) {
+        DCFlushRange(buffer, read);
+        MP3Player_PlayBuffer(buffer, read, NULL);
+        // Warte bis Chunk gespielt ist (z.B. in Schleife prüfen MP3Player_IsPlaying)
+        while(MP3Player_IsPlaying()) usleep(50 * 1000);
+;
+
+    }
+
+    free(buffer);
+    fclose(f);
+    return NULL;
+}
+*/
 
 void* worker(void* arg) {
     char* path = sound_get_mp3_path(w_sound);
@@ -287,12 +354,14 @@ void* worker(void* arg) {
     }
 
     size_t bytesRead = fread(musicBuffer, 1, musicFileSize, musicFile);
-    fclose(musicFile);
+    //fclose(musicFile);
     debug_send("MP3 file loaded into buffer");
 
     MP3Player_PlayBuffer(musicBuffer, bytesRead, NULL);
     return NULL;
 }
+
+
 
 static bool st_sound_play_bg(enum mp3_sound sound) {
     w_sound = sound;
@@ -328,6 +397,7 @@ void sound_update() {
             debug_send(&bg_playlist[bg_playlist_num]);
             debug_send("st_sound_play_bg wird aufgerufen");
             st_sound_play_bg(bg_playlist[bg_playlist_num]);
+            music_run = false;
         }
     }
   

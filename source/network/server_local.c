@@ -114,7 +114,6 @@ struct entity* server_local_spawn_item(vec3 pos, struct item_data* it,
 struct entity* server_local_spawn_monster(vec3 pos, int monster_id,
 									   struct server_local* s) {
 	uint32_t entity_id = entity_gen_id(s->entities);
-
 	struct entity** e_ptr = dict_entity_safe_get(s->entities, entity_id);
 	*e_ptr = malloc(sizeof(struct entity));
 	struct entity* e = *e_ptr;

@@ -107,30 +107,43 @@ static bool entity_tick(struct entity* e) {
 
 	struct AABB bbox;
 	aabb_setsize_centered(&bbox, 0.6F, 1.0F, 0.6F);
-	aabb_translate(&bbox, e->pos[0], e->pos[1] + 1.8F / 2.0F - EYE_HEIGHT, e->pos[2]);
+	aabb_translate(&bbox, e->pos[0], e->pos[1] + 1.8F / 2.0F - EYE_HEIGHT,
+				   e->pos[2]);
 
 	bool in_water = entity_intersection(e, &bbox, test_in_water);
-	bool in_lava  = entity_intersection(e, &bbox, test_in_lava);
+	bool in_lava = entity_intersection(e, &bbox, test_in_lava);
 
-	float slipperiness = (in_lava || in_water) ? 1.0F : (e->on_ground ? 0.6F : 1.0F);
+	float slipperiness
+		= (in_lava || in_water) ? 1.0F : (e->on_ground ? 0.6F : 1.0F);
 
-	int  forward = 0;
-	int  strafe  = 0;
+	int forward = 0;
+	int strafe = 0;
 	bool jumping = false;
 
 	if(e->data.local_player.capture_input) {
-		if(input_held(IB_FORWARD, 1))  forward++;
-		if(input_held(IB_BACKWARD, 1)) forward--;
-		if(input_held(IB_RIGHT, 1))    strafe++;
-		if(input_held(IB_LEFT, 1))     strafe--;
+		if(input_held(IB_FORWARD, 1))
+			forward++;
+
+		if(input_held(IB_BACKWARD, 1))
+			forward--;
+
+		if(input_held(IB_RIGHT, 1))
+			strafe++;
+
+		if(input_held(IB_LEFT, 1))
+			strafe--;
+
 		jumping = input_held(IB_JUMP, 1);
 	}
 
 	int dist = forward * forward + strafe * strafe;
+
 	if(dist > 0) {
 		float distf = fmaxf(sqrtf(dist), 1.0F);
-		float dx = (forward * sinf(e->orient[0]) - strafe * cosf(e->orient[0])) / distf;
-		float dy = (strafe  * sinf(e->orient[0]) + forward * cosf(e->orient[0])) / distf;
+		float dx = (forward * sinf(e->orient[0]) - strafe * cosf(e->orient[0]))
+			/ distf;
+		float dy = (strafe * sinf(e->orient[0]) + forward * cosf(e->orient[0]))
+			/ distf;
 
 		e->vel[0] += 0.1F * powf(0.6F / slipperiness, 3.0F) * dx;
 		e->vel[2] += 0.1F * powf(0.6F / slipperiness, 3.0F) * dy;
@@ -158,7 +171,10 @@ static bool entity_tick(struct entity* e) {
 	float unstuck_move = 0.01F;
 	aabb_translate(&tmp1, e->pos[0], e->pos[1], e->pos[2]);
 	aabb_translate(&tmp2, e->pos[0], e->pos[1] + unstuck_move, e->pos[2]);
-	if(entity_aabb_intersection(e, &tmp1) && !entity_aabb_intersection(e, &tmp2)) {
+
+	// is the player stuck in the floor due to inaccuracy?
+	if(entity_aabb_intersection(e, &tmp1)
+	   && !entity_aabb_intersection(e, &tmp2)) {
 		e->pos[1] += unstuck_move;
 	}
 
@@ -167,13 +183,14 @@ static bool entity_tick(struct entity* e) {
 	glm_vec3_copy(e->vel, new_vel);
 
 	bool collision_xz = false;
+
 	for(int k = 0; k < 3; k++)
-		entity_try_move(e, e->pos, e->vel, &bbox, (size_t[]){1, 0, 2}[k],
-		                &collision_xz, &e->on_ground);
+		entity_try_move(e, e->pos, e->vel, &bbox, (size_t[]) {1, 0, 2}[k],
+						&collision_xz, &e->on_ground);
 
 	if(e->on_ground) {
 		bool collision = false;
-		bool ground    = e->on_ground;
+		bool ground = e->on_ground;
 
 		new_vel[1] = 0.6F;
 		entity_try_move(e, new_pos, new_vel, &bbox, 1, &collision, &ground);
@@ -228,12 +245,16 @@ static bool entity_tick(struct entity* e) {
 			e->vel[1] = 0.3F;
 	}
 
-	// update client-side oxygen bar
-	if(gstate.in_water) gstate.oxygen--;
-	else gstate.oxygen = MAX_OXYGEN;
+	//update client-side oxygen bar
+	if (gstate.in_water) {
+		gstate.oxygen--;
+	} else {
+		gstate.oxygen = MAX_OXYGEN;
+	}
 
 	return false;
 }
+
 bool entity_local_player_block_collide(vec3 pos, struct block_info* blk_info) {
 	assert(pos && blk_info);
 

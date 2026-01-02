@@ -92,7 +92,7 @@ static bool onItemPlace(struct server_local* s, struct item_data* it,
 static size_t drop_redstone_torch(struct block_info* this, struct item_data* it,
 								  struct random_gen* g, struct server_local* s) {
 	if(it) {
-		it->id = BLOCK_REDSTONE_TORCH_LIT;
+		it->id = BLOCK_REDSTONE_TORCH;
 		it->durability = 0;
 		it->count = 1;
 	}
