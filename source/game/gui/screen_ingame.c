@@ -420,7 +420,6 @@ static void screen_ingame_render2D(struct screen* s, int width, int height) {
 			VERSION_MINOR, VERSION_PATCH, VERSION_FORK);
 	gutil_text(4, 4 + (GFX_GUI_SCALE * 8 + 1) * 0, str, GFX_GUI_SCALE * 8, true);
 
-
 	sprintf(str, "%0.1f fps, wait: gpu %0.1fms, vsync %0.1fms",
 			gstate.stats.fps, gstate.stats.dt_gpu * 1000.0F,
 			gstate.stats.dt_vsync * 1000.0F);

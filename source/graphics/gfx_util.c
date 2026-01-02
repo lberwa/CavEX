@@ -303,7 +303,6 @@ void gutil_sky_box(mat4 view_matrix, float celestial_angle, vec3 color_top,
 								0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
 				   (uint16_t[]) {0, 0, 0, 256, 256, 256, 256, 0});
 
-
 	gfx_blending(MODE_OFF);
 	gfx_write_buffers(true, true, true);
 	gfx_alpha_test(true);

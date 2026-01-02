@@ -41,6 +41,7 @@
 #include "graphics/gui_util.h"
 #include "graphics/gfx_settings.h"
 #include "graphics/render_entity.h"
+#include "graphics/render_monster.h"
 #include "item/recipe.h"
 #include "network/client_interface.h"
 #include "network/server_interface.h"
@@ -71,6 +72,13 @@ void* framebuffer3;
 #endif
 
 #ifdef NDEBUG
+	#include <ogc/system.h>
+	#include <stdio.h>
+
+	extern void* __Arena1Lo;
+	extern void* __Arena1Hi;
+	extern void* __Arena2Lo;
+	extern void* __Arena2Hi;
 bool debugsendfirst = false;
 #endif
 
@@ -115,6 +123,7 @@ int main(void) {
 	blocks_init();
 	items_init();
 	render_entity_init();
+	render_monster_init();
 
 	recipe_init();
 	gfx_setup();
@@ -196,7 +205,7 @@ int main(void) {
 						% DAY_LENGTH_TICKS)
 			/ (float)DAY_LENGTH_TICKS;
 
-		clin_update();//client_interface.c Z.331
+		clin_update();
 
 		tick_delta = time_diff_s(last_tick, time_get()) / 0.05F;
 
@@ -350,7 +359,8 @@ int main(void) {
 
 				#ifdef GFX_CLOUDS
 				if(gstate.world.dimension == WORLD_DIM_OVERWORLD)
-					gutil_clouds(gstate.camera.view, daytime_brightness(daytime));
+					gutil_clouds(gstate.camera.view,
+					daytime_brightness(daytime));
 				#endif
 			}
 
@@ -391,6 +401,37 @@ int main(void) {
 		sound_update();
 		input_poll();
 		gfx_finish(true);
+		/*
+		char text1[64];
+		char text2[64];
+
+		snprintf(text1, sizeof(text1),
+        		 "MEM1 free: %u bytes",
+        		 (unsigned int)((u8*)__Arena1Hi - (u8*)__Arena1Lo));
+
+		snprintf(text2, sizeof(text2),
+        		 "MEM2 free: %u bytes",
+        		 (unsigned int)((u8*)__Arena2Hi - (u8*)__Arena2Lo));
+
+*/
+
+		u32 mem1_free = (u32)((u8*)__Arena1Hi - (u8*)__Arena1Lo);
+		u32 mem2_free = (u32)((u8*)__Arena2Hi - (u8*)__Arena2Lo);
+
+
+		char buf[128];
+		snprintf(buf, sizeof(buf),
+    	     "MEM1 total: %u KB\nMEM2 total: %u KB\n"
+	         "MEM1 free: %u KB\nMEM2 free: %u KB\n",
+        	 SYS_GetArena1Size()/1024,
+    	     SYS_GetArena2Size()/1024,
+	         mem1_free/1024,
+        		 mem2_free/1024);
+
+		debug_send(buf);
+
+		//debug_send(text2);
+
 	}
 
 	return 0;

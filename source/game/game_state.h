@@ -93,7 +93,7 @@ struct game_state {
 #endif
 
 #ifdef NDEBUG // for bg_init debugging
-extern struct game_state gstate;
+//extern struct game_state gstate;
 extern ptime_t global_last_pos_update;
 extern struct client_rpc* global_call_type;
 extern struct thread_channel clin_inbox;
@@ -103,5 +103,7 @@ extern struct thread_channel clin_inbox;
 #endif
 
 #endif
+
+extern struct game_state gstate;
 
 #endif

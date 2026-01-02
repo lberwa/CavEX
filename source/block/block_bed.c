@@ -48,7 +48,7 @@ getSideMask(struct block_info* this, enum side side, struct block_info* it) {
 }
 
 static uint8_t getTextureIndex(struct block_info* this, enum side side) {
-    if (this->block->metadata & 0x8) {  // Check of het het hoofdbord is
+	if (this->block->metadata & 0x8) {  // Check of het het hoofdbord is
 		switch(side) {
 			case SIDE_TOP: return tex_atlas_lookup(TEXAT_BED_TOP_2);
 			case SIDE_LEFT:

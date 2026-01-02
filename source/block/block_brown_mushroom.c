@@ -45,11 +45,11 @@ static bool onItemPlace(struct server_local* s, struct item_data* it,
 						enum side on_side) {
 	struct block_data blk;
 	if(!server_world_get_block(&s->world, where->x, where->y - 1, where->z,
-									&blk))
+							   &blk))
 		return false;
-
+		
 	// Check if the block is suitable for planting mushrooms (grass or dirt)
-	if (blk.type != BLOCK_GRASS && blk.type != BLOCK_DIRT)
+	if(!blocks[blk.type] || blocks[blk.type]->can_see_through)
 		return false;
 
 	// Allow placing the mushroom

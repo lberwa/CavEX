@@ -132,12 +132,15 @@ static enum block_material getMaterial(struct block_info* this) {
 	return MATERIAL_ORGANIC;
 }
 
-static size_t getBoundingBox(struct block_info* this, bool entity, struct AABB* x) {
-	if (x) aabb_setsize(x, 1.0F, 1.0F, 1.0F);
+static size_t getBoundingBox(struct block_info* this, bool entity,
+							 struct AABB* x) {
+	if(x)
+		aabb_setsize(x, 1.0F, 1.0F, 1.0F);
 	return 1;
 }
 
-static struct face_occlusion* getSideMask(struct block_info* this, enum side side, struct block_info* it) {
+static struct face_occlusion*
+getSideMask(struct block_info* this, enum side side, struct block_info* it) {
 	return face_occlusion_full();
 }
 

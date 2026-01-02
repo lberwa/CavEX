@@ -1085,7 +1085,6 @@ static struct item item_bowl = {
 	},
 };
 
-
 extern struct item item_mushroom_stew;
 
 static struct item item_feather = {
