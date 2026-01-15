@@ -329,6 +329,7 @@ void* worker(void* arg) {
 }
 */
 
+#ifdef BG_MUSIC
 void* worker(void* arg) {
     char* path = sound_get_mp3_path(w_sound);
     debug_send(path);
@@ -370,6 +371,7 @@ static bool st_sound_play_bg(enum mp3_sound sound) {
     debug_send("MP3 playback started");
     return true;
 }
+#endif
 
 void sound_stop_bg() {
     MP3Player_Stop();
@@ -387,6 +389,7 @@ void sound_set_volume_bg(float volume) {
 
 
 void sound_update() {
+    #ifdef BG_MUSIC
     if (music_run) {
         if (!MP3Player_IsPlaying()) {
             debug_send("MP3 ist nicht am spielen, nächster Titel wird gestartet");
@@ -400,7 +403,7 @@ void sound_update() {
             music_run = false;
         }
     }
-  
+    #endif
 
     for(int i = 0; i < pcm_playlist_num; i++) {
         if (!ASND_StatusVoice(pcm_playlist[i])) {
@@ -414,6 +417,7 @@ void sound_update() {
 
 
 bool sound_play_bg(enum mp3_sound sound[16]) {
+    #ifdef BG_MUSIC
     debug_send("sound_play_bg aufgerufen");
     if (!sound)
      return false;
@@ -425,6 +429,7 @@ bool sound_play_bg(enum mp3_sound sound[16]) {
      }
     debug_send("bg_playlist gesetzt");
     return true;
+    #endif
 }
 
 bool sound_play(enum pcm_sound sound) {

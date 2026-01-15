@@ -24,6 +24,8 @@
 static int count;
 static char liste[MAX_PARTS][MAX_LENGTH];
 
+static char server_screen[64] = "main";
+
 //-------------------------
 // Input Mapping
 //-------------------------
@@ -98,7 +100,6 @@ TextureMap texture_map[] = {
     {"texture_creeper", &texture_creeper},
     {"texture_pig", &texture_pig},
     {"texture_font", &texture_font},
-    {"texture_black_font", &texture_black_font},
     {"texture_anim", &texture_anim},
     {"texture_gui_inventory", &texture_gui_inventory},
     {"texture_gui_crafting", &texture_gui_crafting},
@@ -167,71 +168,31 @@ int split_tilde(const char* input, char output[MAX_PARTS][MAX_LENGTH]) {
     return part; // wie viele Teile gefunden wurden
 }
 
+// -------------------------
+// Change screen
+// -------------------------
+void server_screen_set(char screen_name[64]) {
+    strcpy(server_screen, screen_name);
+}
+
+char* mac_addr = NULL;
 
 // -------------------------
 // Reset-Funktion
 // -------------------------
 static void screen_server_reset(struct screen* s, int width, int height) {
-    char* inputs_old = NULL;
-
-    char* mac_addr = server_get_mac_address();
+    mac_addr = server_get_mac_address();
     if (!mac_addr) {
         mac_addr = "failed";
     }
 
-    //root
-    inputs_val = json_value_init_object();
-    inputs = json_value_get_object(inputs_val);
 
-    //root.pressed
-    JSON_Value* pressed_val = json_value_init_object();
-    JSON_Object* pressed_obj = json_value_get_object(pressed_val);
-
-    //root.released
-    JSON_Value* released_val = json_value_init_object();
-    JSON_Object* released_obj = json_value_get_object(released_val);
-
-    //root.held
-    JSON_Value* held_val = json_value_init_object();
-    JSON_Object* held_obj = json_value_get_object(held_val);
-
-    //root.other
-    JSON_Value* other_val = json_value_init_object();
-    JSON_Object* other_obj = json_value_get_object(other_val);
-
-
-    for (int i = 0; i < 4; i++) {
-        if (i < 3) {
-            for (int i2 = 0; i2 < MAX_INPUTS; i2++) {
-                if (i == 0) 
-                    json_object_set_boolean(pressed_obj, inputs1[i2], 
-                        input_pressed(inputs2[i2], 1));
-                if (i == 1) 
-                    json_object_set_boolean(released_obj, inputs1[i2], 
-                        input_released(inputs2[i2], 1));
-                if (i == 2) 
-                    json_object_set_boolean(held_obj, inputs1[i2], 
-                        input_held(inputs2[i2], 1)); 
-            } 
-        } else {
-            json_object_set_string(other_obj, "mac_addr", mac_addr);
-        }
-    }
-    
-    json_object_set_value(inputs, "pressed", pressed_val);
-    json_object_set_value(inputs, "released", released_val);
-    json_object_set_value(inputs, "held", held_val);
-    json_object_set_value(inputs, "other", other_val);
-
-    inputs_old = json_serialize_to_string(inputs_val);
-
+    inputs_old = NULL;
+    strcpy(server_screen, "main");
 
     server_init(192,168,15,152);
-      
-    /*u32 mac[6];
-    net_get_mac_address(mac);
-    server_send(mac, 6);
-    */
+
+   // struct tex_gfx texture_server[12];
 }
 
 // -------------------------
@@ -244,86 +205,120 @@ static void screen_server_update(struct screen* s, float dt) {
         screen_back();
         return;
     }
+    // -------------------------
+    // Neue Frame-JSON bauen
+    // -------------------------
+    inputs_val = json_value_init_object();
+    inputs = json_value_get_object(inputs_val);
 
-    inputs_old = json_serialize_to_string(inputs_val);
-
-    /*JSON_Object* pressed = json_object_get_object(inputs, "pressed");
-    JSON_Object* released = json_object_get_object(inputs, "released");
-    JSON_Object* held = json_object_get_object(inputs, "held");
-    */
-
-    JSON_Value* pressed_val = json_value_init_object();
-    JSON_Object* pressed = json_value_get_object(pressed_val);
-
+    JSON_Value* pressed_val  = json_value_init_object();
     JSON_Value* released_val = json_value_init_object();
+    JSON_Value* held_val     = json_value_init_object();
+    JSON_Value* other_val    = json_value_init_object();
+
+    JSON_Object* pressed  = json_value_get_object(pressed_val);
     JSON_Object* released = json_value_get_object(released_val);
+    JSON_Object* held     = json_value_get_object(held_val);
+    JSON_Object* other    = json_value_get_object(other_val);
 
-    JSON_Value* held_val = json_value_init_object();
-    JSON_Object* held = json_value_get_object(held_val);
-
-
-    for (int i = 0; i < 4; i++) {
-        for (int i2 = 0; i2 < MAX_INPUTS; i2++) {
-            if (i == 0) 
-                json_object_set_boolean(pressed, inputs1[i2], 
-                    input_pressed(inputs2[i2], 1));
-            if (i == 1) 
-                json_object_set_boolean(released, inputs1[i2], 
-                    input_released(inputs2[i2], 1));
-            if (i == 2) 
-                json_object_set_boolean(held, inputs1[i2], 
-                    input_held(inputs2[i2], 1)); 
-        }
+    for (int i = 0; i < MAX_INPUTS; i++) {
+        json_object_set_boolean(pressed,  inputs1[i], input_pressed(inputs2[i], 1));
+        json_object_set_boolean(released, inputs1[i], input_released(inputs2[i], 1));
+        json_object_set_boolean(held,     inputs1[i], input_held(inputs2[i], 1));
     }
-    
-    json_object_set_value(inputs, "pressed", pressed_val);
-    json_object_set_value(inputs, "released", released_val);
-    json_object_set_value(inputs, "held", held_val);
 
+    json_object_set_string(other, "mac_addr", mac_addr);
+    json_object_set_string(other, "screen", server_screen);
+    json_object_set_number(other, "width", gfx_width());
+    json_object_set_number(other, "height", gfx_height());
+
+    // -------------------------
+    // In Root einsetzen
+    // -------------------------
+    json_object_set_value(inputs, "pressed",  pressed_val);
+    json_object_set_value(inputs, "released", released_val);
+    json_object_set_value(inputs, "held",     held_val);
+    json_object_set_value(inputs, "other",    other_val);
+
+    // -------------------------
+    // JSON serialisieren
+    // -------------------------
     char* new_json = json_serialize_to_string(inputs_val);
 
-    //if (inputs_old != json_serialize_to_string(inputs_val)) {
-    if (inputs_old == NULL || strcmp(inputs_old, new_json) != 0) {
+    // -------------------------
+    // Nur senden, wenn geändert
+    // -------------------------
+    bool changed = (inputs_old == NULL || strcmp(inputs_old, new_json) != 0);
 
-        char* json_text = json_serialize_to_string(inputs_val);
-        server_send(json_text, strlen(json_text));
+    if (inputs_old) {
+        json_free_serialized_string(inputs_old);
+    }
 
+    inputs_old = NULL;
+
+    inputs_old = (char*)malloc(strlen(new_json) + 1); // +1 für '\0'
+    if (inputs_old) {
+        strcpy(inputs_old, new_json); // Inhalt kopieren
+    }
+
+    if (inputs_old) {
+    strcpy(inputs_old, new_json);
+    }
+
+    if (new_json) {
+        json_free_serialized_string(new_json);
+    }
+
+    if (changed) {
+        server_send(new_json, strlen(new_json));
+
+        int is_null = 0;
+        data_is_null:
+
+        // -------------------------
+        // Antwort empfangen (Timeout 1s)
+        // -------------------------
         u8* data = NULL;
-        int len;
+        int len = 0;
 
-        time_t t = time(NULL);
-        struct tm* tm_info = localtime(&t);
-        int tm1 = tm_info->tm_sec;
+        time_t start = time(NULL);
 
-        bool f = false;
-
-        while (data == NULL && f == false) {    
+        while (!data && time(NULL) - start < 1) {
             data = server_receive(&len);
-
-            tm_info = localtime(&t);
-            if (tm1 + 1 <= tm_info->tm_sec) {
-                server_send("no", 2);
-                f = true;
-            }
+            input_poll();
 
             if (input_pressed(IB_HOME, 1)) {
                 server_close();
                 screen_back();
-                f = true;
-                return;
+                break;
             }
-            input_poll();
         }
 
-        if (!f)
-            server_send("yes", 3);
+        if (!data) {
+            server_send("no", 2);
+            is_null++;
+            if (is_null < 2) {
+                return;
+            }
+            goto data_is_null;
+        }
+
+        server_send("yes", 3);
     
         if (len < BUF_SIZE) {
             ((char*)data)[len] = '\0';
         }
 
         count = split_tilde((char*)data, liste);
+
+        data = NULL;
     }
+    // -------------------------
+    // Speicher AUFRÄUMEN
+    // -------------------------
+    json_value_free(inputs_val);
+    inputs_val = NULL;
+    inputs = NULL;
 }
 
 // -------------------------
@@ -333,7 +328,6 @@ static void screen_server_render2D(struct screen* s, int width, int height) {
     gutil_bg();
     
     char buf[128];
-    //snprintf(buf, sizeof(buf), "Server Screen - Network is %s", gstate.network);
     snprintf(buf, sizeof(buf), "Server Screen - Network is %s", gstate.network ? "ON" : "OFF");
 
 
@@ -347,7 +341,7 @@ static void screen_server_render2D(struct screen* s, int width, int height) {
         //--------------------------------------------------------
         // gutil_text(x, y, str, size, shadow)
         //--------------------------------------------------------
-        if (strcmp(liste[i], "gutil_text") == 0) {
+        if (strcmp(liste[i], "gtx") == 0) {
             // Prüfen, dass genug Argumente da sind
             if (i + 5 < count) {
                 int x = atoi(liste[i + 1]);
@@ -365,7 +359,7 @@ static void screen_server_render2D(struct screen* s, int width, int height) {
         //--------------------------------------------------------
         // gfx_bind_texture(tex)
         //--------------------------------------------------------
-        if (strcmp(liste[i], "gfx_bind_texture") == 0) {
+        if (strcmp(liste[i], "gbt") == 0) {
             // Prüfen, dass das Argument da ist
             if (i + 1 < count) {
                 struct tex_gfx* tex = get_texture_by_name(liste[i + 1]);
@@ -379,14 +373,14 @@ static void screen_server_render2D(struct screen* s, int width, int height) {
         //--------------------------------------------------------
         // gutil_bg_panorama()
         //--------------------------------------------------------
-        if (strcmp(liste[i], "gutil_bg_panorama") == 0) {
+        if (strcmp(liste[i], "gbp") == 0) {
             gutil_bg_panorama();
         } else
 
         //--------------------------------------------------------
         // gutil_window(x, y, width, height, title)
         //--------------------------------------------------------
-        if (strcmp(liste[i], "gutil_window") == 0) {
+        if (strcmp(liste[i], "gwow") == 0) {
             if (i + 5 < count) {
                 int x = atoi(liste[i + 1]);
                 int y = atoi(liste[i + 2]);
@@ -402,7 +396,7 @@ static void screen_server_render2D(struct screen* s, int width, int height) {
         //--------------------------------------------------------
         // gutil_text_col(col)
         //--------------------------------------------------------
-        if (strcmp(liste[i], "gutil_text_col") == 0) {
+        if (strcmp(liste[i], "gtc") == 0) {
             if (i + 1 < count) {
                 int col = atoi(liste[i + 1]);
                 gutil_text_col(col);
@@ -413,7 +407,7 @@ static void screen_server_render2D(struct screen* s, int width, int height) {
         //--------------------------------------------------------
         // gutil_texquad(x, y, tx, ty, sx, sy, width, height)
         //--------------------------------------------------------
-        if (strcmp(liste[i], "gutil_texquad") == 0) {
+        if (strcmp(liste[i], "gtq") == 0) {
             if (i + 8 < count) {
                 int x      = atoi(liste[i + 1]);
                 int y      = atoi(liste[i + 2]);
@@ -426,6 +420,34 @@ static void screen_server_render2D(struct screen* s, int width, int height) {
 
                 gutil_texquad(x, y, tx, ty, sx, sy, width, height);
                 i += 8;
+            }
+        } else
+
+        //--------------------------------------------------------
+        // server_screen_set(screen_name)
+        //--------------------------------------------------------
+        if (strcmp(liste[i], "sss") == 0) {
+            if (i + 1 < count) {
+                const char* screen_name2 = liste[i + 1];
+                char screen_name[64];
+                strcpy(screen_name, screen_name2);
+                server_screen_set(screen_name);
+                i += 1;
+            }
+        } else
+
+        //--------------------------------------------------------
+        // gfx_scissor(enable, x, y, width, height)
+        //--------------------------------------------------------
+        if (strcmp(liste[i], "gsc") == 0) {
+            if (i + 5 < count) {
+                bool enable = (strcmp(liste[i + 1], "true") == 0) ? true : false;
+                int x = atoi(liste[i + 2]);
+                int y = atoi(liste[i + 3]);
+                int width = atoi(liste[i + 4]);
+                int height = atoi(liste[i + 5]);
+                gfx_scissor(enable, x, y, width, height);
+                i += 5;
             }
         }
     }

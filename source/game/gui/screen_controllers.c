@@ -219,6 +219,7 @@ static void screen_controllerauswahl_render2D(struct screen* s, int width, int h
 
         gutil_window(slot_x, slot_y, slotwidth, slotheight, text);
 
+        gfx_bind_texture(&texture_gui2);
 
         //icons
         if (controller_for_slot[i] == 1) //                                 wiimote
