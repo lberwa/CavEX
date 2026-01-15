@@ -72,8 +72,12 @@ void* framebuffer3;
 #endif
 
 #ifdef NDEBUG
+	// ram checken
 	#include <ogc/system.h>
 	#include <stdio.h>
+	#include <malloc.h>
+	#include <ogc/lwp_heap.h>
+
 
 	extern void* __Arena1Lo;
 	extern void* __Arena1Hi;
@@ -401,6 +405,8 @@ int main(void) {
 		sound_update();
 		input_poll();
 		gfx_finish(true);
+
+//--------------------------------------------------------------------
 		/*
 		char text1[64];
 		char text2[64];
@@ -414,7 +420,7 @@ int main(void) {
         		 (unsigned int)((u8*)__Arena2Hi - (u8*)__Arena2Lo));
 
 */
-
+/*
 		u32 mem1_free = (u32)((u8*)__Arena1Hi - (u8*)__Arena1Lo);
 		u32 mem2_free = (u32)((u8*)__Arena2Hi - (u8*)__Arena2Lo);
 
@@ -422,16 +428,142 @@ int main(void) {
 		char buf[128];
 		snprintf(buf, sizeof(buf),
     	     "MEM1 total: %u KB\nMEM2 total: %u KB\n"
-	         "MEM1 free: %u KB\nMEM2 free: %u KB\n",
+	         "MEM1 free: %u KB\nMEM2 free: %u KB\n\n\n",
         	 SYS_GetArena1Size()/1024,
     	     SYS_GetArena2Size()/1024,
 	         mem1_free/1024,
         		 mem2_free/1024);
 
 		debug_send(buf);
+		
+		debug_send("---new---\n");
+		struct mallinfo mi;
+    
+		char buffer[100]; // Puffer groß genug für eine Textzeile
+
+
+    // Abfrage der Speicherinformationen
+    mi = mallinfo();
+
+    // Formatieren und Drucken der ersten Zeile
+    snprintf(buffer, sizeof(buffer), "--- Wii RAM Status ---\n");
+    debug_send(buffer); // Ruft terminal_print für die erste Zeile auf
+
+    // Formatieren und Drucken der zweiten Zeile (Gesamt-Heap-Größe)
+    snprintf(buffer, sizeof(buffer), "Gesamt-Heap (Arena): %d KB\n", mi.arena / 1024);
+    debug_send(buffer); // Ruft terminal_print für die zweite Zeile auf
+
+    // Formatieren und Drucken der dritten Zeile (Belegter Speicher)
+    snprintf(buffer, sizeof(buffer), "Belegt (uordblks): %d KB\n", mi.uordblks / 1024);
+    debug_send(buffer); // Ruft terminal_print für die dritte Zeile auf
+    
+    // Formatieren und Drucken der vierten Zeile (Freier Speicher)
+    snprintf(buffer, sizeof(buffer), "Frei (fordblks): %d KB\n", mi.fordblks / 1024);
+    debug_send(buffer); // Ruft terminal_print für die vierte Zeile auf
+
+    // Eine Leerzeile hinzufügen
+    snprintf(buffer, sizeof(buffer), "\n");
+    debug_send(buffer);
+
+    // Beispiel einer Zuweisung, um den Effekt zu zeigen
+    void* big_block = malloc(5 * 1024 * 1024); // 5 MB reservieren
+    
+    if (big_block) {
+        mi = mallinfo(); // Speicher erneut abfragen nach malloc()
+        snprintf(buffer, sizeof(buffer), "Nach 5MB malloc():\n");
+        debug_send(buffer);
+
+        snprintf(buffer, sizeof(buffer), "Aktuell Frei: %d KB\n", mi.fordblks / 1024);
+        debug_send(buffer);
+        
+        free(big_block);
+    } else {
+        snprintf(buffer, sizeof(buffer), "Fehler: Konnte 5MB nicht zuweisen.\n");
+        debug_send(buffer);
+    }
+	*/
+
+	// Arena Grenzen
+    u32 a1lo = (u32)SYS_GetArena1Lo();
+    u32 a1hi = (u32)SYS_GetArena1Hi();
+    u32 a2lo = (u32)SYS_GetArena2Lo();
+    u32 a2hi = (u32)SYS_GetArena2Hi();
+	char buf[256];
+
+    u32 a1_total = (a1hi > a1lo) ? (a1hi - a1lo) : 0;
+    u32 a2_total = (a2hi > a2lo) ? (a2hi - a2lo) : 0;
+
+    struct mallinfo mi = mallinfo();
+
+    // mallinfo.uordblks = total allocated bytes by malloc
+    // mallinfo.fordblks = total free bytes in malloc's internal free list
+    // Achtung: mallinfo bezieht sich auf den malloc-Heap, typischerweise Arena1 (oder wo dein malloc initialisiert wurde).
+    int malloc_used = mi.uordblks;
+    int malloc_free_internal = mi.fordblks;
+/*
+    printf("Arena1 (MEM1): lo=0x%08X hi=0x%08X total=%u bytes\n", a1lo, a1hi, a1_total);
+    printf("Arena2 (MEM2): lo=0x%08X hi=0x%08X total=%u bytes\n", a2lo, a2hi, a2_total);
+
+    printf("\nmalloc (default heap): used (uordblks) = %d bytes\n", malloc_used);
+    printf("malloc internal free (fordblks) = %d bytes\n", malloc_free_internal);
+
+    // Abschätzung: wieviel von Arena1 noch 'verfügbar' (sehr grobe Schätzung):
+    // available_in_arena1 = a1_total - malloc_used
+    // (Hinweis: das ist nur eine Näherung; malloc hat Overhead/Fragmentierung und andere Komponenten können Arena belegen)
+    if (a1_total >= (u32)malloc_used)
+        printf("geschätzter freier Platz in Arena1 = %u bytes\n", a1_total - (u32)malloc_used);
+    else
+        debug_send("geschätzter freier Platz in Arena1 = 0 (oder malloc > arena)\n");
+*/
+
+// Arena 1 Adressen und Total
+    snprintf(buf, sizeof(buf), "Arena1 (MEM1): lo=0x%08X hi=0x%08X total=%u bytes", 
+             a1lo, a1hi, a1_total);
+    debug_send(buf);
+    
+    // Zeilenumbruch (simuliert)
+    snprintf(buf, sizeof(buf), " "); 
+    debug_send(buf);
+
+    // Arena 2 Adressen und Total
+    snprintf(buf, sizeof(buf), "Arena2 (MEM2): lo=0x%08X hi=0x%08X total=%u bytes", 
+             a2lo, a2hi, a2_total);
+    debug_send(buf);
+
+    // Zeilenumbruch
+    snprintf(buf, sizeof(buf), " ");
+    debug_send(buf);
+
+    // malloc (default heap) used
+    snprintf(buf, sizeof(buf), "malloc (default heap): used (uordblks) = %d bytes", 
+             malloc_used);
+    debug_send(buf);
+
+    // malloc internal free
+    snprintf(buf, sizeof(buf), "malloc internal free (fordblks) = %d bytes", 
+             malloc_free_internal);
+    debug_send(buf);
+
+    // Zeilenumbruch
+    snprintf(buf, sizeof(buf), " ");
+    debug_send(buf);
+
+    // Abschätzung
+    if (a1_total >= (u32)malloc_used) {
+        snprintf(buf, sizeof(buf), "geschätzter freier Platz in Arena1 = %u bytes", 
+                 a1_total - (u32)malloc_used);
+        debug_send(buf);
+    } else {
+        snprintf(buf, sizeof(buf), "geschätzter freier Platz in Arena1 = 0 (oder malloc > arena)");
+        debug_send(buf);
+    }
+
+    // Für Arena2: wenn du MEM2 aktiv verwendest, tracke dortige Allocs separat.
+    // Viele Programme legen große Buffers mit memalign/MEM2_alloc in MEM2 an; diese musst du zählen.
+    debug_send("\n(Hinweis: MEM2-Nutzung wird nicht automatisch durch mallinfo gemeldet — falls du MEM2 für große Buffers verwendest, musst du deren Größe selbst tracken.)\n");
 
 		//debug_send(text2);
-
+//----------------------------------------------------------------------------
 	}
 
 	return 0;

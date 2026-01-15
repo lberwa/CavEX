@@ -107,6 +107,7 @@ static void screen_sworld_update2(struct screen* s, float dt) { //TODO: rename
                 	menu_screen_set(&screen_server);
 				} else {
 					server_failed = true;
+					return;
 				}
 				
 				break;

@@ -65,6 +65,7 @@ struct tex_gfx texture_armor_iron2;
 struct tex_gfx texture_armor_diamond1;
 struct tex_gfx texture_armor_diamond2;
 struct tex_gfx texture_bg[12];
+struct tex_gfx texture_server[12];
 
 //struct tex_gfx texture_button;
 //struct tex_gfx texture_buttonlight;
@@ -101,8 +102,6 @@ void tex_init() {
 
 	tex_gfx_load_file(&texture_font, "default.png", TEX_FMT_I8, false);
 	gutil_reset_font(&texture_font);
-
-	tex_gfx_load_file(&texture_black_font, "default_black.png", TEX_FMT_I8, false);
 
 	tex_gfx_load_file(&texture_anim, "anim.png", TEX_FMT_RGBA32, false);
 
@@ -163,26 +162,19 @@ void tex_init() {
 					  TEX_FMT_RGBA16, false);
 
 	tex_gfx_load_file(&texture_mob_char, "mob/char.png", TEX_FMT_RGBA16, false);
-
-	//tex_gfx_load_file(&texture_button, "button.png", TEX_FMT_RGBA16, false);
-	//tex_gfx_load_file(&texture_buttonlight, "buttonlight.png", TEX_FMT_RGBA16, false);
-	tex_gfx_load_file(&texture_bg2, "bg.png", TEX_FMT_RGBA16, false);
-
-	//tex_gfx_load_file(&texture_bg[1], "bg1.png", TEX_FMT_RGB16, false);
-	//tex_gfx_load_file(&texture_bg[2], "bg2.png", TEX_FMT_RGB16, false);
 	
-	tex_gfx_load_file(&texture_bg[0],  "bg1.png",  TEX_FMT_RGB16, false);
-	tex_gfx_load_file(&texture_bg[1],  "bg2.png",  TEX_FMT_RGB16, false);
-	tex_gfx_load_file(&texture_bg[2],  "bg3.png",  TEX_FMT_RGB16, false);
-	tex_gfx_load_file(&texture_bg[3],  "bg4.png",  TEX_FMT_RGB16, false);
-	tex_gfx_load_file(&texture_bg[4],  "bg5.png",  TEX_FMT_RGB16, false);
-	tex_gfx_load_file(&texture_bg[5],  "bg6.png",  TEX_FMT_RGB16, false);
-	tex_gfx_load_file(&texture_bg[6],  "bg7.png",  TEX_FMT_RGB16, false);
-	tex_gfx_load_file(&texture_bg[7],  "bg8.png",  TEX_FMT_RGB16, false);
-	tex_gfx_load_file(&texture_bg[8],  "bg9.png",  TEX_FMT_RGB16, false);
-	tex_gfx_load_file(&texture_bg[9],  "bg10.png", TEX_FMT_RGB16, false);
-	tex_gfx_load_file(&texture_bg[10], "bg11.png", TEX_FMT_RGB16, false);
-	tex_gfx_load_file(&texture_bg[11], "bg12.png", TEX_FMT_RGB16, false);
+	tex_gfx_load_file(&texture_bg[0],  "bg/bg1.png",  TEX_FMT_RGB16, false);
+	tex_gfx_load_file(&texture_bg[1],  "bg/bg2.png",  TEX_FMT_RGB16, false);
+	tex_gfx_load_file(&texture_bg[2],  "bg/bg3.png",  TEX_FMT_RGB16, false);
+	tex_gfx_load_file(&texture_bg[3],  "bg/bg4.png",  TEX_FMT_RGB16, false);
+	tex_gfx_load_file(&texture_bg[4],  "bg/bg5.png",  TEX_FMT_RGB16, false);
+	tex_gfx_load_file(&texture_bg[5],  "bg/bg6.png",  TEX_FMT_RGB16, false);
+	tex_gfx_load_file(&texture_bg[6],  "bg/bg7.png",  TEX_FMT_RGB16, false);
+	tex_gfx_load_file(&texture_bg[7],  "bg/bg8.png",  TEX_FMT_RGB16, false);
+	tex_gfx_load_file(&texture_bg[8],  "bg/bg9.png",  TEX_FMT_RGB16, false);
+	tex_gfx_load_file(&texture_bg[9],  "bg/bg10.png", TEX_FMT_RGB16, false);
+	tex_gfx_load_file(&texture_bg[10], "bg/bg11.png", TEX_FMT_RGB16, false);
+	tex_gfx_load_file(&texture_bg[11], "bg/bg12.png", TEX_FMT_RGB16, false);
 
 
 

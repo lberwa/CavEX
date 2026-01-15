@@ -61,7 +61,6 @@ extern struct tex_gfx texture_minecart;
 extern struct tex_gfx texture_creeper;
 extern struct tex_gfx texture_pig;
 extern struct tex_gfx texture_font;
-extern struct tex_gfx texture_black_font;
 extern struct tex_gfx texture_anim;
 extern struct tex_gfx texture_gui_inventory;
 extern struct tex_gfx texture_gui_crafting;
@@ -90,10 +89,8 @@ extern struct tex_gfx texture_armor_iron2;
 extern struct tex_gfx texture_armor_diamond1;
 extern struct tex_gfx texture_armor_diamond2;
 
-//extern struct tex_gfx texture_button;
-//extern struct tex_gfx texture_buttonlight;
-extern struct tex_gfx texture_bg2;
 extern struct tex_gfx texture_bg[12];
+extern struct tex_gfx texture_server[12];
 
 void tex_init_pre(void);
 void tex_init(void);
