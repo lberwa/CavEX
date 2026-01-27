@@ -25,12 +25,10 @@
 
 #define RPC_INBOX_SIZE 16
 static struct client_rpc rpc_msg[RPC_INBOX_SIZE];
-struct thread_channel clin_inbox;
+static struct thread_channel clin_inbox;
 static struct thread_channel clin_empty_msg;
 
 static ptime_t last_pos_update;
-
-ptime_t global_last_pos_update;// = last_pos_update;
 
 
 void clin_chunk(w_coord_t x, w_coord_t y, w_coord_t z, w_coord_t sx,
@@ -80,12 +78,8 @@ void clin_chunk(w_coord_t x, w_coord_t y, w_coord_t z, w_coord_t sx,
 	free(lighting_torch);
 }
 
-struct client_rpc* global_call_type;
-
 void clin_process(struct client_rpc* call) {
 	assert(call);
-
-	global_call_type = call;
 
 	switch(call->type) {
 		case CRPC_CHUNK:
@@ -334,8 +328,6 @@ void clin_update() {
 		clin_process(call);
 		tchannel_send(&clin_empty_msg, call, true);
 	}
-
-	global_last_pos_update = last_pos_update;
 
 	if(gstate.world_loaded && time_diff_ms(last_pos_update, time_get()) >= 50) {
 		svin_rpc_send(&(struct server_rpc) {

@@ -35,8 +35,6 @@ struct camera {
 	} controller;
 };
 
-#include "../entity/entity.h"
-#include "../world.h"
 
 struct camera_ray_result {
 	bool hit;

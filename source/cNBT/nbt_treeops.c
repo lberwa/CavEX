@@ -42,8 +42,9 @@ void nbt_free_list(struct nbt_list* list)
     list_for_each_safe(current, temp, &list->entry)
     {
         struct nbt_list* entry = list_entry(current, struct nbt_list, entry);
-
-        nbt_free(entry->data);
+        
+        //nbt_free(entry->data);
+        list_del(current);//       <---
         free(entry);
     }
 

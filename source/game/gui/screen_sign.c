@@ -57,7 +57,7 @@ static void screen_sign_reset(struct screen* s, int width, int height) {
 }
 
 static void screen_sign_update(struct screen* s, float dt) {
-	if(input_pressed(IB_INVENTORY, 1)) {
+	if(input_pressed(IB_INVENTORY, 0)) {
 		svin_rpc_send(&(struct server_rpc) {
 			.type = SRPC_WINDOW_CLOSE,
 			.payload.window_close.window = sign_container,
@@ -67,15 +67,15 @@ static void screen_sign_update(struct screen* s, float dt) {
 	}
 
 	// TODO: keyboard input on PC, on-screen keyboard on Wii
-	if(input_pressed(IB_GUI_LEFT, 1)) {
+	if(input_pressed(IB_GUI_LEFT, 0)) {
 		selected_slot = (selected_slot - 1) & 63;
 	}
 
-	if(input_pressed(IB_GUI_RIGHT, 1)) {
+	if(input_pressed(IB_GUI_RIGHT, 0)) {
 		selected_slot = (selected_slot + 1) & 63;
 	}
 
-	if(input_pressed(IB_GUI_UP, 1)) {
+	if(input_pressed(IB_GUI_UP, 0)) {
 		// this action decrements the character
 		uint16_t action_id;
 		if(windowc_new_action(gstate.windows[sign_container], &action_id,
@@ -90,7 +90,7 @@ static void screen_sign_update(struct screen* s, float dt) {
 		}
 	}
 
-	if(input_pressed(IB_GUI_DOWN, 1)) {
+	if(input_pressed(IB_GUI_DOWN, 0)) {
 		// this action increments the character
 		uint16_t action_id;
 		if(windowc_new_action(gstate.windows[sign_container], &action_id,
