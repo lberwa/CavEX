@@ -44,18 +44,16 @@ static bool onItemPlace(struct server_local* s, struct item_data* it,
 						struct block_info* where, struct block_info* on,
 						enum side on_side) {
 	struct block_data blk;
-	if(!server_world_get_block(&s->world, where->x, where->y - 1, where->z,
-							   &blk))
+	if (!server_world_get_block(&s->world, where->x, where->y - 1, where->z, &blk))
 		return false;
-		
+
 	// Check if the block is suitable for planting mushrooms (grass or dirt)
-	if(!blocks[blk.type] || blocks[blk.type]->can_see_through)
+	if (blk.type != BLOCK_GRASS && blk.type != BLOCK_DIRT)
 		return false;
 
 	// Allow placing the mushroom
 	return block_place_default(s, it, where, on, on_side);
 }
-
 
 static void onRandomTick(struct server_local* s, struct block_info* blk) {
 	if (blk->block->sky_light >= 13 || blk->block->torch_light >= 13)

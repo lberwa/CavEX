@@ -105,7 +105,7 @@ void camera_physics(struct camera* c, float dt) {
 	assert(c);
 
 	float jdx, jdy;
-	if(input_joystick(dt, &jdx, &jdy, 1)) {
+	if(input_joystick(dt, &jdx, &jdy, 0)) {
 		c->rx -= jdx * 2.0F;
 		c->ry -= jdy * 2.0F;
 	}
@@ -114,32 +114,32 @@ void camera_physics(struct camera* c, float dt) {
 	float speed_c = 40.0F;
 	float air_friction = 0.05F;
 
-	if(input_held(IB_LEFT, 1)) {
+	if(input_held(IB_LEFT, 0)) {
 		acc_x += cos(c->rx) * speed_c;
 		acc_z -= sin(c->rx) * speed_c;
 	}
 
-	if(input_held(IB_RIGHT, 1)) {
+	if(input_held(IB_RIGHT, 0)) {
 		acc_x -= cos(c->rx) * speed_c;
 		acc_z += sin(c->rx) * speed_c;
 	}
 
-	if(input_held(IB_FORWARD, 1)) {
+	if(input_held(IB_FORWARD, 0)) {
 		acc_x += sin(c->rx) * sin(c->ry) * speed_c;
 		acc_y += cos(c->ry) * speed_c;
 		acc_z += cos(c->rx) * sin(c->ry) * speed_c;
 	}
 
-	if(input_held(IB_BACKWARD, 1)) {
+	if(input_held(IB_BACKWARD, 0)) {
 		acc_x -= sin(c->rx) * sin(c->ry) * speed_c;
 		acc_y -= cos(c->ry) * speed_c;
 		acc_z -= cos(c->rx) * sin(c->ry) * speed_c;
 	}
 
-	if(input_held(IB_JUMP, 1))
+	if(input_held(IB_JUMP, 0))
 		acc_y += speed_c;
 
-	if(input_held(IB_SNEAK, 1))
+	if(input_held(IB_SNEAK, 0))
 		acc_y -= speed_c;
 
 	c->controller.vx += acc_x * dt;
@@ -208,7 +208,7 @@ void camera_attach(struct camera* c, struct entity* e, float tick_delta,
 	//printf("c%.03f %.03f %.03f\n", c->x, c->y, c->z);
 
 	float jdx, jdy;
-	if(e->data.local_player.capture_input && input_joystick(dt, &jdx, &jdy, 1)) {
+	if(e->data.local_player.capture_input && input_joystick(dt, &jdx, &jdy, 0)) {
 		c->rx -= jdx * 2.0F;
 		c->ry -= jdy * 2.0F;
 	}

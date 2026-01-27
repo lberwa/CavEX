@@ -154,17 +154,7 @@ static void onRightClick(struct server_local* s, struct item_data* it,
                            on->x, on->y, on->z,
                            cur);
 }
-/*
-static void onRightClick(struct server_local* s, struct item_data* it,
-						 struct block_info* where, struct block_info* on,
-						 enum side on_side) {
-	// flip metadata bit to open or close the trapdoor
-	server_world_set_block(&s->world, on->x, on->y, on->z, (struct block_data) {
-		.type = BLOCK_TRAP_DOOR,
-		.metadata = on->block->metadata ^ 0x04
-	});
-}
-*/
+
 struct block block_trapdoor = {
 	.name = "Trapdoor",
 	.getSideMask = getSideMask,
@@ -198,5 +188,6 @@ struct block block_trapdoor = {
 		.render_data.block.has_default = false,
 		.armor.is_armor = false,
 		.tool.type = TOOL_TYPE_ANY,
+
 	},
 };

@@ -41,7 +41,7 @@
 #include "graphics/gui_util.h"
 #include "graphics/gfx_settings.h"
 #include "graphics/render_entity.h"
-#include "graphics/render_monster.h"
+//#include "graphics/render_monster.h"
 #include "item/recipe.h"
 #include "network/client_interface.h"
 #include "network/server_interface.h"
@@ -127,7 +127,7 @@ int main(void) {
 	blocks_init();
 	items_init();
 	render_entity_init();
-	render_monster_init();
+	//render_monster_init();
 
 	recipe_init();
 	gfx_setup();

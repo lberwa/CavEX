@@ -20,6 +20,14 @@
 #include <assert.h>
 
 #include "thread.h"
+
+#ifdef PLATFORM_WII 
+#define __XSI_VISIBLE 600 // usleep
+#define __POSIX_VISIBLE 200112
+#include <unistd.h>
+#include <time.h>
+#endif
+
 #include <ogc/video.h>
 #include <stddef.h>
 #ifdef PLATFORM_PC
@@ -127,11 +135,12 @@ void thread_join(struct thread* t) {
 }
 
 void thread_msleep(size_t ms) {
-    // Rough estimate: 1 frame = ~16ms (assuming 60Hz)
-    size_t frames = ms / 16;
+    usleep(ms * 1000);
+	// Rough estimate: 1 frame = ~16ms (assuming 60Hz)
+	/*size_t frames = ms / 16;
     for (size_t i = 0; i < frames; ++i) {
         VIDEO_WaitVSync();
-    }
+    }*/
 }
 
 void tchannel_init(struct thread_channel* c, size_t count) {
