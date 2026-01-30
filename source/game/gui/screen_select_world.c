@@ -144,10 +144,10 @@ static void screen_sworld_reset(struct screen* s, int width, int height) {
 }
 
 static void screen_sworld_update(struct screen* s, float dt) {
-	if(input_pressed(IB_GUI_UP, 1) && gui_selection > 0)
+	if(input_pressed(IB_GUI_UP, 0) && gui_selection > 0)
 		gui_selection--;
 
-	if(input_pressed(IB_GUI_DOWN, 1) && gui_selection < stack_size(worlds) - 1)
+	if(input_pressed(IB_GUI_DOWN, 0) && gui_selection < stack_size(worlds) - 1)
 		gui_selection++;
 
 	if(scroll_offset + (int)gui_selection * entry_height < 4)
@@ -158,7 +158,7 @@ static void screen_sworld_update(struct screen* s, float dt) {
 		scroll_offset = height_visible - side_padding
 			- (int)(gui_selection + 1) * entry_height;
 
-	if(stack_size(worlds) > 0 && input_pressed(IB_GUI_CLICK, 1)) {
+	if(stack_size(worlds) > 0 && input_pressed(IB_GUI_CLICK, 0)) {
 		sound_play(pcm_click);
 		struct world_option opt;
 		stack_at(worlds, &opt, gui_selection);
@@ -171,7 +171,7 @@ static void screen_sworld_update(struct screen* s, float dt) {
 		screen_set(&screen_load_world);
 	}
 
-	if(input_pressed(IB_BACK, 1)) {
+	if(input_pressed(IB_BACK, 0)) {
 		screen_back();
 		sound_play(pcm_click);
 	}

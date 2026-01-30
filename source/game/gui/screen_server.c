@@ -200,7 +200,7 @@ static void screen_server_reset(struct screen* s, int width, int height) {
 // -------------------------
 static void screen_server_update(struct screen* s, float dt) {
 
-    if (input_pressed(IB_HOME, 1)) {
+    if (input_pressed(IB_HOME, 0)) {
         server_close();
         screen_back();
         return;
@@ -222,9 +222,9 @@ static void screen_server_update(struct screen* s, float dt) {
     JSON_Object* other    = json_value_get_object(other_val);
 
     for (int i = 0; i < MAX_INPUTS; i++) {
-        json_object_set_boolean(pressed,  inputs1[i], input_pressed(inputs2[i], 1));
-        json_object_set_boolean(released, inputs1[i], input_released(inputs2[i], 1));
-        json_object_set_boolean(held,     inputs1[i], input_held(inputs2[i], 1));
+        json_object_set_boolean(pressed,  inputs1[i], input_pressed(inputs2[i], 0));
+        json_object_set_boolean(released, inputs1[i], input_released(inputs2[i], 0));
+        json_object_set_boolean(held,     inputs1[i], input_held(inputs2[i], 0));
     }
 
     json_object_set_string(other, "mac_addr", mac_addr);
@@ -287,7 +287,7 @@ static void screen_server_update(struct screen* s, float dt) {
             data = server_receive(&len);
             input_poll();
 
-            if (input_pressed(IB_HOME, 1)) {
+            if (input_pressed(IB_HOME, 0)) {
                 server_close();
                 screen_back();
                 break;

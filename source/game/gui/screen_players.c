@@ -1,6 +1,5 @@
 #include <stdio.h>
 #include <stdbool.h>
-#include <wiiuse/wpad.h>
 
 #include "../../platform/gfx.h"
 #include "../game_state.h"
@@ -59,28 +58,24 @@ static void screen_splayeranzahl_reset(struct screen* s, int width, int height) 
 
 // Update-Funktion: Handhabt Navigation und Auswahl
 static void screen_splayeranzahl_update(struct screen* s, float dt) {
-   
 	for (int p = 0; p < MAX_WIIMOTES; p++) {
-	    u32 wpad_pressed = WPAD_ButtonsDown(p);
-	
 	    // Navigation nach oben
-	    if ((wpad_pressed & WPAD_BUTTON_UP) && gui_selection > 0) {
+	    if (input_pressed(IB_GUI_UP, p) && gui_selection > 0) {
 	        gui_selection--;
 	    }
 	
 	    // Navigation nach unten
-	    if ((wpad_pressed & WPAD_BUTTON_DOWN) && gui_selection < PLAYER_COUNT - 1) {
+	    if (input_pressed(IB_GUI_DOWN, p) && gui_selection < PLAYER_COUNT - 1) {
 	        gui_selection++;
 	    }
-		
     
 	    // Auswahl mit A
-	    if((wpad_pressed & WPAD_BUTTON_A)) {
+	    if((input_pressed(IB_GUI_CLICK, p))) {
 			sound_play(pcm_click);
 	        switch(gui_selection) {
 	            case ONE_PLAYER:
 	                gstate.num_players = 1;
-	                menu_screen_set(&screen_controllerauswahl); // nächster Screen z. B. Controller-Zuweisung
+	                menu_screen_set(&screen_controllerauswahl);
 	                break;
 	            case TWO_PLAYERS:
 	                gstate.num_players = 2;
@@ -97,13 +92,9 @@ static void screen_splayeranzahl_update(struct screen* s, float dt) {
 	        }
 	    }
 	
-	
-	    // Home-Button zum Abbrechen
-	    if (wpad_pressed & WPAD_BUTTON_B) {
+	    if (input_pressed(IB_BACK, p)) {
 			sound_play(pcm_click);
 	        screen_back();
-		return;
-		
 	    }
     }
 }

@@ -503,7 +503,7 @@ static void* chunk_mesher_local_thread(void* user) {
 	while(1) {
 		struct chunk_mesher_rpc* request;
 		tchannel_receive(&mesher_requests, (void**)&request, true);
-		chunk_mesher_build(request);
+		chunk_mesher_build(request); // 			FIXME: sometimes crashes
 		tchannel_send(&mesher_results, request, true);
 	}
 

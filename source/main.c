@@ -111,6 +111,11 @@ int main(void) {
 	gstate.digging.active = false;
 	gstate.paused = false;
 
+	for(int i=1; i<4; i++) {
+        gstate.player_sequence[i] = -1;
+    }
+    gstate.player_sequence[0] = 0; // default: chan 0
+
 	rand_gen_seed(&gstate.rand_src);
 
 #ifdef PLATFORM_WII
@@ -385,7 +390,7 @@ int main(void) {
 			gstate.current_screen->render2D(gstate.current_screen, gfx_width(),
 											gfx_height());
 
-		if(input_pressed(IB_SCREENSHOT, 1)) {
+		if(input_pressed(IB_SCREENSHOT, 0)) {
 			size_t width, height;
 			gfx_copy_framebuffer(NULL, &width, &height);
 
@@ -407,6 +412,7 @@ int main(void) {
 		gfx_finish(true);
 
 //--------------------------------------------------------------------
+	#ifdef DEBUGSEND
 		/*
 		char text1[64];
 		char text2[64];
@@ -561,7 +567,7 @@ int main(void) {
     // Für Arena2: wenn du MEM2 aktiv verwendest, tracke dortige Allocs separat.
     // Viele Programme legen große Buffers mit memalign/MEM2_alloc in MEM2 an; diese musst du zählen.
     debug_send("\n(Hinweis: MEM2-Nutzung wird nicht automatisch durch mallinfo gemeldet — falls du MEM2 für große Buffers verwendest, musst du deren Größe selbst tracken.)\n");
-
+#endif
 		//debug_send(text2);
 //----------------------------------------------------------------------------
 	}

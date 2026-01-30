@@ -71,15 +71,15 @@ static bool entity_tick(struct entity* e) {
 		   cart->data.minecart.occupant_id == e->id) {
 
 			// Only allow control if we're really the rider
-			if(input_held(IB_FORWARD, 1))  cart->data.minecart.speed += 0.01f;
-			if(input_held(IB_BACKWARD, 1)) cart->data.minecart.speed -= 0.01f;
+			if(input_held(IB_FORWARD, 0))  cart->data.minecart.speed += 0.01f;
+			if(input_held(IB_BACKWARD, 0)) cart->data.minecart.speed -= 0.01f;
 
 			// Clamp speed to a safe limit
 			if(cart->data.minecart.speed >  0.3f) cart->data.minecart.speed =  0.3f;
 			if(cart->data.minecart.speed < -0.3f) cart->data.minecart.speed = -0.3f;
 
 			// Dismount
-			if(input_pressed(IB_JUMP, 1)) {
+			if(input_pressed(IB_JUMP, 0)) {
 				cart->data.minecart.occupied   = false;
 				cart->data.minecart.occupant_id = 0;
 				// Lift player a little to avoid clipping into the cart
@@ -119,11 +119,11 @@ static bool entity_tick(struct entity* e) {
 	bool jumping = false;
 
 	if(e->data.local_player.capture_input) {
-		if(input_held(IB_FORWARD, 1))  forward++;
-		if(input_held(IB_BACKWARD, 1)) forward--;
-		if(input_held(IB_RIGHT, 1))    strafe++;
-		if(input_held(IB_LEFT, 1))     strafe--;
-		jumping = input_held(IB_JUMP, 1);
+		if(input_held(IB_FORWARD, 0))  forward++;
+		if(input_held(IB_BACKWARD, 0)) forward--;
+		if(input_held(IB_RIGHT, 0))    strafe++;
+		if(input_held(IB_LEFT, 0))     strafe--;
+		jumping = input_held(IB_JUMP, 0);
 	}
 
 	int dist = forward * forward + strafe * strafe;

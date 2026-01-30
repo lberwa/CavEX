@@ -43,7 +43,8 @@ struct game_state {
 	int gerenderte_splitscreen_anzahl; 
 	int height2_icon;
 	bool game_run;
-	int num_players; 
+	int num_players;
+	int player_sequence[4];
 	sig_atomic_t quit;
 	struct random_gen rand_src;
 	struct config config_user;

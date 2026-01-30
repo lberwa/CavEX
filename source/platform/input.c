@@ -23,6 +23,8 @@
 #include "gfx.h"
 #include "input.h"
 
+#define MAX_WIIMOTES 4
+
 #ifdef PLATFORM_PC
 
 #include <GLFW/glfw3.h>
@@ -121,82 +123,97 @@ void input_native_joystick(float dt, float* dx, float* dy, int player) {
 #ifdef PLATFORM_WII
 
 #include <wiiuse/wpad.h>
+#include <ogc/pad.h>
+#include "../game/game_state.h"
+
+#define MAX_CONTROLLERS 3
 
 static struct {
 	float dx, dy;
 	float magnitude;
 	bool available;
-} joystick_input[3];
+} joystick_input[MAX_CONTROLLERS * MAX_WIIMOTES]; // 1: 0-2,   2: 3-5,   3: 6-8,   4: 9-11
 
-static bool js_emulated_btns_prev[3][4];
-static bool js_emulated_btns_held[3][4];
+static bool js_emulated_btns_prev[8][3][4];
+static bool js_emulated_btns_held[8][3][4];
 
 void input_init() {
 	WPAD_Init();
-	WPAD_SetDataFormat(WPAD_CHAN_0, WPAD_FMT_BTNS_ACC_IR);
-	WPAD_SetVRes(WPAD_CHAN_0, gfx_width(), gfx_height());
+	PAD_Init();
+	WPAD_SetDataFormat(WPAD_CHAN_ALL, WPAD_FMT_BTNS_ACC_IR);
+	WPAD_SetVRes(WPAD_CHAN_ALL, gfx_width(), gfx_height());
 
-	for(int k = 0; k < 4; k++) {
-		for(int j = 0; j < 3; j++)
-			js_emulated_btns_prev[j][k] = js_emulated_btns_held[j][k] = false;
+	for (int p = 0; p < 8; p++) {
+		for(int k = 0; k < 4; k++) {
+			for(int j = 0; j < 3; j++) {
+				js_emulated_btns_prev[p][j][k] = js_emulated_btns_held[p][j][k] = false;
+			}
+		}
 	}
 }
 
 void input_poll() {
 	WPAD_ScanPads();
+	PAD_ScanPads();
 
-	expansion_t e;
-	WPAD_Expansion(WPAD_CHAN_0, &e);
+	for (int i = 0; i < MAX_WIIMOTES; i++) {
+		expansion_t e;
+		WPAD_Expansion(i, &e);
 
-	if(e.type == WPAD_EXP_NUNCHUK) {
-		joystick_input[0].dx = sin(glm_rad(e.nunchuk.js.ang));
-		joystick_input[0].dy = cos(glm_rad(e.nunchuk.js.ang));
-		joystick_input[0].magnitude = e.nunchuk.js.mag;
-		joystick_input[0].available = true;
-	} else {
-		joystick_input[0].available = false;
-	}
-
-	if(e.type == WPAD_EXP_CLASSIC) {
-		joystick_input[1].dx = sin(glm_rad(e.classic.ljs.ang));
-		joystick_input[1].dy = cos(glm_rad(e.classic.ljs.ang));
-		joystick_input[1].magnitude = e.classic.ljs.mag;
-		joystick_input[1].available = true;
-
-		joystick_input[2].dx = sin(glm_rad(e.classic.rjs.ang));
-		joystick_input[2].dy = cos(glm_rad(e.classic.rjs.ang));
-		joystick_input[2].magnitude = e.classic.rjs.mag;
-		joystick_input[2].available = true;
-	} else {
-		joystick_input[1].available = joystick_input[2].available = false;
-	}
-
-	for(int j = 0; j < 3; j++) {
-		for(int k = 0; k < 4; k++) {
-			js_emulated_btns_prev[j][k] = js_emulated_btns_held[j][k];
-			js_emulated_btns_held[j][k] = false;
+		if(e.type == WPAD_EXP_NUNCHUK) {
+			joystick_input[0 + MAX_CONTROLLERS*i].dx = sin(glm_rad(e.nunchuk.js.ang));
+			joystick_input[0 + MAX_CONTROLLERS*i].dy = cos(glm_rad(e.nunchuk.js.ang));
+			joystick_input[0 + MAX_CONTROLLERS*i].magnitude = e.nunchuk.js.mag;
+			joystick_input[0 + MAX_CONTROLLERS*i].available = true;
+		} else {
+			joystick_input[0 + MAX_CONTROLLERS*i].available = false;
 		}
 
-		if(joystick_input[j].available) {
-			float x = joystick_input[j].dx * joystick_input[j].magnitude;
-			float y = joystick_input[j].dy * joystick_input[j].magnitude;
+		if(e.type == WPAD_EXP_CLASSIC) {
+			joystick_input[1 + MAX_CONTROLLERS*i].dx = sin(glm_rad(e.classic.ljs.ang));
+			joystick_input[1 + MAX_CONTROLLERS*i].dy = cos(glm_rad(e.classic.ljs.ang));
+			joystick_input[1 + MAX_CONTROLLERS*i].magnitude = e.classic.ljs.mag;
+			joystick_input[1 + MAX_CONTROLLERS*i].available = true;
 
-			if(x > 0.2F) {
-				js_emulated_btns_held[j][3] = true;
-			} else if(x < -0.2F) {
-				js_emulated_btns_held[j][2] = true;
+			joystick_input[2 + MAX_CONTROLLERS*i].dx = sin(glm_rad(e.classic.rjs.ang));
+			joystick_input[2 + MAX_CONTROLLERS*i].dy = cos(glm_rad(e.classic.rjs.ang));
+			joystick_input[2 + MAX_CONTROLLERS*i].magnitude = e.classic.rjs.mag;
+			joystick_input[2 + MAX_CONTROLLERS*i].available = true;
+		} else {
+			joystick_input[1 + MAX_CONTROLLERS*i].available = 
+						joystick_input[2 + MAX_CONTROLLERS*i].available = false;
+		}
+
+		for(int j = 0; j < 3; j++) {
+			for(int k = 0; k < 4; k++) {
+				js_emulated_btns_prev[i][j][k] = js_emulated_btns_held[i][j][k];
+				js_emulated_btns_held[i][j][k] = false;
 			}
 
-			if(y > 0.2F) {
-				js_emulated_btns_held[j][0] = true;
-			} else if(y < -0.2F) {
-				js_emulated_btns_held[j][1] = true;
+			if(joystick_input[j + MAX_CONTROLLERS*i].available) 
+			{
+				float x = joystick_input[j + MAX_CONTROLLERS*i].dx *
+								 joystick_input[j + MAX_CONTROLLERS*i].magnitude;
+				float y = joystick_input[j + MAX_CONTROLLERS*i].dy * 
+								 joystick_input[j + MAX_CONTROLLERS*i].magnitude;
+
+				if(x > 0.2F) {
+					js_emulated_btns_held[i][j][3] = true;
+				} else if(x < -0.2F) {
+					js_emulated_btns_held[i][j][2] = true;
+				}
+
+				if(y > 0.2F) {
+					js_emulated_btns_held[i][j][0] = true;
+				} else if(y < -0.2F) {
+					js_emulated_btns_held[i][j][1] = true;
+				}
 			}
 		}
 	}
 }
 
-static uint32_t input_wpad_translate(int key) {
+static uint32_t input_wpad_translate(int key, int player) {
 	switch(key) {
 		case 0: return WPAD_BUTTON_UP;
 		case 1: return WPAD_BUTTON_DOWN;
@@ -208,12 +225,12 @@ static uint32_t input_wpad_translate(int key) {
 		case 7: return WPAD_BUTTON_2;
 		case 8: return WPAD_BUTTON_PLUS;
 		case 9: return WPAD_BUTTON_MINUS;
-		case 10: return WPAD_BUTTON_HOME;
+		case 10:return WPAD_BUTTON_HOME;
 		default: break;
 	}
 
 	expansion_t e;
-	WPAD_Expansion(WPAD_CHAN_0, &e);
+	WPAD_Expansion(player, &e);
 
 	if(e.type == WPAD_EXP_NUNCHUK) {
 		switch(key) {
@@ -258,26 +275,26 @@ static uint32_t input_wpad_translate(int key) {
 	return 0;
 }
 
-void input_native_key_status(int key, bool* pressed, bool* released,
+void input_native_key_status(int key, int player, bool* pressed, bool* released,
 							 bool* held) {
 	if(key >= 900 && key < 924) {
 		int js = (key - 900) / 10;
 		int offset = (key - 900) % 10;
 		if(offset < 4) {
-			*held = js_emulated_btns_held[js][offset]
-				&& js_emulated_btns_prev[js][offset];
-			*pressed = js_emulated_btns_held[js][offset]
-				&& !js_emulated_btns_prev[js][offset];
-			*released = !js_emulated_btns_held[js][offset]
-				&& js_emulated_btns_prev[js][offset];
+			*held =      js_emulated_btns_held[player][js][offset]
+				      && js_emulated_btns_prev[player][js][offset];
+		    *pressed =   js_emulated_btns_held[player][js][offset]
+			         && !js_emulated_btns_prev[player][js][offset];
+			*released = !js_emulated_btns_held[player][js][offset]
+			    	  && js_emulated_btns_prev[player][js][offset];
 			return;
 		}
 	}
 
-	*pressed = WPAD_ButtonsDown(WPAD_CHAN_0) & input_wpad_translate(key);
-	*released = WPAD_ButtonsUp(WPAD_CHAN_0) & input_wpad_translate(key);
+	*pressed = WPAD_ButtonsDown(player) & input_wpad_translate(key, player);
+	*released = WPAD_ButtonsUp(player) & input_wpad_translate(key, player);
 	*held = !(*pressed) && !(*released)
-		&& WPAD_ButtonsHeld(WPAD_CHAN_0) & input_wpad_translate(key);
+		&& WPAD_ButtonsHeld(player) & input_wpad_translate(key, player);
 }
 
 bool input_native_key_symbol(int key, int* symbol, int* symbol_help,
@@ -354,31 +371,54 @@ bool input_native_key_any(int* key) {
 void input_pointer_enable(bool enable) { }
 
 bool input_pointer(float* x, float* y, float* angle, int player) {
+	int vplayer = gstate.player_sequence[player];
+	if (vplayer == -1)
+	 return false;
+
 	struct ir_t ir;
-	WPAD_IR(WPAD_CHAN_0, &ir);
+	WPAD_IR(vplayer, &ir);
 	*x = ir.x;
 	*y = ir.y;
 	*angle = ir.angle;
 	return ir.valid;
 }
 
-void input_native_joystick(float dt, float* dx, float* dy) {
-	if(joystick_input[0].available && joystick_input[0].magnitude > 0.1F) {
-		*dx = joystick_input[0].dx * joystick_input[0].magnitude * dt;
-		*dy = joystick_input[0].dy * joystick_input[0].magnitude * dt;
-	} else if(joystick_input[2].available
-			  && joystick_input[2].magnitude > 0.1F) {
-		*dx = joystick_input[2].dx * joystick_input[2].magnitude * dt;
-		*dy = joystick_input[2].dy * joystick_input[2].magnitude * dt;
+void input_native_joystick(float dt, float* dx, float* dy, int player) {
+	if(joystick_input[0 + MAX_CONTROLLERS * player].available 
+	&& joystick_input[0 + MAX_CONTROLLERS * player].magnitude > 0.1F) 
+	{
+		*dx = joystick_input[0 + MAX_CONTROLLERS * player].dx * 
+			  joystick_input[0 + MAX_CONTROLLERS * player].magnitude * dt;
+		*dy = joystick_input[0 + MAX_CONTROLLERS * player].dy * 
+			  joystick_input[0 + MAX_CONTROLLERS * player].magnitude * dt;
+
+	} else if(joystick_input[2 + MAX_CONTROLLERS * player].available
+		   && joystick_input[2 + MAX_CONTROLLERS * player].magnitude > 0.1F) 
+	{
+		*dx = joystick_input[2 + MAX_CONTROLLERS * player].dx * 
+			  joystick_input[2 + MAX_CONTROLLERS * player].magnitude * dt;
+		*dy = joystick_input[2 + MAX_CONTROLLERS * player].dy * 
+			  joystick_input[2 + MAX_CONTROLLERS * player].magnitude * dt;
 	} else {
 		*dx = 0.0F;
 		*dy = 0.0F;
 	}
 }
 
-#endif
+int which_controller(int chan) {
+    if (joystick_input[0 + chan * MAX_CONTROLLERS].available) {
+        return 0; // Nunchuk
 
-#include "../game/game_state.h"
+    } else if (joystick_input[1 + chan * MAX_CONTROLLERS].available ||
+               joystick_input[2 + chan * MAX_CONTROLLERS].available) {
+        return 1; // Classic Controller
+
+    } else {
+        return -1;
+	}
+}
+
+#endif
 
 static const char* input_config_translate(enum input_button key) {
 	switch(key) {
@@ -441,7 +481,11 @@ bool input_symbol(enum input_button b, int* symbol, int* symbol_help,
 	return has_any;
 }
 
-bool input_pressed(enum input_button b, int player) {// TODO: more players
+bool input_pressed(enum input_button b, int player) {
+	int vplayer = gstate.player_sequence[player];
+	if (vplayer == -1)
+	 return false;
+
 	const char* key = input_config_translate(b);
 
 	if(!key)
@@ -460,7 +504,7 @@ bool input_pressed(enum input_button b, int player) {// TODO: more players
 
 	for(size_t k = 0; k < length; k++) {
 		bool pressed, released, held;
-		input_native_key_status(mapping[k], &pressed, &released, &held);
+		input_native_key_status(mapping[k], vplayer, &pressed, &released, &held);
 		if(pressed)
 			any_pressed = true;
 		if(released)
@@ -472,7 +516,11 @@ bool input_pressed(enum input_button b, int player) {// TODO: more players
 	return any_pressed && !any_held && !any_released;
 }
 
-bool input_released(enum input_button b,int player) {// TODO: more players
+bool input_released(enum input_button b,int player) {
+	int vplayer = gstate.player_sequence[player];
+	if (vplayer == -1)
+	 return false;
+
 	const char* key = input_config_translate(b);
 
 	if(!key)
@@ -491,7 +539,7 @@ bool input_released(enum input_button b,int player) {// TODO: more players
 
 	for(size_t k = 0; k < length; k++) {
 		bool pressed, released, held;
-		input_native_key_status(mapping[k], &pressed, &released, &held);
+		input_native_key_status(mapping[k], vplayer, &pressed, &released, &held);
 		if(pressed)
 			any_pressed = true;
 		if(released)
@@ -503,7 +551,11 @@ bool input_released(enum input_button b,int player) {// TODO: more players
 	return !any_pressed && !any_held && any_released;
 }
 
-bool input_held(enum input_button b, int player) {// TODO: more players
+bool input_held(enum input_button b, int player) {
+	int vplayer = gstate.player_sequence[player];
+	if (vplayer == -1)
+	 return false;
+	
 	const char* key = input_config_translate(b);
 
 	if(!key)
@@ -521,7 +573,7 @@ bool input_held(enum input_button b, int player) {// TODO: more players
 
 	for(size_t k = 0; k < length; k++) {
 		bool pressed, released, held;
-		input_native_key_status(mapping[k], &pressed, &released, &held);
+		input_native_key_status(mapping[k], vplayer, &pressed, &released, &held);
 		if(pressed)
 			any_pressed = true;
 		if(held)
@@ -532,6 +584,44 @@ bool input_held(enum input_button b, int player) {// TODO: more players
 }
 
 bool input_joystick(float dt, float* x, float* y, int player) {
-	input_native_joystick(dt, x, y);
+	int vplayer = gstate.player_sequence[player];
+	if (vplayer == -1)
+	 return false;
+
+	input_native_joystick(dt, x, y, vplayer);
 	return true;
+}
+
+
+
+// real channels
+bool rinput_pressed(enum input_button b, int player) {
+	const char* key = input_config_translate(b);
+
+	if(!key)
+		return false;
+
+	size_t length = 8;
+	int mapping[length];
+
+	if(!config_read_int_array(&gstate.config_user, input_config_translate(b),
+							  mapping, &length))
+		return false;
+
+	bool any_pressed = false;
+	bool any_held = false;
+	bool any_released = false;
+
+	for(size_t k = 0; k < length; k++) {
+		bool pressed, released, held;
+		input_native_key_status(mapping[k], player, &pressed, &released, &held);
+		if(pressed)
+			any_pressed = true;
+		if(released)
+			any_released = true;
+		if(held)
+			any_held = true;
+	}
+
+	return any_pressed && !any_held && !any_released;
 }
