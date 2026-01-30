@@ -64,5 +64,8 @@ bool input_held(enum input_button b, int player);
 bool input_joystick(float dt, float* x, float* y, int player);
 void input_pointer_enable(bool enable);
 bool input_pointer(float* x, float* y, float* angle, int player);
+int which_controller(int chan);
+
+bool rinput_pressed(enum input_button b, int player);
 
 #endif

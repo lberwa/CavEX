@@ -6,7 +6,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <wiiuse/wpad.h>
 
 #include "../../graphics/gui_util.h"
 
@@ -24,10 +23,11 @@
 // Globale Variablen
 // -------------------------
 static int controller_for_slot[4];  // 0 = leer, 1 = Wiimote 2 = wiimote + nunchuk, 3 = classic TODO: 4 = gc controller
-static int wiimote_assigned[4];     // -1 = keine Wiimote, sonst Nummer 0–3
+static int wiimote_num_slot[4] = { -1, -1, -1, -1 };
 static int selected_menu = 0;
 static int slot_count = 0;
 static int gui_selection;
+//int gstate.player_sequence[4];  // -1 = keine Wiimote, sonst Nummer 0–3
 
 static const char* menu_options[2] = {
     "OK",
@@ -41,14 +41,7 @@ static void screen_controllerauswahl_reset(struct screen* s, int width, int heig
     slot_count = gstate.num_players;   // Spieleranzahl übernehmen
     if(slot_count <= 0) slot_count = 1; // fallback
 
-    // alle Slots frei
-    for(int i=0; i<slot_count; i++) {
-        controller_for_slot[i] = 0;
-        wiimote_assigned[i] = -1;
-    }
-
     selected_menu = 0;
-
 }
 
 // -------------------------
@@ -57,24 +50,22 @@ static void screen_controllerauswahl_reset(struct screen* s, int width, int heig
 static void screen_controllerauswahl_update(struct screen* s, float dt) {
     // Slots automatisch zuweisen
     for(int ch = 0; ch < MAX_WIIMOTES; ch++) {
-        u32 wpad_pressed = WPAD_ButtonsDown(ch);
-
         // UP / DOWN für Menüauswahl
-        if(wpad_pressed & WPAD_BUTTON_UP) {
+        if(input_pressed(IB_GUI_UP, ch)) {
             selected_menu = (selected_menu - 1 + 2) % 2;
         }
-        if(wpad_pressed & WPAD_BUTTON_DOWN) {
+        if(input_pressed(IB_GUI_DOWN, ch)) {
             selected_menu = (selected_menu + 1) % 2;
         }
 
         // B = zurück
-        if(wpad_pressed & WPAD_BUTTON_B) {
+        if(input_pressed(IB_BACK, ch)) {
             screen_back();
             sound_play(pcm_click);
         }
 
         // A = Menü bestätigen
-        if(wpad_pressed & WPAD_BUTTON_A) {
+        if(input_pressed(IB_GUI_CLICK, ch)) { // --- OK --- //
             bool all_filled = true;
             for(int i=0; i<slot_count; i++)
                 if(controller_for_slot[i] == 0) all_filled = false;
@@ -82,28 +73,27 @@ static void screen_controllerauswahl_update(struct screen* s, float dt) {
             if(selected_menu == 0 && all_filled) {
                 sound_play(pcm_click);
                 menu_screen_set(&screen_select_world);
-                // Slots zurücksetzen für nächsten Besuch
-                for(int i=0; i<slot_count; i++) {
-                    controller_for_slot[i] = 0;
-                    wiimote_assigned[i] = -1;
-                }
-            } else if(selected_menu == 1) {
+
+            } else if(selected_menu == 1) { // --- CHANGE --- //
                 sound_play(pcm_click);
                 // Ändern: alles resetten
                 for(int i=0; i<slot_count; i++) {
                     controller_for_slot[i] = 0;
-                    wiimote_assigned[i] = -1;
+                    wiimote_num_slot[i]    =-1;
                 }
+                for(int i=1; i<4; i++) {
+                    gstate.player_sequence[i] = -1;
+                }
+                gstate.player_sequence[0] = 0; // default: chan 0
                 return;
             }
         }
-    
         
-        if(wpad_pressed != 0) {
+        if(rinput_pressed(IB_ANY, ch)) {
             // Prüfen, ob Wiimote schon in einem Slot zugewiesen
             bool already_assigned = false;
             for(int i=0;i<slot_count;i++) {
-                if(wiimote_assigned[i]==ch) {
+                if(wiimote_num_slot[i]==ch) {
                     already_assigned = true;
                     break;
                 }
@@ -112,31 +102,21 @@ static void screen_controllerauswahl_update(struct screen* s, float dt) {
                 // ersten freien Slot suchen
                 for(int i=0;i<slot_count;i++) {
                     if(controller_for_slot[i]==0) {
-                        //sound_play(pcm_click);
-                        u32 type;
-                        int status = WPAD_Probe(ch, &type);
-
-                        if (status == WPAD_ERR_NONE) {
-
-                            if (type == WPAD_EXP_NUNCHUK) { 
-                                controller_for_slot[i] = 2; // Wiimote + Nunchuk
-
-                            } else if (type == WPAD_EXP_CLASSIC) {
-                                controller_for_slot[i] = 3; // Classic Controller    
-                            
+                        int status = which_controller(ch);
+                            if (status == 0) { //           nunchuck
+                                controller_for_slot[i] = 2;
                             } else {
-                                controller_for_slot[i] = 2; // Wiimote only
+                                controller_for_slot[i] = 3;
                             }
-                        }
-
-                        wiimote_assigned[i] = ch;   // Wiimote-Nummer speichern
+                        gstate.player_sequence[i] = ch;   // Wiimote-Nummer speichern
+                        wiimote_num_slot[i] = ch;
                         break;
                     }
                 }
             }
         }
     }
-    gui_selection = selected_menu;
+    gui_selection = selected_menu; 
 }    
 
 static int propo(int x, int y, int sx) {
@@ -247,7 +227,7 @@ static void screen_controllerauswahl_render2D(struct screen* s, int width, int h
         int number_start_y = (slot_y + slotheight - number_quad_height - 3) + 4;
         int shift_plus = 30;
 
-        if (!(wiimote_assigned[i] == -1)) {
+        if (!(wiimote_num_slot[i] == -1)) {
             gfx_bind_texture(&texture_gui2);
             gutil_texquad(slot_x + (slotwidth/2 - number_quad_width/2), //x
                           slot_y + slotheight - number_quad_height - 3, //y
@@ -255,7 +235,7 @@ static void screen_controllerauswahl_render2D(struct screen* s, int width, int h
                           number_quad_width/2, number_quad_height/2,     //swidth sheight
                           number_quad_width, number_quad_height);        //width height
             
-            number_shift = number_start_x + (wiimote_assigned[i] * shift_plus);
+            number_shift = number_start_x + (wiimote_num_slot[i] * shift_plus);
             gutil_texquad(number_shift, number_start_y, 38, 129, 46-38, 137-129,
                           (46-38)*2, (137-129)*2);
         } 
@@ -266,6 +246,46 @@ static void screen_controllerauswahl_render2D(struct screen* s, int width, int h
     icon_offset += gutil_control_icon(icon_offset, IB_GUI_DOWN, "Change selection");
     icon_offset += gutil_control_icon(icon_offset, IB_GUI_CLICK, "Select option");
     icon_offset += gutil_control_icon(icon_offset, IB_JUMP, "Back");
+
+
+#if 1 < 1
+
+    char buf[128];  // Jede Zeile separat
+
+    int y = 20; // Start-Y
+    int line_height = 20; // Abstand zwischen den Zeilen
+
+    // Header
+    snprintf(buf, sizeof(buf), "=== Slots Status ===");
+    gutil_text(20, y, buf, 20, false);
+    y += line_height;
+
+    // Slots
+    for(int i = 0; i < 4; i++) {
+        snprintf(buf, sizeof(buf),
+                 "Slot %d: controller=%d, wiimote_num=%d",
+                 i, controller_for_slot[i], wiimote_num_slot[i]);
+        gutil_text(20, y, buf, 20, false);
+        y += line_height;
+    }
+
+    // GUI & Menü
+    snprintf(buf, sizeof(buf),
+             "selected_menu=%d, slot_count=%d, gui_selection=%d",
+             selected_menu, slot_count, gui_selection);
+    gutil_text(20, y, buf, 20, false);
+    y += line_height;
+
+    // gstate.player_sequence
+    snprintf(buf, sizeof(buf), "player_sequence: %d %d %d %d",
+             gstate.player_sequence[0],
+             gstate.player_sequence[1],
+             gstate.player_sequence[2],
+             gstate.player_sequence[3]);
+    gutil_text(20, y, buf, 20, false);
+
+
+#endif
 }
 
 // -------------------------

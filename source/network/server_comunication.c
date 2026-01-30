@@ -87,7 +87,7 @@ char* server_get_mac_address() {
 
     return mac_str;
 }
-
+/*
 bool server_data_init() {
     const char *tmp_path = config_read_string(&gstate.config_user, "paths.tmp", "tmp");
 
@@ -198,7 +198,7 @@ bool server_data_init() {
 
     zip_close(z);
 }
-
+*/
 //-----------------
 //debugging
 //-----------------

@@ -77,21 +77,21 @@ static void screen_sworld_reset2(struct screen* s, int width, int height) { //TO
 static void screen_sworld_update2(struct screen* s, float dt) { //TODO: rename
 	if (server_failed) {
 
-	if (input_pressed(IB_ANY, 1)) 
+	if (input_pressed(IB_ANY, 0)) 
 		sound_play(pcm_click);
 		server_failed = false;
 
 	} else {
 
     // Navigation
-    if(input_pressed(IB_GUI_UP, 1) && gui_selection > 0)
+    if(input_pressed(IB_GUI_UP, 0) && gui_selection > 0)
         gui_selection--;
 
-    if(input_pressed(IB_GUI_DOWN, 1) && gui_selection < 3)
+    if(input_pressed(IB_GUI_DOWN, 0) && gui_selection < 3)
         gui_selection++;
 
     // Aktion beim A-Knopf
-    if(input_pressed(IB_GUI_CLICK, 1)) {
+    if(input_pressed(IB_GUI_CLICK, 0)) {
 		sound_play(pcm_click);
         switch(gui_selection) {
             case 0: // Start 
@@ -123,7 +123,7 @@ static void screen_sworld_update2(struct screen* s, float dt) { //TODO: rename
 	}
 
     // Home-Button beendet das Spiel
-    if(input_pressed(IB_HOME, 1))
+    if(input_pressed(IB_HOME, 0))
         gstate.quit = true;
 }
 
