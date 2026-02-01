@@ -1,3 +1,4 @@
+#ifdef PLATFORM_WII
 #define NETWORK_H22
 #include <network.h>
 #include "server_comunication.h"
@@ -236,3 +237,155 @@ int debug_close() {
     int back = net_close(dsock);
     return back;
 }
+#endif /*PLATFORM_WII*/
+
+
+#ifdef PLATFORM_PC
+#include <stdint.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <unistd.h>
+
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
+#include "server_comunication.h"
+#include "../game/game_state.h"
+
+/* ----------------------------------
+   Konstanten
+---------------------------------- */
+
+#define SERVER_PORT 12345
+#define DEBUG_SERVER_PORT 12344
+#define BUF_SIZE 20456
+
+/* ----------------------------------
+   Server socket
+---------------------------------- */
+
+static int sock = -1;
+
+bool server_init(int a, int b, int c, int d)
+{
+    sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock < 0)
+        return false;
+
+    struct sockaddr_in server;
+    memset(&server, 0, sizeof(server));
+
+    server.sin_family = AF_INET;
+    server.sin_port = htons(SERVER_PORT);
+
+    char ip[16];
+    snprintf(ip, sizeof(ip), "%d.%d.%d.%d", a, b, c, d);
+
+    if (inet_pton(AF_INET, ip, &server.sin_addr) != 1) {
+        close(sock);
+        return false;
+    }
+
+    if (connect(sock, (struct sockaddr *)&server, sizeof(server)) < 0) {
+        close(sock);
+        return false;
+    }
+
+    return true;
+}
+
+int server_send(void *data, size_t size)
+{
+    return send(sock, data, size, 0);
+}
+
+/* ----------------------------------
+   Empfang
+---------------------------------- */
+
+static uint8_t recv_buffer[BUF_SIZE];
+
+uint8_t* server_receive(int *out_len)
+{
+    int r = recv(sock, recv_buffer, BUF_SIZE, 0);
+
+    if (r > 0) {
+        *out_len = r;
+        return recv_buffer;
+    }
+
+    *out_len = 0;
+    return NULL;
+}
+
+int server_close(void)
+{
+    int r = close(sock);
+    sock = -1;
+    return r;
+}
+
+/* ----------------------------------
+   MAC-Adresse (PC-Version)
+---------------------------------- */
+
+/*
+ * Auf dem PC ist das nicht trivial & nicht portabel.
+ * Deshalb: sauberer Stub.
+ */
+char* server_get_mac_address(void)
+{
+    return NULL;
+}
+
+/* ----------------------------------
+   Debug socket
+---------------------------------- */
+
+static int dsock = -1;
+
+bool debug_init(int a, int b, int c, int d)
+{
+    dsock = socket(AF_INET, SOCK_STREAM, 0);
+    if (dsock < 0)
+        return false;
+
+    struct sockaddr_in server;
+    memset(&server, 0, sizeof(server));
+
+    server.sin_family = AF_INET;
+    server.sin_port = htons(DEBUG_SERVER_PORT);
+
+    char ip[16];
+    snprintf(ip, sizeof(ip), "%d.%d.%d.%d", a, b, c, d);
+
+    if (inet_pton(AF_INET, ip, &server.sin_addr) != 1) {
+        close(dsock);
+        return false;
+    }
+
+    if (connect(dsock, (struct sockaddr *)&server, sizeof(server)) < 0) {
+        close(dsock);
+        return false;
+    }
+
+    return true;
+}
+
+int debug_send(void *data)
+{
+    return send(dsock, data, strlen((char*)data), 0);
+}
+
+int debug_close(void)
+{
+    int r = close(dsock);
+    dsock = -1;
+    return r;
+}
+#endif /*PLATFORM_PC*/

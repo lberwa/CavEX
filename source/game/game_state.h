@@ -99,9 +99,7 @@ struct game_state {
 //extern struct client_rpc* global_call_type;
 //extern struct thread_channel clin_inbox;
 
-#ifndef PLATFORM_WII// for VSCs
-#define PLATFORM_WII
-#endif
+
 
 #endif
 

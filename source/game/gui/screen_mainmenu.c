@@ -33,11 +33,7 @@
 #include <m-lib/m-string.h>
 #include <string.h>
 #include <time.h>
-#include "my_text_renderer.h"
-#include <gccore.h>
 #include <stdbool.h>
-
-#include "my_text_renderer.h"
 
 static const char* menu_options[4] = {
     "Start",

@@ -33,6 +33,8 @@
 	#include <network.h>
 #endif
 
+#include "item/recipe.h"
+#include "particle.h"
 #include "chunk_mesher.h"
 #include "daytime.h"
 #include "game/game_state.h"
@@ -70,7 +72,7 @@ static void *net_thread(void *arg) {
 GXRModeObj* rmode3;
 void* framebuffer3;
 #endif
-
+#ifdef PLATFORM_WII
 #ifdef NDEBUG
 	// ram checken
 	#include <ogc/system.h>
@@ -84,6 +86,7 @@ void* framebuffer3;
 	extern void* __Arena2Lo;
 	extern void* __Arena2Hi;
 bool debugsendfirst = false;
+#endif
 #endif
 
 int main(void) {

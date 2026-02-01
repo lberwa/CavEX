@@ -6,8 +6,6 @@
 #include "../../network/server_comunication.h"
 #include "../../platform/input.h"
 
-#include <network.h>
-
 #include <time.h>
 #include <string.h>
 #include <stdio.h>

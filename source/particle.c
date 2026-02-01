@@ -18,10 +18,10 @@
 */
 
 #include <assert.h>
-
+#include "particle.h"
 #include "game/game_state.h"
 #include "graphics/render_block.h"
-#include "particle.h"
+
 #include "platform/gfx.h"
 #include "graphics/texture_atlas.h"
 #include "platform/texture.h"
@@ -29,8 +29,6 @@
 
 #define PARTICLES_AREA 8
 #define PARTICLES_VOLUME 64
-
-ARRAY_DEF(array_particle, struct particle, M_POD_OPLIST)
 
 array_particle_t particles;
 

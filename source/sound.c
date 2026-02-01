@@ -1,4 +1,4 @@
-//#ifdef PLATFORM_WII
+#ifdef PLATFORM_WII
 #include <ogc/audio.h>
 #include <mp3player.h>
 #include <asndlib.h>
@@ -467,4 +467,304 @@ bool sound_play(enum pcm_sound sound) {
     return true;
 }
 
-//#endif
+#endif
+
+#ifdef PLATFORM_PC
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <stdbool.h>
+#include <string.h>
+#include <math.h>
+
+#include "pc_sound/include/portaudio.h"
+#include "sound.h"
+#include "config.h"
+#include "game/game_state.h"
+
+#define MAX_PCM_PLAYLIST 16
+
+typedef struct {
+    uint8_t *data;
+    size_t size;
+    int channels;
+    int sample_rate;
+} wav_t;
+
+// PCM playlist
+static wav_t pcm_playlist[MAX_PCM_PLAYLIST];
+static int pcm_playlist_num = 0;
+
+static float global_volume = 1.0f;
+
+// PortAudio stream
+static PaStream *pa_stream = NULL;
+
+//----------------------
+// WAV Loader
+//----------------------
+static wav_t load_wav_file(const char *path) {
+    wav_t w = {0};
+
+    FILE *f = fopen(path, "rb");
+    if (!f) {
+        fprintf(stderr, "Failed to open WAV file: %s\n", path);
+        return w;
+    }
+
+    // Einfacher Loader: Header überspringen, nur PCM 16-bit Stereo 44.1kHz
+    fseek(f, 44, SEEK_SET); // skip WAV header
+    fseek(f, 0, SEEK_END);
+    long file_size = ftell(f);
+    rewind(f);
+    fseek(f, 44, SEEK_SET); // header überspringen
+    size_t data_size = file_size - 44;
+
+    w.data = malloc(data_size);
+    if (!w.data) {
+        fclose(f);
+        return w;
+    }
+
+    fread(w.data, 1, data_size, f);
+    w.size = data_size;
+    w.channels = 2;
+    w.sample_rate = 44100;
+
+    fclose(f);
+    return w;
+}
+
+//----------------------
+// Sound Pfade
+//----------------------
+static const char* sound_get_pcm_path(enum pcm_sound sound) {
+    static char fullpath[256];
+
+    // Basis-Pfad aus der Config
+    const char* base = config_read_string(&gstate.config_user, "paths.sounds", "mp32/sound");
+    if(!base) return NULL;
+
+    switch(sound) {
+        case pcm_click:
+            snprintf(fullpath, sizeof(fullpath), "%s/random/click.wav", base);
+            return fullpath;
+
+        case pcm_chest_close:
+            snprintf(fullpath, sizeof(fullpath), "%s/random/chest_close.wav", base);
+            return fullpath;
+
+        case pcm_chest_open:
+            snprintf(fullpath, sizeof(fullpath), "%s/random/chest_open.wav", base);
+            return fullpath;
+
+        case pcm_door_close:
+            snprintf(fullpath, sizeof(fullpath), "%s/random/door_close.wav", base);
+            return fullpath;
+
+        case pcm_door_open:
+            snprintf(fullpath, sizeof(fullpath), "%s/random/door_open.wav", base);
+            return fullpath;
+
+        case pcm_drink:
+            snprintf(fullpath, sizeof(fullpath), "%s/random/drink.wav", base);
+            return fullpath;
+
+        case pcm_eat1:
+            snprintf(fullpath, sizeof(fullpath), "%s/random/eat1.wav", base);
+            return fullpath;
+
+        case pcm_eat2:
+            snprintf(fullpath, sizeof(fullpath), "%s/random/eat2.wav", base);
+            return fullpath;
+
+        case pcm_eat3:
+            snprintf(fullpath, sizeof(fullpath), "%s/random/eat3.wav", base);
+            return fullpath;
+
+        case pcm_fuse:
+            snprintf(fullpath, sizeof(fullpath), "%s/random/fuse.wav", base);
+            return fullpath;
+
+        case pcm_enderman_portal:
+            snprintf(fullpath, sizeof(fullpath), "%s/mob/endermen/portal.wav", base);
+            return fullpath;
+
+        case pcm_sheep_say2:
+            snprintf(fullpath, sizeof(fullpath), "%s/mob/sheep/say2.wav", base);
+            return fullpath;
+
+        case pcm_villager_idle2:
+            snprintf(fullpath, sizeof(fullpath), "%s/mob/villager/idle2.wav", base);
+            return fullpath;
+
+        case pcm_zombie_say3:
+            snprintf(fullpath, sizeof(fullpath), "%s/mob/zombie/say3.wav", base);
+            return fullpath;
+
+        case pcm_dig_sand1:
+            snprintf(fullpath, sizeof(fullpath), "%s/dig/sand1.wav", base);
+            return fullpath;
+
+        case pcm_dig_stone3:
+            snprintf(fullpath, sizeof(fullpath), "%s/dig/stone3.wav", base);
+            return fullpath;
+
+        case pcm_dig_wood2:
+            snprintf(fullpath, sizeof(fullpath), "%s/dig/wood2.wav", base);
+            return fullpath;
+
+        case pcm_mob_hit2:
+            snprintf(fullpath, sizeof(fullpath), "%s/damage/hit2.wav", base);
+            return fullpath;
+
+        case pcm_cave1:
+            snprintf(fullpath, sizeof(fullpath), "%s/ambient/cave/cave1.wav", base);
+            return fullpath;
+
+        default:
+            return NULL;
+    }
+}
+
+
+//----------------------
+// PortAudio Callback
+//----------------------
+static int pa_callback(const void *inputBuffer, void *outputBuffer,
+                       unsigned long framesPerBuffer,
+                       const PaStreamCallbackTimeInfo* timeInfo,
+                       PaStreamCallbackFlags statusFlags,
+                       void *userData) {
+    float *out = (float*)outputBuffer;
+    (void)inputBuffer;
+    size_t frames_remaining = framesPerBuffer;
+
+    for (int i = 0; i < pcm_playlist_num; i++) {
+        wav_t *w = &pcm_playlist[i];
+        size_t samples = w->size / sizeof(int16_t);
+        int16_t *data16 = (int16_t*)w->data;
+
+        for (size_t j = 0; j < frames_remaining * w->channels && j < samples; j++) {
+            out[j] = data16[j] / 32768.0f * global_volume;
+        }
+    }
+
+    return paContinue;
+}
+
+//----------------------
+// Init / Cleanup
+//----------------------
+void sound_init(void) {
+    printf("start\n");
+    
+    PaError err = Pa_Initialize();
+    if (err != paNoError) {
+        fprintf(stderr, "PortAudio init failed: %s\n", Pa_GetErrorText(err));
+        return;
+    }
+    /*
+    int numDevices = Pa_GetDeviceCount();
+    printf("numDevices: %d", numDevices);
+    for(int i=0;i<numDevices;i++){
+        const PaDeviceInfo* info = Pa_GetDeviceInfo(i);
+        printf("Device %d: %s, maxOut: %d\n", i, info->name, info->maxOutputChannels);
+    }*/
+    int numDevices = Pa_GetDeviceCount();
+    for(int i=0;i<numDevices;i++){
+        const PaDeviceInfo* info = Pa_GetDeviceInfo(i);
+        printf("Device %d: %s, maxOutChannels=%d, defaultSampleRate=%f\n",
+           i, info->name, info->maxOutputChannels, info->defaultSampleRate);
+    }
+    /*PaStream* stream;
+    err = Pa_OpenStream(&stream,
+                            NULL,       // kein Input
+                            &outputParams, // hier explizit DeviceIndex=HDMI
+                            44100, 256, paClipOff,
+                            NULL, NULL);
+*/
+
+    err = Pa_OpenDefaultStream(&pa_stream,
+                               0,          // input channels
+                               2,          // output channels
+                               paFloat32,  // 32-bit float output
+                               44100,      // sample rate
+                               256,        // frames per buffer
+                               pa_callback,
+                               NULL);
+    if (err != paNoError) {
+        fprintf(stderr, "PortAudio open stream failed: %s\n", Pa_GetErrorText(err));
+        return;
+    }
+
+    Pa_StartStream(pa_stream);
+
+    pcm_playlist_num = 0;
+    return;
+}
+
+void sound_shutdown(void) {
+    if (pa_stream) {
+        Pa_StopStream(pa_stream);
+        Pa_CloseStream(pa_stream);
+        pa_stream = NULL;
+    }
+    Pa_Terminate();
+
+    for (int i = 0; i < pcm_playlist_num; i++) {
+        free(pcm_playlist[i].data);
+    }
+    pcm_playlist_num = 0;
+}
+
+//----------------------
+// Volume
+//----------------------
+void sound_set_volume(float volume) {
+    if (volume < 0.0f) volume = 0.0f;
+    if (volume > 1.0f) volume = 1.0f;
+    global_volume = volume;
+}
+
+//----------------------
+// PCM Playback
+//----------------------
+bool sound_play(enum pcm_sound sound) {
+    if (pcm_playlist_num >= MAX_PCM_PLAYLIST) return false;
+
+    const char *path = sound_get_pcm_path(sound);
+    if (!path) return false;
+
+    wav_t w = load_wav_file(path);
+    if (!w.data) return false;
+
+    pcm_playlist[pcm_playlist_num++] = w;
+    return true;
+}
+
+// Entfernt abgespielte PCM-Dateien
+void sound_update(void) {
+    // Einfach: Wenn ein Sound abgespielt wurde, danach freigeben
+    for (int i = 0; i < pcm_playlist_num; i++) {
+        free(pcm_playlist[i].data);
+    }
+    pcm_playlist_num = 0;
+}
+
+bool sound_play_bg(enum mp3_sound sound[16]) {
+    #ifdef BG_MUSIC
+    debug_send("sound_play_bg aufgerufen");
+    if (!sound)
+     return false;
+    debug_send("sound array ist nicht null");
+    music_run = true;
+    for (int i = 0; i < 16; i++) {
+        
+        bg_playlist[i] = sound[i];
+     }
+    debug_send("bg_playlist gesetzt");
+    return true;
+    #endif
+}
+#endif
