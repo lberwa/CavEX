@@ -78,19 +78,32 @@ static int window_width = GFX_PC_WINDOW_WIDTH;
 static int window_height = GFX_PC_WINDOW_HEIGHT;
 GLFWwindow* window;
 
+/* render target (pixel‑perfect scaling): render into an offscreen FBO with
+ * fixed logical resolution (fb_width x fb_height) and blit to the default
+ * framebuffer with GL_NEAREST and integer scaling. */
+static GLuint fbo = 0;
+static GLuint fbo_tex = 0;
+static GLuint fbo_rbo = 0;
+static int fb_width = GFX_PC_WINDOW_WIDTH;
+static int fb_height = GFX_PC_WINDOW_HEIGHT;
+
 int gfx_width() {
-	return window_width;
+	/* logical framebuffer width (fixed) */
+	return fb_width; // 802
 }
 
 int gfx_height() {
-	return window_height;
+	/* logical framebuffer height (fixed) */
+	return fb_height; // 480
 }
 
 static void framebuffer_size_callback(GLFWwindow* window, int width,
 									  int height) {
 	window_width = width;
 	window_height = height;
-	glViewport(0, 0, gfx_width(), gfx_height());
+	/* Keep rendering viewport at the logical framebuffer size while
+	 * blitting/scaling will be handled in gfx_finish(). */
+	glViewport(0, 0, fb_width, fb_height);
 }
 
 static void scroll_callback(GLFWwindow* window, double xoffset,
@@ -169,6 +182,38 @@ void gfx_setup() {
 
 	glViewport(0, 0, gfx_width(), gfx_height());
 
+	/* Create an offscreen FBO at the fixed logical resolution. Render into
+	 * this FBO each frame, then upscale with nearest filtering to the
+	 * window size in gfx_finish(). */
+	glGenTextures(1, &fbo_tex);
+	glBindTexture(GL_TEXTURE_2D, fbo_tex);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, fb_width, fb_height, 0, GL_RGBA,
+				 GL_UNSIGNED_BYTE, NULL);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glBindTexture(GL_TEXTURE_2D, 0);
+
+	glGenRenderbuffers(1, &fbo_rbo);
+	glBindRenderbuffer(GL_RENDERBUFFER, fbo_rbo);
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, fb_width,
+						  fb_height);
+	glBindRenderbuffer(GL_RENDERBUFFER, 0);
+
+	glGenFramebuffers(1, &fbo);
+	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+						   GL_TEXTURE_2D, fbo_tex, 0);
+	glBindRenderbuffer(GL_RENDERBUFFER, fbo_rbo);
+	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
+							  GL_RENDERBUFFER, fbo_rbo);
+
+	if(glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+		printf("FBO incomplete\n");
+
+	/* Keep rendering bound to the FBO by default. */
+	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+	glViewport(0, 0, fb_width, fb_height);
+
 	tex_init();
 	gfx_bind_texture(&texture_terrain);
 
@@ -200,6 +245,40 @@ void gfx_clear_buffers(uint8_t r, uint8_t g, uint8_t b) {
 }
 
 void gfx_finish(bool vsync) {
+	/* Blit the logical FBO to the default framebuffer with integer nearest
+	 * scaling so pixels become larger when the window is bigger but the
+	 * logical resolution remains constant. */
+	if(fbo) {
+		glBindFramebuffer(GL_READ_FRAMEBUFFER, fbo);
+		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+
+	/* compute floating scale to allow fractional upscaling */
+	float scale_x = (float)window_width / (float)fb_width;
+	float scale_y = (float)window_height / (float)fb_height;
+	float scale_f = (scale_x < scale_y) ? scale_x : scale_y;
+	if(scale_f <= 0.0f) scale_f = 1.0f;
+
+	int dest_w = (int)roundf(fb_width * scale_f);
+	int dest_h = (int)roundf(fb_height * scale_f);
+	int dst_x0 = (window_width - dest_w) / 2;
+	int dst_y0 = (window_height - dest_h) / 2;
+	int dst_x1 = dst_x0 + dest_w;
+	int dst_y1 = dst_y0 + dest_h;
+
+	/* choose filter: nearest for exact integer scales, linear for fractional */
+	float intpart;
+	float frac = modff(scale_f, &intpart);
+	GLenum filter = (fabsf(frac) < 1e-6f) ? GL_NEAREST : GL_LINEAR;
+
+	/* Note: source origin is bottom-left for framebuffer coordinates */
+	glBlitFramebuffer(0, 0, fb_width, fb_height, dst_x0, dst_y0, dst_x1,
+			  dst_y1, GL_COLOR_BUFFER_BIT, filter);
+
+		/* After blit, bind FBO again so next frame renders into it. */
+		glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+		glViewport(0, 0, fb_width, fb_height);
+	}
+
 	glfwSwapBuffers(window);
 	gfx_write_buffers(true, true, true);
 	glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);

@@ -46,7 +46,7 @@ void input_init() {
 
 void input_poll() { }
 
-void input_native_key_status(int key, bool* pressed, bool* released,
+void input_native_key_status(int key, int player, bool* pressed, bool* released,
 							 bool* held) {
 	if(key >= 1024) {
 		*pressed = false;
@@ -120,11 +120,12 @@ void input_native_joystick(float dt, float* dx, float* dy, int player) {
 
 #endif
 
+#include "../game/game_state.h"
+
 #ifdef PLATFORM_WII
 
 #include <wiiuse/wpad.h>
 #include <ogc/pad.h>
-#include "../game/game_state.h"
 
 #define MAX_CONTROLLERS 3
 

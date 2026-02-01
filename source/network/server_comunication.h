@@ -3,6 +3,12 @@
 
 #include <stdbool.h>
 
+#ifdef PLATFORM_PC
+#include <stdint.h>
+
+typedef uint8_t u8;
+#endif
+
 bool server_init(int a, int b, int c, int d);
 int server_send(void *data, size_t size);
 u8* server_receive(int* out_len);

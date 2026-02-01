@@ -47,8 +47,8 @@
 #define GFX_GUI_SCALE 2
 
 //PC only: default window width and height (rendering resolution)
-#define GFX_PC_WINDOW_WIDTH 640
-#define GFX_PC_WINDOW_HEIGHT 400
+#define GFX_PC_WINDOW_WIDTH 802
+#define GFX_PC_WINDOW_HEIGHT 480
 
 // TODO: 240p on Wii?
 

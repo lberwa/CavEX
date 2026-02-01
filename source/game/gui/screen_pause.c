@@ -40,6 +40,7 @@ static void screen_pause_reset(struct screen* s, int width, int height) {
 		gstate.local_player->data.local_player.capture_input = false;
 
 	s->render3D = screen_ingame.render3D;
+	input_pointer_enable(true);
 }
 
 static void screen_pause_update(struct screen* s, float dt) {

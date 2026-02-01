@@ -25,6 +25,7 @@
 #include "world.h"
 
 
+
 typedef enum {
   TEXTURE_ATLAS_TERRAIN,
   TEXTURE_ATLAS_PARTICLES
@@ -58,6 +59,12 @@ void particle_add(vec3 pos,
                   uint8_t b,
 				  bool ignore_light,
 				  particle_atlas_t atlas);
+
+#define PARTICLES_AREA 8
+#define PARTICLES_VOLUME 64
+#define M_ARRAY_DEF(name, ...)                                                \
+  M_ARRAY_DEF_AS(name, M_F(name,_t), M_F(name,_it_t), __VA_ARGS__)
+M_ARRAY_DEF(array_particle, struct particle, M_POD_OPLIST)
 
 void particle_init(void);
 void particle_set_camera(vec3 p);
