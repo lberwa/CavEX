@@ -33,8 +33,12 @@ struct tex_gfx texture_particles;
 struct tex_gfx texture_items;
 struct tex_gfx texture_mobs;
 struct tex_gfx texture_minecart;
+
 struct tex_gfx texture_creeper;
 struct tex_gfx texture_pig;
+struct tex_gfx texture_sheep;
+struct tex_gfx texture_sheep_fur;
+
 struct tex_gfx texture_font;
 struct tex_gfx texture_black_font;
 struct tex_gfx texture_anim;
@@ -126,9 +130,11 @@ void tex_init() {
 	tex_gfx_load_file(&texture_items, "items.png", TEX_FMT_RGBA16, false);
 	tex_gfx_load_file(&texture_mobs, "mobs.png", TEX_FMT_RGBA16, false);
 	tex_gfx_load_file(&texture_minecart, "entity/minecart.png", TEX_FMT_RGBA16, false);
-	tex_gfx_load_file(&texture_creeper, "entity/creeper.png", TEX_FMT_RGBA16, false);
-	tex_gfx_load_file(&texture_pig, "entity/pig.png", TEX_FMT_RGBA16, false);
 
+	tex_gfx_load_file(&texture_creeper,   "entity/creeper.png",   TEX_FMT_RGBA16, false);
+	tex_gfx_load_file(&texture_pig,       "entity/pig.png",       TEX_FMT_RGBA16, false);
+	tex_gfx_load_file(&texture_sheep,     "entity/sheep.png",     TEX_FMT_RGBA16, false);
+	tex_gfx_load_file(&texture_sheep_fur, "entity/sheep_fur.png", TEX_FMT_RGBA16, false);
 
 	tex_gfx_load_file(&texture_controls, "controls.png", TEX_FMT_RGBA16, false);
 	tex_gfx_load_file(&texture_pointer, "pointer.png", TEX_FMT_RGBA16, false);

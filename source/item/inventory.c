@@ -90,9 +90,12 @@ void inventory_clear(struct inventory* inv) {
 void inventory_consume(struct inventory* inv, size_t slot) {
 	assert(inv && slot < inv->capacity);
 
+	printf("consuming\n");
+	printf("count is: %d\n", inv->items[slot].count);
 	if(inv->items[slot].count > 0) {
+		printf("count is > 0\n");
 		inv->items[slot].count--;
-
+		printf("count is now: %d\n", inv->items[slot].count);
 		if(inv->items[slot].count == 0) {
 			inv->items[slot].id = 0;
 			inv->items[slot].durability = 0;

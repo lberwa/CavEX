@@ -288,11 +288,13 @@ bool server_init(int a, int b, int c, int d)
 
     if (inet_pton(AF_INET, ip, &server.sin_addr) != 1) {
         close(sock);
+        printf("init failed: 1");
         return false;
     }
 
     if (connect(sock, (struct sockaddr *)&server, sizeof(server)) < 0) {
         close(sock);
+        printf("init failed: 2");
         return false;
     }
 
@@ -340,7 +342,7 @@ int server_close(void)
  */
 char* server_get_mac_address(void)
 {
-    return NULL;
+    return "no_mac_addr";
 }
 
 /* ----------------------------------
@@ -351,6 +353,7 @@ static int dsock = -1;
 
 bool debug_init(int a, int b, int c, int d)
 {
+    #ifdef DEBUG_SEND
     dsock = socket(AF_INET, SOCK_STREAM, 0);
     if (dsock < 0)
         return false;
@@ -375,17 +378,22 @@ bool debug_init(int a, int b, int c, int d)
     }
 
     return true;
+    #endif
 }
 
 int debug_send(void *data)
 {
+    #ifdef DEBUG_SEND
     return send(dsock, data, strlen((char*)data), 0);
+    #endif
 }
 
 int debug_close(void)
 {
+    #ifdef DEBUG_SEND
     int r = close(dsock);
     dsock = -1;
     return r;
+    #endif
 }
 #endif /*PLATFORM_PC*/

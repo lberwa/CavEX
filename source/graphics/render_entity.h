@@ -33,6 +33,6 @@ void render_entity_minecart(mat4 view);
 void render_entity_update_light(uint8_t light);
 void render_entity_init(void);
 void render_entity_creeper(mat4 view, float headYawDeg, float bodyYawDeg, int frame);
-void render_entity_pig(mat4 view, float headYawDeg);
-
+void render_entity_pig(mat4 view, float headYawDeg, int frame);
+void render_entity_sheep(mat4 view, float headYawDeg, int frame, bool shared);
 #endif

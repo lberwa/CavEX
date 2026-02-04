@@ -58,8 +58,12 @@ extern struct tex_gfx texture_particles;
 extern struct tex_gfx texture_items;
 extern struct tex_gfx texture_mobs;
 extern struct tex_gfx texture_minecart;
+
 extern struct tex_gfx texture_creeper;
 extern struct tex_gfx texture_pig;
+extern struct tex_gfx texture_sheep;
+extern struct tex_gfx texture_sheep_fur;
+
 extern struct tex_gfx texture_font;
 extern struct tex_gfx texture_anim;
 extern struct tex_gfx texture_gui_inventory;

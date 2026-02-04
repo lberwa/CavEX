@@ -453,11 +453,13 @@ void render_entity_init(void) {
     memset(vertex_light_inv, 0xFF, sizeof(vertex_light_inv));
 }
 
-// creeper
+//-------------------------
+// CREEPER
+//-------------------------
 void render_entity_creeper(mat4 view, float headYawDeg, float bodyYawDeg, int frame){
 	assert(view);
 
-    float walkAngle = sinf((float)(frame % 60) / 60.0f * 2.0f * M_PI) * (30.0f * (M_PI / 180.0f));
+    float walkAngle = sinf((float)(frame % 60) / 25.0f * 2.0f * M_PI) * (30.0f * (M_PI / 180.0f));
 
     // Compute body matrix with rotation around center
     mat4 model, body_mv;
@@ -547,7 +549,9 @@ void render_entity_creeper(mat4 view, float headYawDeg, float bodyYawDeg, int fr
         { 4, 0, 10 }, // back-left
         { 8, 0, 10 }  // back-right
     };
-    int legAnimDir[4] = { +1, -1, -1, +1 };
+    // rotate legs by 90 degrees around Y and invert animation phase
+    // so the legs move in the opposite direction after rotation
+    int legAnimDir[4] = { -1, +1, +1, -1 };
 
     for (int i = 0; i < 4; i++) {
         displaylist_reset(&dl);
@@ -566,8 +570,11 @@ void render_entity_creeper(mat4 view, float headYawDeg, float bodyYawDeg, int fr
             legPositions[i][1] / 16.0f,
             legPositions[i][2] / 16.0f
         });
-        glm_translate(leg_model, pivot);
-        glm_rotate_x(leg_model, legAnimDir[i] * walkAngle, leg_model);
+    glm_translate(leg_model, pivot);
+    // yaw the leg geometry so feet point correctly (90 degrees)
+    glm_rotate_y(leg_model, glm_rad(90.0f), leg_model);
+    // then apply the walk swing around X
+    glm_rotate_x(leg_model, legAnimDir[i] * walkAngle, leg_model);
         glm_translate(leg_model, (vec3){ -pivot[0], -pivot[1], -pivot[2] });
 
         mat4 leg_mv;
@@ -586,11 +593,10 @@ void render_entity_creeper(mat4 view, float headYawDeg, float bodyYawDeg, int fr
     gfx_matrix_modelview(GLM_MAT4_IDENTITY);
 }
 
-// pig
-// todo: leg movement.
-// todo: texture mapping
-// todo: proportions / placement
-void render_entity_pig(mat4 view, float headYawDeg) {
+//-------------------------
+// PIG
+//-------------------------
+void render_entity_pig(mat4 view, float headYawDeg, int frame) {
     assert(view);
 
     // 1) Basis‐matrix
@@ -602,61 +608,423 @@ void render_entity_pig(mat4 view, float headYawDeg) {
     gfx_bind_texture(&texture_pig);
 
     // 2) Head (8×8×8), y0 = 4
+    // Position the head centered on the body (head width = 8)
+    const int head_x = 6; // x start (pixels)
+    const int head_y = 8; // y start
+    const int head_z = -4; // z start (front of body)
+
+    mat4 head_mv;
+
     displaylist_reset(&dl);
     {
-        // pivot uit Java: setRotationPoint(0,6,...) → in px = 6*1/16 = 0.375
-        vec3 pivot = { (4.0f+4.0f)/16.0f, (6.0f)/16.0f, (4.0f+4.0f)/16.0f };
+        // pivot at head center (in model-local, normalized to [0..1])
+        float pivot_x = ((float)head_x + (float)(head_x + 8)) / 2.0f / 16.0f;
+        float pivot_y = ((float)head_y + (float)(head_y + 8)) / 2.0f / 16.0f;
+        float pivot_z = ((float)head_z + (float)(head_z + 8)) / 2.0f / 16.0f;
+        vec3 pivot = { pivot_x, pivot_y, pivot_z };
         mat4 head_m;
         glm_mat4_identity(head_m);
         glm_translate(head_m, pivot);
-        glm_rotate_y(head_m, glm_rad(headYawDeg), head_m);
+        // add 180deg offset so the head rotates right-left relative to world
+        
+        float yaw = headYawDeg;
+
+        // Begrenzen auf [-80°, +80°]
+        if (yaw > 45.0f)  yaw = 45.0f;
+        if (yaw < -45.0f) yaw = -45.0f;
+        glm_rotate_y(head_m, glm_rad(yaw + -90.0f), head_m);
         glm_translate(head_m, (vec3){ -pivot[0], -pivot[1], -pivot[2] });
-        mat4 head_mv;
         glm_mat4_mul(view, head_m, head_mv);
         gfx_matrix_modelview(head_mv);
     }
     static const UVRect headUV[6] = {
-        {16, 0, 8, 8}, { 8,  0, 8, 8},
-        { 0, 8, 8, 8}, { 8,  8, 8, 8},
-        {16, 8, 8, 8}, {24,  8, 8, 8}
+        {16, 0, 8, 8}, // head bottom
+        { 8, 0, 8, 8}, // head top
+        {24, 8, 8, 8}, // head back
+        { 8, 8, 8, 8}, // head front
+        {16, 8, 8, 8}, // head right
+        { 0, 8, 8, 8}  // head left
     };
     static const int headDir[6] = {0,0,-90,-90,-90,-90};
-    render_entity_create_cube(4, 4, 4,  8, 8, 8, headUV, headDir);
+    //                          ↓↑     /\ \/   → ←
+    render_entity_create_cube(head_x, head_y, head_z,  8, 8, 8, headUV, headDir);
+    displaylist_render_immediate(&dl, 24);
+
+    // small nose/snout that rotates together with the head
+    displaylist_reset(&dl);
+    gfx_matrix_modelview(head_mv);
+    // nose: 2x2x1 box centered horizontally on head front
+    const int nose_w = 4, nose_h = 3, nose_d = 1;
+    const int nose_x = head_x + (8 - nose_w) / 2; // center on head
+    const int nose_y = head_y + 2; // slightly below top of head
+    const int nose_z = head_z - nose_d; // in front of head
+    static const UVRect noseUV[6] = {
+        {21, 16, 4, 1}, // bottom
+        {17, 16, 4, 1}, // top
+        {16, 17, 1, 3}, // right
+        {17, 17, 4, 3}, // front
+        {21, 17, 1, 3}, // left
+        {17, 17, 4, 3}  // back
+    };
+    // rotate the front face so nostrils are left-right when looking at the pig
+    static const int noseDir[6] = {0,0,0,-90,0,0};
+    render_entity_create_cube(nose_x, nose_y, nose_z, nose_w, nose_h, nose_d, noseUV, noseDir);
     displaylist_render_immediate(&dl, 24);
 
     // 3) Body (8×12×4), y0 = 0
     displaylist_reset(&dl);
     gfx_matrix_modelview(body_mv);
     static const UVRect bodyUV[6] = {
-        {20,16, 8,4}, {28,16, 8,4},
-        {32,20, 8,12},{20,20, 8,12},
-        {28,20, 4,12},{16,20, 4,12}
+        {36, 16, 10, 16}, // body bottom
+        {54, 16, 10, 16}, // body top
+        {46, 16,  8, 16}, // body left/right
+        {28, 16,  8, 16}, // body left/right
+        {46,  8, 10,  8}, // body back
+        {36,  8, 10,  8}  // body front
     };
-    static const int bodyDir[6] = {0,0,-90,-90,-90,-90};
-    render_entity_create_cube(4, 0, 6,  8,12,4, bodyUV, bodyDir);
+    static const int bodyDir[6] = {0, -90, 0, 180, -90, -90};
+    //                        ↓↑  /\/ →←
+    render_entity_create_cube( 0,  6, 4, //    pos
+                              16, 8, 10, //    width/height
+                              bodyUV, bodyDir);
+    displaylist_render_immediate(&dl, 24); // body
 
     // 4) Legs (4×6×4), y0 = 0
-    displaylist_reset(&dl);
-    gfx_matrix_modelview(body_mv);
+    // 4) Legs (464), y0 = 0 — animate using frame
     static const UVRect legUV[6] = {
-        { 8,16,4,4}, {4,16,4,4},
-        {12,20,4,6},{4,20,4,6},
-        { 8,20,6,6},{0,20,6,6}
+        { 8, 16, 4, 4}, // bottom
+        { 4, 16, 4, 4}, // top
+        {12, 20, 4, 6}, // front
+        { 4, 20, 4, 6}, // back
+        { 8, 20, 4, 6}, // left
+        { 0, 20, 4, 6}  // right
     };
     static const int legDir[6] = {0,0,-90,-90,-90,-90};
     int legPos[4][3] = {
-        {4,0, 2},
-        {8,0, 2},
-        {4,0,10},
-        {8,0,10}
+        { 1, 0, 2 }, // front-left
+        { 1, 0, 8 }, // front-right
+        { 9, 0, 6 }, // back-left
+        { 9, 0, 12 }  // back-right
     };
-    for(int i=0;i<4;i++){
+
+    // simple walk animation (same pattern as creeper)
+    float walkAngle = sinf((float)(frame % 60) / 25.0f * 2.0f * M_PI) * (30.0f * (M_PI / 180.0f));
+    const int width = 4, height = 6, depth = 4;
+    int legAnimDir[4] = { +1, -1, -1, +1 };
+
+    for (int i = 0; i < 4; i++) {
+        displaylist_reset(&dl);
+
+        bool isFront = (i < 2);
+        vec3 pivot = {
+            (width / 2.0f) / 16.0f,
+            height / 16.0f,
+            (isFront ? depth : 0.0f) / 16.0f
+        };
+
+        mat4 leg_model;
+        glm_mat4_identity(leg_model);
+        glm_translate_make(leg_model, (vec3){
+            legPos[i][0] / 16.0f,
+            legPos[i][1] / 16.0f,
+            legPos[i][2] / 16.0f
+        });
+
+glm_translate(leg_model, pivot);
+
+// exakt wie beim Creeper:
+// erst Beine ausrichten, dann schwingen
+glm_rotate_y(leg_model, glm_rad(90.0f), leg_model);
+glm_rotate_x(leg_model, legAnimDir[i] * walkAngle, leg_model);
+
+glm_translate(leg_model, (vec3){ -pivot[0], -pivot[1], -pivot[2] });
+
+        mat4 leg_mv;
+        glm_mat4_mul(body_mv, leg_model, leg_mv);
+        gfx_matrix_modelview(leg_mv);
+
         render_entity_create_cube(
-            legPos[i][0], legPos[i][1], legPos[i][2],
-            4,6,4, legUV, legDir
+            0, 0, 0,
+            width, height, depth,
+            legUV, legDir
         );
+        displaylist_render_immediate(&dl, 24);
     }
-    displaylist_render_immediate(&dl, 4*24);
+
+    // 5) Cleanup
+    gfx_lighting(true);
+    gfx_matrix_modelview(GLM_MAT4_IDENTITY);
+}
+
+//-------------------------
+// SHEEP
+//-------------------------
+void render_entity_sheep(mat4 view, float headYawDeg, int frame, bool shared) {
+    assert(view);
+
+    // 1) Basis‐matrix
+    mat4 model, body_mv;
+    glm_mat4_identity(model);
+    glm_translate_make(model, (vec3){ -0.5f, 0.0f, -0.5f });
+    glm_mat4_mul(view, model, body_mv);
+
+    gfx_bind_texture(&texture_sheep);
+
+    // 2) Head (8×8×8), y0 = 4 -----------------------------------
+    // Position the head centered on the body (head width = 8)
+    const int head_x = 6; // x start (pixels)
+    const int head_y = 15; // y start
+    const int head_z = -4; // z start (front of body)
+
+    mat4 head_mv;
+
+    displaylist_reset(&dl);
+    {
+        // pivot at head center (in model-local, normalized to [0..1])
+        float pivot_x = ((float)head_x + (float)(head_x + 8)) / 2.0f / 16.0f;
+        float pivot_y = ((float)head_y + (float)(head_y + 8)) / 2.0f / 16.0f;
+        float pivot_z = ((float)head_z + (float)(head_z + 8)) / 2.0f / 16.0f;
+        vec3 pivot = { pivot_x, pivot_y, pivot_z };
+        mat4 head_m;
+        glm_mat4_identity(head_m);
+        glm_translate(head_m, pivot);
+        // add 180deg offset so the head rotates right-left relative to world
+        
+        float yaw = headYawDeg;
+
+        // Begrenzen auf [-80°, +80°]
+        if (yaw > 45.0f)  yaw = 45.0f;
+        if (yaw < -45.0f) yaw = -45.0f;
+        glm_rotate_y(head_m, glm_rad(yaw + -90.0f), head_m);
+        glm_translate(head_m, (vec3){ -pivot[0], -pivot[1], -pivot[2] });
+        glm_mat4_mul(view, head_m, head_mv);
+        gfx_matrix_modelview(head_mv);
+    }
+    static const UVRect headUV[6] = {
+        {14, 0, 6, 8}, // head bottom
+        { 8, 0, 6, 8}, // head top
+        {22, 8, 6, 6}, // head back
+        { 8, 8, 6, 6}, // head front
+        {14, 8, 8, 6}, // head right
+        { 0, 8, 8, 6}  // head left
+    };
+    static const int headDir[6] = {0,0,-90,-90,-90,-90};
+    //                          ↓↑     /\ \/   → ←
+    render_entity_create_cube(head_x, head_y, head_z,  6, 6, 8, headUV, headDir);
+    displaylist_render_immediate(&dl, 24);
+
+
+    if (!shared) {
+        const int head_wool_x = 5; // x start (pixels)
+        const int head_wool_y = 14; // y start
+        const int head_wool_z = -3;
+
+        gfx_bind_texture(&texture_sheep_fur);
+        displaylist_reset(&dl);
+        {
+            // pivot at head center (in model-local, normalized to [0..1])
+            float spivot_x = ((float)head_x + (float)(head_x + 8)) / 2.0f / 16.0f;
+            float spivot_y = ((float)head_y + (float)(head_y + 8)) / 2.0f / 16.0f;
+            float spivot_z = ((float)head_z + (float)(head_z + 8)) / 2.0f / 16.0f;
+            vec3 spivot = { spivot_x, spivot_y, spivot_z };
+            mat4 shead_m;
+            glm_mat4_identity(shead_m);
+            glm_translate(shead_m, spivot);
+            // add 180deg offset so the head rotates right-left relative to world
+        
+            float yaw = headYawDeg;
+
+            if (yaw > 45.0f)  yaw = 45.0f;
+            if (yaw < -45.0f) yaw = -45.0f;
+            glm_rotate_y(shead_m, glm_rad(yaw + -90.0f), shead_m);
+            glm_translate(shead_m, (vec3){ -spivot[0], -spivot[1], -spivot[2] });
+            glm_mat4_mul(view, shead_m, head_mv);
+            gfx_matrix_modelview(head_mv);
+        }
+        static const UVRect sheadUV[6] = {
+            {12, 0, 6, 6}, // head bottom
+            { 6, 0, 6, 6}, // head top
+            {18, 6, 6, 6}, // head back
+            { 6, 6, 6, 6}, // head front
+            {12, 6, 6, 6}, // head right
+            { 0, 6, 6, 6}  // head left
+        };
+        static const int sheadDir[6] = {0,0,-90,-90,-90,-90};
+        //                          ↓↑     /\ \/   → ←
+        render_entity_create_cube(head_wool_x, head_wool_y, head_wool_z,  8, 8, 8, sheadUV, headDir);
+        displaylist_render_immediate(&dl, 24);
+    }
+
+    gfx_bind_texture(&texture_sheep); // reset
+
+    // 3) Body (8×12×4), y0 = 0 -----------------------------------
+    displaylist_reset(&dl);
+    gfx_matrix_modelview(body_mv);
+    static const UVRect bodyUV[6] = {
+        {34, 14, 8, 16}, // body bottom
+        {48, 14, 8, 16}, // body top
+        {42, 14,  6, 16}, // body left/right
+        {28, 14,  6, 16}, // body left/right
+        {42,  8, 8,  8}, // body back
+        {34,  8, 8,  8}  // body front
+    };
+    static const int bodyDir[6] = {0, -90, 0, 180, -90, -90};
+    //                        ↓↑  /\/ →←
+    render_entity_create_cube( 0,  12, 4, //    pos
+                              16, 6, 8, //    width/height
+                              bodyUV, bodyDir);
+    displaylist_render_immediate(&dl, 24); // body
+
+    if (!shared) {
+        gfx_bind_texture(&texture_sheep_fur);
+        displaylist_reset(&dl);
+        gfx_matrix_modelview(body_mv);
+        static const UVRect bodyUV[6] = {
+            {34, 14, 8, 16}, // body bottom
+            {48, 14, 8, 16}, // body top
+            {42, 14,  6, 16}, // body left/right
+            {28, 14,  6, 16}, // body left/right
+            {42,  8, 8,  8}, // body back
+            {34,  8, 8,  8}  // body front
+        };
+        static const int bodyDir[6] = {0, -90, 0, 180, -90, -90};
+        //                        ↓↑  /\/ →←
+        render_entity_create_cube(-2, 11, 2, //    pos
+                                  19, 8, 12, //    width/height
+                                  bodyUV, bodyDir);
+        displaylist_render_immediate(&dl, 24); // body
+    }
+    gfx_bind_texture(&texture_sheep); //reset
+
+    // 4) Legs (4×6×4), y0 = 0 -----------------------------------
+    // 4) Legs (464), y0 = 0 — animate using frame
+    static const UVRect legUV[6] = {
+        { 8, 16, 4,  4}, // bottom
+        { 4, 16, 4,  4}, // top
+        { 8, 20, 4, 12}, // front
+        {12, 20, 4, 12}, // back
+        { 4, 20, 4, 12}, // left
+        { 0, 20, 4, 12}  // right
+    };
+    static const int legDir[6] = {0,0,-90,-90,-90,-90};
+    int legPos[4][3] = {
+        { 1, 0, 1 }, // front-left
+        { 1, 0, 7 }, // front-right
+        { 9, 0, 5 }, // back-left
+        { 9, 0, 11 }  // back-right
+    };
+
+
+
+    // simple walk animation (same pattern as creeper)
+    float walkAngle = sinf((float)(frame % 60) / 25.0f * 2.0f * M_PI) * (20.0f * (M_PI / 180.0f));
+    const int width = 4, height = 12, depth = 4;
+    int legAnimDir[4] = { +1, -1, -1, +1 };
+
+    for (int i = 0; i < 4; i++) {
+        displaylist_reset(&dl);
+
+        bool isFront = (i < 2);
+        vec3 pivot = {
+            (width / 2.0f) / 16.0f,
+            height / 16.0f,
+            (isFront ? depth : 0.0f) / 16.0f
+        };
+
+        mat4 leg_model;
+        glm_mat4_identity(leg_model);
+        glm_translate_make(leg_model, (vec3){
+            legPos[i][0] / 16.0f,
+            legPos[i][1] / 16.0f,
+            legPos[i][2] / 16.0f
+        });
+
+        glm_translate(leg_model, pivot);
+
+        // exakt wie beim Creeper:
+        // erst Beine ausrichten, dann schwingen
+        glm_rotate_y(leg_model, glm_rad(90.0f), leg_model);
+        glm_rotate_x(leg_model, legAnimDir[i] * walkAngle, leg_model);
+
+        glm_translate(leg_model, (vec3){ -pivot[0], -pivot[1], -pivot[2] });
+
+        mat4 leg_mv;
+        glm_mat4_mul(body_mv, leg_model, leg_mv);
+        gfx_matrix_modelview(leg_mv);
+
+        render_entity_create_cube(
+            0, 0, 0,
+            width, height, depth,
+            legUV, legDir
+        );
+        displaylist_render_immediate(&dl, 24);
+    }
+
+    if (!shared) {
+        static const UVRect legUV[6] = {
+        { 8, 16, 4, 4}, // bottom
+        { 4, 16, 4, 4}, // top
+        { 8, 20, 4, 6}, // front
+        {12, 20, 4, 6}, // back
+        { 4, 20, 4, 6}, // left
+        { 0, 20, 4, 6}  // right
+    };
+    static const int legDir[6] = {0,0,-90,-90,-90,-90};
+    int legPos[4][3] = {
+        { 0, 0, 0 }, // front-left
+        { 0, 0, 6 }, // front-right
+        { 8, 0, 4 }, // back-left
+        { 8, 0, 10 }  // back-right
+    };
+
+
+
+    // simple walk animation (same pattern as creeper)
+    float walkAngle = sinf((float)(frame % 60) / 25.0f * 2.0f * M_PI) * (20.0f * (M_PI / 180.0f));
+    const int width = 4, height = 6, depth = 4;
+    int legAnimDir[4] = { +1, -1, -1, +1 };
+
+    for (int i = 0; i < 4; i++) {
+        displaylist_reset(&dl);
+
+        bool isFront = (i < 2);
+        vec3 pivot = {
+            (width / 2.0f) / 16.0f,
+            height / 16.0f,
+            (isFront ? depth : 0.0f) / 16.0f
+        };
+
+        mat4 leg_model;
+        glm_mat4_identity(leg_model);
+        glm_translate_make(leg_model, (vec3){
+            legPos[i][0] / 16.0f,
+            legPos[i][1] / 16.0f,
+            legPos[i][2] / 16.0f
+        });
+
+        glm_translate(leg_model, pivot);
+
+        // exakt wie beim Creeper:
+        // erst Beine ausrichten, dann schwingen
+        glm_rotate_y(leg_model, glm_rad(90.0f), leg_model);
+        glm_rotate_x(leg_model, legAnimDir[i] * walkAngle, leg_model);
+
+        glm_translate(leg_model, (vec3){ -pivot[0], -pivot[1], -pivot[2] });
+
+        mat4 leg_mv;
+        glm_mat4_mul(body_mv, leg_model, leg_mv);
+        gfx_matrix_modelview(leg_mv);
+
+        render_entity_create_cube(
+            6, 0, 0,
+            width, height, depth,
+            legUV, legDir
+        );
+        displaylist_render_immediate(&dl, 24);
+    }
+    }
+
+
 
     // 5) Cleanup
     gfx_lighting(true);
