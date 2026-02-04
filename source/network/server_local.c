@@ -233,7 +233,9 @@ void server_local_set_player_health(struct server_local* s, short new_health) {
 		.type = CRPC_PLAYER_SET_HEALTH,
 		.payload.player_set_health.health = s->player.health
 	});
-}
+} 
+
+bool place_block = false;
 
 static void server_local_process(struct server_rpc* call, void* user) {
 	assert(call && user);
@@ -337,6 +339,7 @@ static void server_local_process(struct server_rpc* call, void* user) {
 			}
 			break;
 		case SRPC_BLOCK_PLACE:
+			printf("srpc_block_place");
 			if(s->player.has_pos && call->payload.block_place.y >= 0
 			   && call->payload.block_place.y < WORLD_HEIGHT) {
 				int x, y, z;
@@ -351,6 +354,7 @@ static void server_local_process(struct server_rpc* call, void* user) {
 					   &s->world, call->payload.block_place.x,
 					   call->payload.block_place.y, call->payload.block_place.z,
 					   &blk_on)) {
+					printf("true 1");
 					struct block_info where = (struct block_info) {
 						.block = &blk_where,
 						.neighbours = NULL,
@@ -373,15 +377,22 @@ static void server_local_process(struct server_rpc* call, void* user) {
 
 					if(blocks[blk_on.type]
 					   && blocks[blk_on.type]->onRightClick) {
+						printf("true 2");
 						blocks[blk_on.type]->onRightClick(
 							s, &it_data, &where, &on,
 							call->payload.block_place.side);
+						if (place_block) {
+							goto p_block;
+							place_block = false;
+						}
 					} else if((!blocks[blk_where.type]
 							   || blocks[blk_where.type]->place_ignore)
 							  && it && it->onItemPlace
 							  && it->onItemPlace(
 								  s, &it_data, &where, &on,
 								  call->payload.block_place.side)) {
+						printf("false2");
+						p_block:
 						size_t slot
 							= inventory_get_hotbar(&s->player.inventory);
 						inventory_consume(&s->player.inventory,
@@ -506,7 +517,7 @@ static void server_local_update(struct server_local* s) {
 	assert(s);
 
 	// print TPS
-	#ifndef NDEBUG
+	#ifndef PRINT_TPS
 	ptime_t this_tick = time_get();
 	float dt = time_diff_s(s->last_tick, this_tick);
 	float tps = 1.0F / dt;

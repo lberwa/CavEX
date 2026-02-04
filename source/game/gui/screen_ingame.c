@@ -231,7 +231,7 @@ static void screen_ingame_update(struct screen* s, float dt) {
 	}
 
 
-// block place
+	// block place
 	if(gstate.camera_hit.hit && input_pressed(IB_ACTION2, 0)
 	   && !gstate.digging.active) {
 		svin_rpc_send(&(struct server_rpc) {
@@ -525,8 +525,10 @@ sprintf(str, "time: %.0f (%.0f)  angle: %.3f", time, day_ticks, angle);
 	gutil_texquad((width - 182 * GFX_GUI_SCALE) / 2, height - (GFX_GUI_SCALE * 16) * 8 / 5 - 22 * GFX_GUI_SCALE, 0, 0,
 				  182, 22, 182 * GFX_GUI_SCALE, 22 * GFX_GUI_SCALE);
 
+	//  +
 	gfx_blending(MODE_INVERT);
-	gutil_texquad((width - 16 * GFX_GUI_SCALE) / 2, (height - 16 * GFX_GUI_SCALE) / 2, 0, 229, GFX_GUI_SCALE, GFX_GUI_SCALE,
+	gfx_bind_texture(&texture_gui2);
+	gutil_texquad((width - 16 * GFX_GUI_SCALE) / 2, (height - 16 * GFX_GUI_SCALE) / 2, 0, 229, 16, 16,
 				  16 * GFX_GUI_SCALE, 16 * GFX_GUI_SCALE);
 
 	gfx_blending(MODE_OFF);

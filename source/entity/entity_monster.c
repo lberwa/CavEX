@@ -38,12 +38,24 @@
 
 // Creeper movement constants
 #define CREEPER_ACCEL            0.25f    // acceleration per tick
-#define CREEPER_MAX_SPEED        1.25f    // max horizontal speed per tick
+#define CREEPER_MAX_SPEED        0.70f    // max horizontal speed per tick
 #define CREEPER_WANDER_INTERVAL  20      // ticks between direction changes
-#define GRAVITY                  2.0f   // gravity per tick
+#define GRAVITY                  2.00f   // gravity per tick
 #define UNSTUCK_MOVE             0.01f   // slight upward nudge if stuck
-#define YAW_SMOOTH_FACTOR        0.2f    // smoothing factor [0..1]
+#define YAW_SMOOTH_FACTOR        0.20f    // smoothing factor [0..1]
 
+// Pig movement constants (similar to creeper but slightly slower)
+#define PIG_ACCEL                0.20f
+#define PIG_MAX_SPEED            0.12f
+
+// Sheep
+#define SHEEP_ACCEL                0.20f
+#define SHEEP_MAX_SPEED            0.12f
+
+
+//-------------------------
+// CREEPER
+//-------------------------
 // Local bounding box for collision (centered, half-height offset)
 void make_creeper_bbox(struct AABB* out) {
     const float sx = 0.6f, sy = 1.7f, sz = 0.6f;
@@ -86,33 +98,6 @@ static bool client_tick_creeper(struct entity* e) {
 
     return false;
 }
-
-void server_explode(struct server_local *s, vec3 center, float radius) {
-    int r = ceilf(radius);
-    for(int dx = -r; dx <= r; dx++) {
-      for(int dy = -r; dy <= r; dy++) {
-        for(int dz = -r; dz <= r; dz++) {
-          float dist = sqrtf(dx*dx + dy*dy + dz*dz);
-          if (dist > radius) continue;
-
-          int bx = (int)floorf(center[0]) + dx;
-          int by = (int)floorf(center[1]) + dy;
-          int bz = (int)floorf(center[2]) + dz;
-
-          // *** BOUNDARY CHECK ***
-          if (by < 0 || by >= WORLD_HEIGHT) continue;
-          // eventueel ook x/z check binnen chunk-limieten,
-          // maar server_world_get_block doet dat vaak al intern.
-
-          if (server_world_get_block(&s->world, bx, by, bz, NULL)) {
-            server_world_set_block(s, bx, by, bz,
-              (struct block_data){ .type = BLOCK_AIR, .metadata = 0 });
-          }
-        }
-      }
-    }
-}
-
 
 // Server-side creeper logic
 static bool server_tick_creeper(struct entity* e, struct server_local* s) {
@@ -198,10 +183,257 @@ static bool server_tick_creeper(struct entity* e, struct server_local* s) {
     return false;
 }
 
+//-------------------------
+// PIG
+//-------------------------
+static bool client_tick_pig(struct entity* e) {
+    assert(e);
+
+    glm_vec3_copy(e->pos, e->pos_old);
+    glm_vec3_lerp(e->pos, e->network_pos, 0.3f, e->pos);
+
+    vec3 delta;
+    entity_get_delta(e, delta);
+    float speed = sqrtf(delta[0]*delta[0] + delta[2]*delta[2]);
+    if (speed > 0.001f) {
+        e->data.monster.head_yaw = atan2f(delta[0], delta[2]);
+    }
+    entity_blend_body_to_head(&e->data.monster.body_yaw,
+                              e->data.monster.head_yaw,
+                              YAW_SMOOTH_FACTOR);
+
+    e->orient[0] = 0.0f;
+    e->orient[1] = e->data.monster.body_yaw + e->data.monster.head_yaw;
+
+    entity_tick_animation(e, speed, 60);
+    
+    return false;
+}
+
+// Pig bounding box (centered, slightly shorter than creeper)
+void make_pig_bbox(struct AABB* out) {
+    const float sx = 0.6f, sy = 1.2f, sz = 0.6f;
+    aabb_setsize_centered_offset(out, sx, sy, sz, 0.0f, sy * 0.5f, 0.0f);
+}
+
+static struct AABB make_pig_bbox_ret(void) {
+    struct AABB b;
+    make_pig_bbox(&b);
+    return b;
+}
+
+static size_t getBoundingBox_pig(const struct entity* e, struct AABB* out) {
+    assert(e && out);
+    make_pig_bbox(out);
+    aabb_translate(out, e->pos[0], e->pos[1], e->pos[2]);
+    return 1;
+}
+
+// Server-side pig logic
+static bool server_tick_pig(struct entity* e, struct server_local* s) {
+    assert(e && s);
+
+    glm_vec3_copy(e->pos,    e->pos_old);
+    glm_vec2_copy(e->orient, e->orient_old);
+
+    entity_damp_velocity(e, 0.005f);
+
+    // dead: pigs don't have a fuse, remove immediately when health <= 0
+    if (e->health <= 0) {
+        e->delay_destroy = 0;
+    }
+
+    vec3 center = { e->pos[0], e->pos[1], e->pos[2] };
+
+    if (--e->data.monster.direction_time <= 0) {
+        float ang = rand_gen_flt(&s->rand_src) * 2.0f * M_PI;
+        e->data.monster.direction[0] = cosf(ang);
+        e->data.monster.direction[1] = sinf(ang);
+        e->data.monster.direction_time = 30 + rand_gen_int(&s->rand_src, 30);
+    }
+
+    entity_move_in_direction(e, PIG_ACCEL, e->data.monster.direction);
+    entity_clamp_speed(e, PIG_MAX_SPEED);
+
+    entity_try_unstuck(e, make_pig_bbox);
+
+    bool collision_xz = false;
+    entity_try_move_axis(e, 1, make_pig_bbox_ret, &collision_xz, &e->on_ground);
+
+    if (e->on_ground) {
+        struct AABB bb_check = make_pig_bbox_ret();
+        bb_check.y1 -= 0.01f;
+        bb_check.y2 += 0.01f;
+        aabb_translate(&bb_check, e->pos[0], e->pos[1], e->pos[2]);
+
+        if (collision_xz || entity_aabb_intersection(e, &bb_check)) {
+            if (entity_try_auto_jump(e, 4.0f, 0.01f)) {
+                float ang = rand_gen_flt(&s->rand_src) * 2.0f * M_PI;
+                e->data.monster.direction[0] = cosf(ang);
+                e->data.monster.direction[1] = sinf(ang);
+                e->data.monster.direction_time = 30 + rand_gen_int(&s->rand_src, 30);
+            }
+        }
+    }
+
+    entity_try_move_axis(e, 0, make_pig_bbox_ret, &collision_xz, &e->on_ground);
+    entity_try_move_axis(e, 2, make_pig_bbox_ret, &collision_xz, &e->on_ground);
+
+    entity_apply_gravity(e, GRAVITY);
+    entity_apply_friction(e, e->on_ground ? 0.6f : 1.0f);
+
+    clin_rpc_send(&(struct client_rpc){
+        .type = CRPC_ENTITY_MOVE,
+        .payload.entity_move.entity_id = e->id,
+        .payload.entity_move.pos = {e->pos[0], e->pos[1], e->pos[2]}
+    });
+
+    return false;
+}
+
+//-------------------------
+// SHEEP
+//-------------------------
+static bool client_tick_sheep(struct entity* e) {
+    assert(e);
+
+    glm_vec3_copy(e->pos, e->pos_old);
+    glm_vec3_lerp(e->pos, e->network_pos, 0.3f, e->pos);
+
+    vec3 delta;
+    entity_get_delta(e, delta);
+    float speed = sqrtf(delta[0]*delta[0] + delta[2]*delta[2]);
+    if (speed > 0.001f) {
+        e->data.monster.head_yaw = atan2f(delta[0], delta[2]);
+    }
+    entity_blend_body_to_head(&e->data.monster.body_yaw,
+                              e->data.monster.head_yaw,
+                              YAW_SMOOTH_FACTOR);
+
+    e->orient[0] = 0.0f;
+    e->orient[1] = e->data.monster.body_yaw + e->data.monster.head_yaw;
+
+    entity_tick_animation(e, speed, 60);
+    
+    return false;
+}
+
+// Sheep bounding box (centered, slightly shorter than creeper)
+void make_sheep_bbox(struct AABB* out) {
+    const float sx = 0.6f, sy = 1.2f, sz = 0.6f;
+    aabb_setsize_centered_offset(out, sx, sy, sz, 0.0f, sy * 0.5f, 0.0f);
+}
+
+static struct AABB make_sheep_bbox_ret(void) {
+    struct AABB b;
+    make_sheep_bbox(&b);
+    return b;
+}
+
+static size_t getBoundingBox_sheep(const struct entity* e, struct AABB* out) {
+    assert(e && out);
+    make_sheep_bbox(out);
+    aabb_translate(out, e->pos[0], e->pos[1], e->pos[2]);
+    return 1;
+}
+
+// Server-side sheep logic
+static bool server_tick_sheep(struct entity* e, struct server_local* s) {
+    assert(e && s);
+
+    glm_vec3_copy(e->pos,    e->pos_old);
+    glm_vec2_copy(e->orient, e->orient_old);
+
+    entity_damp_velocity(e, 0.005f);
+
+    // dead
+    if (e->health <= 0) {
+        e->delay_destroy = 0;
+    }
+
+    vec3 center = { e->pos[0], e->pos[1], e->pos[2] };
+
+    if (--e->data.monster.direction_time <= 0) {
+        float ang = rand_gen_flt(&s->rand_src) * 2.0f * M_PI;
+        e->data.monster.direction[0] = cosf(ang);
+        e->data.monster.direction[1] = sinf(ang);
+        e->data.monster.direction_time = 30 + rand_gen_int(&s->rand_src, 30);
+    }
+
+    entity_move_in_direction(e, SHEEP_ACCEL, e->data.monster.direction);
+    entity_clamp_speed(e, SHEEP_MAX_SPEED);
+
+    entity_try_unstuck(e, make_sheep_bbox);
+
+    bool collision_xz = false;
+    entity_try_move_axis(e, 1, make_sheep_bbox_ret, &collision_xz, &e->on_ground);
+
+    if (e->on_ground) {
+        struct AABB bb_check = make_sheep_bbox_ret();
+        bb_check.y1 -= 0.01f;
+        bb_check.y2 += 0.01f;
+        aabb_translate(&bb_check, e->pos[0], e->pos[1], e->pos[2]);
+
+        if (collision_xz || entity_aabb_intersection(e, &bb_check)) {
+            if (entity_try_auto_jump(e, 4.0f, 0.01f)) {
+                float ang = rand_gen_flt(&s->rand_src) * 2.0f * M_PI;
+                e->data.monster.direction[0] = cosf(ang);
+                e->data.monster.direction[1] = sinf(ang);
+                e->data.monster.direction_time = 30 + rand_gen_int(&s->rand_src, 30);
+            }
+        }
+    }
+
+    entity_try_move_axis(e, 0, make_sheep_bbox_ret, &collision_xz, &e->on_ground);
+    entity_try_move_axis(e, 2, make_sheep_bbox_ret, &collision_xz, &e->on_ground);
+
+    entity_apply_gravity(e, GRAVITY);
+    entity_apply_friction(e, e->on_ground ? 0.6f : 1.0f);
+
+    clin_rpc_send(&(struct client_rpc){
+        .type = CRPC_ENTITY_MOVE,
+        .payload.entity_move.entity_id = e->id,
+        .payload.entity_move.pos = {e->pos[0], e->pos[1], e->pos[2]}
+    });
+
+    return false;
+}
+
+
+void server_explode(struct server_local *s, vec3 center, float radius) {
+    int r = ceilf(radius);
+    for(int dx = -r; dx <= r; dx++) {
+      for(int dy = -r; dy <= r; dy++) {
+        for(int dz = -r; dz <= r; dz++) {
+          float dist = sqrtf(dx*dx + dy*dy + dz*dz);
+          if (dist > radius) continue;
+
+          int bx = (int)floorf(center[0]) + dx;
+          int by = (int)floorf(center[1]) + dy;
+          int bz = (int)floorf(center[2]) + dz;
+
+          // *** BOUNDARY CHECK ***
+          if (by < 0 || by >= WORLD_HEIGHT) continue;
+          // eventueel ook x/z check binnen chunk-limieten,
+          // maar server_world_get_block doet dat vaak al intern.
+
+          if (server_world_get_block(&s->world, bx, by, bz, NULL)) {
+            server_world_set_block(s, bx, by, bz,
+              (struct block_data){ .type = BLOCK_AIR, .metadata = 0 });
+          }
+        }
+      }
+    }
+}
+
 static bool entity_server_tick(struct entity* e, struct server_local* s) {
-    return (e->data.monster.id == MONSTER_CREEPER)
-        ? server_tick_creeper(e, s)
-        : false;
+    switch (e->data.monster.id) {
+        case MONSTER_CREEPER : return server_tick_creeper(e, s);
+        case MONSTER_ZOMBIE  : return false;
+        case ANIMAIL_SHEEP   : return server_tick_sheep(e, s);
+        case ANIMAIL_PIG     : return server_tick_pig(e, s);
+        default              : return false;
+    }
 }
 
 static bool entity_client_tick(struct entity* e) {
@@ -211,8 +443,9 @@ static bool entity_client_tick(struct entity* e) {
 
     if (e->type == ENTITY_MONSTER) {
         switch (e->data.monster.id) {
-            case MONSTER_CREEPER:
-                return client_tick_creeper(e);
+            case MONSTER_CREEPER : return client_tick_creeper(e);
+            case ANIMAIL_PIG     : return client_tick_pig(e);
+            case ANIMAIL_SHEEP   : return client_tick_sheep(e);
             // todo: other monsters
           // case MONSTER_ZOMBIE: return client_tick_zombie(e);
             default:
@@ -222,7 +455,6 @@ static bool entity_client_tick(struct entity* e) {
     return false;
 }
 
-// Render creeper
 static void entity_render(struct entity* e, mat4 view, float td) {
     assert(e);
 
@@ -243,10 +475,26 @@ static void entity_render(struct entity* e, mat4 view, float td) {
     glm_translate_make(model, p);
     glm_mat4_mul(view, model, mv);
 
-    render_entity_creeper(mv,
-                          glm_deg(bodyYaw),
-                          glm_deg(headYaw),
-                          e->data.monster.frame);
+    switch (e->data.monster.id) {
+        case MONSTER_CREEPER:
+            render_entity_creeper(mv,
+                                  glm_deg(bodyYaw),
+                                  glm_deg(headYaw),
+                                  e->data.monster.frame);
+            break;
+        case ANIMAIL_PIG:
+            render_entity_pig(mv, glm_deg(headYaw), e->data.monster.frame);
+            break;
+        case ANIMAIL_SHEEP:
+            render_entity_sheep(mv, glm_deg(headYaw), e->data.monster.frame, e->data.monster.shared);
+            break;
+        default:
+            render_entity_creeper(mv,
+                                  glm_deg(bodyYaw),
+                                  glm_deg(headYaw),
+                                  e->data.monster.frame);
+            break;
+    }
 
     // shadow, doesn't seem to work currently
     struct AABB shadow_bb;
@@ -309,7 +557,6 @@ void entity_monster(uint32_t id,
     e->getBoundingBox = getBoundingBox_creeper;
     e->onLeftClick = onLeftClick;
     e->leftClickText = "Attack";
-    e->onRightClick = NULL;
     e->rightClickText = NULL;
     e->delay_destroy = -1;
     // spawn slightly higher, to prevent getting stuck
@@ -319,4 +566,33 @@ void entity_monster(uint32_t id,
     }
 
     e->ai_timer     = CREEPER_WANDER_INTERVAL;
+
+    /* Per-monster overrides (name, drop, bbox, initial data) */
+    switch (monster_id) {
+        case MONSTER_CREEPER:
+            /* defaults already match creeper */
+            e->name = "Creeper";
+            e->drop_item = (struct item_data){ .id = ITEM_GUNPOWDER, .durability = 0, .count = 1 };
+            e->getBoundingBox = getBoundingBox_creeper;
+            e->data.monster.fuse = -1;
+            e->onRightClick = NULL;
+            break;
+        case ANIMAIL_PIG:
+            e->name = "Pig";
+            e->drop_item = (struct item_data){ .id = ITEM_PORKCHOP, .durability = 0, .count = 1 };
+            e->getBoundingBox = getBoundingBox_pig;
+            e->onRightClick = NULL;
+            /* initialize pig-specific union fields */
+            break;
+        case ANIMAIL_SHEEP:
+            e->name = "Sheep";
+            e->drop_item = (struct item_data){ .id = ITEM_PORKCHOP, .durability = 0, .count = 1 };
+            e->getBoundingBox = getBoundingBox_sheep;
+            e->onRightClick = NULL;
+            e->data.monster.shared = false;
+            break;
+        default:
+            /* leave generic defaults */
+            break;
+    }
 }

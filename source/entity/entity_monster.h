@@ -28,6 +28,8 @@
 enum {
     MONSTER_ZOMBIE  = 0,
     MONSTER_CREEPER = 1,
+	ANIMAIL_PIG     = 2,
+	ANIMAIL_SHEEP   = 3,
     MONSTER_COUNT
 };
 

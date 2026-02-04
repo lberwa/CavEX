@@ -89,7 +89,16 @@ bool debugsendfirst = false;
 #endif
 #endif
 
+#ifdef PLATFORM_PC
+#include <signal.h>
+#endif
+
 int main(void) {
+
+	#ifdef PLATFORM_PC
+	signal(SIGPIPE, SIG_IGN);
+	#endif
+
 	//video_init_custom();
 	#ifdef PLATFORM_WII
 	VIDEO_Init();

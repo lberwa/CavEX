@@ -100,6 +100,7 @@ struct entity {
 			float body_yaw;
 		    float head_yaw;
 		    int fuse;
+			bool shared;
 		} monster;
         struct entity_minecart {
 			float speed;

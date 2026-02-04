@@ -41,8 +41,8 @@ struct item item_egg_zombie = {
 	.tool.type = TOOL_TYPE_ANY,
 	.render_data = {
 		.item = {
-			.texture_x = 8,
-			.texture_y = 4,
+			.texture_x = 9,
+			.texture_y = 9,
 		},
 	},
 };

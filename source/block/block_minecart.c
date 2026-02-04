@@ -58,7 +58,7 @@ static uint8_t getTextureIndex(struct block_info* this, enum side side) {
 
 
 struct block block_minecart = {
-	.name = "Sand",
+	.name = "Minecart",
 	.getSideMask = getSideMask,
 	.getBoundingBox = getBoundingBox,
 	.getMaterial = getMaterial,
