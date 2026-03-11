@@ -23,6 +23,7 @@
 #include "texture_atlas.h"
 
 static uint8_t global_block_atlas[TEXAT_MAX];
+static uint8_t global_block_atlas2[TEXAT_MAX];
 static uint8_t global_particle_atlas[TEXAT_MAX];
 
 static int clamp_n(int x, int n) {
@@ -103,7 +104,7 @@ void* tex_atlas_compute(dict_atlas_src_t atlas, uint8_t* atlas_dst,
     printf("Error: image is NULL\n");
     return NULL;
 }
-if (width < 256) {
+if (width < 16) {
     printf("Error: image width too small (%zu)\n", width);
     return NULL;
 }
@@ -112,7 +113,7 @@ if (width != height) {
     return NULL;
 }
 
-	assert(image && width >= 256 && width == height);
+	assert(image && width >= 16 && width == height);
 
 	int tile_size = width / 16;
 	int border_scale = width / 256;
@@ -180,6 +181,10 @@ if (width != height) {
 
 uint8_t tex_atlas_lookup(enum tex_atlas_entry name) {
 	return global_block_atlas[name];
+}
+
+uint8_t tex_atlas_lookup2(enum tex_atlas_entry name) {
+	return global_block_atlas2[name];
 }
 
 uint8_t tex_atlas_lookup_particle(enum tex_atlas_entry name) {
@@ -317,26 +322,11 @@ void* tex_atlas_block(const char* filename, size_t* width, size_t* height) {
 	tex_atlas_reg(atlas, TEXAT_ORE_LAPIS, 0, 10);
 	tex_atlas_reg(atlas, TEXAT_RAIL_POWERED_OFF, 3, 10);
 	
-	// redstone wire power levels, from 0 to 15
+	// redstone base texture (single entry; brightness handled at render time)
+	tex_atlas_reg_col(atlas, TEXAT_REDSTONE_OFF, 4, 10, 111, 0, 0);
+	tex_atlas_reg_col(atlas, TEXAT_REDSTONE_MIDDLE_OFF, 4, 11, 111, 0, 0);
 	tex_atlas_reg_col(atlas, TEXAT_REDSTONE_WIRE_OFF, 5, 10, 111, 0, 0);
-	for (int lvl = 0; lvl <= 15; ++lvl) {
-	    uint8_t r = redstone_colors[lvl][0];
-	    uint8_t g = redstone_colors[lvl][1];
-	    uint8_t b = redstone_colors[lvl][2];
-
-	    enum tex_atlas_entry entry;
-	    if (lvl == 0) {
-	        entry = TEXAT_REDSTONE_WIRE_OFF;
-	    } else {
-	        entry = TEXAT_REDSTONE_WIRE_L1 + (lvl - 1);
-	    }
-
-	    tex_atlas_reg_col(atlas, entry, 5, 10, r, g, b);
-	}
-
-	//tex_atlas_reg_col(atlas, TEXAT_REDSTONE_WIRE_ON, 5, 10, 252, 49, 0);
-	tex_atlas_reg_col(atlas, TEXAT_REDSTONE_WIRE_INTERSECT_OFF, 5, 11, 111, 0, 0); //4, 10?
-	tex_atlas_reg_col(atlas, TEXAT_REDSTONE_WIRE_INTERSECT_ON, 5, 11, 252, 49, 0);
+	tex_atlas_reg_col(atlas, TEXAT_REDSTONE_STOCK_OFF, 5, 11, 111, 0, 0);
 
 
 	tex_atlas_reg(atlas, TEXAT_SANDSTONE_TOP, 0, 11);
@@ -365,7 +355,7 @@ void* tex_atlas_block(const char* filename, size_t* width, size_t* height) {
 	tex_atlas_reg(atlas, TEXAT_WOOL_15, 1, 7);  // Black
 
 	tex_atlas_reg(atlas, TEXAT_LAVA_STATIC, 15, 15);
-
+	// (redstone variants moved to runtime brightness)
 	tex_atlas_reg_col(atlas, TEXAT_GRASS_TOP, 0, 0, 110, 198, 63);
 	tex_atlas_reg_grass(atlas, TEXAT_GRASS_SIDE, 6, 2, 110, 198, 63, 3, 0);
 	tex_atlas_reg_col(atlas, TEXAT_TALLGRASS, 7, 2, 110, 198, 63);
@@ -383,6 +373,27 @@ void* tex_atlas_block(const char* filename, size_t* width, size_t* height) {
 	dict_atlas_src_clear(atlas);
 	free(image);
 
+	return output;
+}
+
+void* tex_atlas_block2(const char* filename, size_t* width, size_t* height) {
+	dict_atlas_src_t atlas;
+	dict_atlas_src_init(atlas);
+
+	// Redstone variants now use runtime brightness; keep only base entries
+	tex_atlas_reg_col(atlas, TEXAT_REDSTONE_OFF, 4, 10, 111, 0, 0);
+	tex_atlas_reg_col(atlas, TEXAT_REDSTONE_MIDDLE_OFF, 4, 11, 111, 0, 0);
+	tex_atlas_reg_col(atlas, TEXAT_REDSTONE_WIRE_OFF, 5, 10, 111, 0, 0);
+	tex_atlas_reg_col(atlas, TEXAT_REDSTONE_STOCK_OFF, 5, 11, 111, 0, 0);
+
+	// do not clear after registering; we want the registrations to persist
+	uint8_t* image = tex_read(filename, width, height);
+	void* output = tex_atlas_compute(atlas,
+									 global_block_atlas2,
+									 image,
+									 *width, *height);
+	dict_atlas_src_clear(atlas);
+	free(image);
 	return output;
 }
 

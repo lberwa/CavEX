@@ -47,7 +47,6 @@ struct particle {
     particle_atlas_t atlas;      // which atlas to sample
 };
 
-
 void particle_add(vec3 pos,
                   vec3 vel,
                   uint8_t tex,
@@ -60,11 +59,13 @@ void particle_add(vec3 pos,
 				  bool ignore_light,
 				  particle_atlas_t atlas);
 
+#ifdef PLATFORM_PC
 #define PARTICLES_AREA 8
 #define PARTICLES_VOLUME 64
 #define M_ARRAY_DEF(name, ...)                                                \
   M_ARRAY_DEF_AS(name, M_F(name,_t), M_F(name,_it_t), __VA_ARGS__)
 M_ARRAY_DEF(array_particle, struct particle, M_POD_OPLIST)
+#endif
 
 void particle_init(void);
 void particle_set_camera(vec3 p);

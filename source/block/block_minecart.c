@@ -16,7 +16,7 @@
 	You should have received a copy of the GNU General Public License
 	along with CavEX.  If not, see <http://www.gnu.org/licenses/>.
 */
-
+/*
 #include "blocks.h"
 
 static enum block_material getMaterial(struct block_info* this) {
@@ -90,4 +90,4 @@ struct block block_minecart = {
 		.tool.type = TOOL_TYPE_ANY,
 	},
 };
-
+*/

@@ -726,28 +726,458 @@ size_t render_block_rail(struct displaylist* dl,
     return 1;
 }
 
+// ----------- render_block_redstone_wire() -----------------
+#define REDSTONE_CASE_DEBUG
+
+static inline int neighbours_ext_index(int dx, int dy, int dz) {
+	int idx = 0;
+	for (int z = -1; z <= 1; ++z) {
+		for (int y = -1; y <= 1; ++y) {
+			for (int x = -1; x <= 1; ++x) {
+				if (x == 0 && y == 0 && z == 0) continue;
+				if (x == dx && y == dy && z == dz) return idx;
+				idx++;
+			}
+		}
+	}
+	return -1;
+}
+
+static inline bool neighbours_ext_get(struct block_info* info,
+										int dx, int dy, int dz,
+										struct block_data* out) {
+	if (!info || !info->neighbours_ext) return false;
+	int idx = neighbours_ext_index(dx, dy, dz);
+	if (idx < 0) return false;
+	*out = info->neighbours_ext[idx];
+	return true;
+}
+static inline bool is_redstone_source(uint8_t type, uint8_t meta) {
+	if (type == BLOCK_REDSTONE_WIRE) return true;
+	if (type == BLOCK_REDSTONE_TORCH || type == BLOCK_REDSTONE_TORCH_LIT)
+		return true;
+	if ((type == BLOCK_STONE_PRESSURE_PLATE || type == BLOCK_WOOD_PRESSURE_PLATE)
+		&& (meta & 0x0F) == 1) {
+		return true;
+	}
+	return false;
+}
+
+static inline enum tex_atlas_entry redstone_variant_base(uint8_t variant) {
+	enum tex_atlas_entry base_off;
+	switch (variant) {
+		case 1:
+			base_off = TEXAT_REDSTONE_MIDDLE_OFF;
+			break;
+		case 2:
+			base_off = TEXAT_REDSTONE_WIRE_OFF;
+			break;
+		case 3:
+			base_off = TEXAT_REDSTONE_STOCK_OFF;
+			break;
+		case 0:
+		default:
+			base_off = TEXAT_REDSTONE_OFF;
+			break;
+	}
+	return base_off;
+}
+
+static inline uint8_t redstone_vertex_light(uint8_t base, uint8_t level) {
+	(void)base;
+	// buckets: 0 = very dark, 1-5 = bright, 6-10 = medium, 11-15 = dim
+	uint8_t v;
+	if (level == 0) {
+		v = 7;
+	} else if (level <= 2) {
+		v = 8;
+	} else if (level <= 4) {
+		v = 9;
+	} else if (level <= 6) {
+		v = 10;
+	} else if (level <= 8) {
+		v = 11;
+	} else if (level <= 10) {
+		v = 12;
+	} else if (level <= 12) {
+		v = 13;
+	} else if (level <= 14) {
+		v = 14;
+	} else {
+		v = 30;
+	}
+	return (v << 4) | v;
+}
+
+static void render_redstone(struct displaylist* dl, int16_t x, int16_t y, int16_t z,
+							uint16_t a, uint16_t b, uint16_t c, uint16_t d,
+							uint8_t level, const uint8_t (*tex_coords)[2],
+							uint8_t* vertex_light, int tex_rotate)
+	{
+	displaylist_pos(dl, x * BLK_LEN, y * BLK_LEN + a, z * BLK_LEN);
+	displaylist_color(dl, redstone_vertex_light(
+		DIM_LIGHT(vertex_light[4], NULL, false, 0), level));
+	displaylist_texcoord(dl, tex_coords[(tex_rotate + 0) % 4][0],
+							tex_coords[(tex_rotate + 0) % 4][1]);
+	displaylist_pos(dl, x * BLK_LEN + BLK_LEN, y * BLK_LEN + b,
+					z * BLK_LEN);
+	displaylist_color(dl, redstone_vertex_light(
+		DIM_LIGHT(vertex_light[5], NULL, false, 0), level));
+	displaylist_texcoord(dl, tex_coords[(tex_rotate + 1) % 4][0],
+							tex_coords[(tex_rotate + 1) % 4][1]);
+	displaylist_pos(dl, x * BLK_LEN + BLK_LEN, y * BLK_LEN + c,
+					z * BLK_LEN + BLK_LEN);
+	displaylist_color(dl, redstone_vertex_light(
+		DIM_LIGHT(vertex_light[6], NULL, false, 0), level));
+	displaylist_texcoord(dl, tex_coords[(tex_rotate + 2) % 4][0],
+							tex_coords[(tex_rotate + 2) % 4][1]);
+	displaylist_pos(dl, x * BLK_LEN, y * BLK_LEN + d,
+					z * BLK_LEN + BLK_LEN);
+	displaylist_color(dl, redstone_vertex_light(
+		DIM_LIGHT(vertex_light[7], NULL, false, 0), level));
+	displaylist_texcoord(dl, tex_coords[(tex_rotate + 3) % 4][0],
+							tex_coords[(tex_rotate + 3) % 4][1]);
+	}
+
+static void render_redstone_offset(struct displaylist* dl, int16_t x, int16_t y, int16_t z,
+								   uint16_t a, uint16_t b, uint16_t c, uint16_t d,
+								   uint8_t level, const uint8_t (*tex_coords)[2],
+								   uint8_t* vertex_light, int tex_rotate,
+								   int16_t ox, int16_t oz)
+	{
+	displaylist_pos(dl, x * BLK_LEN + ox, y * BLK_LEN + a, z * BLK_LEN + oz);
+	displaylist_color(dl, redstone_vertex_light(
+		DIM_LIGHT(vertex_light[4], NULL, false, 0), level));
+	displaylist_texcoord(dl, tex_coords[(tex_rotate + 0) % 4][0],
+							tex_coords[(tex_rotate + 0) % 4][1]);
+	displaylist_pos(dl, x * BLK_LEN + BLK_LEN + ox, y * BLK_LEN + b,
+					z * BLK_LEN + oz);
+	displaylist_color(dl, redstone_vertex_light(
+		DIM_LIGHT(vertex_light[5], NULL, false, 0), level));
+	displaylist_texcoord(dl, tex_coords[(tex_rotate + 1) % 4][0],
+							tex_coords[(tex_rotate + 1) % 4][1]);
+	displaylist_pos(dl, x * BLK_LEN + BLK_LEN + ox, y * BLK_LEN + c,
+					z * BLK_LEN + BLK_LEN + oz);
+	displaylist_color(dl, redstone_vertex_light(
+		DIM_LIGHT(vertex_light[6], NULL, false, 0), level));
+	displaylist_texcoord(dl, tex_coords[(tex_rotate + 2) % 4][0],
+							tex_coords[(tex_rotate + 2) % 4][1]);
+	displaylist_pos(dl, x * BLK_LEN + ox, y * BLK_LEN + d,
+					z * BLK_LEN + BLK_LEN + oz);
+	displaylist_color(dl, redstone_vertex_light(
+		DIM_LIGHT(vertex_light[7], NULL, false, 0), level));
+	displaylist_texcoord(dl, tex_coords[(tex_rotate + 3) % 4][0],
+							tex_coords[(tex_rotate + 3) % 4][1]);
+	}
+
+static void render_redstone_vertical(struct displaylist* dl, int16_t x, int16_t y, int16_t z,
+									 uint8_t level, const uint8_t (*tex_coords)[2],
+									 uint8_t* vertex_light, int tex_rotate, int dir)
+	{
+	const int16_t offset = -4;
+	const int16_t y_top = y * BLK_LEN + BLK_LEN;
+	const int16_t y_bot = y * BLK_LEN + 16;
+
+	int16_t x0 = x * BLK_LEN;
+	int16_t x1 = x * BLK_LEN + BLK_LEN;
+	int16_t z0 = z * BLK_LEN;
+	int16_t z1 = z * BLK_LEN + BLK_LEN;
+
+	switch (dir) {
+		case 0: // +X (right)
+			x0 = x1 = x * BLK_LEN + BLK_LEN + offset;
+			break;
+		case 1: // -X (left)
+			x0 = x1 = x * BLK_LEN - offset;
+			break;
+		case 2: // +Z (front)
+			z0 = z1 = z * BLK_LEN - offset;
+			break;
+		case 3: // -Z (back)
+			z0 = z1 = z * BLK_LEN + BLK_LEN + offset;
+			break;
+		default:
+			return;
+	}
+
+	int rot = tex_rotate;
+	if (dir == 0 || dir == 1)
+		rot = (tex_rotate + 1) % 4;
+
+	displaylist_pos(dl, x0, y_top, z0);
+	displaylist_color(dl, redstone_vertex_light(
+		DIM_LIGHT(vertex_light[4], NULL, false, 0), level));
+	displaylist_texcoord(dl, tex_coords[(rot + 0) % 4][0],
+							tex_coords[(rot + 0) % 4][1]);
+	displaylist_pos(dl, x1, y_top, z1);
+	displaylist_color(dl, redstone_vertex_light(
+		DIM_LIGHT(vertex_light[5], NULL, false, 0), level));
+	displaylist_texcoord(dl, tex_coords[(rot + 1) % 4][0],
+							tex_coords[(rot + 1) % 4][1]);
+	displaylist_pos(dl, x1, y_bot, z1);
+	displaylist_color(dl, redstone_vertex_light(
+		DIM_LIGHT(vertex_light[6], NULL, false, 0), level));
+	displaylist_texcoord(dl, tex_coords[(rot + 2) % 4][0],
+							tex_coords[(rot + 2) % 4][1]);
+	displaylist_pos(dl, x0, y_bot, z0);
+	displaylist_color(dl, redstone_vertex_light(
+		DIM_LIGHT(vertex_light[7], NULL, false, 0), level));
+	displaylist_texcoord(dl, tex_coords[(rot + 3) % 4][0],
+							tex_coords[(rot + 3) % 4][1]);
+
+	// Draw back face so it is visible regardless of culling.
+	displaylist_pos(dl, x0, y_bot, z0);
+	displaylist_color(dl, redstone_vertex_light(
+		DIM_LIGHT(vertex_light[7], NULL, false, 0), level));
+	displaylist_texcoord(dl, tex_coords[(rot + 3) % 4][0],
+							tex_coords[(rot + 3) % 4][1]);
+	displaylist_pos(dl, x1, y_bot, z1);
+	displaylist_color(dl, redstone_vertex_light(
+		DIM_LIGHT(vertex_light[6], NULL, false, 0), level));
+	displaylist_texcoord(dl, tex_coords[(rot + 2) % 4][0],
+							tex_coords[(rot + 2) % 4][1]);
+	displaylist_pos(dl, x1, y_top, z1);
+	displaylist_color(dl, redstone_vertex_light(
+		DIM_LIGHT(vertex_light[5], NULL, false, 0), level));
+	displaylist_texcoord(dl, tex_coords[(rot + 1) % 4][0],
+							tex_coords[(rot + 1) % 4][1]);
+	displaylist_pos(dl, x0, y_top, z0);
+	displaylist_color(dl, redstone_vertex_light(
+		DIM_LIGHT(vertex_light[4], NULL, false, 0), level));
+	displaylist_texcoord(dl, tex_coords[(rot + 0) % 4][0],
+							tex_coords[(rot + 0) % 4][1]);
+	}
+
 // todo: This is currently mostly copied from block-rail. Adapt this to:
 // - show corner/intersection texture where needed
 size_t render_block_redstone_wire(struct displaylist* dl, struct block_info* this,
 						 enum side side, struct block_info* it,
 						 uint8_t* vertex_light, bool count_only) {
-	if(side != SIDE_TOP)
+	if(side != SIDE_TOP) {
+		#ifdef REDSTONE_CASE_DEBUG
+		printf("return 0;\n");
+		#endif
 		return 0;
+	}
 
 	if(!count_only) {
+
+		bool has_near = false;
+		uint8_t near_mask = 0; // bit0=+X, bit1=-X, bit2=+Z, bit3=-Z
+
+		struct block_data above;
+		bool above_air = neighbours_ext_get(this, 0, +1, 0, &above)
+			&& above.type == BLOCK_AIR;
+
+		#ifdef REDSTONE_CASE_DEBUG
+		{
+		struct block_data above;
+		if (neighbours_ext_get(this, 0, +1, 0, &above)) {
+		    printf("above: type=%u meta=%u at %d,%d,%d\n",
+		           above.type, above.metadata, this->x, this->y + 1, this->z);
+		} else {
+		    printf("above: (no data)\n");
+		}
+		}
+		
+		printf(above_air ? "above_air = true\n" : "above_air = false\n");
+		#endif
+
+		const struct { int dx, dz; enum side side; uint8_t bit; } dirs[4] = {
+			{ +1,  0, SIDE_RIGHT, 1 << 0 }, // +X
+			{ -1,  0, SIDE_LEFT,  1 << 1 }, // -X
+			{  0, -1, SIDE_FRONT, 1 << 3 }, // +Z
+			{  0, +1, SIDE_BACK,  1 << 2 }, // -Z
+			//{  0, +1, SIDE_FRONT, 1 << 2 }
+		};
+
+		for (int i = 0; i < 4; ++i) {
+			enum side sdir = dirs[i].side;
+			uint8_t ntype = this->neighbours ? this->neighbours[sdir].type : BLOCK_AIR;
+			uint8_t nmeta = this->neighbours ? (this->neighbours[sdir].metadata & 0x0F) : 0;
+
+			bool dir_near = false;
+			if (is_redstone_source(ntype, nmeta)) {
+				dir_near = true;
+			}
+
+			// down-diagonal only if side block is air
+			if (!dir_near && ntype == BLOCK_AIR) {
+				struct block_data btmp;
+				if (neighbours_ext_get(this, dirs[i].dx, -1, dirs[i].dz, &btmp)) {
+					if (is_redstone_source(btmp.type, btmp.metadata)) {
+						dir_near = true;
+					}
+				}
+			}
+
+			// up-diagonal if block above current is air (regardless of side block)
+			if (!dir_near && above_air) {
+				struct block_data btmp;
+				if (neighbours_ext_get(this, dirs[i].dx, +1, dirs[i].dz, &btmp)) {
+					if (is_redstone_source(btmp.type, btmp.metadata)) {
+						dir_near = true;
+					}
+				}
+			}
+
+			if (dir_near) {
+				has_near = true;
+				near_mask |= dirs[i].bit;
+			}
+		}
+		
+		// Zusatzliste: 0 = nix, 1 = direkt/unter, 2 = oben (bei Luft ueber dem Block)
+		uint8_t dir_state[4] = {0, 0, 0, 0};
+		#ifdef REDSTONE_CASE_DEBUG
+		printf("wo ist der block\n");
+		#endif
+		for (int i = 0; i < 4; ++i) {
+			enum side sdir = dirs[i].side;
+			uint8_t ntype = this->neighbours ? this->neighbours[sdir].type : BLOCK_AIR;
+			uint8_t nmeta = this->neighbours ? (this->neighbours[sdir].metadata & 0x0F) : 0;
+
+			if (is_redstone_source(ntype, nmeta)) {
+				dir_state[i] = 1;
+				continue;
+				#ifdef REDSTONE_CASE_DEBUG
+				printf("1\n");
+				#endif
+			}
+
+			if (ntype == BLOCK_AIR) {
+				struct block_data btmp;
+				if (neighbours_ext_get(this, dirs[i].dx, -1, dirs[i].dz, &btmp)) {
+					if (is_redstone_source(btmp.type, btmp.metadata)) {
+						dir_state[i] = 1;
+						continue;
+						#ifdef REDSTONE_CASE_DEBUG
+						printf("2\n");
+						#endif
+					}
+				}
+			}
+
+			if (above_air) {
+				struct block_data btmp;
+				if (neighbours_ext_get(this, dirs[i].dx, +1, dirs[i].dz, &btmp)) {
+					if (is_redstone_source(btmp.type, btmp.metadata)) {
+						dir_state[i] = 2;
+						#ifdef REDSTONE_CASE_DEBUG
+						printf("3\n");
+						#endif
+					}
+				}
+			}
+			#ifdef REDSTONE_CASE_DEBUG
+			printf("nix da\n");
+			#endif
+		}
+		
+		// --------------------------------------------------
 		int16_t x = W2C_COORD(this->x);
 		int16_t y = W2C_COORD(this->y);
 		int16_t z = W2C_COORD(this->z);
-		uint8_t tex = blocks[this->block->type]->getTextureIndex(this, side);
-		uint8_t luminance = blocks[this->block->type]->luminance;
 
-		uint8_t tex_coords[4][2] = {
-			{TEX_OFFSET(TEXTURE_X(tex)), TEX_OFFSET(TEXTURE_Y(tex))},
-			{TEX_OFFSET(TEXTURE_X(tex)) + 16, TEX_OFFSET(TEXTURE_Y(tex))},
-			{TEX_OFFSET(TEXTURE_X(tex)) + 16, TEX_OFFSET(TEXTURE_Y(tex)) + 16},
-			{TEX_OFFSET(TEXTURE_X(tex)), TEX_OFFSET(TEXTURE_Y(tex)) + 16},
-		};
+		bool zero = false;
+		for (int i = 0; i < 4; i++) {
+			if (dir_state[i] == 0) zero = true;
+		}
+
+		#ifdef REDSTONE_CASE_DEBUG
+		printf("%d    %d    %d    %d\n", dir_state[0], dir_state[1], dir_state[2], dir_state[3]);
+		#endif
+
+		uint8_t tex;
+		int cases = -1;
 		int tex_rotate = 0;
+		
+		// straight
+		if   (dir_state[0] != 0 && dir_state[1] != 0
+		   && dir_state[2] == 0 && dir_state[3] == 0
+		   
+		   || dir_state[0] != 0 && dir_state[1] == 0
+		   && dir_state[2] == 0 && dir_state[3] == 0 
+		   
+		   || dir_state[0] == 0 && dir_state[1] != 0
+		   && dir_state[2] == 0 && dir_state[3] == 0)
+	   {
+			cases      = 0;
+			tex_rotate = 0;
+		} else 
+		if   (dir_state[0] == 0 && dir_state[1] == 0
+		   && dir_state[2] != 0 && dir_state[3] != 0
+		   
+		   || dir_state[0] == 0 && dir_state[1] == 0
+		   && dir_state[2] != 0 && dir_state[3] == 0 
+		   
+		   || dir_state[0] == 0 && dir_state[1] == 0
+		   && dir_state[2] == 0 && dir_state[3] != 0) 
+		{
+			cases      = 0;
+			tex_rotate = 1;
+		} else 
+		// curve
+		{
+			if (dir_state[0] == 0 && dir_state[1] != 0
+		     && dir_state[2] == 0 && dir_state[3] != 0) 
+			{
+				cases = 1;
+				tex_rotate = 3;
+		   	} else
+		   	if (dir_state[0] == 0 && dir_state[1] != 0
+		     && dir_state[2] != 0 && dir_state[3] == 0) 
+		   	{
+				cases = 1;
+				tex_rotate = 2;
+			} else
+			if (dir_state[0] != 0 && dir_state[1] == 0
+		     && dir_state[2] != 0 && dir_state[3] == 0) 
+		   	{
+				cases = 1;
+				tex_rotate = 1;
+			} else
+			if (dir_state[0] != 0 && dir_state[1] == 0
+		     && dir_state[2] == 0 && dir_state[3] != 0) 
+		   	{
+				cases = 1;
+				tex_rotate = 0;
+			} else {
+				if (dir_state[0] != 0 && dir_state[1] != 0
+			     && dir_state[2] == 0 && dir_state[3] != 0) 
+				{
+					cases = 2;
+					tex_rotate = 3;
+			   	} else
+			   	if (dir_state[0] == 0 && dir_state[1] != 0
+			     && dir_state[2] != 0 && dir_state[3] != 0) 
+			   	{
+					cases = 2;
+					tex_rotate = 2;
+				} else
+				if (dir_state[0] != 0 && dir_state[1] == 0
+			     && dir_state[2] != 0 && dir_state[3] != 0) 
+			   	{
+					cases = 2;
+					tex_rotate = 0;
+				} else
+				if (dir_state[0] != 0 && dir_state[1] != 0
+			     && dir_state[2] != 0 && dir_state[3] == 0) 
+		   		{
+					cases = 2;
+					tex_rotate = 1;
+				} else {
+					cases = 3;
+				}
+			}	
+		}
+		//uint8_t lvl = this->block->metadata & 0x0F;
+		//tex = tex_atlas_lookup(redstone_variant_entry(variant, lvl));
+		//} else { // all 
+			//cases = 3;
+		//}
+
+		uint8_t lvl = this->block->metadata & 0x0F;
 
 		uint16_t a = 16, b = 16, c = 16, d = 16;
 
@@ -773,39 +1203,212 @@ size_t render_block_redstone_wire(struct displaylist* dl, struct block_info* thi
 				break;
 		}*/
 
-		if(blocks[this->block->type]->render_block_data.rail_curved_possible) {
+		/*if(blocks[this->block->type]->render_block_data.rail_curved_possible) {
 			switch(this->block->metadata) {
 				case 6: tex_rotate = 0; break;
 				case 7: tex_rotate = 3; break;
 				case 8: tex_rotate = 2; break;
 			}
+		}*/
+		
+		uint8_t variant;
+		//cases = 5;
+		printf("cases=%d\n", cases);
+
+		switch (cases) {
+			case 0: { // ----------------------- 0 ------------
+				#ifdef REDSTONE_CASE_DEBUG
+				printf("case 0\n");
+				#endif
+				variant = 2; // 0..3: 0=redstone,1=middle,2=wire,3=stock
+
+				tex = tex_atlas_lookup(redstone_variant_base(variant));
+
+				#ifdef REDSTONE_CASE_DEBUG
+				printf("pos=%d,%d,%d side=%d above_air=%d  ds=%d %d %d %d\n",
+           			this->x,this->y,this->z, side, above_air,
+           			dir_state[0],dir_state[1],dir_state[2],dir_state[3]);
+				printf("case=%d variant=%d tex=%u tx=%u ty=%u rot=%d\n",
+       				cases, variant, tex, TEXTURE_X(tex), TEXTURE_Y(tex), tex_rotate);
+				printf("zusatz:\n");
+				printf("case=%d variant=%d base=%d tex=%u tx=%u ty=%u\n",
+       				cases, variant, redstone_variant_base(variant),
+       				tex, TEXTURE_X(tex), TEXTURE_Y(tex));
+				printf("OFF  : %u %u\n", TEXTURE_X(tex_atlas_lookup(TEXAT_REDSTONE_OFF)), 
+						TEXTURE_Y(tex_atlas_lookup(TEXAT_REDSTONE_OFF)));
+				printf("WIRE : %u %u\n", TEXTURE_X(tex_atlas_lookup(TEXAT_REDSTONE_WIRE_OFF)), 
+						TEXTURE_Y(tex_atlas_lookup(TEXAT_REDSTONE_WIRE_OFF)));
+				printf("MIDDLE: %u %u\n\n", TEXTURE_X(tex_atlas_lookup(TEXAT_REDSTONE_MIDDLE_OFF)), 
+						TEXTURE_Y(tex_atlas_lookup(TEXAT_REDSTONE_MIDDLE_OFF)));
+				#endif
+
+				uint8_t tex_coords[4][2] = {
+					{TEX_OFFSET(TEXTURE_X(tex)), TEX_OFFSET(TEXTURE_Y(tex))},
+					{TEX_OFFSET(TEXTURE_X(tex)) + 16, TEX_OFFSET(TEXTURE_Y(tex))},
+					{TEX_OFFSET(TEXTURE_X(tex)) + 16, TEX_OFFSET(TEXTURE_Y(tex)) + 16},
+					{TEX_OFFSET(TEXTURE_X(tex)), TEX_OFFSET(TEXTURE_Y(tex)) + 16},
+				};
+				render_redstone(dl, x, y, z, a, b, c, d, lvl, tex_coords,
+								vertex_light, tex_rotate);
+				break;
+			} case 1: { // ----------------------- 1 ------------
+				#ifdef REDSTONE_CASE_DEBUG
+				printf("case 1\n");
+				#endif
+				variant = 3; // 0..3: 0=redstone,1=middle,2=wire,3=stock
+
+				tex = tex_atlas_lookup(redstone_variant_base(variant));
+
+				#ifdef REDSTONE_CASE_DEBUG
+				printf("pos=%d,%d,%d side=%d above_air=%d  ds=%d %d %d %d\n",
+           			this->x,this->y,this->z, side, above_air,
+           			dir_state[0],dir_state[1],dir_state[2],dir_state[3]);
+				printf("case=%d variant=%d tex=%u tx=%u ty=%u rot=%d\n",
+       				cases, variant, tex, TEXTURE_X(tex), TEXTURE_Y(tex), tex_rotate);
+				printf("zusatz:\n");
+				printf("case=%d variant=%d base=%d tex=%u tx=%u ty=%u\n",
+       				cases, variant, redstone_variant_base(variant),
+       				tex, TEXTURE_X(tex), TEXTURE_Y(tex));
+				printf("OFF  : %u %u\n", TEXTURE_X(tex_atlas_lookup(TEXAT_REDSTONE_OFF)), 
+						TEXTURE_Y(tex_atlas_lookup(TEXAT_REDSTONE_OFF)));
+				printf("WIRE : %u %u\n", TEXTURE_X(tex_atlas_lookup(TEXAT_REDSTONE_WIRE_OFF)), 
+						TEXTURE_Y(tex_atlas_lookup(TEXAT_REDSTONE_WIRE_OFF)));
+				printf("MIDDLE: %u %u\n\n", TEXTURE_X(tex_atlas_lookup(TEXAT_REDSTONE_MIDDLE_OFF)), 
+						TEXTURE_Y(tex_atlas_lookup(TEXAT_REDSTONE_MIDDLE_OFF)));
+				#endif
+				
+
+				uint8_t tex_coords[4][2] = {
+					{TEX_OFFSET(TEXTURE_X(tex)), TEX_OFFSET(TEXTURE_Y(tex))},
+					{TEX_OFFSET(TEXTURE_X(tex)) + 16, TEX_OFFSET(TEXTURE_Y(tex))},
+					{TEX_OFFSET(TEXTURE_X(tex)) + 16, TEX_OFFSET(TEXTURE_Y(tex)) + 16},
+					{TEX_OFFSET(TEXTURE_X(tex)), TEX_OFFSET(TEXTURE_Y(tex)) + 16},
+				};
+				render_redstone(dl, x, y, z, a, b, c, d, lvl, tex_coords,
+							vertex_light, tex_rotate);
+				break;
+			} case 2: { // ----------------------- 2 ------------
+				#ifdef REDSTONE_CASE_DEBUG
+				printf("case 1\n");
+				#endif
+				variant = 1; // 0..3: 0=redstone,1=middle,2=wire,3=stock
+
+				tex = tex_atlas_lookup(redstone_variant_base(variant));
+				
+				#ifdef REDSTONE_CASE_DEBUG
+				printf("pos=%d,%d,%d side=%d above_air=%d  ds=%d %d %d %d\n",
+           			this->x,this->y,this->z, side, above_air,
+           			dir_state[0],dir_state[1],dir_state[2],dir_state[3]);
+				printf("case=%d variant=%d tex=%u tx=%u ty=%u rot=%d\n",
+       				cases, variant, tex, TEXTURE_X(tex), TEXTURE_Y(tex), tex_rotate);
+				printf("zusatz:\n");
+				printf("case=%d variant=%d base=%d tex=%u tx=%u ty=%u\n",
+       				cases, variant, redstone_variant_base(variant),
+       				tex, TEXTURE_X(tex), TEXTURE_Y(tex));
+				printf("OFF  : %u %u\n", TEXTURE_X(tex_atlas_lookup(TEXAT_REDSTONE_OFF)), 
+						TEXTURE_Y(tex_atlas_lookup(TEXAT_REDSTONE_OFF)));
+				printf("WIRE : %u %u\n", TEXTURE_X(tex_atlas_lookup(TEXAT_REDSTONE_WIRE_OFF)), 
+						TEXTURE_Y(tex_atlas_lookup(TEXAT_REDSTONE_WIRE_OFF)));
+				printf("MIDDLE: %u %u\n\n", TEXTURE_X(tex_atlas_lookup(TEXAT_REDSTONE_MIDDLE_OFF)), 
+						TEXTURE_Y(tex_atlas_lookup(TEXAT_REDSTONE_MIDDLE_OFF)));
+				#endif
+				
+
+				uint8_t tex_coords[4][2] = {
+					{TEX_OFFSET(TEXTURE_X(tex)), TEX_OFFSET(TEXTURE_Y(tex))},
+					{TEX_OFFSET(TEXTURE_X(tex)) + 16, TEX_OFFSET(TEXTURE_Y(tex))},
+					{TEX_OFFSET(TEXTURE_X(tex)) + 16, TEX_OFFSET(TEXTURE_Y(tex)) + 16},
+					{TEX_OFFSET(TEXTURE_X(tex)), TEX_OFFSET(TEXTURE_Y(tex)) + 16},
+				};
+				render_redstone(dl, x, y, z, a, b, c, d, lvl, tex_coords,
+							vertex_light, tex_rotate);
+				break;
+			} 
+			case 3:		
+			default: { // ----------------------- D ------------
+				tex_rotate = 0;
+				variant = 0; // 0..3: 0=redstone,1=middle,2=wire,3=stock
+
+				#ifdef REDSTONE_CASE_DEBUG
+				printf("default\n");
+				#endif
+
+				tex = tex_atlas_lookup(redstone_variant_base(variant));
+
+				#ifdef REDSTONE_CASE_DEBUG
+				printf("pos=%d,%d,%d side=%d above_air=%d  ds=%d %d %d %d\n",
+           			this->x,this->y,this->z, side, above_air,
+           			dir_state[0],dir_state[1],dir_state[2],dir_state[3]);
+				printf("case=%d variant=%d tex=%u tx=%u ty=%u rot=%d\n",
+       				cases, variant, tex, TEXTURE_X(tex), TEXTURE_Y(tex), tex_rotate);
+				printf("zusatz:\n");
+				printf("case=%d variant=%d base=%d tex=%u tx=%u ty=%u\n",
+       				cases, variant, redstone_variant_base(variant),
+       				tex, TEXTURE_X(tex), TEXTURE_Y(tex));
+				printf("OFF  : %u %u\n", TEXTURE_X(tex_atlas_lookup(TEXAT_REDSTONE_OFF)), 
+						TEXTURE_Y(tex_atlas_lookup(TEXAT_REDSTONE_OFF)));
+				printf("WIRE : %u %u\n", TEXTURE_X(tex_atlas_lookup(TEXAT_REDSTONE_WIRE_OFF)), 
+						TEXTURE_Y(tex_atlas_lookup(TEXAT_REDSTONE_WIRE_OFF)));
+				printf("MIDDLE: %u %u\n\n", TEXTURE_X(tex_atlas_lookup(TEXAT_REDSTONE_MIDDLE_OFF)), 
+						TEXTURE_Y(tex_atlas_lookup(TEXAT_REDSTONE_MIDDLE_OFF)));
+				#endif
+				
+				uint8_t tex_coords[4][2] = {
+					{TEX_OFFSET(TEXTURE_X(tex)), TEX_OFFSET(TEXTURE_Y(tex))},
+					{TEX_OFFSET(TEXTURE_X(tex)) + 16, TEX_OFFSET(TEXTURE_Y(tex))},
+					{TEX_OFFSET(TEXTURE_X(tex)) + 16, TEX_OFFSET(TEXTURE_Y(tex)) + 16},
+					{TEX_OFFSET(TEXTURE_X(tex)), TEX_OFFSET(TEXTURE_Y(tex)) + 16},
+				};
+				render_redstone(dl, x, y, z, a, b, c, d, lvl, tex_coords,
+								vertex_light, tex_rotate);
+			}
 		}
-
-		displaylist_pos(dl, x * BLK_LEN, y * BLK_LEN + a, z * BLK_LEN);
-		displaylist_color(dl,
-						  DIM_LIGHT(vertex_light[4], NULL, false, luminance));
-		displaylist_texcoord(dl, tex_coords[(tex_rotate + 0) % 4][0],
-							 tex_coords[(tex_rotate + 0) % 4][1]);
-		displaylist_pos(dl, x * BLK_LEN + BLK_LEN, y * BLK_LEN + b,
-						z * BLK_LEN);
-		displaylist_color(dl,
-						  DIM_LIGHT(vertex_light[5], NULL, false, luminance));
-		displaylist_texcoord(dl, tex_coords[(tex_rotate + 1) % 4][0],
-							 tex_coords[(tex_rotate + 1) % 4][1]);
-		displaylist_pos(dl, x * BLK_LEN + BLK_LEN, y * BLK_LEN + c,
-						z * BLK_LEN + BLK_LEN);
-		displaylist_color(dl,
-						  DIM_LIGHT(vertex_light[6], NULL, false, luminance));
-		displaylist_texcoord(dl, tex_coords[(tex_rotate + 2) % 4][0],
-							 tex_coords[(tex_rotate + 2) % 4][1]);
-		displaylist_pos(dl, x * BLK_LEN, y * BLK_LEN + d,
-						z * BLK_LEN + BLK_LEN);
-		displaylist_color(dl,
-						  DIM_LIGHT(vertex_light[7], NULL, false, luminance));
-		displaylist_texcoord(dl, tex_coords[(tex_rotate + 3) % 4][0],
-							 tex_coords[(tex_rotate + 3) % 4][1]);
+			uint8_t tex_coords[4][2] = {
+				{TEX_OFFSET(TEXTURE_X(tex)), TEX_OFFSET(TEXTURE_Y(tex))},
+				{TEX_OFFSET(TEXTURE_X(tex)) + 16, TEX_OFFSET(TEXTURE_Y(tex))},
+				{TEX_OFFSET(TEXTURE_X(tex)) + 16, TEX_OFFSET(TEXTURE_Y(tex)) + 16},
+				{TEX_OFFSET(TEXTURE_X(tex)), TEX_OFFSET(TEXTURE_Y(tex)) + 16},
+			};
+			/*render_redstone(dl, x, y, z, a, b, c, d, lvl, tex_coords,
+							vertex_light, tex_rotate);*/
+			if (above_air) {
+				uint8_t slope_tex = tex_atlas_lookup(redstone_variant_base(2));
+				uint8_t slope_tex_coords[4][2] = {
+					{TEX_OFFSET(TEXTURE_X(slope_tex)), TEX_OFFSET(TEXTURE_Y(slope_tex))},
+					{TEX_OFFSET(TEXTURE_X(slope_tex)) + 16, TEX_OFFSET(TEXTURE_Y(slope_tex))},
+					{TEX_OFFSET(TEXTURE_X(slope_tex)) + 16, TEX_OFFSET(TEXTURE_Y(slope_tex)) + 16},
+					{TEX_OFFSET(TEXTURE_X(slope_tex)), TEX_OFFSET(TEXTURE_Y(slope_tex)) + 16},
+				};
+				for (int i = 0; i < 4; ++i) {
+					struct block_data btmp;
+					#ifdef REDSTONE_CASE_DEBUG
+					printf("?\n");
+					#endif
+					if (neighbours_ext_get(this, dirs[i].dx, +1, dirs[i].dz, &btmp)
+						&& is_redstone_source(btmp.type, btmp.metadata)) {
+						#ifdef REDSTONE_CASE_DEBUG
+						printf("yes\n");
+						#endif
+						const int dir_rot[4] = {0, 2, 1, 3}; // +X, -X, +Z, -Z
+						int slope_rotate = dir_rot[i & 3];
+						render_redstone_vertical(dl, x, y, z, lvl, slope_tex_coords,
+												  vertex_light, slope_rotate, i);
+					}
+					#ifdef REDSTONE_CASE_DEBUG
+					bool ok = neighbours_ext_get(this, dirs[i].dx, +1, dirs[i].dz, &btmp);
+					printf("above_ok=%d above_type=%u above_meta=%u pos=%d,%d,%d\n",
+    						ok, btmp.type, btmp.metadata, this->x, this->y, this->z);
+					#endif
+					
+				}
+			}
 	}
-
+	//#undef REDSTONE_CASE_DEBUG
+	#ifdef REDSTONE_CASE_DEBUG
+	else {
+		printf("no redstone rendering\n");
+	}
+	#endif
 	return 1;
 }
 
@@ -1791,6 +2394,7 @@ void render_block_cracks(struct block_data* blk, mat4 view, w_coord_t x,
 		displaylist_reset(&block_cracks_dl);
 
 		struct block_data neighbours[6];
+		struct block_data neighbours_ext[26];
 		struct block_info neighbours_info[6];
 
 		for(int k = 0; k < SIDE_MAX; k++) {
@@ -1809,9 +2413,24 @@ void render_block_cracks(struct block_data* blk, mat4 view, w_coord_t x,
 			};
 		}
 
+		bool want_ext = (blk->type == BLOCK_REDSTONE_WIRE);
+		if (want_ext) {
+			int ei = 0;
+			for (int dz = -1; dz <= 1; ++dz) {
+				for (int dy = -1; dy <= 1; ++dy) {
+					for (int dx = -1; dx <= 1; ++dx) {
+						if (dx == 0 && dy == 0 && dz == 0) continue;
+						neighbours_ext[ei++]
+							= world_get_block(&gstate.world, x + dx, y + dy, z + dz);
+					}
+				}
+			}
+		}
+
 		struct block_info local_info = (struct block_info) {
 			.block = blk,
 			.neighbours = neighbours,
+			.neighbours_ext = want_ext ? neighbours_ext : NULL,
 			.x = x,
 			.y = y,
 			.z = z,

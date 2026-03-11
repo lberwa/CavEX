@@ -36,6 +36,7 @@
 #include "../graphics/render_block.h"
 #include "../graphics/render_entity.h"
 #include "../network/client_interface.h"
+#include "../network/server_interface.h"
 #include "../network/server_local.h"
 #include "../platform/gfx.h"
 #include "../item/items.h"
@@ -133,8 +134,8 @@ static inline float slope_height(uint8_t meta, int by,
                                  float current_y)
 {
     switch (meta) {
-        case 2: /* up to W (-X) */ return (float)by + 0.5f - (x - cx);
-        case 3: /* up to E (+X) */ return (float)by + 0.5f + (x - cx);
+        case 2: /* up to E (+X) */ return (float)by + 0.5f + (x - cx);
+        case 3: /* up to W (-X) */ return (float)by + 0.5f - (x - cx);
         case 4: /* up to N (-Z) */ return (float)by + 0.5f - (z - cz);
         case 5: /* up to S (+Z) */ return (float)by + 0.5f + (z - cz);
         default: return current_y; // non-slope
@@ -216,8 +217,8 @@ static bool minecart_server_tick(struct entity* e, struct server_local* s) {
             break;
 
         // --- Slopes EW (2: up to W, 3: up to E) ---
-        case 2: // ascend West (-X uphill)
-        case 3: { // ascend East (+X uphill)
+        case 2: // ascend East (+X uphill)
+        case 3: { // ascend West (-X uphill)
             e->pos[2] = cz;                // lock Z (unchanged)
             MOVE_ALONG_X(fabsf(spd));      // move along X (unchanged)
 
@@ -323,10 +324,10 @@ static void entity_minecart_render(struct entity* e, mat4 view, float tick_delta
         switch (meta) {
             case 0:  yaw_deg =   0.0f; break;   // NS
             case 1:  yaw_deg =  90.0f; break;   // EW
-            case 2:  yaw_deg =  90.0f; pitch_deg =  45.0f; y_offset = 0.5f; break; // slope W
-            case 3:  yaw_deg =  90.0f; pitch_deg = -45.0f; y_offset = 0.5f; break; // slope E
-            case 4:  yaw_deg =   0.0f; pitch_deg =  45.0f; y_offset = 0.5f; break; // slope S
-            case 5:  yaw_deg =   0.0f; pitch_deg = -45.0f; y_offset = 0.5f; break; // slope N
+            case 2:  yaw_deg =  90.0f; pitch_deg =  45.0f; y_offset = 0.1f; break; // slope E
+            case 3:  yaw_deg =  90.0f; pitch_deg = -45.0f; y_offset = 0.1f; break; // slope W
+            case 4:  yaw_deg =   0.0f; pitch_deg =  45.0f; y_offset = 0.1f; break; // slope S
+            case 5:  yaw_deg =   0.0f; pitch_deg = -45.0f; y_offset = 0.1f; break; // slope N
             case 9:  yaw_deg =  135.0f; break; // SE curve
             case 8:  yaw_deg = -135.0f; break; // SW curve
             case 7:  yaw_deg =  -45.0f; break; // NW curve
@@ -376,7 +377,7 @@ static size_t getBoundingBox(const struct entity *e, struct AABB *out) {
 
 // entity_minecart.c (of waar je onRightClick staat)
 
-static bool onRightClick(struct entity* e) {
+static bool onRightClick(struct entity* e, struct item_data *held) {
 	assert(e);
 
 	struct entity* player = gstate.local_player;
@@ -404,7 +405,10 @@ static bool onRightClick(struct entity* e) {
 
 static bool onLeftClick(struct entity *e) {
     assert(e);
-    // TODO: add breakdown logic.
+    svin_rpc_send(&(struct server_rpc){
+        .type = SRPC_ENTITY_ATTACK,
+        .payload.entity_attack.entity_id = e->id,
+    });
     return true;
 }
 
@@ -437,6 +441,7 @@ void entity_minecart(uint32_t id, struct entity* e, bool server, void* world) {
     e->data.minecart.item.id         = ITEM_MINECART;
     e->data.minecart.item.durability = 0;
     e->data.minecart.item.count      = 1;
+    e->health = 10;
     e->data.minecart.speed = 0.0f;
     e->data.minecart.occupied = false;
     e->data.minecart.occupant_id = 0;

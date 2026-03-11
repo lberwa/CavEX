@@ -147,9 +147,62 @@ enum tex_atlas_entry {
     TEXAT_REDSTONE_WIRE_L10,
     TEXAT_REDSTONE_WIRE_L11,
     TEXAT_REDSTONE_WIRE_L12,
-    TEXAT_REDSTONE_WIRE_L13,
-    TEXAT_REDSTONE_WIRE_L14,
-    TEXAT_REDSTONE_WIRE_L15,
+	TEXAT_REDSTONE_WIRE_L13,
+	TEXAT_REDSTONE_WIRE_L14,
+	TEXAT_REDSTONE_WIRE_L15,
+	TEXAT_REDSTONE_OFF,
+	TEXAT_REDSTONE_L1,
+	TEXAT_REDSTONE_L2,
+	TEXAT_REDSTONE_L3,
+	TEXAT_REDSTONE_L4,
+	TEXAT_REDSTONE_L5,
+	TEXAT_REDSTONE_L6,
+	TEXAT_REDSTONE_L7,
+	TEXAT_REDSTONE_L8,
+	TEXAT_REDSTONE_L9,
+	TEXAT_REDSTONE_L10,
+	TEXAT_REDSTONE_L11,
+	TEXAT_REDSTONE_L12,
+	TEXAT_REDSTONE_L13,
+	TEXAT_REDSTONE_L14,
+	TEXAT_REDSTONE_L15,
+	//TEXAT_REDSTONE_ON,
+	TEXAT_REDSTONE_MIDDLE,
+	TEXAT_REDSTONE_STOCK,
+	TEXAT_REDSTONE_MIDDLE_OFF,
+	TEXAT_REDSTONE_MIDDLE_L1,
+	TEXAT_REDSTONE_MIDDLE_L2,
+	TEXAT_REDSTONE_MIDDLE_L3,
+	TEXAT_REDSTONE_MIDDLE_L4,
+	TEXAT_REDSTONE_MIDDLE_L5,
+	TEXAT_REDSTONE_MIDDLE_L6,
+	TEXAT_REDSTONE_MIDDLE_L7,
+	TEXAT_REDSTONE_MIDDLE_L8,
+	TEXAT_REDSTONE_MIDDLE_L9,
+	TEXAT_REDSTONE_MIDDLE_L10,
+	TEXAT_REDSTONE_MIDDLE_L11,
+	TEXAT_REDSTONE_MIDDLE_L12,
+	TEXAT_REDSTONE_MIDDLE_L13,
+	TEXAT_REDSTONE_MIDDLE_L14,
+	TEXAT_REDSTONE_MIDDLE_L15,
+	//TEXAT_REDSTONE_MIDDLE_ON,
+	TEXAT_REDSTONE_STOCK_OFF,
+	TEXAT_REDSTONE_STOCK_L1,
+	TEXAT_REDSTONE_STOCK_L2,
+	TEXAT_REDSTONE_STOCK_L3,
+	TEXAT_REDSTONE_STOCK_L4,
+	TEXAT_REDSTONE_STOCK_L5,
+	TEXAT_REDSTONE_STOCK_L6,
+	TEXAT_REDSTONE_STOCK_L7,
+	TEXAT_REDSTONE_STOCK_L8,
+	TEXAT_REDSTONE_STOCK_L9,
+	TEXAT_REDSTONE_STOCK_L10,
+	TEXAT_REDSTONE_STOCK_L11,
+	TEXAT_REDSTONE_STOCK_L12,
+	TEXAT_REDSTONE_STOCK_L13,
+	TEXAT_REDSTONE_STOCK_L14,
+	TEXAT_REDSTONE_STOCK_L15,
+	//TEXAT_REDSTONE_STOCK_ON,
 	TEXAT_REDSTONE_WIRE_INTERSECT_OFF,
 	TEXAT_REDSTONE_WIRE_INTERSECT_ON,
 	TEXAT_SANDSTONE_TOP,
@@ -240,9 +293,12 @@ struct texture_entry {
 
 ARRAY_DEF(dict_atlas_src, struct texture_entry, M_POD_OPLIST)
 
-#define TEXTURE_INDEX(x, y) (((y)*14) + (x))
-#define TEXTURE_X(idx) ((idx) % 14)
-#define TEXTURE_Y(idx) ((idx) / 14)
+#define TEXTURE_INDEX(x, y) (((y)*16) + (x))
+#define TEXTURE_X(idx) ((idx) % 16)
+#define TEXTURE_Y(idx) ((idx) / 16)
+
+// Terrain atlas size (terrain.png). Keep in sync with the actual PNG size.
+#define TERRAIN_PNG_HEIGHT 256
 
 void tex_atlas_reg(dict_atlas_src_t atlas, enum tex_atlas_entry name, uint8_t x,
 				   uint8_t y);
@@ -254,9 +310,11 @@ void tex_atlas_reg_grass(dict_atlas_src_t atlas, enum tex_atlas_entry name,
 void* tex_atlas_compute(dict_atlas_src_t atlas, uint8_t* atlas_dst,
 						uint8_t* image, size_t width, size_t height);
 void* tex_atlas_block(const char* filename, size_t* width, size_t* height);
+void* tex_atlas_block2(const char* filename, size_t* width, size_t* height);
 void* tex_atlas_particles(const char* filename, size_t* width, size_t* height);
 
 uint8_t tex_atlas_lookup(enum tex_atlas_entry name);
+uint8_t tex_atlas_lookup2(enum tex_atlas_entry name);
 uint8_t tex_atlas_lookup_particle(enum tex_atlas_entry name);
 
 

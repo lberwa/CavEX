@@ -35,10 +35,11 @@ struct screen {
 };
 
 extern struct screen screen_ingame;
+extern struct screen screen_game_menu;
 extern struct screen screen_load_world;
 
 extern struct screen screen_select_world;
-extern struct screen screen_select_world2; //TODO: rename
+extern struct screen screen_mainmenu;
 extern struct screen spieleranzahl_auswählen;
 extern struct screen screen_controllerauswahl;
 extern struct screen screen_server;

@@ -217,11 +217,17 @@ static void screen_ingame_update(struct screen* s, float dt) {
 	    if (ptr) {
 	        struct entity *e = *ptr;
 	        if (e && e->onRightClick) {
-	            e->onRightClick(e);
-	            struct item_data held;
-	            if (inventory_get_hotbar_item(
-	                   windowc_get_latest(gstate.windows[WINDOWC_INVENTORY]), &held))
-	            {
+				struct item_data held;
+				struct item_data *held_ptr = NULL;
+				bool TRue;
+
+				if (inventory_get_hotbar_item(
+				        windowc_get_latest(gstate.windows[WINDOWC_INVENTORY]), &held)) {
+					held_ptr = &held;
+					TRue = true;
+				}
+	            e->onRightClick(e, held_ptr);
+	            if (TRue) {
 	                gstate.held_item_animation.punch.start = time_get();
 	                gstate.held_item_animation.punch.place = false;
 	            }
@@ -400,12 +406,14 @@ static void screen_ingame_update(struct screen* s, float dt) {
 	}
 
 	if(input_pressed(IB_HOME, 0)) {
-		screen_set(&screen_pause);
+		screen_set(&screen_game_menu);
+		/*
 		gstate.paused = true;
 
 		svin_rpc_send(&(struct server_rpc) {
 			.type = SRPC_TOGGLE_PAUSE,
 		});
+		*/
 	}
 
 	if(input_pressed(IB_INVENTORY, 0))

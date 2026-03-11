@@ -37,9 +37,9 @@
 
 static const char* menu_options[4] = {
     "Start",
-    "Server",
-    "Einstellungen",
-    "Beenden"
+    "Settings",
+    "Paused",
+    "Save & Quit"
 };
 
 static size_t gui_selection;
@@ -58,7 +58,7 @@ static enum mp3_sound bg_playlist[16] = {
 	mp3_bg10,
 };
 
-static void screen_mainmenu_reset(struct screen* s, int width, int height) {
+static void screen_gmenu_reset(struct screen* s, int width, int height) { 
 	gstate.game_run = false;
 	gstate.num_players = 1;
 	server_failed = false;
@@ -70,15 +70,8 @@ static void screen_mainmenu_reset(struct screen* s, int width, int height) {
 	sound_init();
 	sound_play_bg(bg_playlist);
 }
-static void screen_mainmenu_update(struct screen* s, float dt) {
-	if (server_failed) {
 
-	if (input_pressed(IB_ANY, 0)) 
-		sound_play(pcm_click);
-		server_failed = false;
-
-	} else {
-
+static void screen_gmenu_update(struct screen* s, float dt) { 
     // Navigation
     if(input_pressed(IB_GUI_UP, 0) && gui_selection > 0)
         gui_selection--;
@@ -90,44 +83,37 @@ static void screen_mainmenu_update(struct screen* s, float dt) {
     if(input_pressed(IB_GUI_CLICK, 0)) {
 		sound_play(pcm_click);
         switch(gui_selection) {
-            case 0: // Start 
-				#ifdef PLATFORM_WII
-				menu_screen_set(&spieleranzahl_auswählen);
-                #endif
-				#ifdef PLATFORM_PC
-				menu_screen_set(&screen_select_world);
-				#endif
+            case 0:  
+				screen_set(&screen_ingame);
 				break;
-            case 1: // Server
-				if (gstate.network) {
-                	menu_screen_set(&screen_server);
-				} else {
-					server_failed = true;
-					return;
-				}
-				
+            case 1: 
 				break;
-            case 2: // Einstellungen
-                //settings_menu();
+            case 2: 
+                gstate.paused = true;
+                screen_set(&screen_pause);
+        		svin_rpc_send(&(struct server_rpc) {
+        			.type = SRPC_TOGGLE_PAUSE,
+		        });
                 break;
-            case 3: // Beenden
-                gstate.quit = true;
+            case 3:
+                svin_rpc_send(&(struct server_rpc) {
+		        	.type = SRPC_TOGGLE_PAUSE,
+        		});
+        		gstate.paused = false;
+
+		        screen_set(&screen_select_world);
+		        svin_rpc_send(&(struct server_rpc) {
+			        .type = SRPC_UNLOAD_WORLD,
+        		});
                 break;
         }
     }
-
-	}
-
-    // Home-Button beendet das Spiel
-    if(input_pressed(IB_HOME, 0))
-        gstate.quit = true;
 }
 
 
-static void screen_mainmenu_render2D(struct screen* s, int width, int height) {
-
-	gutil_bg();
-	gutil_bg_panorama();
+static void screen_gmenu_render2D(struct screen* s, int width, int height) { 
+	gfx_bind_texture(&texture_particles);
+	gutil_texquad(50, 50, 0, 0, 100, 100, 100, 100);
 
 	int start_y = height / 3;
 	int button_height = 40;
@@ -175,10 +161,10 @@ static void screen_mainmenu_render2D(struct screen* s, int width, int height) {
 	icon_offset += gutil_control_icon(icon_offset, IB_GUI_CLICK, "Select option");
 }
 
-struct screen screen_mainmenu = {
-	.reset = screen_mainmenu_reset,
-	.update = screen_mainmenu_update,
-	.render2D = screen_mainmenu_render2D,
+struct screen screen_game_menu = {
+	.reset = screen_gmenu_reset,
+	.update = screen_gmenu_update,
+	.render2D = screen_gmenu_render2D,
 	.render3D = NULL,
 	.render_world = true,
 };

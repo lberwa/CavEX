@@ -961,68 +961,65 @@ void render_entity_sheep(mat4 view, float headYawDeg, int frame, bool shared) {
     }
 
     if (!shared) {
+        gfx_bind_texture(&texture_sheep_fur);
         static const UVRect legUV[6] = {
-        { 8, 16, 4, 4}, // bottom
-        { 4, 16, 4, 4}, // top
-        { 8, 20, 4, 6}, // front
-        {12, 20, 4, 6}, // back
-        { 4, 20, 4, 6}, // left
-        { 0, 20, 4, 6}  // right
-    };
-    static const int legDir[6] = {0,0,-90,-90,-90,-90};
-    int legPos[4][3] = {
-        { 0, 0, 0 }, // front-left
-        { 0, 0, 6 }, // front-right
-        { 8, 0, 4 }, // back-left
-        { 8, 0, 10 }  // back-right
-    };
-
-
-
-    // simple walk animation (same pattern as creeper)
-    float walkAngle = sinf((float)(frame % 60) / 25.0f * 2.0f * M_PI) * (20.0f * (M_PI / 180.0f));
-    const int width = 4, height = 6, depth = 4;
-    int legAnimDir[4] = { +1, -1, -1, +1 };
-
-    for (int i = 0; i < 4; i++) {
-        displaylist_reset(&dl);
-
-        bool isFront = (i < 2);
-        vec3 pivot = {
-            (width / 2.0f) / 16.0f,
-            height / 16.0f,
-            (isFront ? depth : 0.0f) / 16.0f
+            { 8, 16, 4, 4}, // bottom
+            { 4, 16, 4, 4}, // top
+            { 8, 20, 4, 6}, // front
+            {12, 20, 4, 6}, // back
+            { 4, 20, 4, 6}, // left
+            { 0, 20, 4, 6}  // right
+        };
+        static const int legDir[6] = {0,0,-90,-90,-90,-90};
+        int legPos[4][3] = {
+            { 1, 0, -1 }, // front-left
+            { 1, 0, 5 }, // front-right
+            { 7, 0, 5 }, // back-left
+            { 7, 0, 11 }  // back-right
         };
 
-        mat4 leg_model;
-        glm_mat4_identity(leg_model);
-        glm_translate_make(leg_model, (vec3){
-            legPos[i][0] / 16.0f,
-            legPos[i][1] / 16.0f,
-            legPos[i][2] / 16.0f
-        });
+        const int woolW = 6, woolH = 6, woolD = 6;
+        const int woolY = 6;
+        const float woolWalkAngle = walkAngle * ((float)woolH / (float)height);
 
-        glm_translate(leg_model, pivot);
+        for (int i = 0; i < 4; i++) {
+            displaylist_reset(&dl);
 
-        // exakt wie beim Creeper:
-        // erst Beine ausrichten, dann schwingen
-        glm_rotate_y(leg_model, glm_rad(90.0f), leg_model);
-        glm_rotate_x(leg_model, legAnimDir[i] * walkAngle, leg_model);
+            bool isFront = (i < 2);
+            vec3 pivot = {
+                (woolW / 2.0f) / 16.0f,
+                (woolY + woolH) / 16.0f,
+                (isFront ? woolD : 0.0f) / 16.0f
+            };
 
-        glm_translate(leg_model, (vec3){ -pivot[0], -pivot[1], -pivot[2] });
+            mat4 leg_model;
+            glm_mat4_identity(leg_model);
+            glm_translate_make(leg_model, (vec3){
+                legPos[i][0] / 16.0f,
+                legPos[i][1] / 16.0f,
+                legPos[i][2] / 16.0f
+            });
 
-        mat4 leg_mv;
-        glm_mat4_mul(body_mv, leg_model, leg_mv);
-        gfx_matrix_modelview(leg_mv);
+            glm_translate(leg_model, pivot);
+            // use the same swing values as the base legs
+            glm_rotate_y(leg_model, glm_rad(90.0f), leg_model);
+            glm_rotate_x(leg_model, legAnimDir[i] * woolWalkAngle, leg_model);
+            glm_translate(leg_model, (vec3){ -pivot[0], -pivot[1], -pivot[2] });
 
-        render_entity_create_cube(
-            6, 0, 0,
-            width, height, depth,
-            legUV, legDir
-        );
-        displaylist_render_immediate(&dl, 24);
+            mat4 leg_mv;
+            glm_mat4_mul(body_mv, leg_model, leg_mv);
+            gfx_matrix_modelview(leg_mv);
+
+            render_entity_create_cube(
+                0, woolY, 0,
+                woolW, woolH, woolD,
+                legUV, legDir
+            );
+            displaylist_render_immediate(&dl, 24);
+        }
+        gfx_bind_texture(&texture_sheep);
     }
-    }
+
 
 
 

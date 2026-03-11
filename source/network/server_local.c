@@ -339,7 +339,7 @@ static void server_local_process(struct server_rpc* call, void* user) {
 			}
 			break;
 		case SRPC_BLOCK_PLACE:
-			printf("srpc_block_place");
+			//printf("srpc_block_place");
 			if(s->player.has_pos && call->payload.block_place.y >= 0
 			   && call->payload.block_place.y < WORLD_HEIGHT) {
 				int x, y, z;
@@ -354,7 +354,7 @@ static void server_local_process(struct server_rpc* call, void* user) {
 					   &s->world, call->payload.block_place.x,
 					   call->payload.block_place.y, call->payload.block_place.z,
 					   &blk_on)) {
-					printf("true 1");
+					//printf("true 1");
 					struct block_info where = (struct block_info) {
 						.block = &blk_where,
 						.neighbours = NULL,
@@ -377,7 +377,7 @@ static void server_local_process(struct server_rpc* call, void* user) {
 
 					if(blocks[blk_on.type]
 					   && blocks[blk_on.type]->onRightClick) {
-						printf("true 2");
+						//printf("true 2");
 						blocks[blk_on.type]->onRightClick(
 							s, &it_data, &where, &on,
 							call->payload.block_place.side);
@@ -391,7 +391,7 @@ static void server_local_process(struct server_rpc* call, void* user) {
 							  && it->onItemPlace(
 								  s, &it_data, &where, &on,
 								  call->payload.block_place.side)) {
-						printf("false2");
+						//printf("false2");
 						p_block:
 						size_t slot
 							= inventory_get_hotbar(&s->player.inventory);
@@ -451,10 +451,17 @@ static void server_local_process(struct server_rpc* call, void* user) {
 		  uint32_t id = call->payload.entity_attack.entity_id;
 		  struct entity **ptr = dict_entity_get(s->entities, id);
 		  if (ptr && *ptr) {
-		    (*ptr)->health -= 5;    // of welk DAMAGE‐getal je wilt
-		    if ((*ptr)->health <= 0) {
-		      (*ptr)->data.monster.fuse = 30;
-		      (*ptr)->ai_state = AI_FUSE;
+		    struct entity *e = *ptr;
+		    e->health -= 5;    // damage per hit
+		    if (e->health <= 0) {
+		      if (e->type == ENTITY_MINECART) {
+		        vec3 pos = { e->pos[0], e->pos[1], e->pos[2] };
+		        server_local_spawn_item(pos, &e->data.minecart.item, true, s);
+		        e->delay_destroy = 0;
+		      } else if (e->type == ENTITY_MONSTER) {
+		        e->data.monster.fuse = 30;
+		        e->ai_state = AI_FUSE;
+		      }
 		    }
 		  }
 		  break;
@@ -517,7 +524,7 @@ static void server_local_update(struct server_local* s) {
 	assert(s);
 
 	// print TPS
-	#ifndef PRINT_TPS
+	#ifdef PRINT_TPS
 	ptime_t this_tick = time_get();
 	float dt = time_diff_s(s->last_tick, this_tick);
 	float tps = 1.0F / dt;

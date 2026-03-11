@@ -29,6 +29,7 @@
 
 struct tex_gfx texture_fog;
 struct tex_gfx texture_terrain;
+struct tex_gfx texture_terrain2;
 struct tex_gfx texture_particles;
 struct tex_gfx texture_items;
 struct tex_gfx texture_mobs;
@@ -98,9 +99,11 @@ void tex_init() {
 	tex_init_pre();
 
 	size_t w, h;
-	void* output = tex_atlas_block("terrain.png", &w, &h);
-	if(output){
+	void* output  = tex_atlas_block( "terrain.png", &w, &h);
+	//void* output2 = tex_atlas_block2("terrain.png", &w, &h);
+	if(output /*&& output2*/){
 		tex_gfx_load(&texture_terrain, output, w, h, TEX_FMT_RGBA16, false);
+		//tex_gfx_load(&texture_terrain2, output2, w, h, TEX_FMT_RGBA16, false);
 	}
 
 
@@ -111,7 +114,9 @@ void tex_init() {
 
     size_t pw, ph;
     void* pout = tex_atlas_particles("particles.png", &pw, &ph);
+	printf("\n?\n\n");
     if(pout) {
+		printf("pout is not NULL \n");
         tex_gfx_load(&texture_particles, pout, pw, ph, TEX_FMT_RGBA16, false);
     }
 
