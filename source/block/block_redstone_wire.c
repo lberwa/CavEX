@@ -56,6 +56,9 @@ static void onWorldTick(struct server_local* s, struct block_info* blk) {
     struct block_data cur = *blk->block;
     if (cur.type != BLOCK_REDSTONE_WIRE) return;
 
+    struct block_data btmp;
+    #define GET_BLOCK_AT(xx,yy,zz, out) server_world_get_block(&s->world, (xx), (yy), (zz), (out))
+
     uint8_t strong = 0;
     for (int side = 0; side < SIDE_MAX; ++side) {
         if (!blk->neighbours) continue;
@@ -84,12 +87,51 @@ static void onWorldTick(struct server_local* s, struct block_info* blk) {
             SIDE_BACK    // -Z
     };
     uint8_t maxWire = 0;
+    bool above_air = false;
+    if (GET_BLOCK_AT(blk->x, blk->y + 1, blk->z, &btmp) && btmp.type == BLOCK_AIR) {
+        above_air = true;
+    }
+
     for (int i = 0; i < 4; ++i) {
-        if (blk->neighbours
-            && blk->neighbours[horiz[i]].type == 55)
-        {
-            uint8_t p = blk->neighbours[horiz[i]].metadata & 0x0F;
-            if (p > maxWire) maxWire = p;
+        if (!blk->neighbours) continue;
+
+        enum side sdir = horiz[i];
+        uint8_t ntype = blk->neighbours[sdir].type;
+        uint8_t nmeta = blk->neighbours[sdir].metadata & 0x0F;
+
+        if (ntype == BLOCK_REDSTONE_WIRE) {
+            if (nmeta > maxWire) maxWire = nmeta;
+        }
+
+        int ox, oy, oz;
+        blocks_side_offset(sdir, &ox, &oy, &oz);
+
+        // down-diagonal only if side is air (unchanged)
+        if (ntype == BLOCK_AIR) {
+            if (GET_BLOCK_AT(blk->x + ox, blk->y - 1, blk->z + oz, &btmp)) {
+                if (btmp.type == BLOCK_REDSTONE_WIRE) {
+                    uint8_t p = btmp.metadata & 0x0F;
+                    if (p > maxWire) maxWire = p;
+                }
+                if (btmp.type == BLOCK_REDSTONE_TORCH ||
+                    btmp.type == BLOCK_REDSTONE_TORCH_LIT) {
+                    strong = 15;
+                }
+            }
+        }
+
+        // up-diagonal: if block above current is air, check regardless of side block
+        if (above_air) {
+            if (GET_BLOCK_AT(blk->x + ox, blk->y + 1, blk->z + oz, &btmp)) {
+                if (btmp.type == BLOCK_REDSTONE_WIRE) {
+                    uint8_t p = btmp.metadata & 0x0F;
+                    if (p > maxWire) maxWire = p;
+                }
+                if (btmp.type == BLOCK_REDSTONE_TORCH ||
+                    btmp.type == BLOCK_REDSTONE_TORCH_LIT) {
+                    strong = 15;
+                }
+            }
         }
     }
 

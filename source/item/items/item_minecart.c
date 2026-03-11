@@ -29,9 +29,12 @@ static bool onItemPlace(struct server_local* s, struct item_data* it,
     if (!on || on->block->type != BLOCK_RAIL) return false;
 
     // compute spawn position: center of rail
+    uint8_t meta = on->block->metadata & 0xF;
+    bool is_slope = (meta >= 2 && meta <= 5);
+    
     vec3 pos = {
         on->x + 0.5f,
-        on->y + 0.1f,
+        on->y + (is_slope ? 0.5f : 0.1f),
         on->z + 0.5f
     };
 

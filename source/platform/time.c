@@ -21,9 +21,12 @@
 
 #ifdef PLATFORM_PC
 
+#include <stdlib.h>
 #include <time.h>
 
-void time_reset() { }
+void time_reset() {
+	srand((unsigned)time(NULL));
+}
 
 ptime_t time_get() {
 	struct timespec t;
@@ -47,14 +50,22 @@ float time_diff_s(ptime_t f, ptime_t s) {
 		+ (float)(s.tv_nsec - f.tv_nsec) / 1000000000.0F;
 }
 
+int get_random(int from, int to) {
+	return (rand() % to + from);
+}
+
 #endif
 
 #ifdef PLATFORM_WII
 
 #include <ogc/lwp_watchdog.h>
 
+#include <stdlib.h>
+#include <ogc/system.h>
+
 void time_reset() {
 	settime(0);
+	srand(time(NULL));
 }
 
 ptime_t time_get() {
@@ -73,4 +84,7 @@ float time_diff_s(ptime_t f, ptime_t s) {
 	return (float)(s - f) / (float)(1000UL * TB_TIMER_CLOCK);
 }
 
+int get_random(int from, int to) {
+	return (rand() % to + from);
+}
 #endif

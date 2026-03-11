@@ -277,34 +277,50 @@ static void chunk_mesher_rebuild(struct block_data* bd, w_coord_t cx,
 			for(c_coord_t x = 0; x < CHUNK_SIZE; x++) {
 				struct block_data local = BLK_DATA(bd, x, y, z);
 
-				if(blocks[local.type]) {
-					struct block_data neighbours[6];
-					struct block_info neighbours_info[6];
+					if(blocks[local.type]) {
+						struct block_data neighbours[6];
+						struct block_data neighbours_ext[26];
+						struct block_info neighbours_info[6];
 
-					for(int k = 0; k < SIDE_MAX; k++) {
-						enum side s = (enum side)k;
+						for(int k = 0; k < SIDE_MAX; k++) {
+							enum side s = (enum side)k;
 
 						int ox, oy, oz;
 						blocks_side_offset(s, &ox, &oy, &oz);
 
 						neighbours[k] = BLK_DATA(bd, x + ox, y + oy, z + oz);
 
-						neighbours_info[k] = (struct block_info) {
-							.block = neighbours + k,
-							.neighbours = NULL,
-							.x = cx + x + ox,
-							.y = cy + y + oy,
-							.z = cz + z + oz,
-						};
-					}
+							neighbours_info[k] = (struct block_info) {
+								.block = neighbours + k,
+								.neighbours = NULL,
+								.neighbours_ext = NULL,
+								.x = cx + x + ox,
+								.y = cy + y + oy,
+								.z = cz + z + oz,
+							};
+						}
 
-					struct block_info local_info = (struct block_info) {
-						.block = &local,
-						.neighbours = neighbours,
-						.x = cx + x,
-						.y = cy + y,
-						.z = cz + z,
-					};
+						bool want_ext = (local.type == BLOCK_REDSTONE_WIRE);
+						if (want_ext) {
+							int ei = 0;
+							for (int dz = -1; dz <= 1; ++dz) {
+								for (int dy = -1; dy <= 1; ++dy) {
+									for (int dx = -1; dx <= 1; ++dx) {
+										if (dx == 0 && dy == 0 && dz == 0) continue;
+										neighbours_ext[ei++] = BLK_DATA(bd, x + dx, y + dy, z + dz);
+									}
+								}
+							}
+						}
+
+						struct block_info local_info = (struct block_info) {
+							.block = &local,
+							.neighbours = neighbours,
+							.neighbours_ext = want_ext ? neighbours_ext : NULL,
+							.x = cx + x,
+							.y = cy + y,
+							.z = cz + z,
+						};
 
 					uint8_t vertex_light[24];
 					bool light_loaded = count_only;

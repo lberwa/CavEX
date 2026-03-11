@@ -17,7 +17,10 @@
 	along with CavEX.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#ifdef PLATFORM_PC
 #include "../particle.h"
+#endif
+
 #include "client_interface.h"
 #include "../game/game_state.h"
 #include "../particle.h"

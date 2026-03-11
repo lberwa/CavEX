@@ -46,6 +46,7 @@ static uint32_t gfx_depth_test_last = GX_TRUE;
 static uint32_t gfx_depth_func_last = GX_LEQUAL;
 
 static int gfx_screen_width = 802;
+static float gfx_texcoord_div = 256.0f;
 
 /*static void* thread_vsync(void* user) {
 	void* current_frame = NULL;
@@ -258,6 +259,15 @@ void gfx_flip_buffers(float* gpu_wait, float* vsync_wait) {
 void gfx_bind_texture(struct tex_gfx* tex) {
 	assert(tex);
 	tex_gfx_bind(tex, GX_TEXMAP0);
+	gfx_set_texcoord_div(tex ? (float)tex->width : 256.0f);
+}
+
+float gfx_get_texcoord_div(void) {
+	return gfx_texcoord_div;
+}
+
+void gfx_set_texcoord_div(float div) {
+	gfx_texcoord_div = (div > 0.0f) ? div : 256.0f;
 }
 
 void gfx_copy_framebuffer(uint8_t* dest, size_t* width, size_t* height) {

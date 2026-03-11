@@ -149,7 +149,7 @@ int main(void) {
 	recipe_init();
 	gfx_setup();
 	
-	menu_screen_set(&screen_select_world2);
+	menu_screen_set(&screen_mainmenu);
 
 	world_create(&gstate.world);
 

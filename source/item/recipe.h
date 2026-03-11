@@ -36,9 +36,15 @@ struct recipe {
 	} shape[9];
 };
 
+#ifdef PLATFORM_WII
+ARRAY_DEF(array_recipe, struct recipe, M_POD_OPLIST)
+#endif
+
+#ifdef PLATFORM_PC
 #define M_ARRAY_DEF(name, ...)                                                \
   M_ARRAY_DEF_AS(name, M_F(name,_t), M_F(name,_it_t), __VA_ARGS__)
 M_ARRAY_DEF(array_recipe, struct recipe, M_POD_OPLIST)
+#endif
 
 extern array_recipe_t recipes_crafting;
 

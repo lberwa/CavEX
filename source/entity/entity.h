@@ -80,7 +80,7 @@ struct entity {
 	size_t (*getBoundingBox)(const struct entity *e, struct AABB *out);
     const char *leftClickText;
     const char *rightClickText;
-    bool (*onRightClick)(struct entity *e);
+    bool (*onRightClick)(struct entity *e, struct item_data *held);
     bool (*onLeftClick)(struct entity *e);
 	union entity_data {
 		struct entity_local_player {
@@ -101,6 +101,7 @@ struct entity {
 		    float head_yaw;
 		    int fuse;
 			bool shared;
+			bool shared_now;
 		} monster;
         struct entity_minecart {
 			float speed;

@@ -121,7 +121,7 @@ enum block_type {
 	BLOCK_PUMPKIN_LIT = 91,
 	BLOCK_IRON_CHEST = 95,
 	BLOCK_TRAP_DOOR = 96,
-	BLOCK_MINECART = 98,
+	//BLOCK_MINECART = 98,
 };
 
 typedef int32_t w_coord_t;
@@ -136,6 +136,9 @@ struct block_data {
 struct block_info {
 	struct block_data* block;
 	struct block_data* neighbours;
+	// Optional extended neighbours (26 cells around the block, excluding center).
+	// Order: dx,dy,dz loops from -1..1 skipping 0,0,0 (x major, then y, then z).
+	struct block_data* neighbours_ext;
 	w_coord_t x, y, z;
 };
 

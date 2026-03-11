@@ -58,7 +58,7 @@ static enum mp3_sound bg_playlist[16] = {
 	mp3_bg10,
 };
 
-static void screen_sworld_reset2(struct screen* s, int width, int height) { //TODO: rename
+static void screen_mainmenu_reset(struct screen* s, int width, int height) {
 	gstate.game_run = false;
 	gstate.num_players = 1;
 	server_failed = false;
@@ -70,7 +70,7 @@ static void screen_sworld_reset2(struct screen* s, int width, int height) { //TO
 	sound_init();
 	sound_play_bg(bg_playlist);
 }
-static void screen_sworld_update2(struct screen* s, float dt) { //TODO: rename
+static void screen_mainmenu_update(struct screen* s, float dt) {
 	if (server_failed) {
 
 	if (input_pressed(IB_ANY, 0)) 
@@ -124,7 +124,7 @@ static void screen_sworld_update2(struct screen* s, float dt) { //TODO: rename
 }
 
 
-static void screen_sworld_render2D2(struct screen* s, int width, int height) { //TODO: rename
+static void screen_mainmenu_render2D(struct screen* s, int width, int height) {
 
 	gutil_bg();
 	gutil_bg_panorama();
@@ -175,11 +175,10 @@ static void screen_sworld_render2D2(struct screen* s, int width, int height) { /
 	icon_offset += gutil_control_icon(icon_offset, IB_GUI_CLICK, "Select option");
 }
 
-struct screen screen_select_world2 = { //TODO: rename
-	.reset = screen_sworld_reset2,
-	.update = screen_sworld_update2,
-	.render2D = screen_sworld_render2D2,
+struct screen screen_mainmenu = {
+	.reset = screen_mainmenu_reset,
+	.update = screen_mainmenu_update,
+	.render2D = screen_mainmenu_render2D,
 	.render3D = NULL,
 	.render_world = true,
 };
-

@@ -18,10 +18,14 @@
 */
 
 #include <assert.h>
+#ifdef PLATFORM_PC
 #include "particle.h"
+#endif
 #include "game/game_state.h"
 #include "graphics/render_block.h"
-
+#ifdef PLATFORM_WII
+#include "particle.h"
+#endif
 #include "platform/gfx.h"
 #include "graphics/texture_atlas.h"
 #include "platform/texture.h"
@@ -29,6 +33,10 @@
 
 #define PARTICLES_AREA 8
 #define PARTICLES_VOLUME 64
+
+#ifdef PLATFORM_WII
+ARRAY_DEF(array_particle, struct particle, M_POD_OPLIST)
+#endif
 
 array_particle_t particles;
 
@@ -102,8 +110,8 @@ void particle_add(vec3 pos,
     p->atlas    = atlas;
 
     if (atlas == TEXTURE_ATLAS_TERRAIN) {
-        float fx = (TEX_OFFSET(TEXTURE_X(tex)) + rnd() * 12.0f) / 256.0f;
-        float fy = (TEX_OFFSET(TEXTURE_Y(tex)) + rnd() * 12.0f) / 256.0f;
+        float fx = (TEX_OFFSET(TEXTURE_X(tex)) + rnd() * 12.0f) / (float)TERRAIN_PNG_HEIGHT;
+        float fy = (TEX_OFFSET(TEXTURE_Y(tex)) + rnd() * 12.0f) / (float)TERRAIN_PNG_HEIGHT;
         p->tex_uv[0] = fx;
         p->tex_uv[1] = fy;
     } else {
@@ -429,8 +437,8 @@ static void render_single(struct particle* p, vec3 camera, float delta) {
     if (p->atlas == TEXTURE_ATLAS_TERRAIN) {
         u0 = p->tex_uv[0];
         v0 = p->tex_uv[1];
-        u1 = u0 + (4.0f  / 256.0f);
-        v1 = v0 + (4.0f  / 256.0f);
+        u1 = u0 + (4.0f  / (float)TERRAIN_PNG_HEIGHT);
+        v1 = v0 + (4.0f  / (float)TERRAIN_PNG_HEIGHT);
     } else {
         u0 = (TEX_OFFSET(TEXTURE_X(tile))) / 256.0f;
         v0 = (TEX_OFFSET(TEXTURE_Y(tile))) / 256.0f;
