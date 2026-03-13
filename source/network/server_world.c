@@ -18,6 +18,7 @@
 */
 
 #include <assert.h>
+#include <stdio.h>
 
 #include "../lighting.h"
 #include "../util.h"
@@ -322,7 +323,7 @@ void server_world_save_chunk_obj(struct server_world* w, bool erase,
 	assert(w && c);
 
 	if(c->modified) {
-		//  load region archive into cache
+		// load region archive into cache
 		struct region_archive tmp;
 		struct region_archive* ra = server_world_chunk_region(w, x, z);
 
@@ -334,11 +335,23 @@ void server_world_save_chunk_obj(struct server_world* w, bool erase,
 			ra = &tmp;
 		}
 
-		region_archive_set_blocks(ra, x, z, c);
-		c->modified = false;
+		bool saved = region_archive_set_blocks(ra, x, z, c);
+		if(!saved) {
+			fprintf(stderr, "server_world_save_chunk_obj: failed to save chunk %d,%d — keeping in memory\n", (int)x, (int)z);
+		} else {
+			c->modified = false;
+		}
 	}
 
 	if(erase) {
+		/* Only erase the in-memory chunk if the last save succeeded (not modified),
+		 * otherwise keep it so we can retry saving later — prevents data loss when
+		 * region writes fail. */
+		if(c->modified) {
+			fprintf(stderr, "server_world_save_chunk_obj: skip erase of chunk %d,%d because save failed\n", (int)x, (int)z);
+			return;
+		}
+
 		server_world_chunk_destroy(c);
 		dict_server_chunks_erase(w->chunks, S_CHUNK_ID(x, z));
 	}

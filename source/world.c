@@ -18,6 +18,7 @@
 */
 
 #include <assert.h>
+#include <stdlib.h>
 
 #include "game/game_state.h"
 #include "lighting.h"

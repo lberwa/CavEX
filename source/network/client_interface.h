@@ -26,6 +26,7 @@
 #include "../world.h"
 
 #include "../cglm/cglm.h"
+#include <stdint.h>
 
 enum client_rpc_type {
 	CRPC_CHUNK,
@@ -46,8 +47,17 @@ enum client_rpc_type {
 	CRPC_SPAWN_MINECART,
 };
 
+#ifdef SPLITSCREEN
+#define CRPC_PLAYER_ID(pid) .player_id = (uint8_t)(pid),
+#else
+#define CRPC_PLAYER_ID(pid)
+#endif
+
 struct client_rpc {
 	enum client_rpc_type type;
+#ifdef SPLITSCREEN
+	uint8_t player_id;
+#endif
 	union {
 		struct {
 			w_coord_t x, y, z;

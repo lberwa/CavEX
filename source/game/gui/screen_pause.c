@@ -36,8 +36,7 @@ static bool pointer_available;
 static float pointer_x, pointer_y, pointer_angle;
 
 static void screen_pause_reset(struct screen* s, int width, int height) {
-	if(gstate.local_player)
-		gstate.local_player->data.local_player.capture_input = false;
+	gstate_set_capture_input_all(false);
 
 	s->render3D = screen_ingame.render3D;
 	input_pointer_enable(true);

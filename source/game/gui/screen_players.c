@@ -83,10 +83,16 @@ static void screen_splayeranzahl_update(struct screen* s, float dt) {
 	                break;
 	            case THREE_PLAYERS:
 	                gstate.num_players = 3;
+#ifdef SPLITSCREEN
+	                gstate.num_players = 2;
+#endif
 	                menu_screen_set(&screen_controllerauswahl);
 	                break;
 	            case FOUR_PLAYERS:
 	                gstate.num_players = 4;
+#ifdef SPLITSCREEN
+	                gstate.num_players = 2;
+#endif
 	                menu_screen_set(&screen_controllerauswahl);
 	                break;
 	        }

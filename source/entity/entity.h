@@ -22,6 +22,7 @@
 
 #include <m-lib/m-dict.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 #include "../cglm/cglm.h"
 #include "../item/items.h"
@@ -86,6 +87,9 @@ struct entity {
 		struct entity_local_player {
 			int jump_ticks;
 			bool capture_input;
+#ifdef SPLITSCREEN
+			uint8_t player_index;
+#endif
 		} local_player;
 		struct entity_item {
 			struct item_data item;

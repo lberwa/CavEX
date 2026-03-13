@@ -17,6 +17,8 @@
 	along with CavEX.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <assert.h>
+
 #include "inventory_logic.h"
 
 #define min(a, b) ((a) < (b) ? (a) : (b))

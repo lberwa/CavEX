@@ -59,6 +59,11 @@ static bool test_in_liquid(struct AABB* entity, struct block_info* blk_info) {
 
 static bool entity_tick(struct entity* e) {
 	assert(e);
+#ifdef SPLITSCREEN
+	int player_index = e->data.local_player.player_index;
+#else
+	int player_index = 0;
+#endif
 
 	// MINECART CONTROL: detect cart by scanning entities for occupant_id == player id
 	dict_entity_it_t it;
@@ -71,15 +76,15 @@ static bool entity_tick(struct entity* e) {
 		   cart->data.minecart.occupant_id == e->id) {
 
 			// Only allow control if we're really the rider
-			if(input_held(IB_FORWARD, 0))  cart->data.minecart.speed += 0.01f;
-			if(input_held(IB_BACKWARD, 0)) cart->data.minecart.speed -= 0.01f;
+			if(input_held(IB_FORWARD, player_index))  cart->data.minecart.speed += 0.01f;
+			if(input_held(IB_BACKWARD, player_index)) cart->data.minecart.speed -= 0.01f;
 
 			// Clamp speed to a safe limit
 			if(cart->data.minecart.speed >  0.3f) cart->data.minecart.speed =  0.3f;
 			if(cart->data.minecart.speed < -0.3f) cart->data.minecart.speed = -0.3f;
 
 			// Dismount
-			if(input_pressed(IB_JUMP, 0)) {
+			if(input_pressed(IB_JUMP, player_index)) {
 				cart->data.minecart.occupied   = false;
 				cart->data.minecart.occupant_id = 0;
 				// Lift player a little to avoid clipping into the cart
@@ -119,11 +124,11 @@ static bool entity_tick(struct entity* e) {
 	bool jumping = false;
 
 	if(e->data.local_player.capture_input) {
-		if(input_held(IB_FORWARD, 0))  forward++;
-		if(input_held(IB_BACKWARD, 0)) forward--;
-		if(input_held(IB_RIGHT, 0))    strafe++;
-		if(input_held(IB_LEFT, 0))     strafe--;
-		jumping = input_held(IB_JUMP, 0);
+		if(input_held(IB_FORWARD, player_index))  forward++;
+		if(input_held(IB_BACKWARD, player_index)) forward--;
+		if(input_held(IB_RIGHT, player_index))    strafe++;
+		if(input_held(IB_LEFT, player_index))     strafe--;
+		jumping = input_held(IB_JUMP, player_index);
 	}
 
 	int dist = forward * forward + strafe * strafe;
@@ -229,8 +234,15 @@ static bool entity_tick(struct entity* e) {
 	}
 
 	// update client-side oxygen bar
+#ifdef SPLITSCREEN
+	if(in_water)
+		gstate.oxygen_arr[player_index]--;
+	else
+		gstate.oxygen_arr[player_index] = MAX_OXYGEN;
+#else
 	if(gstate.in_water) gstate.oxygen--;
 	else gstate.oxygen = MAX_OXYGEN;
+#endif
 
 	return false;
 }
@@ -254,6 +266,9 @@ void entity_local_player(uint32_t id, struct entity* e, struct world* w) {
 	e->teleport = entity_default_teleport;
 	e->type = ENTITY_LOCAL_PLAYER;
 	e->data.local_player.capture_input = false;
+#ifdef SPLITSCREEN
+	e->data.local_player.player_index = 0;
+#endif
     e->leftClickText = NULL;
 //    e->onLeftClick   = onLeftClick;
     e->rightClickText = NULL;

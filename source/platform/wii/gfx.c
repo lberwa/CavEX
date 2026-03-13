@@ -47,6 +47,10 @@ static uint32_t gfx_depth_func_last = GX_LEQUAL;
 
 static int gfx_screen_width = 802;
 static float gfx_texcoord_div = 256.0f;
+static uint32_t current_vp_x = 0;
+static uint32_t current_vp_y = 0;
+static uint32_t current_vp_w = 0;
+static uint32_t current_vp_h = 0;
 
 /*static void* thread_vsync(void* user) {
 	void* current_frame = NULL;
@@ -138,6 +142,10 @@ void gfx_setup() {
 	GX_Init(fifoBuffer, FIFO_SIZE);
 	gfx_clear_buffers(255, 255, 255);
 	GX_SetViewport(0, 0, screenMode->fbWidth, screenMode->efbHeight, 0, 1);
+	current_vp_x = 0;
+	current_vp_y = 0;
+	current_vp_w = screenMode->fbWidth;
+	current_vp_h = screenMode->efbHeight;
 	GX_SetDispCopyYScale(
 		GX_GetYScaleFactor(screenMode->efbHeight, screenMode->xfbHeight));
 	GX_SetScissor(0, 0, screenMode->fbWidth, screenMode->efbHeight);
@@ -338,6 +346,30 @@ void gfx_mode_gui() {
 	gfx_write_buffers(true, false, false);
 }
 
+void gfx_mode_gui_viewport(uint32_t width, uint32_t height) {
+	gfx_fog(false);
+
+	Mtx44 projection;
+
+	guOrtho(projection, 0, (f32)height, 0, (f32)width, -256, 256);
+	GX_LoadProjectionMtx(projection, GX_ORTHOGRAPHIC);
+	gfx_matrix_modelview(GLM_MAT4_IDENTITY);
+
+	gfx_lighting(false);
+	gfx_blending(MODE_BLEND);
+	gfx_alpha_test(true);
+	gfx_write_buffers(true, false, false);
+}
+
+void gfx_viewport(uint32_t x, uint32_t y, uint32_t width, uint32_t height) {
+	current_vp_x = x;
+	current_vp_y = y;
+	current_vp_w = width;
+	current_vp_h = height;
+	GX_SetViewport((f32)x, (f32)y, (f32)width, (f32)height, 0.0f, 1.0f);
+	GX_SetScissor(x, y, width, height);
+}
+
 void gfx_matrix_projection(mat4 proj, bool is_perspective) {
 	assert(proj);
 
@@ -449,7 +481,8 @@ void gfx_write_buffers(bool color, bool depth, bool depth_test) {
 }
 
 void gfx_depth_range(float near, float far) {
-	GX_SetViewport(0, 0, screenMode->fbWidth, screenMode->efbHeight, near, far);
+	GX_SetViewport((f32)current_vp_x, (f32)current_vp_y, (f32)current_vp_w,
+				   (f32)current_vp_h, near, far);
 }
 
 void gfx_depth_func(enum depth_func func) {

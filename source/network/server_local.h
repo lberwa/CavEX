@@ -46,22 +46,28 @@ struct complex_block_pos {
 	int x, y, z;
 };
 
+struct server_player {
+	double x, y, z;
+	float rx, ry;
+	enum world_dim dimension;
+	bool has_pos;
+	bool finished_loading;
+	struct inventory inventory;
+	struct inventory* active_inventory;
+	short health;
+	int oxygen;
+	int spawn_x, spawn_y, spawn_z;
+	float vel_y, old_vel_y;
+	int fall_y;
+};
+
 struct server_local {
 	struct random_gen rand_src;
-	struct {
-		double x, y, z;
-		float rx, ry;
-		enum world_dim dimension;
-		bool has_pos;
-		bool finished_loading;
-		struct inventory inventory;
-		struct inventory* active_inventory;
-		short health;
-		int oxygen;
-		int spawn_x, spawn_y, spawn_z;
-		float vel_y, old_vel_y;
-		int fall_y;
-	} player;
+#ifdef SPLITSCREEN
+	struct server_player players[2];
+#else
+	struct server_player player;
+#endif
 	struct server_world world;
 	dict_entity_t entities;
 	struct complex_block_pos chest_pos[MAX_CHESTS];

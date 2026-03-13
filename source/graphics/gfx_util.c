@@ -18,6 +18,7 @@
 */
 
 #include <assert.h>
+#include <stdlib.h>
 
 #include "../daytime.h"
 #include "../game/game_state.h"

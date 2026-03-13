@@ -18,6 +18,7 @@
 */
 
 #include <assert.h>
+#include <stdlib.h>
 #include <stdint.h>
 
 #include "chunk_mesher.h"
