@@ -340,6 +340,24 @@ void gfx_mode_gui() {
 	gfx_write_buffers(true, false, false);
 }
 
+void gfx_mode_gui_viewport(uint32_t width, uint32_t height) {
+	gfx_fog(false);
+
+	mat4 proj;
+	glm_ortho(0, (float)width, (float)height, 0, -256, 256, proj);
+	gfx_matrix_projection(proj, false);
+	gfx_matrix_modelview(GLM_MAT4_IDENTITY);
+
+	gfx_lighting(false);
+	gfx_blending(MODE_BLEND);
+	gfx_alpha_test(true);
+	gfx_write_buffers(true, false, false);
+}
+
+void gfx_viewport(uint32_t x, uint32_t y, uint32_t width, uint32_t height) {
+	glViewport(x, y, width, height);
+}
+
 void gfx_matrix_projection(mat4 proj, bool is_perspective) {
 	assert(proj);
 	glUniformMatrix4fv(glGetUniformLocation(shader_prog, "proj"), 1, GL_FALSE,

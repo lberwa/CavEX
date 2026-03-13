@@ -45,8 +45,7 @@ void screen_sign_set_windowc(uint8_t container) {
 static void screen_sign_reset(struct screen* s, int width, int height) {
 	input_pointer_enable(true);
 
-	if(gstate.local_player)
-		gstate.local_player->data.local_player.capture_input = false;
+	gstate_set_capture_input_all(false);
 
 	s->render3D = screen_ingame.render3D;
 
@@ -78,7 +77,7 @@ static void screen_sign_update(struct screen* s, float dt) {
 	if(input_pressed(IB_GUI_UP, 0)) {
 		// this action decrements the character
 		uint16_t action_id;
-		if(windowc_new_action(gstate.windows[sign_container], &action_id,
+		if(windowc_new_action(gstate_windows()[sign_container], &action_id,
 							  false, selected_slot)) {
 			svin_rpc_send(&(struct server_rpc) {
 				.type = SRPC_WINDOW_CLICK,
@@ -93,7 +92,7 @@ static void screen_sign_update(struct screen* s, float dt) {
 	if(input_pressed(IB_GUI_DOWN, 0)) {
 		// this action increments the character
 		uint16_t action_id;
-		if(windowc_new_action(gstate.windows[sign_container], &action_id,
+		if(windowc_new_action(gstate_windows()[sign_container], &action_id,
 							  true, selected_slot)) {
 			svin_rpc_send(&(struct server_rpc) {
 				.type = SRPC_WINDOW_CLICK,
@@ -108,7 +107,7 @@ static void screen_sign_update(struct screen* s, float dt) {
 
 static void screen_sign_render2D(struct screen* s, int width, int height) {
 	struct inventory* inv
-		= windowc_get_latest(gstate.windows[sign_container]);
+		= windowc_get_latest(gstate_windows()[sign_container]);
 
 	// darken background
 	gfx_texture(false);

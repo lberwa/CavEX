@@ -64,8 +64,7 @@ static void screen_mainmenu_reset(struct screen* s, int width, int height) {
 	server_failed = false;
 	input_pointer_enable(true);
 
-	if(gstate.local_player)
-		gstate.local_player->data.local_player.capture_input = false;
+	gstate_set_capture_input_all(false);
 
 	sound_init();
 	sound_play_bg(bg_playlist);

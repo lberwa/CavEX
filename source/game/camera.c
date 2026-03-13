@@ -18,6 +18,7 @@
 */
 
 #include <assert.h>
+#include <float.h>
 
 #include "../platform/gfx.h"
 #include "../platform/input.h"
@@ -105,7 +106,7 @@ void camera_physics(struct camera* c, float dt) {
 	assert(c);
 
 	float jdx, jdy;
-	if(input_joystick(dt, &jdx, &jdy, 0)) {
+	if(input_joystick(dt, &jdx, &jdy, gstate_active_player())) {
 		c->rx -= jdx * 2.0F;
 		c->ry -= jdy * 2.0F;
 	}
@@ -114,32 +115,32 @@ void camera_physics(struct camera* c, float dt) {
 	float speed_c = 40.0F;
 	float air_friction = 0.05F;
 
-	if(input_held(IB_LEFT, 0)) {
+	if(input_held(IB_LEFT, gstate_active_player())) {
 		acc_x += cos(c->rx) * speed_c;
 		acc_z -= sin(c->rx) * speed_c;
 	}
 
-	if(input_held(IB_RIGHT, 0)) {
+	if(input_held(IB_RIGHT, gstate_active_player())) {
 		acc_x -= cos(c->rx) * speed_c;
 		acc_z += sin(c->rx) * speed_c;
 	}
 
-	if(input_held(IB_FORWARD, 0)) {
+	if(input_held(IB_FORWARD, gstate_active_player())) {
 		acc_x += sin(c->rx) * sin(c->ry) * speed_c;
 		acc_y += cos(c->ry) * speed_c;
 		acc_z += cos(c->rx) * sin(c->ry) * speed_c;
 	}
 
-	if(input_held(IB_BACKWARD, 0)) {
+	if(input_held(IB_BACKWARD, gstate_active_player())) {
 		acc_x -= sin(c->rx) * sin(c->ry) * speed_c;
 		acc_y -= cos(c->ry) * speed_c;
 		acc_z -= cos(c->rx) * sin(c->ry) * speed_c;
 	}
 
-	if(input_held(IB_JUMP, 0))
+	if(input_held(IB_JUMP, gstate_active_player()))
 		acc_y += speed_c;
 
-	if(input_held(IB_SNEAK, 0))
+	if(input_held(IB_SNEAK, gstate_active_player()))
 		acc_y -= speed_c;
 
 	c->controller.vx += acc_x * dt;
@@ -182,10 +183,17 @@ void camera_physics(struct camera* c, float dt) {
 void camera_update(struct camera* c, bool in_water) {
 	assert(c);
 
+	camera_update_viewport(c, in_water,
+						   (float)gfx_width() / (float)gfx_height());
+}
+
+void camera_update_viewport(struct camera* c, bool in_water, float aspect) {
+	assert(c);
+
 	glm_perspective(glm_rad(gstate.config.fov)
 						* (in_water ? 6.0F / 7.0F : 1.0F),
-					(float)gfx_width() / (float)gfx_height(), 0.075F,
-					gstate.config.render_distance, c->projection);
+					aspect, 0.075F, gstate.config.render_distance,
+					c->projection);
 
 	glm_lookat((vec3) {c->x, c->y, c->z},
 			   (vec3) {c->x + sinf(c->rx) * sinf(c->ry), c->y + cosf(c->ry),
@@ -208,7 +216,12 @@ void camera_attach(struct camera* c, struct entity* e, float tick_delta,
 	//printf("c%.03f %.03f %.03f\n", c->x, c->y, c->z);
 
 	float jdx, jdy;
-	if(e->data.local_player.capture_input && input_joystick(dt, &jdx, &jdy, 0)) {
+#ifdef SPLITSCREEN
+	int player_index = e->data.local_player.player_index;
+#else
+	int player_index = 0;
+#endif
+	if(e->data.local_player.capture_input && input_joystick(dt, &jdx, &jdy, player_index)) {
 		c->rx -= jdx * 2.0F;
 		c->ry -= jdy * 2.0F;
 	}

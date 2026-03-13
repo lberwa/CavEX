@@ -63,6 +63,8 @@ void gfx_matrix_texture(bool enable, mat4 tex);
 
 void gfx_mode_world(void);
 void gfx_mode_gui(void);
+void gfx_mode_gui_viewport(uint32_t width, uint32_t height);
+void gfx_viewport(uint32_t x, uint32_t y, uint32_t width, uint32_t height);
 void gfx_fog_color(uint8_t r, uint8_t g, uint8_t b);
 void gfx_fog_pos(float dx, float dz, float distance);
 void gfx_fog(bool enable);

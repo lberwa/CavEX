@@ -122,6 +122,18 @@ int main(void) {
 	gstate.digging.cooldown = time_get();
 	gstate.digging.active = false;
 	gstate.paused = false;
+#ifdef SPLITSCREEN
+	gstate.active_player = 0;
+	for(int i = 0; i < 2; i++) {
+		gstate.cameras[i] = gstate.camera;
+		memset(&gstate.camera_hits[i], 0, sizeof(gstate.camera_hits[i]));
+		gstate.local_players[i] = NULL;
+		gstate.diggings[i] = gstate.digging;
+		gstate.held_item_animations[i] = gstate.held_item_animation;
+		gstate.in_water_arr[i] = false;
+		gstate.oxygen_arr[i] = MAX_OXYGEN;
+	}
+#endif
 
 	for(int i=1; i<4; i++) {
         gstate.player_sequence[i] = -1;
@@ -154,7 +166,7 @@ int main(void) {
 	world_create(&gstate.world);
 
 	for(size_t k = 0; k < 256; k++)
-		gstate.windows[k] = NULL;
+		gstate_windows()[k] = NULL;
 
 	clin_init();
 	svin_init();
@@ -239,79 +251,147 @@ int main(void) {
 			}
 		}
 
-		if(gstate.local_player)
-			camera_attach(&gstate.camera, gstate.local_player, tick_delta,
-							gstate.stats.dt);
-		// update particle‐system with current camera pos for spawn‐culling
-		particle_set_camera((vec3){
-		    gstate.camera.x,
-		    gstate.camera.y,
-		    gstate.camera.z
-		});
-
 		render_world
 			= gstate.current_screen->render_world && gstate.world_loaded;
-		bool in_water_new = false;
 
-		if(render_world) {
-			struct block_data blk = world_get_block(
-				&gstate.world, floorf(gstate.camera.x),
-				floorf(gstate.camera.y + 0.1F), floorf(gstate.camera.z));
-			in_water_new		
-				= blk.type == BLOCK_WATER_FLOW || blk.type == BLOCK_WATER_STILL;
-			#ifndef GFX_FANCY_LIQUIDS
-			if(gstate.in_water != in_water_new) {
-			#endif
-				gstate.in_water = in_water_new;	
-			#ifndef GFX_FANCY_LIQUIDS
-				world_redraw_chunks(&gstate.world);
-			}
-			#endif
-		}
+#ifdef SPLITSCREEN
+		if(splitscreen_enabled() && render_world) {
+			int player_count = splitscreen_player_count();
+			for(int p = 0; p < player_count; p++) {
+				splitscreen_load_player(p);
+				if(gstate.local_player)
+					camera_attach(&gstate.camera, gstate.local_player,
+								  tick_delta, gstate.stats.dt);
 
-		camera_update(&gstate.camera, gstate.in_water);
+				bool in_water_new = false;
+				struct block_data blk = world_get_block(
+					&gstate.world, floorf(gstate.camera.x),
+					floorf(gstate.camera.y + 0.1F),
+					floorf(gstate.camera.z));
+				in_water_new = blk.type == BLOCK_WATER_FLOW
+					|| blk.type == BLOCK_WATER_STILL;
+				#ifndef GFX_FANCY_LIQUIDS
+				if(gstate.in_water != in_water_new) {
+				#endif
+					gstate.in_water = in_water_new;
+				#ifndef GFX_FANCY_LIQUIDS
+					world_redraw_chunks(&gstate.world);
+				}
+				#endif
 
-		if(render_world) {
-			world_pre_render(&gstate.world, &gstate.camera, gstate.camera.view);
+				{
+					vec3 origin, dir;
+					camera_get_ray(&gstate.camera, origin, dir);
 
-			{
-				// 1) Bereken eerst de ray‐origin en direction uit de camera
-				vec3 origin, dir;
-				camera_get_ray(&gstate.camera, origin, dir);
+					float tHit;
+					struct entity *hitE = raycast_entity(&gstate.entities,
+														 origin, dir,
+														 4.5f,
+														 &tHit);
+					if(hitE == gstate.local_player)
+						hitE = NULL;
 
-				// 2) Probeer eerst een entiteit te raken binnen 4.5 eenheid
-				float tHit;
-				struct entity *hitE = raycast_entity(&gstate.entities,
-													 origin, dir,
-													 4.5f,
-													 &tHit);
-				if (hitE == gstate.local_player) {
-				    hitE = NULL;
+					if(hitE) {
+						gstate.camera_hit.entity_hit = true;
+						gstate.camera_hit.entity_id  = hitE->id;
+						gstate.camera_hit.hit = false;
+					} else {
+						gstate.camera_hit.entity_hit = false;
+						gstate.camera_hit.entity_id  = 0;
+
+						camera_ray_pick(&gstate.world,
+										gstate.camera.x, gstate.camera.y,
+										gstate.camera.z,
+										gstate.camera.x
+											+ sinf(gstate.camera.rx)
+											  * sinf(gstate.camera.ry) * 4.5F,
+										gstate.camera.y
+											+ cosf(gstate.camera.ry) * 4.5F,
+										gstate.camera.z
+											+ cosf(gstate.camera.rx)
+											  * sinf(gstate.camera.ry) * 4.5F,
+										&gstate.camera_hit);
+					}
 				}
 
-				if (hitE) {
-					gstate.camera_hit.entity_hit = true;
-					gstate.camera_hit.entity_id  = hitE->id;
-					gstate.camera_hit.hit = false;
-				}
-				else {
-					gstate.camera_hit.entity_hit = false;
-					gstate.camera_hit.entity_id  = 0;
-
-					camera_ray_pick(&gstate.world,
-									gstate.camera.x, gstate.camera.y, gstate.camera.z,
-									gstate.camera.x + sinf(gstate.camera.rx) * sinf(gstate.camera.ry) * 4.5F,
-									gstate.camera.y +            cosf(gstate.camera.ry) * 4.5F,
-									gstate.camera.z + cosf(gstate.camera.rx) * sinf(gstate.camera.ry) * 4.5F,
-									&gstate.camera_hit);
-				}
+				splitscreen_store_player(p);
 			}
 		} else {
-		    world_pre_render_clear(&gstate.world);
-		    gstate.camera_hit.hit        = false;
-		    gstate.camera_hit.entity_hit = false;
-		    gstate.camera_hit.entity_id  = 0;
+#endif
+			if(gstate.local_player)
+				camera_attach(&gstate.camera, gstate.local_player, tick_delta,
+								gstate.stats.dt);
+			// update particle‐system with current camera pos for spawn‐culling
+			particle_set_camera((vec3){
+			    gstate.camera.x,
+			    gstate.camera.y,
+			    gstate.camera.z
+			});
+
+			bool in_water_new = false;
+
+			if(render_world) {
+				struct block_data blk = world_get_block(
+					&gstate.world, floorf(gstate.camera.x),
+					floorf(gstate.camera.y + 0.1F), floorf(gstate.camera.z));
+				in_water_new		
+					= blk.type == BLOCK_WATER_FLOW || blk.type == BLOCK_WATER_STILL;
+				#ifndef GFX_FANCY_LIQUIDS
+				if(gstate.in_water != in_water_new) {
+				#endif
+					gstate.in_water = in_water_new;	
+				#ifndef GFX_FANCY_LIQUIDS
+					world_redraw_chunks(&gstate.world);
+				}
+				#endif
+			}
+
+			camera_update(&gstate.camera, gstate.in_water);
+
+			if(render_world) {
+				world_pre_render(&gstate.world, &gstate.camera, gstate.camera.view);
+
+				{
+					// 1) Bereken eerst de ray‐origin en direction uit de camera
+					vec3 origin, dir;
+					camera_get_ray(&gstate.camera, origin, dir);
+
+					// 2) Probeer eerst een entiteit te raken binnen 4.5 eenheid
+					float tHit;
+					struct entity *hitE = raycast_entity(&gstate.entities,
+														 origin, dir,
+														 4.5f,
+														 &tHit);
+					if (hitE == gstate.local_player) {
+					    hitE = NULL;
+					}
+
+					if (hitE) {
+						gstate.camera_hit.entity_hit = true;
+						gstate.camera_hit.entity_id  = hitE->id;
+						gstate.camera_hit.hit = false;
+					}
+					else {
+						gstate.camera_hit.entity_hit = false;
+						gstate.camera_hit.entity_id  = 0;
+
+						camera_ray_pick(&gstate.world,
+										gstate.camera.x, gstate.camera.y, gstate.camera.z,
+										gstate.camera.x + sinf(gstate.camera.rx) * sinf(gstate.camera.ry) * 4.5F,
+										gstate.camera.y +            cosf(gstate.camera.ry) * 4.5F,
+										gstate.camera.z + cosf(gstate.camera.rx) * sinf(gstate.camera.ry) * 4.5F,
+										&gstate.camera_hit);
+					}
+				}
+			} else {
+			    world_pre_render_clear(&gstate.world);
+			    gstate.camera_hit.hit        = false;
+			    gstate.camera_hit.entity_hit = false;
+			    gstate.camera_hit.entity_id  = 0;
+			}
+#ifdef SPLITSCREEN
 		}
+#endif
 
 		world_update_lighting(&gstate.world);
 		world_build_chunks(&gstate.world, CHUNK_MESHER_QLENGTH);
@@ -322,6 +402,7 @@ int main(void) {
 
 		gfx_flip_buffers(&gstate.stats.dt_gpu, &gstate.stats.dt_vsync);
 
+		bool rendered_2d = false;
 		if(!gstate.paused) {
 			// must not modify displaylists while still rendering!
 			chunk_mesher_receive();
@@ -331,76 +412,190 @@ int main(void) {
 			daytime_sky_colors(daytime, top_plane_color, bottom_plane_color,
 								 atmosphere_color);
 
-			if(render_world) {
-				gfx_clear_buffers(atmosphere_color[0], atmosphere_color[1],
+#ifdef SPLITSCREEN
+			if(splitscreen_enabled() && render_world) {
+				int player_count = splitscreen_player_count();
+				int vp_w = gfx_width();
+				int vp_h = gfx_height() / player_count;
+
+				for(int p = 0; p < player_count; p++) {
+					int vp_x = 0;
+					int vp_y = p * vp_h;
+
+					splitscreen_load_player(p);
+
+					gfx_viewport(vp_x, vp_y, vp_w, vp_h);
+					gfx_scissor(true, vp_x, vp_y, vp_w, vp_h);
+
+					if(render_world) {
+						gfx_clear_buffers(atmosphere_color[0], atmosphere_color[1],
+											atmosphere_color[2]);
+					} else {
+						gfx_clear_buffers(128, 128, 128);
+					}
+
+					gfx_fog_color(atmosphere_color[0], atmosphere_color[1],
 									atmosphere_color[2]);
+
+					camera_update_viewport(&gstate.camera, gstate.in_water,
+										   (float)vp_w / (float)vp_h);
+					world_pre_render(&gstate.world, &gstate.camera,
+									 gstate.camera.view);
+
+					gfx_mode_world();
+					gfx_matrix_projection(gstate.camera.projection, true);
+
+					if(render_world) {
+						gfx_update_light(daytime_brightness(daytime),
+										 world_dimension_light(&gstate.world));
+
+						if(gstate.world.dimension == WORLD_DIM_OVERWORLD)
+							gutil_sky_box(gstate.camera.view,
+											daytime_celestial_angle(daytime),
+											top_plane_color, bottom_plane_color);
+
+						gstate.stats.chunks_rendered
+							= world_render(&gstate.world, &gstate.camera, false);
+					} else {
+						gstate.stats.chunks_rendered = 0;
+					}
+
+					if(gstate.current_screen->render3D) {
+						gfx_fog(false);
+						gstate.current_screen->render3D(gstate.current_screen,
+														gstate.camera.view);
+					}
+
+					if(render_world) {
+						gfx_fog(false);
+						particle_set_camera((vec3){
+						    gstate.camera.x,
+						    gstate.camera.y,
+						    gstate.camera.z
+						});
+						particle_render(
+							gstate.camera.view,
+							(vec3) {gstate.camera.x, gstate.camera.y,
+									gstate.camera.z},
+							tick_delta);
+						entities_client_render(gstate.entities, &gstate.camera,
+											   tick_delta);
+						gfx_fog(true);
+
+						#ifdef GFX_FANCY_LIQUIDS
+						world_render(&gstate.world, &gstate.camera, true);
+						#endif
+
+						#ifdef GFX_CLOUDS
+						if(gstate.world.dimension == WORLD_DIM_OVERWORLD)
+							gutil_clouds(gstate.camera.view,
+							daytime_brightness(daytime));
+						#endif
+					}
+
+					gfx_mode_gui_viewport(vp_w, vp_h);
+
+					if(gstate.in_water) {
+						gfx_bind_texture(&texture_water);
+						gutil_texquad_col(0, 0,
+											-gstate.camera.rx / GLM_PI * 256,
+											gstate.camera.ry / GLM_PI * 256, 512,
+											512 * (float)vp_h / (float)vp_w,
+											vp_w, vp_h, 0xFF, 0xFF, 0xFF,
+											0x80);
+					}
+
+					if(gstate.current_screen->render2D)
+						gstate.current_screen->render2D(gstate.current_screen,
+														vp_w, vp_h);
+
+					splitscreen_store_player(p);
+				}
+
+				gfx_scissor(false, 0, 0, 0, 0);
+				rendered_2d = true;
 			} else {
-				gfx_clear_buffers(128, 128, 128);
+#endif
+				if(render_world) {
+					gfx_clear_buffers(atmosphere_color[0], atmosphere_color[1],
+										atmosphere_color[2]);
+				} else {
+					gfx_clear_buffers(128, 128, 128);
+				}
+
+				gfx_fog_color(atmosphere_color[0], atmosphere_color[1],
+								atmosphere_color[2]);
+
+				gfx_mode_world();
+				gfx_matrix_projection(gstate.camera.projection, true);
+
+				if(render_world) {
+					gfx_update_light(daytime_brightness(daytime),
+									 world_dimension_light(&gstate.world));
+
+					if(gstate.world.dimension == WORLD_DIM_OVERWORLD)
+						gutil_sky_box(gstate.camera.view,
+										daytime_celestial_angle(daytime),
+										top_plane_color, bottom_plane_color);
+
+					gstate.stats.chunks_rendered
+						= world_render(&gstate.world, &gstate.camera, false);
+				} else {
+					gstate.stats.chunks_rendered = 0;
+				}
+
+				if(gstate.current_screen->render3D) {
+					gfx_fog(false);
+					gstate.current_screen->render3D(gstate.current_screen,
+													gstate.camera.view);
+				}
+
+				if(render_world) {
+					gfx_fog(false);
+					particle_render(
+						gstate.camera.view,
+						(vec3) {gstate.camera.x, gstate.camera.y, gstate.camera.z},
+						tick_delta);
+					entities_client_render(gstate.entities, &gstate.camera,
+										   tick_delta);
+					gfx_fog(true);
+
+					#ifdef GFX_FANCY_LIQUIDS
+					world_render(&gstate.world, &gstate.camera, true);
+					#endif
+
+					#ifdef GFX_CLOUDS
+					if(gstate.world.dimension == WORLD_DIM_OVERWORLD)
+						gutil_clouds(gstate.camera.view,
+						daytime_brightness(daytime));
+					#endif
+				}
+
+				gfx_mode_gui();
+
+				if(gstate.in_water) {
+					gfx_bind_texture(&texture_water);
+					gutil_texquad_col(0, 0, -gstate.camera.rx / GLM_PI * 256,
+										gstate.camera.ry / GLM_PI * 256, 512,
+										512 * (float)gfx_height() / (float)gfx_width(),
+										gfx_width(), gfx_height(), 0xFF, 0xFF, 0xFF,
+										0x80);
+				}
+#ifdef SPLITSCREEN
 			}
-
-			gfx_fog_color(atmosphere_color[0], atmosphere_color[1],
-							atmosphere_color[2]);
-
-			gfx_mode_world();
-			gfx_matrix_projection(gstate.camera.projection, true);
-
-			if(render_world) {
-				gfx_update_light(daytime_brightness(daytime),
-								 world_dimension_light(&gstate.world));
-
-				if(gstate.world.dimension == WORLD_DIM_OVERWORLD)
-					gutil_sky_box(gstate.camera.view,
-									daytime_celestial_angle(daytime), top_plane_color,
-									bottom_plane_color);
-
-				gstate.stats.chunks_rendered
-					= world_render(&gstate.world, &gstate.camera, false);
-			} else {
-				gstate.stats.chunks_rendered = 0;
-			}
-
-			if(gstate.current_screen->render3D) {
-				gfx_fog(false);
-				gstate.current_screen->render3D(gstate.current_screen,
-												gstate.camera.view);
-			}
-
-			if(render_world) {
-				gfx_fog(false);
-				particle_render(
-					gstate.camera.view,
-					(vec3) {gstate.camera.x, gstate.camera.y, gstate.camera.z},
-					tick_delta);
-				entities_client_render(gstate.entities, &gstate.camera, tick_delta);
-				gfx_fog(true);
-
-				#ifdef GFX_FANCY_LIQUIDS
-				world_render(&gstate.world, &gstate.camera, true);
-				#endif
-
-				#ifdef GFX_CLOUDS
-				if(gstate.world.dimension == WORLD_DIM_OVERWORLD)
-					gutil_clouds(gstate.camera.view,
-					daytime_brightness(daytime));
-				#endif
-			}
-
-			gfx_mode_gui();
-
-			if(gstate.in_water) {
-				gfx_bind_texture(&texture_water);
-				gutil_texquad_col(0, 0, -gstate.camera.rx / GLM_PI * 256,
-									gstate.camera.ry / GLM_PI * 256, 512,
-									512 * (float)gfx_height() / (float)gfx_width(),
-									gfx_width(), gfx_height(), 0xFF, 0xFF, 0xFF,
-									0x80);
-			}
+#endif
 
 		}
 
-		if(gstate.current_screen->render2D)
+		if(gstate.current_screen->render2D && !rendered_2d)
 			gstate.current_screen->render2D(gstate.current_screen, gfx_width(),
 											gfx_height());
+
+#ifdef SPLITSCREEN
+		if(splitscreen_enabled() && render_world) {
+			splitscreen_load_player(0);
+		}
+#endif
 
 		if(input_pressed(IB_SCREENSHOT, 0)) {
 			size_t width, height;

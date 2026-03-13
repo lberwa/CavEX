@@ -17,6 +17,8 @@
 	along with CavEX.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <limits.h>
+
 #include "../../graphics/gfx_util.h"
 #include "../../graphics/gfx_settings.h"
 #include "../../graphics/gui_util.h"
@@ -51,8 +53,7 @@ void screen_iron_chest_set_windowc(uint8_t container) {
 static void screen_iron_chest_reset(struct screen* s, int width, int height) {
 	input_pointer_enable(true);
 
-	if(gstate.local_player)
-		gstate.local_player->data.local_player.capture_input = false;
+	gstate_set_capture_input_all(false);
 
 	s->render3D = screen_ingame.render3D;
 
@@ -72,7 +73,7 @@ static void screen_iron_chest_reset(struct screen* s, int width, int height) {
 	for(int k = 0; k < INVENTORY_SIZE_HOTBAR; k++) {
 		if(k
 		   == (int)inventory_get_hotbar(
-			   windowc_get_latest(gstate.windows[WINDOWC_INVENTORY])))
+			   windowc_get_latest(gstate_windows()[WINDOWC_INVENTORY])))
 			selected_slot = slots_index;
 
 		slots[slots_index++] = (struct inv_slot) {
@@ -127,7 +128,7 @@ static void screen_iron_chest_update(struct screen* s, float dt) {
 
 	if(input_pressed(IB_GUI_CLICK, 0)) {
 		uint16_t action_id;
-		if(windowc_new_action(gstate.windows[iron_chest_container], &action_id,
+		if(windowc_new_action(gstate_windows()[iron_chest_container], &action_id,
 							  false, slots[selected_slot].slot)) {
 			svin_rpc_send(&(struct server_rpc) {
 				.type = SRPC_WINDOW_CLICK,
@@ -139,7 +140,7 @@ static void screen_iron_chest_update(struct screen* s, float dt) {
 		}
 	} else if(input_pressed(IB_GUI_CLICK_ALT, 0)) {
 		uint16_t action_id;
-		if(windowc_new_action(gstate.windows[iron_chest_container], &action_id,
+		if(windowc_new_action(gstate_windows()[iron_chest_container], &action_id,
 							  true, slots[selected_slot].slot)) {
 			svin_rpc_send(&(struct server_rpc) {
 				.type = SRPC_WINDOW_CLICK,
@@ -223,7 +224,7 @@ static void screen_iron_chest_update(struct screen* s, float dt) {
 
 static void screen_iron_chest_render2D(struct screen* s, int width, int height) {
 	struct inventory* inv
-		= windowc_get_latest(gstate.windows[iron_chest_container]);
+		= windowc_get_latest(gstate_windows()[iron_chest_container]);
 
 	// darken background
 	gfx_texture(false);

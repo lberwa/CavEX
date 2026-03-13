@@ -37,8 +37,7 @@
 static void screen_ingame_reset(struct screen* s, int width, int height) {
 	input_pointer_enable(false);
 
-	if(gstate.local_player)
-		gstate.local_player->data.local_player.capture_input = true;
+	gstate_set_capture_input_all(true);
 }
 
 void screen_ingame_render3D(struct screen* s, mat4 view) {
@@ -87,7 +86,7 @@ void screen_ingame_render3D(struct screen* s, mat4 view) {
 
 	float place_lerp = 0.0F;
 	size_t slot = inventory_get_hotbar(
-		windowc_get_latest(gstate.windows[WINDOWC_INVENTORY]));
+		windowc_get_latest(gstate_windows()[WINDOWC_INVENTORY]));
 
 	float dig_lerp
 		= time_diff_s(gstate.held_item_animation.punch.start, time_get())
@@ -123,7 +122,7 @@ void screen_ingame_render3D(struct screen* s, mat4 view) {
 	mat4 model;
 	struct item_data item;
 
-	if(inventory_get_slot(windowc_get_latest(gstate.windows[WINDOWC_INVENTORY]),
+	if(inventory_get_slot(windowc_get_latest(gstate_windows()[WINDOWC_INVENTORY]),
 						  slot + INVENTORY_SLOT_HOTBAR, &item)
 	   && item_get(&item)) {
 		glm_translate_make(model,
@@ -178,10 +177,10 @@ void screen_ingame_render3D(struct screen* s, mat4 view) {
 	gfx_depth_range(0.0F, 1.0F);
 }
 
-static void screen_ingame_update(struct screen* s, float dt) {
+static void screen_ingame_update_player(struct screen* s, float dt) {
 	// left click interaction
 	if (gstate.camera_hit.entity_hit
-	    && input_pressed(IB_ACTION1, 0)
+	    && input_pressed(IB_ACTION1, gstate_active_player())
 	    && !gstate.digging.active)
 	{
 	    struct entity **ptr = dict_entity_get(
@@ -195,7 +194,7 @@ static void screen_ingame_update(struct screen* s, float dt) {
 	            // Optionele punch‐animatie (zoals eerder)
 	            struct item_data held;
 	            if (inventory_get_hotbar_item(
-	                   windowc_get_latest(gstate.windows[WINDOWC_INVENTORY]), &held))
+	                   windowc_get_latest(gstate_windows()[WINDOWC_INVENTORY]), &held))
 	            {
 	                gstate.held_item_animation.punch.start = time_get();
 	                gstate.held_item_animation.punch.place = false;
@@ -207,7 +206,7 @@ static void screen_ingame_update(struct screen* s, float dt) {
 
 	// right click interaction met entity via dict_entity_get
 	if (gstate.camera_hit.entity_hit
-	    && input_pressed(IB_ACTION2, 0)
+	    && input_pressed(IB_ACTION2, gstate_active_player())
 	    && !gstate.digging.active)
 	{
 	    struct entity **ptr = dict_entity_get(
@@ -222,7 +221,7 @@ static void screen_ingame_update(struct screen* s, float dt) {
 				bool TRue;
 
 				if (inventory_get_hotbar_item(
-				        windowc_get_latest(gstate.windows[WINDOWC_INVENTORY]), &held)) {
+				        windowc_get_latest(gstate_windows()[WINDOWC_INVENTORY]), &held)) {
 					held_ptr = &held;
 					TRue = true;
 				}
@@ -238,7 +237,7 @@ static void screen_ingame_update(struct screen* s, float dt) {
 
 
 	// block place
-	if(gstate.camera_hit.hit && input_pressed(IB_ACTION2, 0)
+	if(gstate.camera_hit.hit && input_pressed(IB_ACTION2, gstate_active_player())
 	   && !gstate.digging.active) {
 		svin_rpc_send(&(struct server_rpc) {
 			.type = SRPC_BLOCK_PLACE,
@@ -249,7 +248,7 @@ static void screen_ingame_update(struct screen* s, float dt) {
 		});
 
 		if(inventory_get_hotbar_item(
-			   windowc_get_latest(gstate.windows[WINDOWC_INVENTORY]), NULL)) {
+			   windowc_get_latest(gstate_windows()[WINDOWC_INVENTORY]), NULL)) {
 			gstate.held_item_animation.punch.start = time_get();
 			gstate.held_item_animation.punch.place = true;
 		}
@@ -262,7 +261,7 @@ static void screen_ingame_update(struct screen* s, float dt) {
 							  gstate.digging.z);
 		struct item_data it;
 		inventory_get_hotbar_item(
-			windowc_get_latest(gstate.windows[WINDOWC_INVENTORY]), &it);
+			windowc_get_latest(gstate_windows()[WINDOWC_INVENTORY]), &it);
 		int delay = blocks[blk.type] ?
 			tool_dig_delay_ms(blocks[blk.type], item_get(&it)) :
 			0;
@@ -300,10 +299,10 @@ static void screen_ingame_update(struct screen* s, float dt) {
 			gstate.digging.active = false;
 		}
 
-		if(input_released(IB_ACTION1, 0))
+		if(input_released(IB_ACTION1, gstate_active_player()))
 			gstate.digging.active = false;
 	} else {
-		if(gstate.camera_hit.hit && input_held(IB_ACTION1, 0)
+		if(gstate.camera_hit.hit && input_held(IB_ACTION1, gstate_active_player())
 		   && time_diff_ms(gstate.digging.cooldown, time_get()) >= 250) {
 			gstate.digging.active = true;
 			gstate.digging.start = time_get();
@@ -322,7 +321,7 @@ static void screen_ingame_update(struct screen* s, float dt) {
 		}
 	}
 
-	if(input_held(IB_ACTION1, 0)
+	if(input_held(IB_ACTION1, gstate_active_player())
 	   && time_diff_s(gstate.held_item_animation.punch.start, time_get())
 		   >= 0.2F) {
 		gstate.held_item_animation.punch.start = time_get();
@@ -355,16 +354,16 @@ static void screen_ingame_update(struct screen* s, float dt) {
 	}
 
 	size_t slot = inventory_get_hotbar(
-		windowc_get_latest(gstate.windows[WINDOWC_INVENTORY]));
+		windowc_get_latest(gstate_windows()[WINDOWC_INVENTORY]));
 	bool old_item_exists = inventory_get_hotbar_item(
-		windowc_get_latest(gstate.windows[WINDOWC_INVENTORY]), NULL);
+		windowc_get_latest(gstate_windows()[WINDOWC_INVENTORY]), NULL);
 
-	if(input_pressed(IB_SCROLL_LEFT, 0)) {
+	if(input_pressed(IB_SCROLL_LEFT, gstate_active_player())) {
 		size_t next_slot = (slot == 0) ? INVENTORY_SIZE_HOTBAR - 1 : slot - 1;
 		inventory_set_hotbar(
-			windowc_get_latest(gstate.windows[WINDOWC_INVENTORY]), next_slot);
+			windowc_get_latest(gstate_windows()[WINDOWC_INVENTORY]), next_slot);
 		bool new_item_exists = inventory_get_hotbar_item(
-			windowc_get_latest(gstate.windows[WINDOWC_INVENTORY]), NULL);
+			windowc_get_latest(gstate_windows()[WINDOWC_INVENTORY]), NULL);
 
 		if(time_diff_s(gstate.held_item_animation.switch_item.start, time_get())
 			   >= 0.15F
@@ -382,12 +381,12 @@ static void screen_ingame_update(struct screen* s, float dt) {
 		});
 	}
 
-	if(input_pressed(IB_SCROLL_RIGHT, 0)) {
+	if(input_pressed(IB_SCROLL_RIGHT, gstate_active_player())) {
 		size_t next_slot = (slot == INVENTORY_SIZE_HOTBAR - 1) ? 0 : slot + 1;
 		inventory_set_hotbar(
-			windowc_get_latest(gstate.windows[WINDOWC_INVENTORY]), next_slot);
+			windowc_get_latest(gstate_windows()[WINDOWC_INVENTORY]), next_slot);
 		bool new_item_exists = inventory_get_hotbar_item(
-			windowc_get_latest(gstate.windows[WINDOWC_INVENTORY]), NULL);
+			windowc_get_latest(gstate_windows()[WINDOWC_INVENTORY]), NULL);
 
 		if(time_diff_s(gstate.held_item_animation.switch_item.start, time_get())
 			   >= 0.15F
@@ -405,7 +404,7 @@ static void screen_ingame_update(struct screen* s, float dt) {
 		});
 	}
 
-	if(input_pressed(IB_HOME, 0)) {
+	if(input_pressed(IB_HOME, gstate_active_player())) {
 		screen_set(&screen_game_menu);
 		/*
 		gstate.paused = true;
@@ -416,8 +415,23 @@ static void screen_ingame_update(struct screen* s, float dt) {
 		*/
 	}
 
-	if(input_pressed(IB_INVENTORY, 0))
+	if(input_pressed(IB_INVENTORY, gstate_active_player()))
 		screen_set(&screen_inventory);
+}
+
+static void screen_ingame_update(struct screen* s, float dt) {
+#ifdef SPLITSCREEN
+	if(splitscreen_enabled()) {
+		int player_count = splitscreen_player_count();
+		for(int p = 0; p < player_count; p++) {
+			splitscreen_load_player(p);
+			screen_ingame_update_player(s, dt);
+			splitscreen_store_player(p);
+		}
+		return;
+	}
+#endif
+	screen_ingame_update_player(s, dt);
 }
 
 static void screen_ingame_render2D(struct screen* s, int width, int height) {
@@ -513,7 +527,7 @@ sprintf(str, "time: %.0f (%.0f)  angle: %.3f", time, day_ticks, angle);
 		if(blocks[bd.type] && blocks[bd.type]->onRightClick) {
 			icon_offset += gutil_control_icon(icon_offset, IB_ACTION2, "Use");
 		} else if(inventory_get_hotbar_item(
-					  windowc_get_latest(gstate.windows[WINDOWC_INVENTORY]),
+					  windowc_get_latest(gstate_windows()[WINDOWC_INVENTORY]),
 					  &item)
 				  && item_get(&item)) {
 			icon_offset
@@ -544,7 +558,7 @@ sprintf(str, "time: %.0f (%.0f)  angle: %.3f", time, day_ticks, angle);
 	for(int k = 0; k < INVENTORY_SIZE_HOTBAR; k++) {
 		struct item_data item;
 		if(inventory_get_slot(
-			   windowc_get_latest(gstate.windows[WINDOWC_INVENTORY]),
+			   windowc_get_latest(gstate_windows()[WINDOWC_INVENTORY]),
 			   k + INVENTORY_SLOT_HOTBAR, &item))
 			gutil_draw_item(&item, (width - 182 * GFX_GUI_SCALE) / 2 + 3 * GFX_GUI_SCALE + 20 * GFX_GUI_SCALE * k,
 							height - (GFX_GUI_SCALE * 16) * 8 / 5 - 19 * GFX_GUI_SCALE, 0);
@@ -557,7 +571,7 @@ sprintf(str, "time: %.0f (%.0f)  angle: %.3f", time, day_ticks, angle);
 	gutil_texquad((width - 182 * GFX_GUI_SCALE) / 2 - 2
 					  + 20 * GFX_GUI_SCALE 
 						  * inventory_get_hotbar(windowc_get_latest(
-							  gstate.windows[WINDOWC_INVENTORY])),
+							  gstate_windows()[WINDOWC_INVENTORY])),
 				  height - (GFX_GUI_SCALE * 16) * 8 / 5 - 23 * GFX_GUI_SCALE, 208, 0, 24, 24, 24 * GFX_GUI_SCALE, 24 * GFX_GUI_SCALE);
 
 	for(int k = 0; k < MAX_PLAYER_HEALTH/HEALTH_PER_HEART; k++) {

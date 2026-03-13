@@ -19,6 +19,8 @@
 
 #include <assert.h>
 
+#include <stdlib.h>
+
 #include "window_container.h"
 
 bool windowc_create(struct window_container* wc, enum window_type type,

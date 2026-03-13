@@ -26,6 +26,7 @@
 #include "../particle.h"
 #include "../platform/thread.h"
 #include "server_interface.h"
+#include "server_local.h"
 
 #define RPC_INBOX_SIZE 16
 static struct client_rpc rpc_msg[RPC_INBOX_SIZE];
@@ -33,6 +34,9 @@ static struct thread_channel clin_inbox;
 static struct thread_channel clin_empty_msg;
 
 static ptime_t last_pos_update;
+#ifdef SPLITSCREEN
+static bool splitscreen_p2_spawned = false;
+#endif
 
 
 void clin_chunk(w_coord_t x, w_coord_t y, w_coord_t z, w_coord_t sx,
@@ -108,16 +112,28 @@ void clin_process(struct client_rpc* call) {
 					(vec3) {call->payload.player_pos.position[0],
 							call->payload.player_pos.position[1],
 							call->payload.player_pos.position[2]});
+#ifdef SPLITSCREEN
+			if(splitscreen_enabled() && gstate.local_players[1]
+			   && !splitscreen_p2_spawned) {
+				vec3 p2pos = {
+					call->payload.player_pos.position[0] + 2.0F,
+					call->payload.player_pos.position[1],
+					call->payload.player_pos.position[2] + 2.0F
+				};
+				gstate.local_players[1]->teleport(gstate.local_players[1], p2pos);
+				splitscreen_p2_spawned = true;
+			}
+#endif
 			gstate.world_loaded = true;
 			break;
 		case CRPC_WORLD_RESET:
 			world_unload_all(&gstate.world);
 
 			for(size_t k = 0; k < 256; k++) {
-				if(gstate.windows[k]) {
-					windowc_destroy(gstate.windows[k]);
-					free(gstate.windows[k]);
-					gstate.windows[k] = NULL;
+				if(gstate_windows()[k]) {
+					windowc_destroy(gstate_windows()[k]);
+					free(gstate_windows()[k]);
+					gstate_windows()[k] = NULL;
 				}
 			}
 
@@ -131,10 +147,10 @@ void clin_process(struct client_rpc* call) {
 
 			dict_entity_reset(gstate.entities);
 
-			gstate.windows[WINDOWC_INVENTORY]
+			gstate_windows()[WINDOWC_INVENTORY]
 				= malloc(sizeof(struct window_container));
-			assert(gstate.windows[WINDOWC_INVENTORY]);
-			windowc_create(gstate.windows[WINDOWC_INVENTORY],
+			assert(gstate_windows()[WINDOWC_INVENTORY]);
+			windowc_create(gstate_windows()[WINDOWC_INVENTORY],
 						   WINDOW_TYPE_INVENTORY, INVENTORY_SIZE);
 
 			gstate.world_loaded = false;
@@ -149,23 +165,46 @@ void clin_process(struct client_rpc* call) {
 								gstate.local_player, &gstate.world);
 
 			gstate.local_player->health = MAX_PLAYER_HEALTH;
+#ifdef SPLITSCREEN
+			gstate.local_player->data.local_player.player_index = 0;
+			gstate.local_players[0] = gstate.local_player;
+			gstate.oxygen_arr[0] = MAX_OXYGEN;
+			splitscreen_p2_spawned = false;
+
+			if(splitscreen_enabled()) {
+				uint32_t p2_id = 0xF0000001u;
+				if(dict_entity_get(gstate.entities, p2_id))
+					p2_id = entity_gen_id(gstate.entities);
+				struct entity** p2_ptr = dict_entity_safe_get(gstate.entities,
+															 p2_id);
+				*p2_ptr = malloc(sizeof(struct entity));
+				assert(*p2_ptr);
+				gstate.local_players[1] = *p2_ptr;
+				entity_local_player(p2_id, gstate.local_players[1],
+									&gstate.world);
+				gstate.local_players[1]->data.local_player.player_index = 1;
+				gstate.local_players[1]->health = MAX_PLAYER_HEALTH;
+			} else {
+				gstate.local_players[1] = NULL;
+			}
+#endif
 
 			if(gstate.current_screen == &screen_ingame)
 				screen_set(&screen_load_world);
 			break;
 		case CRPC_INVENTORY_SLOT: {
 			uint8_t window = call->payload.inventory_slot.window;
-			if(gstate.windows[window])
-				windowc_slot_change(gstate.windows[window],
+			if(gstate_windows()[window])
+				windowc_slot_change(gstate_windows()[window],
 									call->payload.inventory_slot.slot,
 									call->payload.inventory_slot.item);
 			break;
 		}
 		case CRPC_WINDOW_TRANSACTION: {
 			uint8_t window = call->payload.window_transaction.window;
-			if(gstate.windows[window])
+			if(gstate_windows()[window])
 				windowc_action_apply_result(
-					gstate.windows[window],
+					gstate_windows()[window],
 					call->payload.window_transaction.action_id,
 					call->payload.window_transaction.accepted);
 			break;
@@ -173,15 +212,15 @@ void clin_process(struct client_rpc* call) {
 		case CRPC_OPEN_WINDOW: {
 			uint8_t window = call->payload.window_open.window;
 
-			if(gstate.windows[window]) {
-				windowc_destroy(gstate.windows[window]);
-				free(gstate.windows[window]);
+			if(gstate_windows()[window]) {
+				windowc_destroy(gstate_windows()[window]);
+				free(gstate_windows()[window]);
 			}
 
-			gstate.windows[window] = malloc(sizeof(struct window_container));
+			gstate_windows()[window] = malloc(sizeof(struct window_container));
 
-			if(gstate.windows[window]) {
-				windowc_create(gstate.windows[window],
+			if(gstate_windows()[window]) {
+				windowc_create(gstate_windows()[window],
 							   call->payload.window_open.type,
 							   call->payload.window_open.slot_count);
 
@@ -324,6 +363,9 @@ void clin_init() {
 		tchannel_send(&clin_empty_msg, rpc_msg + k, true);
 
 	last_pos_update = time_get();
+#ifdef SPLITSCREEN
+	splitscreen_p2_spawned = false;
+#endif
 }
 
 void clin_update() {
@@ -334,15 +376,42 @@ void clin_update() {
 	}
 
 	if(gstate.world_loaded && time_diff_ms(last_pos_update, time_get()) >= 50) {
-		svin_rpc_send(&(struct server_rpc) {
-			.type = SRPC_PLAYER_POS,
-			.payload.player_pos.x = gstate.camera.x,
-			.payload.player_pos.y = gstate.camera.y,
-			.payload.player_pos.z = gstate.camera.z,
-			.payload.player_pos.rx = -glm_deg(gstate.camera.rx),
-			.payload.player_pos.ry = glm_deg(gstate.camera.ry) - 90.0F,
-			.payload.player_pos.vel_y = gstate.local_player->vel[1]
-		});
+#ifdef SPLITSCREEN
+		if(splitscreen_enabled()) {
+			for(int i = 0; i < splitscreen_player_count(); i++) {
+				struct camera* cam = &gstate.cameras[i];
+				struct entity* player = gstate.local_players[i];
+				if(player) {
+					svin_rpc_send(&(struct server_rpc) {
+						RPC_PLAYER_ID(i)
+						.type = SRPC_PLAYER_POS,
+						.payload.player_pos.x = cam->x,
+						.payload.player_pos.y = cam->y,
+						.payload.player_pos.z = cam->z,
+						.payload.player_pos.rx = -glm_deg(cam->rx),
+						.payload.player_pos.ry = glm_deg(cam->ry) - 90.0F,
+						.payload.player_pos.vel_y = player->vel[1]
+					});
+				}
+			}
+		} else
+#endif
+		{
+			struct camera* cam = &gstate.camera;
+			struct entity* player = gstate.local_player;
+			if(player) {
+				svin_rpc_send(&(struct server_rpc) {
+					RPC_PLAYER_ID(0)
+					.type = SRPC_PLAYER_POS,
+					.payload.player_pos.x = cam->x,
+					.payload.player_pos.y = cam->y,
+					.payload.player_pos.z = cam->z,
+					.payload.player_pos.rx = -glm_deg(cam->rx),
+					.payload.player_pos.ry = glm_deg(cam->ry) - 90.0F,
+					.payload.player_pos.vel_y = player->vel[1]
+				});
+			}
+		}
 		last_pos_update = time_get();
 	}
 }
@@ -353,4 +422,3 @@ void clin_rpc_send(struct client_rpc* call) {
 	*empty = *call;
 	tchannel_send(&clin_inbox, empty, true);
 }
-

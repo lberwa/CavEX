@@ -23,6 +23,7 @@
 #include "../world.h"
 #include <m-lib/m-string.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 #define MAX_PLAYER_HEALTH 160
 #define HEALTH_PER_HEART 16
@@ -40,8 +41,17 @@ enum server_rpc_type {
 	SRPC_TOGGLE_PAUSE,
 };
 
+#ifdef SPLITSCREEN
+#define RPC_PLAYER_ID(pid) .player_id = (uint8_t)(pid),
+#else
+#define RPC_PLAYER_ID(pid)
+#endif
+
 struct server_rpc {
 	enum server_rpc_type type;
+#ifdef SPLITSCREEN
+	uint8_t player_id;
+#endif
 	union {
 		struct {
 			double x, y, z;

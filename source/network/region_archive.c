@@ -18,6 +18,8 @@
 */
 
 #include <assert.h>
+#include <errno.h>
+#include <string.h>
 #include <m-lib/m-string.h>
 
 #include "../cNBT/nbt.h"
@@ -377,8 +379,11 @@ bool region_archive_set_blocks(struct region_archive* ra, w_coord_t x,
 	FILE* f = fopen(string_get_cstr(ra->file_name), "rb+");
 
 	// early exit
-	if(!f)
+	if(!f) {
+		fprintf(stderr, "region_archive_set_blocks: fopen failed for '%s': %s\n",
+				string_get_cstr(ra->file_name), strerror(errno));
 		return false;
+	}
 
 	struct nbt_list root_list_sentinel = (struct nbt_list) {
 		.data = NULL,
@@ -549,6 +554,11 @@ bool region_archive_set_blocks(struct region_archive* ra, w_coord_t x,
 	// this could be done without resorting the entire list
 	if(success)
 		success = rebuild_occupied_list(ra);
+
+	if(!success) {
+		fprintf(stderr, "region_archive_set_blocks: failed to write chunk %d,%d into '%s'\n",
+				(int)x, (int)z, string_get_cstr(ra->file_name));
+	}
 
 	fclose(f);
 	buffer_free(&res);

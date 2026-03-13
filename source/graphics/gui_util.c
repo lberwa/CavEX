@@ -18,6 +18,7 @@
 */
 
 #include <string.h>
+#include <stdio.h>
 
 #include "../platform/gfx.h"
 #include "gui_util.h"
