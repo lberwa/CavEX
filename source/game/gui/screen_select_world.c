@@ -101,12 +101,16 @@ static void screen_sworld_reset(struct screen* s, int width, int height) {
 				struct world_option opt;
 				string_init_printf(opt.path, "%s/%s", saves_path, dir->d_name);
 
+				printf("[DEBUG screen_select_world] scanning '%s'\n", string_get_cstr(opt.path));
 				struct level_archive la;
 				if(level_archive_create(&la, opt.path)) {
+					printf("[DEBUG screen_select_world] create OK for '%s'\n", string_get_cstr(opt.path));
 					char name[64];
 
-					if(!level_archive_read(&la, LEVEL_NAME, name, sizeof(name)))
+					if(!level_archive_read(&la, LEVEL_NAME, name, sizeof(name))) {
+						printf("[DEBUG screen_select_world] LEVEL_NAME read failed\n");
 						strcpy(name, "Missing name");
+					}
 
 					string_init_set_str(opt.name, name);
 					string_init_set_str(opt.directory, dir->d_name);

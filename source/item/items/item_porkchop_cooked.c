@@ -24,9 +24,9 @@
 static bool onItemPlace(struct server_local* s, struct item_data* it,
 						struct block_info* where, struct block_info* on,
 						enum side on_side) {
-	if (s->player.health >= MAX_PLAYER_HEALTH) return false;
+if (s->players[0].health >= MAX_PLAYER_HEALTH) return false;
 
-	server_local_set_player_health(s, s->player.health+4*HEALTH_PER_HEART);
+	server_local_set_player_health(s, 0, s->players[0].health+4*HEALTH_PER_HEART);
 	return true;
 }
 

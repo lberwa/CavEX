@@ -73,8 +73,8 @@ static bool onItemPlace(struct server_local* s, struct item_data* it,
 		struct block_info blk_info = *on;
 		blk_info.block = &blk;
 
-		if(entity_local_player_block_collide(
-			   (vec3) {s->player.x, s->player.y, s->player.z}, &blk_info))
+if(entity_local_player_block_collide(
+                            (vec3) {s->players[0].x, s->players[0].y, s->players[0].z}, &blk_info))
 			return false;
 
 		server_world_set_block(s, on->x, on->y, on->z, blk);
@@ -90,8 +90,8 @@ static bool onItemPlace(struct server_local* s, struct item_data* it,
 		struct block_info blk_info = *where;
 		blk_info.block = &blk;
 
-		if(entity_local_player_block_collide(
-			   (vec3) {s->player.x, s->player.y, s->player.z}, &blk_info))
+if(entity_local_player_block_collide(
+                            (vec3) {s->players[0].x, s->players[0].y, s->players[0].z}, &blk_info))
 			return false;
 
 		server_world_set_block(s, where->x, where->y, where->z, blk);

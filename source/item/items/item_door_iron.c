@@ -49,11 +49,11 @@ static bool onItemPlace(struct server_local* s, struct item_data* it,
 	blk2_info.block = &blk2;
 
 	if(entity_local_player_block_collide(
-		   (vec3) {s->player.x, s->player.y, s->player.z}, &blk2_info))
+(vec3) {s->players[0].x, s->players[0].y, s->players[0].z}, &blk2_info))
 		return false;
 
 	if(entity_local_player_block_collide(
-		   (vec3) {s->player.x, s->player.y + 1, s->player.z}, &blk2_info))
+(vec3) {s->players[0].x, s->players[0].y + 1, s->players[0].z}, &blk2_info))
 		return false;
 
 	server_world_set_block(s, where->x, where->y, where->z, blk2);

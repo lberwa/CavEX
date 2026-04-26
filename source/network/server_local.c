@@ -495,6 +495,7 @@ static void server_local_process(struct server_rpc* call, void* user) {
 			string_set(s->level_name, call->payload.load_world.name);
 			string_clear(call->payload.load_world.name);
 
+			printf("[DEBUG server_local SRPC_LOAD_WORLD] name='%s'\n", string_get_cstr(s->level_name));
 			if(level_archive_create(&s->level, s->level_name)) {
 				vec3 pos;
 				vec2 rot;
@@ -559,7 +560,12 @@ static void server_local_update(struct server_local* s) {
 	svin_process_messages(server_local_process, s, false);
 
 #ifdef SPLITSCREEN
-	if(!s->players[0].has_pos || s->paused)
+	int max_players = 4;
+	bool any_active = false;
+	for(int i = 0; i < max_players; i++) {
+		if(s->players[i].has_pos) any_active = true;
+	}
+	if(!any_active || s->paused)
 		return;
 #else
 	if(!s->player.has_pos || s->paused)
@@ -898,8 +904,14 @@ unload_done:
 #endif
 
 #ifdef SPLITSCREEN
-	for (int i = 0; i < num_players; i++) {
-		struct server_player* player = &s->players[i];
+
+
+for (int i = 0; i < 4; i++) {
+			struct server_player* player = &s->players[i];
+
+
+
+
 		// check if player is underwater
 		// server side X off by one?
 		struct block_data blk;
@@ -979,14 +991,13 @@ unload_done:
 #endif
 }
 
-static void* server_local_thread(void* user) {
+void server_local_thread(void* user) {
 	while(1) {
 		server_local_update(user);
 		thread_msleep(50);
 	}
-
-	return NULL;
 }
+
 
 void server_local_create(struct server_local* s) {
 	assert(s);
@@ -994,20 +1005,27 @@ void server_local_create(struct server_local* s) {
 	s->paused = false;
 	s->world_time = 0;
 #ifdef SPLITSCREEN
-	for (int i = 0; i < 2; i++) {
+
+int max_players = 4;
+  for (int i = 0; i < max_players; i++) {
 		s->players[i].has_pos = false;
 		s->players[i].finished_loading = false;
 		inventory_create(&s->players[i].inventory, &inventory_logic_player, s,
 						 INVENTORY_SIZE, 0, 0, 0);
 		s->players[i].active_inventory = &s->players[i].inventory;
 	}
-#else
-	s->player.has_pos = false;
-	s->player.finished_loading = false;
-	inventory_create(&s->player.inventory, &inventory_logic_player, s,
-					 INVENTORY_SIZE, 0, 0, 0);
-	s->player.active_inventory = &s->player.inventory;
 #endif
+
+void server_local_thread(void* user) {
+
+	while(1) {
+		server_local_update(user);
+		thread_msleep(50);
+	}
+	return NULL;
+}
+
+
 	s->last_tick = time_get();
 	string_init(s->level_name);
 

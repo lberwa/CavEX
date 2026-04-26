@@ -66,8 +66,9 @@ static bool onItemPlace(struct server_local* s, struct item_data* it,
 						struct block_info* where, struct block_info* on,
 						enum side on_side) {
 	int metadata = 0;
-	double dx = s->player.x - (where->x + 0.5);
-	double dz = s->player.z - (where->z + 0.5);
+int player_id = 0;
+double dx = s->players[player_id].x - (where->x + 0.5);
+double dz = s->players[player_id].z - (where->z + 0.5);
 
 	if(fabs(dx) > fabs(dz)) {
 		metadata = (dx >= 0) ? 5 : 4;
@@ -86,7 +87,7 @@ static bool onItemPlace(struct server_local* s, struct item_data* it,
 	blk_info.block = &blk;
 
 	if(entity_local_player_block_collide(
-		   (vec3) {s->player.x, s->player.y, s->player.z}, &blk_info))
+(vec3) {s->players[player_id].x, s->players[player_id].y, s->players[player_id].z}, &blk_info))
 		return false;
 
 	server_world_set_block(s, where->x, where->y, where->z, blk);
