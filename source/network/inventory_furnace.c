@@ -157,8 +157,8 @@ static void inv_on_close(struct inventory* inv) {
 		if(item.id != 0) {
 			inventory_clear_slot(inv, k);
 			set_inv_slot_push(changes, k);
-			server_local_spawn_item(
-				(vec3) {s->player.x, s->player.y, s->player.z}, &item, true, s);
+server_local_spawn_item(
+				(vec3) {s->players[0].x, s->players[0].y, s->players[0].z}, &item, true, s);
 		}
 	}
 
@@ -166,7 +166,7 @@ static void inv_on_close(struct inventory* inv) {
 	if(inventory_get_picked_item(inv, &picked_item)) {
 		inventory_clear_picked_item(inv);
 		set_inv_slot_push(changes, SPECIAL_SLOT_PICKED_ITEM);
-		server_local_spawn_item((vec3) {s->player.x, s->player.y, s->player.z},
+server_local_spawn_item((vec3) {s->players[0].x, s->players[0].y, s->players[0].z},
 								&picked_item, true, s);
 	}
 
@@ -205,13 +205,13 @@ static void inv_on_create(struct inventory* inv) {
 
 	for(size_t k = 0; k < INVENTORY_SIZE_HOTBAR; k++) {
 		inv->items[k + FURNACE_SLOT_HOTBAR]
-			= s->player.inventory.items[k + INVENTORY_SLOT_HOTBAR];
+			= s->players[0].inventory.items[k + INVENTORY_SLOT_HOTBAR];
 		set_inv_slot_push(changes, k + FURNACE_SLOT_HOTBAR);
 	}
 
 	for(size_t k = 0; k < INVENTORY_SIZE_MAIN; k++) {
 		inv->items[k + FURNACE_SLOT_MAIN]
-			= s->player.inventory.items[k + INVENTORY_SLOT_MAIN];
+			= s->players[0].inventory.items[k + INVENTORY_SLOT_MAIN];
 		set_inv_slot_push(changes, k + FURNACE_SLOT_MAIN);
 	}
 
@@ -226,18 +226,18 @@ static bool inv_on_destroy(struct inventory* inv) {
 	set_inv_slot_init(changes);
 
 	for(size_t k = 0; k < INVENTORY_SIZE_HOTBAR; k++) {
-		s->player.inventory.items[k + INVENTORY_SLOT_HOTBAR]
+s->players[0].inventory.items[k + INVENTORY_SLOT_HOTBAR]
 			= inv->items[k + FURNACE_SLOT_HOTBAR];
 		set_inv_slot_push(changes, k + INVENTORY_SLOT_HOTBAR);
 	}
 
 	for(size_t k = 0; k < INVENTORY_SIZE_MAIN; k++) {
-		s->player.inventory.items[k + INVENTORY_SLOT_MAIN]
+s->players[0].inventory.items[k + INVENTORY_SLOT_MAIN]
 			= inv->items[k + FURNACE_SLOT_MAIN];
 		set_inv_slot_push(changes, k + INVENTORY_SLOT_MAIN);
 	}
 
-	server_local_send_inv_changes(changes, &s->player.inventory,
+server_local_send_inv_changes(changes, &s->players[0].inventory,
 								  WINDOWC_INVENTORY);
 	set_inv_slot_clear(changes);
 	return true;

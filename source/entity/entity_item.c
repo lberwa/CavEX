@@ -154,13 +154,12 @@ static bool entity_server_tick(struct entity* e, struct server_local* s) {
 	} else if(e->data.item.age >= 2 * 4
 			  && glm_vec3_distance2(
 					 e->pos,
-					 (vec3) {s->player.x, s->player.y - 0.6F, s->player.z})
+(vec3) {s->players[0].x, s->players[0].y - 0.6F, s->players[0].z})
 				  < glm_pow2(2.0F)) { // allow pickup after 2s
 		// TODO: case where item cannot be picked up completely
-		if(s->player.active_inventory && s->player.active_inventory->logic
-		   && s->player.active_inventory->logic->on_collect)
-			s->player.active_inventory->logic->on_collect(
-				s->player.active_inventory, &e->data.item.item);
+		if(s->players[0].active_inventory && s->players[0].active_inventory->logic->on_collect)
+			s->players[0].active_inventory->logic->on_collect(
+				s->players[0].active_inventory, &e->data.item.item);
 
 		clin_rpc_send(&(struct client_rpc) {
 			.type = CRPC_PICKUP_ITEM,
@@ -261,3 +260,5 @@ void entity_item(uint32_t id, struct entity* e, bool server, void* world,
 
 	entity_default_init(e, server, world);
 }
+
+

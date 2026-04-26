@@ -89,13 +89,13 @@ struct game_state {
 	int oxygen;
 #ifdef SPLITSCREEN
 	int active_player;
-	struct camera cameras[2];
-	struct camera_ray_result camera_hits[2];
-	struct entity* local_players[2];
-	struct digging diggings[2];
-	struct held_anim held_item_animations[2];
-	bool in_water_arr[2];
-	int oxygen_arr[2];
+struct camera cameras[4];
+struct camera_ray_result camera_hits[4];
+struct entity* local_players[4];
+struct digging diggings[4];
+struct held_anim held_item_animations[4];
+bool in_water_arr[4];
+int oxygen_arr[4];
 #else
 #endif
 };
@@ -110,14 +110,10 @@ static inline int gstate_active_player(void) {
 	return gstate.active_player;
 }
 static inline int splitscreen_player_count(void) {
-	return (gstate.num_players > 2) ? 2 : gstate.num_players;
+	return (gstate.num_players > 4) ? 4 : gstate.num_players;
 }
 static inline bool splitscreen_enabled(void) {
-#ifdef PLATFORM_PC
-	return false;
-#else
 	return gstate.num_players > 1;
-#endif
 }
 static inline void splitscreen_load_player(int idx) {
 	gstate.active_player = idx;

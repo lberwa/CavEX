@@ -82,7 +82,7 @@ static bool onItemPlace(struct server_local* s, struct item_data* it,
     });
 
     // Replace the actually-held hotbar slot with the filled bucket
-    struct inventory* inv = &s->player.inventory;
+	struct inventory* inv = &s->players[0].inventory;
     const size_t hotbar_rel = inventory_get_hotbar(inv);             // 0..8
     const size_t slot_abs   = INVENTORY_SLOT_HOTBAR + hotbar_rel;    // absolute index
 

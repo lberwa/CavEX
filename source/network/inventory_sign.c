@@ -102,7 +102,7 @@ static bool inv_on_destroy(struct inventory* inv) {
 	set_inv_slot_t changes;
 	set_inv_slot_init(changes);
 
-	server_local_send_inv_changes(changes, &s->player.inventory,
+server_local_send_inv_changes(changes, &s->players[0].inventory,
 								  WINDOWC_INVENTORY);
 	set_inv_slot_clear(changes);
 	return true;

@@ -24,7 +24,7 @@
 static bool onItemPlace(struct server_local* s, struct item_data* it,
 						struct block_info* where, struct block_info* on,
 						enum side on_side) {
-	server_local_set_player_health(s, s->player.health-16);
+server_local_set_player_health(s, 0, s->players[0].health-16);
 	return true;
 }
 

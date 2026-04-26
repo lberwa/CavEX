@@ -404,7 +404,7 @@ static void screen_ingame_update_player(struct screen* s, float dt) {
 		});
 	}
 
-	if(input_pressed(IB_HOME, gstate_active_player())) {
+	if(input_pressed(IB_HOME, gstate_active_player()) || input_pressed(IB_GUI_UP, gstate_active_player())) {
 		screen_set(&screen_game_menu);
 		/*
 		gstate.paused = true;
@@ -413,6 +413,11 @@ static void screen_ingame_update_player(struct screen* s, float dt) {
 			.type = SRPC_TOGGLE_PAUSE,
 		});
 		*/
+	}
+
+	if(splitscreen_enabled()) {
+		gstate.active_player = (gstate.active_player + 1) % splitscreen_player_count();
+		splitscreen_load_player(gstate.active_player);
 	}
 
 	if(input_pressed(IB_INVENTORY, gstate_active_player()))
@@ -574,27 +579,38 @@ sprintf(str, "time: %.0f (%.0f)  angle: %.3f", time, day_ticks, angle);
 							  gstate_windows()[WINDOWC_INVENTORY])),
 				  height - (GFX_GUI_SCALE * 16) * 8 / 5 - 23 * GFX_GUI_SCALE, 208, 0, 24, 24, 24 * GFX_GUI_SCALE, 24 * GFX_GUI_SCALE);
 
-	for(int k = 0; k < MAX_PLAYER_HEALTH/HEALTH_PER_HEART; k++) {
-		// draw black hearts
-		gutil_texquad((width - 182 * GFX_GUI_SCALE) / 2 + k * 8 * GFX_GUI_SCALE,
+	int player_count = splitscreen_player_count();
+	int heart_start_x = (width - 182 * GFX_GUI_SCALE) / 2;
+	int heart_spacing = 8 * GFX_GUI_SCALE;
+	int player_heart_offset = GFX_GUI_SCALE * 20; // offset per player for stacking
+
+	for(int p = 0; p < player_count; p++) {
+		splitscreen_load_player(p);
+		int heart_x_base = heart_start_x + p * player_heart_offset;
+
+		for(int k = 0; k < MAX_PLAYER_HEALTH/HEALTH_PER_HEART; k++) {
+			// draw black hearts
+			gutil_texquad(heart_x_base + k * heart_spacing,
 				  height - (GFX_GUI_SCALE * 16) * 8 / 5 - (22 + 10) * GFX_GUI_SCALE, 16, 229, 9, 9, 9 * GFX_GUI_SCALE,
 					  9 * GFX_GUI_SCALE);
-	}
-	for(int k = 0; k < (gstate.local_player->health/HEALTH_PER_HEART); k++) {
-		// draw red hearts
-		gutil_texquad((width - 182 * GFX_GUI_SCALE) / 2 + k * 8 * GFX_GUI_SCALE,
-					  height - (GFX_GUI_SCALE * 16) * 8 / 5 - (22 + 10) * GFX_GUI_SCALE, 52, 229, 9, 9, 9 * GFX_GUI_SCALE,
-				  9 * GFX_GUI_SCALE);
-	}
-
-	// draw oxygen bar if underwater
-	if(gstate.in_water && gstate.oxygen >= OXYGEN_THRESHOLD) {
-		for(int k = 0; k < ((gstate.oxygen - OXYGEN_THRESHOLD) / 32); k++) {
-			gutil_texquad((width - 182 * GFX_GUI_SCALE) / 2 + k * 8 * GFX_GUI_SCALE,
-							height - (GFX_GUI_SCALE * 20) * 8 / 5 - (22 + 10) * GFX_GUI_SCALE, 17, 249, 9, 9, 9 * GFX_GUI_SCALE,
-						9 * GFX_GUI_SCALE);
-
 		}
+		for(int k = 0; k < (gstate.local_player->health/HEALTH_PER_HEART); k++) {
+			// draw red hearts
+			gutil_texquad(heart_x_base + k * heart_spacing,
+						  height - (GFX_GUI_SCALE * 16) * 8 / 5 - (22 + 10) * GFX_GUI_SCALE, 52, 229, 9, 9, 9 * GFX_GUI_SCALE,
+					  9 * GFX_GUI_SCALE);
+		}
+
+		// draw oxygen bar if underwater
+		if(gstate.in_water && gstate.oxygen >= OXYGEN_THRESHOLD) {
+			int oxy_x_base = heart_x_base;
+			for(int k = 0; k < ((gstate.oxygen - OXYGEN_THRESHOLD) / 32); k++) {
+				gutil_texquad(oxy_x_base + k * heart_spacing,
+								height - (GFX_GUI_SCALE * 20) * 8 / 5 - (22 + 10) * GFX_GUI_SCALE, 17, 249, 9, 9, 9 * GFX_GUI_SCALE,
+							9 * GFX_GUI_SCALE);
+			}
+		}
+		splitscreen_store_player(p);
 	}
 }
 

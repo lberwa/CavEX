@@ -63,11 +63,8 @@ struct server_player {
 
 struct server_local {
 	struct random_gen rand_src;
-#ifdef SPLITSCREEN
-	struct server_player players[2];
-#else
-	struct server_player player;
-#endif
+#define MAX_SERVER_PLAYERS 4
+	struct server_player players[MAX_SERVER_PLAYERS];
 	struct server_world world;
 	dict_entity_t entities;
 	struct complex_block_pos chest_pos[MAX_CHESTS];
@@ -91,6 +88,6 @@ void server_local_spawn_block_drops(struct server_local* s,
 									struct block_info* blk_info);
 void server_local_send_inv_changes(set_inv_slot_t changes,
 								   struct inventory* inv, uint8_t window);
-void server_local_set_player_health(struct server_local* s, short new_health);
+void server_local_set_player_health(struct server_local* s, int player_id, short new_health);
 extern bool place_block;
 #endif

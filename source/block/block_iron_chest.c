@@ -61,7 +61,8 @@ static uint8_t getTextureIndex(struct block_info* this, enum side side) {
 static void onRightClick(struct server_local* s, struct item_data* it,
 						 struct block_info* where, struct block_info* on,
 						 enum side on_side) {
-	if(s->player.active_inventory == &s->player.inventory) {
+int player_id = 0;
+if(s->players[player_id].active_inventory == &s->players[player_id].inventory) {
 		clin_rpc_send(&(struct client_rpc) {
 			.type = CRPC_OPEN_WINDOW,
 			.payload.window_open.window = WINDOWC_IRON_CHEST,
@@ -71,7 +72,7 @@ static void onRightClick(struct server_local* s, struct item_data* it,
 
 		struct inventory* inv = malloc(sizeof(struct inventory));
 		inventory_create(inv, &inventory_logic_iron_chest, s, IRON_CHEST_SIZE, on->x, on->y, on->z);
-		s->player.active_inventory = inv;
+s->players[player_id].active_inventory = inv;
 	}
 }
 
@@ -89,7 +90,7 @@ static bool onItemPlace(struct server_local* s, struct item_data* it,
 	blk_info.block = &blk;
 
 	if(entity_local_player_block_collide(
-		   (vec3) {s->player.x, s->player.y, s->player.z}, &blk_info))
+(vec3) {s->players[0].x, s->players[0].y, s->players[0].z}, &blk_info))
 		return false;
 
 	for (int i=0; i<MAX_CHESTS; i++) {

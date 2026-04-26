@@ -131,18 +131,19 @@ static void toggleDoor(struct server_local* s,
             .neighbours = NULL
         };
         if (entity_local_player_block_collide(
-                (vec3){s->player.x, s->player.y, s->player.z}, &di))
+(vec3){s->players[0].x, s->players[0].y, s->players[0].z}, &di))
         {
-            double dx = s->player.x - (x + 0.5);
-            double dz = s->player.z - (z + 0.5);
+int player_id = 0;
+double dx = s->players[player_id].x - (x + 0.5);
+double dz = s->players[player_id].z - (z + 0.5);
             if (fabs(dx) > fabs(dz)) {
                 // push out along X
                 double push = (dx > 0.0) ? +0.6 : -0.6;
-                s->player.x = x + 0.5 + push;
+s->players[player_id].x = x + 0.5 + push;
             } else {
                 // push out along Z
                 double push = (dz > 0.0) ? +0.6 : -0.6;
-                s->player.z = z + 0.5 + push;
+s->players[player_id].z = z + 0.5 + push;
             }
         }
     }

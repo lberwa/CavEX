@@ -131,7 +131,7 @@ static void inv_on_close(struct inventory* inv) {
 			inventory_clear_slot(inv, k);
 			set_inv_slot_push(changes, k);
 			server_local_spawn_item(
-				(vec3) {s->player.x, s->player.y, s->player.z}, &item, true, s);
+(vec3) {s->players[0].x, s->players[0].y, s->players[0].z}, &item, true, s);
 		}
 	}
 
@@ -139,7 +139,7 @@ static void inv_on_close(struct inventory* inv) {
 	if(inventory_get_picked_item(inv, &picked_item)) {
 		inventory_clear_picked_item(inv);
 		set_inv_slot_push(changes, SPECIAL_SLOT_PICKED_ITEM);
-		server_local_spawn_item((vec3) {s->player.x, s->player.y, s->player.z},
+server_local_spawn_item((vec3) {s->players[0].x, s->players[0].y, s->players[0].z},
 								&picked_item, true, s);
 	}
 
