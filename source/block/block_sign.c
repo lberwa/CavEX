@@ -103,7 +103,10 @@ static bool onItemPlace(struct server_local* s, struct item_data* it,
 	blk_info.block = &blk;
 
 	if(entity_local_player_block_collide(
-(vec3) {s->players[0].x, s->players[0].y, s->players[0].z}, &blk_info))
+		   (vec3) {s->players[s->active_player_id].x,
+				   s->players[s->active_player_id].y,
+				   s->players[s->active_player_id].z},
+		   &blk_info))
 		return false;
 
 	for (int i=0; i<MAX_CHESTS; i++) {
@@ -124,9 +127,10 @@ static bool onItemPlace(struct server_local* s, struct item_data* it,
 static void onRightClick(struct server_local* s, struct item_data* it,
 						 struct block_info* where, struct block_info* on,
 						 enum side on_side) {
-int player_id = 0;
-if(s->players[player_id].active_inventory == &s->players[player_id].inventory) {
+	const uint8_t pid = s->active_player_id;
+	if(s->players[pid].active_inventory == &s->players[pid].inventory) {
 		clin_rpc_send(&(struct client_rpc) {
+			CRPC_PLAYER_ID(pid)
 			.type = CRPC_OPEN_WINDOW,
 			.payload.window_open.window = WINDOWC_SIGN,
 			.payload.window_open.type = WINDOW_TYPE_SIGN,
@@ -136,7 +140,7 @@ if(s->players[player_id].active_inventory == &s->players[player_id].inventory) {
 		struct inventory* inv = malloc(sizeof(struct inventory));
 		inventory_create(inv, &inventory_logic_sign, s,
 			SIGN_SIZE, on->x, on->y, on->z);
-s->players[player_id].active_inventory = inv;
+		s->players[pid].active_inventory = inv;
 	}
 }
 

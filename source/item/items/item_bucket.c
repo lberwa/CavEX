@@ -82,7 +82,8 @@ static bool onItemPlace(struct server_local* s, struct item_data* it,
     });
 
     // Replace the actually-held hotbar slot with the filled bucket
-	struct inventory* inv = &s->players[0].inventory;
+	const uint8_t pid = s->active_player_id;
+	struct inventory* inv = &s->players[pid].inventory;
     const size_t hotbar_rel = inventory_get_hotbar(inv);             // 0..8
     const size_t slot_abs   = INVENTORY_SLOT_HOTBAR + hotbar_rel;    // absolute index
 
@@ -92,7 +93,7 @@ static bool onItemPlace(struct server_local* s, struct item_data* it,
     // Notify client (use your helper that emits CRPC_INVENTORY_SLOT)
     set_inv_slot_t changes; set_inv_slot_init(changes);
     set_inv_slot_push(changes, slot_abs);
-    server_local_send_inv_changes(changes, inv, WINDOWC_INVENTORY);
+    server_local_send_inv_changes(pid, changes, inv, WINDOWC_INVENTORY);
     set_inv_slot_clear(changes);
 
     // Mirror local copy as well

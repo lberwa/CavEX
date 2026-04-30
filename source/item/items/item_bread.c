@@ -24,9 +24,14 @@
 static bool onItemPlace(struct server_local* s, struct item_data* it,
 						struct block_info* where, struct block_info* on,
 						enum side on_side) {
-	if (s->players[0].health >= MAX_PLAYER_HEALTH) return false;
+	const uint8_t pid = s->active_player_id;
+	if(s->players[pid].health >= MAX_PLAYER_HEALTH)
+		return false;
 
-	server_local_set_player_health(s, 0, s->players[0].health + 2*HEALTH_PER_HEART + (HEALTH_PER_HEART/2));
+	server_local_set_player_health(s, pid,
+								  s->players[pid].health
+									  + 2 * HEALTH_PER_HEART
+									  + (HEALTH_PER_HEART / 2));
 	return true;
 }
 
@@ -46,5 +51,4 @@ struct item item_bread = {
 		},
 	},
 };
-
 

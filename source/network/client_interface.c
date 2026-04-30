@@ -38,6 +38,30 @@ static ptime_t last_pos_update;
 static bool splitscreen_p2_spawned = false;
 #endif
 
+static inline uint8_t clin_player_id(const struct client_rpc* call) {
+#ifdef SPLITSCREEN
+	if(!call)
+		return 0;
+	uint8_t pid = call->player_id;
+	return (pid < 4) ? pid : 0;
+#else
+	(void)call;
+	return 0;
+#endif
+}
+
+static void clin_windows_destroy_table(struct window_container** table) {
+	if(!table)
+		return;
+	for(size_t k = 0; k < 256; k++) {
+		if(table[k]) {
+			windowc_destroy(table[k]);
+			free(table[k]);
+			table[k] = NULL;
+		}
+	}
+}
+
 
 void clin_chunk(w_coord_t x, w_coord_t y, w_coord_t z, w_coord_t sx,
 				w_coord_t sy, w_coord_t sz, uint8_t* ids, uint8_t* metadata,
@@ -89,6 +113,12 @@ void clin_chunk(w_coord_t x, w_coord_t y, w_coord_t z, w_coord_t sx,
 void clin_process(struct client_rpc* call) {
 	assert(call);
 
+#ifdef SPLITSCREEN
+	uint8_t pid = clin_player_id(call);
+#else
+	uint8_t pid = 0;
+#endif
+
 	switch(call->type) {
 		case CRPC_CHUNK:
 			clin_chunk(call->payload.chunk.x, call->payload.chunk.y,
@@ -103,39 +133,85 @@ void clin_process(struct client_rpc* call) {
 								 call->payload.unload_chunk.z);
 			break;
 		case CRPC_PLAYER_POS:
-			gstate.camera.rx = glm_rad(-call->payload.player_pos.rotation[0]);
-			gstate.camera.ry = glm_rad(glm_clamp(
-				call->payload.player_pos.rotation[1] + 90.0F, 0.0F, 180.0F));
-			if(gstate.local_player)
-				gstate.local_player->teleport(
-					gstate.local_player,
-					(vec3) {call->payload.player_pos.position[0],
-							call->payload.player_pos.position[1],
-							call->payload.player_pos.position[2]});
+		{
 #ifdef SPLITSCREEN
-			if(splitscreen_enabled() && gstate.local_players[1]
+			struct camera* cam = &gstate.cameras[pid];
+			struct entity* lp = gstate.local_players[pid];
+#else
+			struct camera* cam = &gstate.camera;
+			struct entity* lp = gstate.local_player;
+#endif
+
+			// Treat CRPC_PLAYER_POS as spawn/teleport. Do not constantly
+			// overwrite local camera rotation once the game is running,
+			// otherwise local look controls "snap back" if the server resends
+			// this message.
+			bool was_loaded = gstate.world_loaded;
+
+			vec3 new_pos;
+			new_pos[0] = call->payload.player_pos.position[0];
+			new_pos[1] = call->payload.player_pos.position[1];
+			new_pos[2] = call->payload.player_pos.position[2];
+
+			bool apply_rotation = !was_loaded;
+			if(lp) {
+				float dist2 = glm_vec3_distance2(lp->pos, new_pos);
+				// If the server moved us noticeably, also accept its rotation
+				// (respawn, dimension change, etc.).
+				if(dist2 > 0.25f)
+					apply_rotation = true;
+			}
+
+			if(apply_rotation) {
+				cam->rx = glm_rad(-call->payload.player_pos.rotation[0]);
+				cam->ry = glm_rad(glm_clamp(
+					call->payload.player_pos.rotation[1] + 90.0F, 0.0F, 180.0F));
+				if(lp) {
+					lp->orient[0] = cam->rx;
+					lp->orient[1] = cam->ry;
+					lp->orient_old[0] = cam->rx;
+					lp->orient_old[1] = cam->ry;
+				}
+			}
+
+			// Ensure the camera position is immediately valid (clin_update may
+			// run before camera_attach in the same frame).
+			cam->x = new_pos[0];
+			cam->y = new_pos[1];
+			cam->z = new_pos[2];
+			if(lp)
+				lp->teleport(lp, (vec3) {new_pos[0], new_pos[1], new_pos[2]});
+#ifdef SPLITSCREEN
+			// Until we have per-player persistence in `level.dat`, spawn player 2
+			// near player 1 when the first spawn pos arrives.
+			if(pid == 0 && splitscreen_enabled() && gstate.local_players[1]
 			   && !splitscreen_p2_spawned) {
 				vec3 p2pos = {
-					call->payload.player_pos.position[0] + 2.0F,
-					call->payload.player_pos.position[1],
-					call->payload.player_pos.position[2] + 2.0F
+					new_pos[0] + 2.0F,
+					new_pos[1],
+					new_pos[2] + 2.0F
 				};
 				gstate.local_players[1]->teleport(gstate.local_players[1], p2pos);
 				splitscreen_p2_spawned = true;
 			}
 #endif
 			gstate.world_loaded = true;
+		}
 			break;
 		case CRPC_WORLD_RESET:
 			world_unload_all(&gstate.world);
 
-			for(size_t k = 0; k < 256; k++) {
-				if(gstate_windows()[k]) {
-					windowc_destroy(gstate_windows()[k]);
-					free(gstate_windows()[k]);
-					gstate_windows()[k] = NULL;
-				}
-			}
+		{
+#ifdef SPLITSCREEN
+			int player_count = splitscreen_enabled() ? splitscreen_player_count() : 1;
+			for(int p = 0; p < player_count; p++)
+				clin_windows_destroy_table(gstate.windows_by_player[p]);
+#else
+			clin_windows_destroy_table(gstate.windows_by_player[0]);
+#endif
+			// Default active window table to player 0.
+			gstate.windows = gstate.windows_by_player[0];
+		}
 
 			dict_entity_it_t it;
 			dict_entity_it(it, gstate.entities);
@@ -147,11 +223,24 @@ void clin_process(struct client_rpc* call) {
 
 			dict_entity_reset(gstate.entities);
 
-			gstate_windows()[WINDOWC_INVENTORY]
+#ifdef SPLITSCREEN
+		{
+			int player_count = splitscreen_enabled() ? splitscreen_player_count() : 1;
+			for(int p = 0; p < player_count; p++) {
+				gstate.windows_by_player[p][WINDOWC_INVENTORY]
+					= malloc(sizeof(struct window_container));
+				assert(gstate.windows_by_player[p][WINDOWC_INVENTORY]);
+				windowc_create(gstate.windows_by_player[p][WINDOWC_INVENTORY],
+							   WINDOW_TYPE_INVENTORY, INVENTORY_SIZE);
+			}
+		}
+#else
+			gstate.windows_by_player[0][WINDOWC_INVENTORY]
 				= malloc(sizeof(struct window_container));
-			assert(gstate_windows()[WINDOWC_INVENTORY]);
-			windowc_create(gstate_windows()[WINDOWC_INVENTORY],
+			assert(gstate.windows_by_player[0][WINDOWC_INVENTORY]);
+			windowc_create(gstate.windows_by_player[0][WINDOWC_INVENTORY],
 						   WINDOW_TYPE_INVENTORY, INVENTORY_SIZE);
+#endif
 
 			gstate.world_loaded = false;
 			gstate.world.dimension = call->payload.world_reset.dimension;
@@ -165,6 +254,7 @@ void clin_process(struct client_rpc* call) {
 								gstate.local_player, &gstate.world);
 
 			gstate.local_player->health = MAX_PLAYER_HEALTH;
+			gstate.local_player->data.local_player.capture_input = true;
 #ifdef SPLITSCREEN
 			gstate.local_player->data.local_player.player_index = 0;
 			gstate.local_players[0] = gstate.local_player;
@@ -183,7 +273,9 @@ void clin_process(struct client_rpc* call) {
 				entity_local_player(p2_id, gstate.local_players[1],
 									&gstate.world);
 				gstate.local_players[1]->data.local_player.player_index = 1;
+				gstate.local_players[1]->data.local_player.capture_input = true;
 				gstate.local_players[1]->health = MAX_PLAYER_HEALTH;
+				gstate.oxygen_arr[1] = MAX_OXYGEN;
 			} else {
 				gstate.local_players[1] = NULL;
 			}
@@ -194,57 +286,64 @@ void clin_process(struct client_rpc* call) {
 			break;
 		case CRPC_INVENTORY_SLOT: {
 			uint8_t window = call->payload.inventory_slot.window;
-			if(gstate_windows()[window])
-				windowc_slot_change(gstate_windows()[window],
-									call->payload.inventory_slot.slot,
+			struct window_container* wc =
+				gstate.windows_by_player[pid][window];
+			if(wc)
+				windowc_slot_change(wc, call->payload.inventory_slot.slot,
 									call->payload.inventory_slot.item);
 			break;
 		}
 		case CRPC_WINDOW_TRANSACTION: {
 			uint8_t window = call->payload.window_transaction.window;
-			if(gstate_windows()[window])
+			struct window_container* wc =
+				gstate.windows_by_player[pid][window];
+			if(wc)
 				windowc_action_apply_result(
-					gstate_windows()[window],
-					call->payload.window_transaction.action_id,
+					wc, call->payload.window_transaction.action_id,
 					call->payload.window_transaction.accepted);
 			break;
 		}
 		case CRPC_OPEN_WINDOW: {
 			uint8_t window = call->payload.window_open.window;
 
-			if(gstate_windows()[window]) {
-				windowc_destroy(gstate_windows()[window]);
-				free(gstate_windows()[window]);
+			if(gstate.windows_by_player[pid][window]) {
+				windowc_destroy(gstate.windows_by_player[pid][window]);
+				free(gstate.windows_by_player[pid][window]);
 			}
 
-			gstate_windows()[window] = malloc(sizeof(struct window_container));
+			gstate.windows_by_player[pid][window]
+				= malloc(sizeof(struct window_container));
 
-			if(gstate_windows()[window]) {
-				windowc_create(gstate_windows()[window],
+			if(gstate.windows_by_player[pid][window]) {
+				windowc_create(gstate.windows_by_player[pid][window],
 							   call->payload.window_open.type,
 							   call->payload.window_open.slot_count);
 
-				switch(call->payload.window_open.type) {
-					case WINDOW_TYPE_WORKBENCH:
-						screen_crafting_set_windowc(window);
-						screen_set(&screen_crafting);
-						break;
-					case WINDOW_TYPE_FURNACE:
-						screen_furnace_set_windowc(window);
-						screen_set(&screen_furnace);
-						break;
-					case WINDOW_TYPE_CHEST:
-						screen_chest_set_windowc(window);
-						screen_set(&screen_chest);
-						break;
-					case WINDOW_TYPE_IRON_CHEST:
-						screen_iron_chest_set_windowc(window);
-						screen_set(&screen_iron_chest);
-						break;
-					case WINDOW_TYPE_SIGN:
-						screen_sign_set_windowc(window);
-						screen_set(&screen_sign);
-					default: break;
+				// UI screens are currently global. For now, only player 0
+				// actually opens those screens.
+				if(pid == 0) {
+					switch(call->payload.window_open.type) {
+						case WINDOW_TYPE_WORKBENCH:
+							screen_crafting_set_windowc(window);
+							screen_set(&screen_crafting);
+							break;
+						case WINDOW_TYPE_FURNACE:
+							screen_furnace_set_windowc(window);
+							screen_set(&screen_furnace);
+							break;
+						case WINDOW_TYPE_CHEST:
+							screen_chest_set_windowc(window);
+							screen_set(&screen_chest);
+							break;
+						case WINDOW_TYPE_IRON_CHEST:
+							screen_iron_chest_set_windowc(window);
+							screen_set(&screen_iron_chest);
+							break;
+						case WINDOW_TYPE_SIGN:
+							screen_sign_set_windowc(window);
+							screen_set(&screen_sign);
+						default: break;
+					}
 				}
 			}
 
@@ -325,15 +424,19 @@ void clin_process(struct client_rpc* call) {
 		} break;
 
 		case CRPC_PICKUP_ITEM: {
-			if(gstate.local_player
-			   && call->payload.pickup_item.collector_id
-				   == gstate.local_player->id) {
+#ifdef SPLITSCREEN
+			struct entity* lp = gstate.local_players[pid];
+			struct camera* cam = &gstate.cameras[pid];
+#else
+			struct entity* lp = gstate.local_player;
+			struct camera* cam = &gstate.camera;
+#endif
+			if(lp && (call->payload.pickup_item.collector_id == 0
+					  || call->payload.pickup_item.collector_id == lp->id)) {
 				struct entity* e = *(dict_entity_get(
 					gstate.entities, call->payload.pickup_item.entity_id));
 				if(e)
-					glm_vec3_copy((vec3) {gstate.camera.x,
-										  gstate.camera.y - 0.2F,
-										  gstate.camera.z},
+					glm_vec3_copy((vec3) {cam->x, cam->y - 0.2F, cam->z},
 								  e->network_pos);
 			}
 		} break;
@@ -350,7 +453,15 @@ void clin_process(struct client_rpc* call) {
 				glm_vec3_copy(call->payload.entity_move.pos, e->network_pos);
 		} break;
 		case CRPC_PLAYER_SET_HEALTH:
-			if (gstate.local_player) gstate.local_player->health = call->payload.player_set_health.health;
+		{
+#ifdef SPLITSCREEN
+			struct entity* lp = gstate.local_players[pid];
+#else
+			struct entity* lp = gstate.local_player;
+#endif
+			if(lp)
+				lp->health = call->payload.player_set_health.health;
+		}
 		break;
 	}
 }
@@ -385,9 +496,9 @@ void clin_update() {
 					svin_rpc_send(&(struct server_rpc) {
 						RPC_PLAYER_ID(i)
 						.type = SRPC_PLAYER_POS,
-						.payload.player_pos.x = cam->x,
-						.payload.player_pos.y = cam->y,
-						.payload.player_pos.z = cam->z,
+						.payload.player_pos.x = player->pos[0],
+						.payload.player_pos.y = player->pos[1],
+						.payload.player_pos.z = player->pos[2],
 						.payload.player_pos.rx = -glm_deg(cam->rx),
 						.payload.player_pos.ry = glm_deg(cam->ry) - 90.0F,
 						.payload.player_pos.vel_y = player->vel[1]
@@ -403,9 +514,9 @@ void clin_update() {
 				svin_rpc_send(&(struct server_rpc) {
 					RPC_PLAYER_ID(0)
 					.type = SRPC_PLAYER_POS,
-					.payload.player_pos.x = cam->x,
-					.payload.player_pos.y = cam->y,
-					.payload.player_pos.z = cam->z,
+					.payload.player_pos.x = player->pos[0],
+					.payload.player_pos.y = player->pos[1],
+					.payload.player_pos.z = player->pos[2],
 					.payload.player_pos.rx = -glm_deg(cam->rx),
 					.payload.player_pos.ry = glm_deg(cam->ry) - 90.0F,
 					.payload.player_pos.vel_y = player->vel[1]

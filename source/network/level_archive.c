@@ -18,7 +18,7 @@
 */
 
 #include <assert.h>
-#include <errno.h>
+#include <string.h>
 
 #include "level_archive.h"
 
@@ -27,13 +27,10 @@ bool level_archive_create(struct level_archive* la, string_t filename) {
 
 	la->modified = false;
 
+	string_init_printf(la->file_name, "%s/level.dat", string_get_cstr(filename));
+	la->data = nbt_parse_path(string_get_cstr(la->file_name));
 
-					   string_get_cstr(filename);
-
-
-	printf("[DEBUG level_archive_create] filename='%s' parsed data=%p errno=%s\n", string_get_cstr(la->file_name), la->data, (la->data ? "OK" : strerror(errno)));
-
-	return la->data;
+	return la->data != NULL;
 }
 
 static bool level_archive_read_internal(nbt_node* root,

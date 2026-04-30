@@ -122,6 +122,7 @@ static void toggleDoor(struct server_local* s,
     // ——— NUDGE PLAYER IF THE DOOR SWINGS INTO THEM ———
     // handle both opening (0→1) and closing (1→0)
     if ((bd.metadata & 0x01) != (newMeta & 0x01)) {
+		const uint8_t pid = s->active_player_id;
         struct block_data test = { .type = doorType, .metadata = newMeta };
         struct block_info di = {
             .x          = x,
@@ -131,19 +132,18 @@ static void toggleDoor(struct server_local* s,
             .neighbours = NULL
         };
         if (entity_local_player_block_collide(
-(vec3){s->players[0].x, s->players[0].y, s->players[0].z}, &di))
+(vec3){s->players[pid].x, s->players[pid].y, s->players[pid].z}, &di))
         {
-int player_id = 0;
-double dx = s->players[player_id].x - (x + 0.5);
-double dz = s->players[player_id].z - (z + 0.5);
+double dx = s->players[pid].x - (x + 0.5);
+double dz = s->players[pid].z - (z + 0.5);
             if (fabs(dx) > fabs(dz)) {
                 // push out along X
                 double push = (dx > 0.0) ? +0.6 : -0.6;
-s->players[player_id].x = x + 0.5 + push;
+s->players[pid].x = x + 0.5 + push;
             } else {
                 // push out along Z
                 double push = (dz > 0.0) ? +0.6 : -0.6;
-s->players[player_id].z = z + 0.5 + push;
+s->players[pid].z = z + 0.5 + push;
             }
         }
     }

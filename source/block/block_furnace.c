@@ -80,6 +80,9 @@ static uint8_t getTextureIndex2(struct block_info* this, enum side side) {
 static void onRightClick(struct server_local* s, struct item_data* it,
 						 struct block_info* where, struct block_info* on,
 						 enum side on_side) {
+	const uint8_t pid = s->active_player_id;
+	struct server_player* player = &s->players[pid];
+
 	if(items[it->id] && items[it->id]->fuel && on->block->metadata < 15) {
 		uint8_t new_fuel = on->block->metadata + items[it->id]->fuel;
 		if (new_fuel > 15) new_fuel = 15;
@@ -89,22 +92,24 @@ static void onRightClick(struct server_local* s, struct item_data* it,
 				.metadata = new_fuel
 			});
 
-size_t slot = inventory_get_hotbar(&s->players[0].inventory);
-		inventory_consume(&s->players[0].inventory,
+		size_t slot = inventory_get_hotbar(&player->inventory);
+		inventory_consume(&player->inventory,
 							slot + INVENTORY_SLOT_HOTBAR);
 
 		clin_rpc_send(&(struct client_rpc) {
+			CRPC_PLAYER_ID(pid)
 			.type = CRPC_INVENTORY_SLOT,
 			.payload.inventory_slot.window = WINDOWC_INVENTORY,
 			.payload.inventory_slot.slot
 			= slot + INVENTORY_SLOT_HOTBAR,
-			.payload.inventory_slot.item = s->players[0].inventory.items[slot + INVENTORY_SLOT_HOTBAR]
+			.payload.inventory_slot.item
+				= player->inventory.items[slot + INVENTORY_SLOT_HOTBAR]
 		});
 	} else {
 		if(on->block->metadata != 0) {
-int player_id = 0;
-if(s->players[0].active_inventory == &s->players[0].inventory) {
+			if(player->active_inventory == &player->inventory) {
 				clin_rpc_send(&(struct client_rpc) {
+					CRPC_PLAYER_ID(pid)
 					.type = CRPC_OPEN_WINDOW,
 					.payload.window_open.window = WINDOWC_FURNACE,
 					.payload.window_open.type = WINDOW_TYPE_FURNACE,
@@ -113,7 +118,7 @@ if(s->players[0].active_inventory == &s->players[0].inventory) {
 
 				struct inventory* inv = malloc(sizeof(struct inventory));
 				inventory_create(inv, &inventory_logic_furnace, s, FURNACE_SIZE, on->x, on->y, on->z);
-s->players[player_id].active_inventory = inv;
+				player->active_inventory = inv;
 			}
 		}
 	}

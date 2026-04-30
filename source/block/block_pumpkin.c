@@ -92,8 +92,9 @@ static bool onItemPlace(struct server_local* s, struct item_data* it,
 						struct block_info* where, struct block_info* on,
 						enum side on_side) {
 	int metadata = 0;
-double dx = s->players[0].x - (where->x + 0.5);
-double dz = s->players[0].z - (where->z + 0.5);
+	const uint8_t pid = s->active_player_id;
+	double dx = s->players[pid].x - (where->x + 0.5);
+	double dz = s->players[pid].z - (where->z + 0.5);
 
 	if(fabs(dx) > fabs(dz)) {
 		metadata = (dx >= 0) ? 3 : 1;
@@ -112,7 +113,8 @@ double dz = s->players[0].z - (where->z + 0.5);
 	blk_info.block = &blk;
 
 	if(entity_local_player_block_collide(
-(vec3) {s->players[0].x, s->players[0].y, s->players[0].z}, &blk_info))
+		   (vec3) {s->players[pid].x, s->players[pid].y, s->players[pid].z},
+		   &blk_info))
 		return false;
 
 	server_world_set_block(s, where->x, where->y, where->z, blk);

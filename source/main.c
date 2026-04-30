@@ -59,6 +59,12 @@
 #include "cglm/cglm.h"
 #include "lodepng/lodepng.h"
 
+#ifdef CAMERA_DEBUG
+#define CAMERA_DBG_PRINTF(...) printf(__VA_ARGS__)
+#else
+#define CAMERA_DBG_PRINTF(...) ((void)0)
+#endif
+
 #ifdef PLATFORM_WII
 static void *xfb2 = NULL;
 
@@ -93,6 +99,44 @@ bool debugsendfirst = false;
 #include <signal.h>
 #endif
 
+#ifdef SPLITSCREEN
+static void splitscreen_viewport_rect(int player_index, int player_count,
+									  int* out_x, int* out_y, int* out_w,
+									  int* out_h) {
+	int w = gfx_width();
+	int h = gfx_height();
+
+	if(player_count == 2) {
+		int vp_h = h / 2;
+		*out_x = 0;
+		*out_w = w;
+		*out_h = vp_h;
+		// OpenGL viewport/scissor origin is bottom-left -> player 0 on top.
+		*out_y = (player_index == 0) ? vp_h : 0;
+		return;
+	}
+
+	if(player_count == 4) {
+		int vp_w = w / 2;
+		int vp_h = h / 2;
+		int row = player_index / 2; // 0..1 (top..bottom)
+		int col = player_index % 2; // 0..1 (left..right)
+		*out_w = vp_w;
+		*out_h = vp_h;
+		*out_x = col * vp_w;
+		*out_y = (1 - row) * vp_h;
+		return;
+	}
+
+	// Fallback: vertical stack.
+	int vp_h = h / player_count;
+	*out_x = 0;
+	*out_w = w;
+	*out_h = vp_h;
+	*out_y = (player_count - 1 - player_index) * vp_h;
+}
+#endif
+
 int main(void) {
 
 	#ifdef PLATFORM_PC
@@ -122,6 +166,12 @@ int main(void) {
 	gstate.digging.cooldown = time_get();
 	gstate.digging.active = false;
 	gstate.paused = false;
+#ifdef SPLITSCREEN
+	// Default to 2 players for splitscreen builds (can still be changed via menu).
+	gstate.num_players = 2;
+#else
+	gstate.num_players = 1;
+#endif
 #ifdef SPLITSCREEN
 	gstate.active_player = 0;
 	for(int i = 0; i < 2; i++) {
@@ -165,8 +215,15 @@ int main(void) {
 
 	world_create(&gstate.world);
 
+	gstate.windows = gstate.windows_by_player[0];
+#ifdef SPLITSCREEN
+	for(int p = 0; p < 4; p++)
+		for(size_t k = 0; k < 256; k++)
+			gstate.windows_by_player[p][k] = NULL;
+#else
 	for(size_t k = 0; k < 256; k++)
-		gstate_windows()[k] = NULL;
+		gstate.windows_by_player[0][k] = NULL;
+#endif
 
 	clin_init();
 	svin_init();
@@ -238,9 +295,30 @@ int main(void) {
 						% DAY_LENGTH_TICKS)
 			/ (float)DAY_LENGTH_TICKS;
 
-		clin_update();
+			clin_update();
 
-		tick_delta = time_diff_s(last_tick, time_get()) / 0.05F;
+#ifdef TEST_MULTIPLAYER_INPUT
+#ifdef SPLITSCREEN
+			// Debug: verify splitscreen player pointers stay distinct and stable.
+			static ptime_t last_lp_dbg;
+			ptime_t now_lp_dbg = time_get();
+			if(time_diff_ms(last_lp_dbg, now_lp_dbg) >= 1000) {
+				struct entity* p0 = gstate.local_players[0];
+				struct entity* p1 = gstate.local_players[1];
+				printf("[splitscreen] p0=%p id=%u pidx=%d | p1=%p id=%u pidx=%d | same_ptr=%d\n",
+					   (void*)p0,
+					   p0 ? (unsigned)p0->id : 0u,
+					   p0 ? p0->data.local_player.player_index : -1,
+					   (void*)p1,
+					   p1 ? (unsigned)p1->id : 0u,
+					   p1 ? p1->data.local_player.player_index : -1,
+					   (p0 && p1 && p0 == p1) ? 1 : 0);
+				last_lp_dbg = now_lp_dbg;
+			}
+#endif
+#endif
+
+			tick_delta = time_diff_s(last_tick, time_get()) / 0.05F;
 
 		while(tick_delta >= 1.0F) {
 			last_tick = time_add_ms(last_tick, 50);
@@ -259,9 +337,26 @@ int main(void) {
 			int player_count = splitscreen_player_count();
 			for(int p = 0; p < player_count; p++) {
 				splitscreen_load_player(p);
+				#ifdef CAMERA_DEBUG
+				// Debug: verify that camera rotation persists across frames and
+				// doesn't get reset somewhere else.
+				static ptime_t last_cam_dbg;
+				ptime_t now_dbg = time_get();
+				bool do_dbg = (p == 0) && (time_diff_ms(last_cam_dbg, now_dbg) >= 250);
+				float rx_pre = gstate.camera.rx;
+				float ry_pre = gstate.camera.ry;
+				#endif
 				if(gstate.local_player)
 					camera_attach(&gstate.camera, gstate.local_player,
 								  tick_delta, gstate.stats.dt);
+				#ifdef CAMERA_DEBUG
+				if(do_dbg) {
+					CAMERA_DBG_PRINTF("[main ss p0] cam pre=(%.2f %.2f) post=(%.2f %.2f) stored_before=(%.2f %.2f)\n",
+						   glm_deg(rx_pre), glm_deg(ry_pre),
+						   glm_deg(gstate.camera.rx), glm_deg(gstate.camera.ry),
+						   glm_deg(gstate.cameras[0].rx), glm_deg(gstate.cameras[0].ry));
+				}
+				#endif
 
 				bool in_water_new = false;
 				struct block_data blk = world_get_block(
@@ -315,7 +410,15 @@ int main(void) {
 				}
 
 				splitscreen_store_player(p);
+				#ifdef CAMERA_DEBUG
+				if(do_dbg) {
+					CAMERA_DBG_PRINTF("[main ss p0] stored_after=(%.2f %.2f)\n",
+						   glm_deg(gstate.cameras[0].rx), glm_deg(gstate.cameras[0].ry));
+					last_cam_dbg = now_dbg;
+				}
+				#endif
 			}
+			splitscreen_load_player(0);
 		} else {
 #endif
 			if(gstate.local_player)
@@ -415,12 +518,10 @@ int main(void) {
 #ifdef SPLITSCREEN
 			if(splitscreen_enabled() && render_world) {
 				int player_count = splitscreen_player_count();
-				int vp_w = gfx_width();
-				int vp_h = gfx_height() / player_count;
-
 				for(int p = 0; p < player_count; p++) {
-					int vp_x = 0;
-					int vp_y = p * vp_h;
+					int vp_x, vp_y, vp_w, vp_h;
+					splitscreen_viewport_rect(p, player_count, &vp_x, &vp_y,
+											  &vp_w, &vp_h);
 
 					splitscreen_load_player(p);
 

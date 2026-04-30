@@ -20,6 +20,10 @@
 #ifndef GAME_STATE_H
 #define GAME_STATE_H
 
+#ifndef SPLITSCREEN
+#define SPLITSCREEN 2
+#endif
+
 #include <signal.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -66,7 +70,14 @@ struct game_state {
 	dict_entity_t entities;
 	uint64_t world_time;
 	ptime_t world_time_start;
-	struct window_container* windows[256];
+	// Active player's window table (256 pointers).
+	// In splitscreen, this pointer is swapped per player before update/render.
+	struct window_container** windows;
+#ifdef SPLITSCREEN
+	struct window_container* windows_by_player[4][256];
+#else
+	struct window_container* windows_by_player[1][256];
+#endif
 	struct digging {
 		bool active;
 		ptime_t start;
@@ -120,20 +131,20 @@ static inline void splitscreen_load_player(int idx) {
 	gstate.camera = gstate.cameras[idx];
 	gstate.camera_hit = gstate.camera_hits[idx];
 	gstate.local_player = gstate.local_players[idx];
+	gstate.windows = gstate.windows_by_player[idx];
 	gstate.digging = gstate.diggings[idx];
 	gstate.held_item_animation = gstate.held_item_animations[idx];
 	gstate.in_water = gstate.in_water_arr[idx];
 	gstate.oxygen = gstate.oxygen_arr[idx];
 }
-static inline void splitscreen_store_player(int idx) {
-	gstate.cameras[idx] = gstate.camera;
-	gstate.camera_hits[idx] = gstate.camera_hit;
-	gstate.local_players[idx] = gstate.local_player;
-	gstate.diggings[idx] = gstate.digging;
-	gstate.held_item_animations[idx] = gstate.held_item_animation;
-	gstate.in_water_arr[idx] = gstate.in_water;
-	gstate.oxygen_arr[idx] = gstate.oxygen;
-}
+	static inline void splitscreen_store_player(int idx) {
+		gstate.cameras[idx] = gstate.camera;
+		gstate.camera_hits[idx] = gstate.camera_hit;
+		gstate.diggings[idx] = gstate.digging;
+		gstate.held_item_animations[idx] = gstate.held_item_animation;
+		gstate.in_water_arr[idx] = gstate.in_water;
+		gstate.oxygen_arr[idx] = gstate.oxygen;
+	}
 static inline void gstate_set_capture_input_all(bool enable) {
 	int count = splitscreen_player_count();
 	for(int i = 0; i < count; i++) {

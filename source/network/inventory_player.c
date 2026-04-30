@@ -115,6 +115,8 @@ static void inv_post_action(struct inventory* inv, size_t slot, bool right,
 
 static void inv_on_close(struct inventory* inv) {
 	struct server_local* s = inv->user;
+	uint8_t pid = s->active_player_id;
+	struct server_player* player = &s->players[pid];
 
 	set_inv_slot_t changes;
 	set_inv_slot_init(changes);
@@ -130,8 +132,8 @@ static void inv_on_close(struct inventory* inv) {
 		if(item.id != 0) {
 			inventory_clear_slot(inv, k);
 			set_inv_slot_push(changes, k);
-			server_local_spawn_item(
-(vec3) {s->players[0].x, s->players[0].y, s->players[0].z}, &item, true, s);
+			server_local_spawn_item((vec3) {player->x, player->y, player->z},
+									&item, true, s);
 		}
 	}
 
@@ -139,15 +141,16 @@ static void inv_on_close(struct inventory* inv) {
 	if(inventory_get_picked_item(inv, &picked_item)) {
 		inventory_clear_picked_item(inv);
 		set_inv_slot_push(changes, SPECIAL_SLOT_PICKED_ITEM);
-server_local_spawn_item((vec3) {s->players[0].x, s->players[0].y, s->players[0].z},
+		server_local_spawn_item((vec3) {player->x, player->y, player->z},
 								&picked_item, true, s);
 	}
 
-	server_local_send_inv_changes(changes, inv, WINDOWC_INVENTORY);
+	server_local_send_inv_changes(pid, changes, inv, WINDOWC_INVENTORY);
 	set_inv_slot_clear(changes);
 }
 
 static bool inv_on_collect(struct inventory* inv, struct item_data* item) {
+	struct server_local* s = inv->user;
 	uint8_t priorities[INVENTORY_SIZE_HOTBAR + INVENTORY_SIZE_MAIN];
 
 	for(size_t k = 0; k < INVENTORY_SIZE_HOTBAR; k++)
@@ -162,7 +165,8 @@ static bool inv_on_collect(struct inventory* inv, struct item_data* item) {
 	bool success
 		= inventory_collect(inv, item, priorities,
 							sizeof(priorities) / sizeof(*priorities), changes);
-	server_local_send_inv_changes(changes, inv, WINDOWC_INVENTORY);
+	server_local_send_inv_changes(s->active_player_id, changes, inv,
+								  WINDOWC_INVENTORY);
 	set_inv_slot_clear(changes);
 
 	return success;

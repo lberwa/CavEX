@@ -220,7 +220,10 @@ bool block_place_default(struct server_local* s, struct item_data* it,
 	blk_info.block = &blk;
 
 	if(entity_local_player_block_collide(
-(vec3) {s->players[0].x, s->players[0].y, s->players[0].z}, &blk_info))
+		   (vec3) {s->players[s->active_player_id].x,
+				   s->players[s->active_player_id].y,
+				   s->players[s->active_player_id].z},
+		   &blk_info))
 		return false;
 
 	server_world_set_block(s, where->x, where->y, where->z, blk);

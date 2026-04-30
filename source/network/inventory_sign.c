@@ -49,6 +49,7 @@ static void inv_post_action(struct inventory* inv, size_t slot, bool right,
 
 static void inv_on_close(struct inventory* inv) {
 	struct server_local* s = inv->user;
+	uint8_t pid = s->active_player_id;
 
 	set_inv_slot_t changes;
 	set_inv_slot_init(changes);
@@ -64,7 +65,7 @@ static void inv_on_close(struct inventory* inv) {
 	}
 
 
-	server_local_send_inv_changes(changes, inv, WINDOWC_SIGN);
+	server_local_send_inv_changes(pid, changes, inv, WINDOWC_SIGN);
 	set_inv_slot_clear(changes);
 
 	inventory_destroy(inv);
@@ -76,6 +77,7 @@ static bool inv_on_collect(struct inventory* inv, struct item_data* item) {
 
 static void inv_on_create(struct inventory* inv) {
 	struct server_local* s = inv->user;
+	uint8_t pid = s->active_player_id;
 
 	set_inv_slot_t changes;
 	set_inv_slot_init(changes);
@@ -92,17 +94,19 @@ static void inv_on_create(struct inventory* inv) {
 		}
 	}
 	
-	server_local_send_inv_changes(changes, inv, WINDOWC_SIGN);
+	server_local_send_inv_changes(pid, changes, inv, WINDOWC_SIGN);
 	set_inv_slot_clear(changes);
 }
 
 static bool inv_on_destroy(struct inventory* inv) {
 	struct server_local* s = inv->user;
+	uint8_t pid = s->active_player_id;
+	struct server_player* player = &s->players[pid];
 
 	set_inv_slot_t changes;
 	set_inv_slot_init(changes);
 
-server_local_send_inv_changes(changes, &s->players[0].inventory,
+	server_local_send_inv_changes(pid, changes, &player->inventory,
 								  WINDOWC_INVENTORY);
 	set_inv_slot_clear(changes);
 	return true;

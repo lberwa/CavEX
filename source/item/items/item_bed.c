@@ -72,7 +72,11 @@ static bool onItemPlace(struct server_local* s, struct item_data* it,
     // Collision check with foot
     struct block_info blk2_info = *where;
     blk2_info.block = &foot;
-    if (entity_local_player_block_collide((vec3) {s->players[0].x, s->players[0].y, s->players[0].z}, &blk2_info)) {
+    if (entity_local_player_block_collide(
+			(vec3) {s->players[s->active_player_id].x,
+					s->players[s->active_player_id].y,
+					s->players[s->active_player_id].z},
+			&blk2_info)) {
         return false;
     }
 
