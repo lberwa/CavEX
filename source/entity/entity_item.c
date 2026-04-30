@@ -151,23 +151,47 @@ static bool entity_server_tick(struct entity* e, struct server_local* s) {
 
 	if(e->delay_destroy > 0) {
 		e->delay_destroy--;
-	} else if(e->data.item.age >= 2 * 4
-			  && glm_vec3_distance2(
-					 e->pos,
-(vec3) {s->players[0].x, s->players[0].y - 0.6F, s->players[0].z})
-				  < glm_pow2(2.0F)) { // allow pickup after 2s
-		// TODO: case where item cannot be picked up completely
-		if(s->players[0].active_inventory && s->players[0].active_inventory->logic->on_collect)
-			s->players[0].active_inventory->logic->on_collect(
-				s->players[0].active_inventory, &e->data.item.item);
+	} else if(e->data.item.age >= 2 * 4) { // allow pickup after 2s
+		int best_pid = -1;
+		float best_d2 = 0.0f;
+		for(int i = 0; i < MAX_SERVER_PLAYERS; i++) {
+			struct server_player* p = &s->players[i];
+			if(!p->has_pos)
+				continue;
 
-		clin_rpc_send(&(struct client_rpc) {
-			.type = CRPC_PICKUP_ITEM,
-			.payload.pickup_item.entity_id = e->id,
-			.payload.pickup_item.collector_id = 0, // local player
-		});
+			float d2 = glm_vec3_distance2(
+				e->pos, (vec3) {p->x, p->y - 0.6F, p->z});
+			if(d2 < glm_pow2(2.0F)) {
+				if(best_pid < 0 || d2 < best_d2) {
+					best_pid = i;
+					best_d2 = d2;
+				}
+			}
+		}
 
-		e->delay_destroy = 1;
+		if(best_pid >= 0) {
+			struct server_player* p = &s->players[best_pid];
+
+			// TODO: case where item cannot be picked up completely
+			if(p->active_inventory && p->active_inventory->logic
+			   && p->active_inventory->logic->on_collect) {
+				uint8_t old_pid = s->active_player_id;
+				s->active_player_id = (uint8_t)best_pid;
+				p->active_inventory->logic->on_collect(p->active_inventory,
+													  &e->data.item.item);
+				s->active_player_id = old_pid;
+			}
+
+			clin_rpc_send(&(struct client_rpc) {
+				CRPC_PLAYER_ID(best_pid)
+				.type = CRPC_PICKUP_ITEM,
+				.payload.pickup_item.entity_id = e->id,
+				// `collector_id == 0` means: use `player_id` on client side.
+				.payload.pickup_item.collector_id = 0,
+			});
+
+			e->delay_destroy = 1;
+		}
 	}
 
 	return e->data.item.age >= 5 * 60 * 20; // destroy after 5 min
@@ -260,5 +284,3 @@ void entity_item(uint32_t id, struct entity* e, bool server, void* world,
 
 	entity_default_init(e, server, world);
 }
-
-

@@ -23,6 +23,7 @@
 #include <m-lib/m-string.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 
 #include "../item/inventory.h"
 #include "../world.h"
@@ -65,7 +66,11 @@ struct server_local {
 	struct random_gen rand_src;
 #define MAX_SERVER_PLAYERS 4
 	struct server_player players[MAX_SERVER_PLAYERS];
+	// Player id of the RPC currently being processed (used by block/inventory
+	// callbacks that don't carry player context yet).
+	uint8_t active_player_id;
 	struct server_world world;
+	bool world_initialized;
 	dict_entity_t entities;
 	struct complex_block_pos chest_pos[MAX_CHESTS];
 	struct item_data chest_items[MAX_CHESTS][MAX_CHEST_SLOTS];
@@ -86,7 +91,7 @@ struct entity* server_local_spawn_monster(vec3 pos, int monster_id,
 									   struct server_local* s);
 void server_local_spawn_block_drops(struct server_local* s,
 									struct block_info* blk_info);
-void server_local_send_inv_changes(set_inv_slot_t changes,
+void server_local_send_inv_changes(uint8_t player_id, set_inv_slot_t changes,
 								   struct inventory* inv, uint8_t window);
 void server_local_set_player_health(struct server_local* s, int player_id, short new_health);
 extern bool place_block;

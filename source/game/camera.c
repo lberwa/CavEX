@@ -19,6 +19,9 @@
 
 #include <assert.h>
 #include <float.h>
+#ifdef CAMERA_DEBUG
+#include <stdio.h>
+#endif
 
 #include "../platform/gfx.h"
 #include "../platform/input.h"
@@ -213,6 +216,11 @@ void camera_attach(struct camera* c, struct entity* e, float tick_delta,
 	c->y = pos_lerp[1];
 	c->z = pos_lerp[2];
 
+	// Camera rotation should be owned by the player entity so it persists even
+	// if camera structs get reloaded/reset elsewhere (splitscreen swapping etc).
+	c->rx = e->orient[0];
+	c->ry = e->orient[1];
+
 	//printf("c%.03f %.03f %.03f\n", c->x, c->y, c->z);
 
 	float jdx, jdy;
@@ -221,12 +229,49 @@ void camera_attach(struct camera* c, struct entity* e, float tick_delta,
 #else
 	int player_index = 0;
 #endif
-	if(e->data.local_player.capture_input && input_joystick(dt, &jdx, &jdy, player_index)) {
+	bool joy_ok = false;
+	jdx = 0.0f;
+	jdy = 0.0f;
+
+	float rx_before = c->rx;
+	float ry_before = c->ry;
+
+	if(e->data.local_player.capture_input
+	   && (joy_ok = input_joystick(dt, &jdx, &jdy, player_index))) {
 		c->rx -= jdx * 2.0F;
 		c->ry -= jdy * 2.0F;
 	}
 
+	float ry_unclamped = c->ry;
 	c->ry = glm_clamp(c->ry, glm_rad(0.5F), GLM_PI - glm_rad(0.5F));
+
+	#ifdef CAMERA_DEBUG
+	// Debug: throttle to avoid spamming stdout.
+	static ptime_t last_dbg_print;
+	ptime_t now = time_get();
+	if(time_diff_ms(last_dbg_print, now) >= 250) {
+		float rx_after = c->rx;
+		float ry_after = c->ry;
+		printf("[camera_attach p=%d eid=%u cap=%d joy=%d] pos=(%.2f %.2f %.2f) "
+			   "ent=(%.2f %.2f %.2f old=(%.2f %.2f %.2f) td=%.2f) "
+			   "j=(%.5f %.5f) ddeg=(%.2f %.2f) "
+			   "rx=%.2f->%.2f ry=%.2f->%.2f clamp(%.2f->%.2f)\n",
+			   player_index,
+			   (unsigned)e->id,
+			   (int)e->data.local_player.capture_input,
+			   (int)joy_ok,
+			   c->x, c->y, c->z,
+			   e->pos[0], e->pos[1], e->pos[2],
+			   e->pos_old[0], e->pos_old[1], e->pos_old[2],
+			   tick_delta,
+			   jdx, jdy,
+			   glm_deg(-jdx * 2.0f), glm_deg(-jdy * 2.0f),
+			   glm_deg(rx_before), glm_deg(rx_after),
+			   glm_deg(ry_before), glm_deg(ry_unclamped),
+			   glm_deg(ry_unclamped), glm_deg(ry_after));
+		last_dbg_print = now;
+	}
+#endif
 
 	e->orient[0] = c->rx;
 	e->orient[1] = c->ry;

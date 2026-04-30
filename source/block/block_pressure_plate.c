@@ -73,17 +73,23 @@ static bool onItemPlace(struct server_local* s, struct item_data* it,
 static void onWorldTick(struct server_local* s, struct block_info* info) {
     if (!info->neighbours) return;
 	struct block_data cur = *info->block;
-int player_id = 0;
-float px       = s->players[0].x;
-float pz       = s->players[0].z;
-float footY    = s->players[0].y - EYE_HEIGHT;
+    bool onPlate = false;
+	for(int i = 0; i < MAX_SERVER_PLAYERS; i++) {
+		struct server_player* p = &s->players[i];
+		if(!p->has_pos)
+			continue;
 
-    bool insideXZ = (px >= info->x && px < info->x + 1.0f)
-                 && (pz >= info->z && pz < info->z + 1.0f);
+		float px = p->x;
+		float pz = p->z;
+		float footY = p->y - EYE_HEIGHT;
 
-
-    bool onPlate  = insideXZ
-                 && (footY >= info->y && footY <= info->y + 0.1f);
+		bool insideXZ = (px >= info->x && px < info->x + 1.0f)
+					 && (pz >= info->z && pz < info->z + 1.0f);
+		if(insideXZ && (footY >= info->y && footY <= info->y + 0.1f)) {
+			onPlate = true;
+			break;
+		}
+	}
 
     uint8_t newState = onPlate ? 1 : 0;
 

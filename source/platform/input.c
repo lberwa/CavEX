@@ -17,6 +17,16 @@
 	along with CavEX.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+// Temporary local 2-player keyboard test mode:
+// - Player 0 uses WASD + mouse
+// - Player 1 uses IJKL (+ other remaps in input_native_key_status)
+//
+// Disable by removing/commenting these defines.
+#define TEST_MULTIPLAYER_INPUT
+#ifndef SPLITSCREEN
+#define SPLITSCREEN 2
+#endif
+
 #include <assert.h>
 
 #include "../cglm/cglm.h"
@@ -48,10 +58,44 @@ void input_poll() { }
 
 void input_native_key_status(int key, int player, bool* pressed, bool* released,
 							 bool* held) {
-	if(key >= 1024) {
+	int orig_key = key;
+	// On PC we have one shared keyboard/mouse. The higher layers pass a
+	// `player` index; for local splitscreen testing we can interpret that here.
+#ifdef TEST_MULTIPLAYER_INPUT
+#ifdef SPLITSCREEN
+	if(player == 1) {
+		// Map player-0 default controls -> player-1 test controls.
+		switch(key) {
+			// mouse buttons -> U/O
+			case 1000: key = 85; break; // LMB -> U
+			case 1001: key = 79; break; // RMB -> O
+
+			// movement WASD -> IJKL
+			case 87: key = 73; break; // W -> I
+			case 83: key = 75; break; // S -> K
+			case 65: key = 74; break; // A -> J
+			case 68: key = 76; break; // D -> L
+
+			// jump/sneak
+			case 32: key = 344; break;  // Space -> RShift
+			case 340: key = 345; break; // LShift -> RCtrl
+
+			// inventory / hotbar scroll (E / 1 / 2)
+			case 69: key = 80; break; // E -> P
+			case 49: key = 44; break; // 1 -> ,
+			case 50: key = 46; break; // 2 -> .
+
+			default: break;
+		}
+	}
+#endif
+#endif
+
+	if(key < 0 || key >= 1024) {
 		*pressed = false;
 		*released = false;
 		*held = false;
+		return;
 	}
 
 	int state = key < 1000 ? glfwGetKey(window, key) :
@@ -60,6 +104,26 @@ void input_native_key_status(int key, int player, bool* pressed, bool* released,
 	*pressed = (state == GLFW_PRESS) && !input_key_held[key];
 	*released = (state == GLFW_RELEASE) && input_key_held[key];
 	*held = !(*released) && input_key_held[key];
+
+#ifdef TEST_MULTIPLAYER_INPUT
+	// Debug: show whether the per-player mapping actually happens at runtime.
+	// Only print on press/release events to avoid spamming.
+	static bool printed_p1_wasd_held = false;
+	if((*pressed || *released)
+	   && (orig_key == 87 || orig_key == 83 || orig_key == 65 || orig_key == 68
+		   || orig_key == 73 || orig_key == 75 || orig_key == 74 || orig_key == 76
+		   || orig_key == 1000 || orig_key == 1001)) {
+		printf("[input_native_key_status] player=%d orig=%d mapped=%d state=%d pressed=%d released=%d held=%d\n",
+			   player, orig_key, key, state, (int)*pressed, (int)*released,
+			   (int)*held);
+	}
+	if(!printed_p1_wasd_held && player == 1 && *held
+	   && (orig_key == 87 || orig_key == 83 || orig_key == 65 || orig_key == 68)) {
+		printed_p1_wasd_held = true;
+		printf("[input_native_key_status] WARNING player=1 sees WASD held (orig=%d mapped=%d)\n",
+			   orig_key, key);
+	}
+#endif
 
 	if(state == GLFW_PRESS)
 		input_key_held[key] = true;
@@ -80,6 +144,67 @@ bool input_native_key_symbol(int key, int* symbol, int* symbol_help,
 bool input_native_key_any(int* key) {
 	return false;
 }
+
+#ifdef TEST_MULTIPLAYER_INPUT
+static bool test_input_mapping(enum input_button b, int player, int* mapping,
+							   size_t* length) {
+	if(!mapping || !length || *length == 0)
+		return false;
+
+	// Use the same numeric key codes as config.json (GLFW keycodes).
+	// Mouse buttons are encoded as 1000 + GLFW mouse button id.
+	if(player == 0) {
+		switch(b) {
+			case IB_ACTION1: mapping[0] = 1000; *length = 1; return true; // LMB
+			case IB_ACTION2: mapping[0] = 1001; *length = 1; return true; // RMB
+			case IB_FORWARD: mapping[0] = 87; *length = 1; return true; // W
+			case IB_BACKWARD: mapping[0] = 83; *length = 1; return true; // S
+			case IB_LEFT: mapping[0] = 65; *length = 1; return true; // A
+			case IB_RIGHT: mapping[0] = 68; *length = 1; return true; // D
+			case IB_JUMP: mapping[0] = 32; *length = 1; return true; // Space
+			case IB_SNEAK: mapping[0] = 340; *length = 1; return true; // LShift
+			case IB_INVENTORY: mapping[0] = 69; *length = 1; return true; // E
+			case IB_HOME: mapping[0] = 257; *length = 1; return true; // Esc
+			case IB_SCROLL_LEFT: mapping[0] = 49; *length = 1; return true; // 1
+			case IB_SCROLL_RIGHT: mapping[0] = 50; *length = 1; return true; // 2
+			case IB_GUI_UP: mapping[0] = 265; *length = 1; return true; // Up
+			case IB_GUI_DOWN: mapping[0] = 264; *length = 1; return true; // Down
+			case IB_GUI_LEFT: mapping[0] = 263; *length = 1; return true; // Left
+			case IB_GUI_RIGHT: mapping[0] = 262; *length = 1; return true; // Right
+			case IB_GUI_CLICK: mapping[0] = 1000; *length = 1; return true;
+			case IB_GUI_CLICK_ALT: mapping[0] = 1001; *length = 1; return true;
+			case IB_BACK: mapping[0] = 259; *length = 1; return true; // Backspace
+			case IB_SCREENSHOT: mapping[0] = 291; *length = 1; return true; // F12
+			case IB_ANY: mapping[0] = 257; *length = 1; return true; // Esc (best effort)
+			default: return false;
+		}
+	}
+
+	// Player 1: IJKL movement + U/O actions. Look via arrow keys (see input_joystick).
+	switch(b) {
+		case IB_ACTION1: mapping[0] = 85; *length = 1; return true; // U
+		case IB_ACTION2: mapping[0] = 79; *length = 1; return true; // O
+		case IB_FORWARD: mapping[0] = 73; *length = 1; return true; // I
+		case IB_BACKWARD: mapping[0] = 75; *length = 1; return true; // K
+		case IB_LEFT: mapping[0] = 74; *length = 1; return true; // J
+		case IB_RIGHT: mapping[0] = 76; *length = 1; return true; // L
+		case IB_JUMP: mapping[0] = 344; *length = 1; return true; // RShift
+		case IB_SNEAK: mapping[0] = 345; *length = 1; return true; // RCtrl
+		case IB_INVENTORY: mapping[0] = 80; *length = 1; return true; // P
+		case IB_HOME: mapping[0] = 257; *length = 1; return true; // Esc
+		case IB_SCROLL_LEFT: mapping[0] = 44; *length = 1; return true; // ,
+		case IB_SCROLL_RIGHT: mapping[0] = 46; *length = 1; return true; // .
+		case IB_GUI_UP: mapping[0] = 265; *length = 1; return true; // Up
+		case IB_GUI_DOWN: mapping[0] = 264; *length = 1; return true; // Down
+		case IB_GUI_LEFT: mapping[0] = 263; *length = 1; return true; // Left
+		case IB_GUI_RIGHT: mapping[0] = 262; *length = 1; return true; // Right
+		case IB_BACK: mapping[0] = 259; *length = 1; return true; // Backspace
+		case IB_SCREENSHOT: mapping[0] = 291; *length = 1; return true; // F12
+		case IB_ANY: mapping[0] = 257; *length = 1; return true;
+		default: return false;
+	}
+}
+#endif
 
 void input_pointer_enable(bool enable) {
 	glfwSetInputMode(window, GLFW_CURSOR,
@@ -448,6 +573,44 @@ static const char* input_config_translate(enum input_button key) {
 	}
 }
 
+static inline const char* input_config_suffix(const char* key) {
+	if(!key)
+		return NULL;
+	// keys come from input_config_translate() and use "input.<name>".
+	return (strncmp(key, "input.", 6) == 0) ? (key + 6) : key;
+}
+
+static bool input_read_mapping(enum input_button b, int player, int* mapping,
+							   size_t* length) {
+	const char* base = input_config_translate(b);
+	if(!base)
+		return false;
+
+#ifdef TEST_MULTIPLAYER_INPUT
+#ifdef PLATFORM_PC
+	if(test_input_mapping(b, player, mapping, length))
+		return true;
+#endif
+#endif
+
+#ifdef SPLITSCREEN
+	// Optional per-player overrides: input.p1.player_forward, input.p2..., etc.
+	if(player > 0) {
+		char keybuf[96];
+		const char* suffix = input_config_suffix(base);
+		if(suffix) {
+			snprintf(keybuf, sizeof(keybuf), "input.p%d.%s", player, suffix);
+			if(config_read_int_array(&gstate.config_user, keybuf, mapping,
+									 length))
+				return true;
+		}
+	}
+#endif
+
+	// Fallback to legacy single-player mapping: input.player_forward, etc.
+	return config_read_int_array(&gstate.config_user, base, mapping, length);
+}
+
 bool input_symbol(enum input_button b, int* symbol, int* symbol_help,
 				  enum input_category* category, int player) {
 	const char* key = input_config_translate(b);
@@ -458,8 +621,7 @@ bool input_symbol(enum input_button b, int* symbol, int* symbol_help,
 	size_t length = 8;
 	int mapping[length];
 
-	if(!config_read_int_array(&gstate.config_user, input_config_translate(b),
-							  mapping, &length))
+	if(!input_read_mapping(b, player, mapping, &length))
 		return false;
 
 	int priority = 0;
@@ -483,9 +645,44 @@ bool input_symbol(enum input_button b, int* symbol, int* symbol_help,
 }
 
 bool input_pressed(enum input_button b, int player) {
+#ifdef TEST_MULTIPLAYER_INPUT
+#ifdef PLATFORM_PC
+	{
+		size_t length = 8;
+		int mapping[length];
+		if(test_input_mapping(b, player, mapping, &length)) {
+			bool any_pressed = false;
+			bool any_held = false;
+			bool any_released = false;
+
+			for(size_t k = 0; k < length; k++) {
+				bool pressed, released, held;
+				input_native_key_status(mapping[k], player, &pressed, &released,
+										&held);
+				if(pressed)
+					any_pressed = true;
+				if(released)
+					any_released = true;
+				if(held)
+					any_held = true;
+			}
+
+			return any_pressed && !any_held && !any_released;
+		}
+	}
+#endif
+#endif
+
 	int vplayer = gstate.player_sequence[player];
-	if (vplayer == -1)
-	 return false;
+	if(vplayer == -1) {
+#ifdef PLATFORM_PC
+		// On PC the keyboard is shared; treat all players as available.
+		// Still pass `player` through so the callsite can differentiate later.
+		vplayer = player;
+#else
+		return false;
+#endif
+	}
 
 	const char* key = input_config_translate(b);
 
@@ -495,8 +692,7 @@ bool input_pressed(enum input_button b, int player) {
 	size_t length = 8;
 	int mapping[length];
 
-	if(!config_read_int_array(&gstate.config_user, input_config_translate(b),
-							  mapping, &length))
+	if(!input_read_mapping(b, player, mapping, &length))
 		return false;
 
 	bool any_pressed = false;
@@ -518,9 +714,42 @@ bool input_pressed(enum input_button b, int player) {
 }
 
 bool input_released(enum input_button b,int player) {
+#ifdef TEST_MULTIPLAYER_INPUT
+#ifdef PLATFORM_PC
+	{
+		size_t length = 8;
+		int mapping[length];
+		if(test_input_mapping(b, player, mapping, &length)) {
+			bool any_pressed = false;
+			bool any_held = false;
+			bool any_released = false;
+
+			for(size_t k = 0; k < length; k++) {
+				bool pressed, released, held;
+				input_native_key_status(mapping[k], player, &pressed, &released,
+										&held);
+				if(pressed)
+					any_pressed = true;
+				if(released)
+					any_released = true;
+				if(held)
+					any_held = true;
+			}
+
+			return !any_pressed && !any_held && any_released;
+		}
+	}
+#endif
+#endif
+
 	int vplayer = gstate.player_sequence[player];
-	if (vplayer == -1)
-	 return false;
+	if(vplayer == -1) {
+#ifdef PLATFORM_PC
+		vplayer = player;
+#else
+		return false;
+#endif
+	}
 
 	const char* key = input_config_translate(b);
 
@@ -530,8 +759,7 @@ bool input_released(enum input_button b,int player) {
 	size_t length = 8;
 	int mapping[length];
 
-	if(!config_read_int_array(&gstate.config_user, input_config_translate(b),
-							  mapping, &length))
+	if(!input_read_mapping(b, player, mapping, &length))
 		return false;
 
 	bool any_pressed = false;
@@ -553,9 +781,38 @@ bool input_released(enum input_button b,int player) {
 }
 
 bool input_held(enum input_button b, int player) {
+#ifdef TEST_MULTIPLAYER_INPUT
+#ifdef PLATFORM_PC
+	{
+		size_t length = 8;
+		int mapping[length];
+		if(test_input_mapping(b, player, mapping, &length)) {
+			bool any_pressed = false;
+			bool any_held = false;
+
+			for(size_t k = 0; k < length; k++) {
+				bool pressed, released, held;
+				input_native_key_status(mapping[k], player, &pressed, &released,
+										&held);
+				if(pressed)
+					any_pressed = true;
+				if(held)
+					any_held = true;
+			}
+
+			return any_pressed || any_held;
+		}
+	}
+#endif
+#endif
 	int vplayer = gstate.player_sequence[player];
-	if (vplayer == -1)
-	 return false;
+	if(vplayer == -1) {
+#ifdef PLATFORM_PC
+		vplayer = player;
+#else
+		return false;
+#endif
+	}
 	
 	const char* key = input_config_translate(b);
 
@@ -565,8 +822,7 @@ bool input_held(enum input_button b, int player) {
 	size_t length = 8;
 	int mapping[length];
 
-	if(!config_read_int_array(&gstate.config_user, input_config_translate(b),
-							  mapping, &length))
+	if(!input_read_mapping(b, player, mapping, &length))
 		return false;
 
 	bool any_pressed = false;
@@ -585,9 +841,82 @@ bool input_held(enum input_button b, int player) {
 }
 
 bool input_joystick(float dt, float* x, float* y, int player) {
+#ifdef TEST_MULTIPLAYER_INPUT
+#ifdef PLATFORM_PC
+	static bool printed_joy_p0 = false;
+	static bool printed_joy_p1 = false;
+	// Player 0: mouse look (existing behavior).
+	// Player 1: arrow keys emulate joystick look.
+	if(player == 0) {
+		if(!printed_joy_p0) {
+			printed_joy_p0 = true;
+			printf("[input_joystick] player=0 uses mouse\n");
+		}
+		input_native_joystick(dt, x, y, player);
+		return true;
+	}
+	if(player == 1) {
+		if(!printed_joy_p1) {
+			printed_joy_p1 = true;
+			printf("[input_joystick] player=1 uses arrow keys\n");
+		}
+		bool pressed, released, held;
+
+		// 262..265 are the GLFW arrow key codes, matching config.json.
+		input_native_key_status(263, player, &pressed, &released, &held); // Left
+		int left = held ? 1 : 0;
+		input_native_key_status(262, player, &pressed, &released, &held); // Right
+		int right = held ? 1 : 0;
+		input_native_key_status(265, player, &pressed, &released, &held); // Up
+		int up = held ? 1 : 0;
+		input_native_key_status(264, player, &pressed, &released, &held); // Down
+		int down = held ? 1 : 0;
+
+		int xdir = right - left;
+		int ydir = down - up;
+
+		const float speed = 1.5f; // tuned to feel similar to mouse deltas
+		*x = (float)xdir * speed * dt;
+		*y = (float)ydir * speed * dt;
+		return true;
+	}
+	return false;
+#endif
+#endif
+
 	int vplayer = gstate.player_sequence[player];
-	if (vplayer == -1)
-	 return false;
+	if(vplayer == -1) {
+#ifdef PLATFORM_PC
+		vplayer = player;
+#else
+		return false;
+#endif
+	}
+
+#ifdef PLATFORM_PC
+#ifdef SPLITSCREEN
+	// Only one mouse exists; give additional players keyboard-look so they can
+	// be controlled independently without extra devices.
+	if(player > 0 && gstate.num_players > 1) {
+		bool pressed, released, held;
+		input_native_key_status(263, player, &pressed, &released, &held); // Left
+		int left = held ? 1 : 0;
+		input_native_key_status(262, player, &pressed, &released, &held); // Right
+		int right = held ? 1 : 0;
+		input_native_key_status(265, player, &pressed, &released, &held); // Up
+		int up = held ? 1 : 0;
+		input_native_key_status(264, player, &pressed, &released, &held); // Down
+		int down = held ? 1 : 0;
+
+		int xdir = right - left;
+		int ydir = down - up;
+		const float speed = 1.5f;
+		*x = (float)xdir * speed * dt;
+		*y = (float)ydir * speed * dt;
+		return true;
+	}
+#endif
+#endif
 
 	input_native_joystick(dt, x, y, vplayer);
 	return true;

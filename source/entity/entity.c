@@ -346,7 +346,8 @@ bool entity_aabb_intersect_ray(const vec3 origin,
                                float *out_t)
 {
     assert(origin && dir && e && out_t);
-    assert(e->getBoundingBox != NULL);
+    if(!e->getBoundingBox)
+        return false;
 
     // 1) Vraag de AABB van de entity op via de functiepointer
     struct AABB box;

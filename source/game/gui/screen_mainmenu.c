@@ -60,7 +60,11 @@ static enum mp3_sound bg_playlist[16] = {
 
 static void screen_mainmenu_reset(struct screen* s, int width, int height) {
 	gstate.game_run = false;
+#ifdef SPLITSCREEN
+	gstate.num_players = 2;
+#else
 	gstate.num_players = 1;
+#endif
 	server_failed = false;
 	input_pointer_enable(true);
 

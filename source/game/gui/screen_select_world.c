@@ -166,8 +166,11 @@ static void screen_sworld_update(struct screen* s, float dt) {
 		struct world_option opt;
 		stack_at(worlds, &opt, gui_selection);
 
-		struct server_rpc rpc;
+		struct server_rpc rpc = {0};
 		rpc.type = SRPC_LOAD_WORLD;
+#ifdef SPLITSCREEN
+		rpc.player_id = 0;
+#endif
 		string_init_set(rpc.payload.load_world.name, opt.path);
 		svin_rpc_send(&rpc);
 

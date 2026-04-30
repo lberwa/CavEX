@@ -25,6 +25,14 @@
 
 #define EYE_HEIGHT 1.62F
 
+static size_t getBoundingBox(const struct entity* e, struct AABB* out) {
+	assert(e && out);
+	aabb_setsize_centered(out, 0.6F, 1.8F, 0.6F);
+	aabb_translate(out, e->pos[0], e->pos[1] + 1.8F / 2.0F - EYE_HEIGHT,
+				   e->pos[2]);
+	return 1;
+}
+
 static void liquid_aabb(struct AABB* out, struct block_info* blk_info) {
 	int block_height = (blk_info->block->metadata & 0x8) ?
 		16 :
@@ -63,6 +71,26 @@ static bool entity_tick(struct entity* e) {
 	int player_index = e->data.local_player.player_index;
 #else
 	int player_index = 0;
+#endif
+
+#ifdef TEST_MULTIPLAYER_INPUT
+	// Debug: verify per-entity input routing (WASD should only affect player 0,
+	// IJKL only player 1).
+	static ptime_t last_dbg_by_player[4];
+	ptime_t now = time_get();
+	if(player_index >= 0 && player_index < 4
+	   && time_diff_ms(last_dbg_by_player[player_index], now) >= 250) {
+		bool f = input_held(IB_FORWARD, player_index);
+		bool b = input_held(IB_BACKWARD, player_index);
+		bool l = input_held(IB_LEFT, player_index);
+		bool r = input_held(IB_RIGHT, player_index);
+		if(f || b || l || r) {
+			printf("[entity_local_player tick] ent=%u pidx=%d held F=%d B=%d L=%d R=%d\n",
+				   (unsigned)e->id, player_index, (int)f, (int)b, (int)l,
+				   (int)r);
+		}
+		last_dbg_by_player[player_index] = now;
+	}
 #endif
 
 	// MINECART CONTROL: detect cart by scanning entities for occupant_id == player id
@@ -265,7 +293,8 @@ void entity_local_player(uint32_t id, struct entity* e, struct world* w) {
 	e->render = NULL;
 	e->teleport = entity_default_teleport;
 	e->type = ENTITY_LOCAL_PLAYER;
-	e->data.local_player.capture_input = false;
+	e->getBoundingBox = getBoundingBox;
+	e->data.local_player.capture_input = true;
 #ifdef SPLITSCREEN
 	e->data.local_player.player_index = 0;
 #endif

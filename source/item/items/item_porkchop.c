@@ -24,7 +24,8 @@
 static bool onItemPlace(struct server_local* s, struct item_data* it,
 						struct block_info* where, struct block_info* on,
 						enum side on_side) {
-server_local_set_player_health(s, 0, s->players[0].health-16);
+	const uint8_t pid = s->active_player_id;
+	server_local_set_player_health(s, pid, s->players[pid].health - 16);
 	return true;
 }
 
@@ -44,4 +45,3 @@ struct item item_porkchop = {
 		},
 	},
 };
-

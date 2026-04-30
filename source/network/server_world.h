@@ -51,6 +51,7 @@ struct server_world {
 	struct region_archive loaded_regions[MAX_REGIONS];
 	ilist_regions_t loaded_regions_lru;
 	size_t loaded_regions_length;
+	bool initialized;
 };
 
 void server_world_create(struct server_world* w, string_t level_name,

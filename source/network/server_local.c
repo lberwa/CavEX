@@ -89,9 +89,10 @@ struct entity* server_local_spawn_item(vec3 pos, struct item_data* it,
 
 	if(throw) {
 #ifdef SPLITSCREEN
-		float rx = glm_rad(-s->players[0].rx
+		uint8_t pid = s->active_player_id;
+		float rx = glm_rad(-s->players[pid].rx
 						   + (rand_gen_flt(&s->rand_src) - 0.5F) * 22.5F);
-		float ry = glm_rad(s->players[0].ry + 90.0F
+		float ry = glm_rad(s->players[pid].ry + 90.0F
 						   + (rand_gen_flt(&s->rand_src) - 0.5F) * 22.5F);
 #else
 		float rx = glm_rad(-s->player.rx
@@ -182,7 +183,7 @@ void server_local_spawn_block_drops(struct server_local* s,
 	}
 }
 
-void server_local_send_inv_changes(set_inv_slot_t changes,
+void server_local_send_inv_changes(uint8_t player_id, set_inv_slot_t changes,
 								   struct inventory* inv, uint8_t window) {
 	assert(changes && inv);
 
@@ -193,6 +194,7 @@ void server_local_send_inv_changes(set_inv_slot_t changes,
 		size_t slot = *set_inv_slot_ref(it);
 
 		clin_rpc_send(&(struct client_rpc) {
+			CRPC_PLAYER_ID(player_id)
 			.type = CRPC_INVENTORY_SLOT,
 			.payload.inventory_slot.window = window,
 			.payload.inventory_slot.slot = slot,
@@ -206,6 +208,13 @@ void server_local_send_inv_changes(set_inv_slot_t changes,
 }
 
 void server_local_set_player_health(struct server_local* s, int player_id, short new_health) {
+#ifdef SPLITSCREEN
+	if(player_id < 0 || player_id >= MAX_SERVER_PLAYERS)
+		player_id = 0;
+#else
+	(void)player_id;
+	player_id = 0;
+#endif
 #ifdef SPLITSCREEN
 	struct server_player* player = &s->players[player_id];
 #else
@@ -222,6 +231,7 @@ void server_local_set_player_health(struct server_local* s, int player_id, short
 			if (item.id != 0) {
 				inventory_clear_slot(&player->inventory, i);
 				clin_rpc_send(&(struct client_rpc) {
+					CRPC_PLAYER_ID(player_id)
 					.type = CRPC_INVENTORY_SLOT,
 					.payload.inventory_slot.window = WINDOWC_INVENTORY,
 					.payload.inventory_slot.slot = i,
@@ -239,6 +249,7 @@ void server_local_set_player_health(struct server_local* s, int player_id, short
 		player->y = player->spawn_y;
 		player->z = player->spawn_z;
 		clin_rpc_send(&(struct client_rpc) {
+			CRPC_PLAYER_ID(player_id)
 			.type = CRPC_PLAYER_POS,
 			.payload.player_pos.position = {player->x, player->y, player->z},
 			.payload.player_pos.rotation = {0, 0}
@@ -247,6 +258,7 @@ void server_local_set_player_health(struct server_local* s, int player_id, short
 
 	//send updated health to client
 	clin_rpc_send(&(struct client_rpc) {
+		CRPC_PLAYER_ID(player_id)
 		.type = CRPC_PLAYER_SET_HEALTH,
 		.payload.player_set_health.health = player->health
 	});
@@ -259,7 +271,11 @@ static void server_local_process(struct server_rpc* call, void* user) {
 
 	struct server_local* s = user;
 #ifdef SPLITSCREEN
-	struct server_player* player = &s->players[call->player_id];
+	uint8_t pid = call->player_id;
+	if(pid >= MAX_SERVER_PLAYERS)
+		pid = 0;
+	struct server_player* player = &s->players[pid];
+	s->active_player_id = pid;
 #else
 	struct server_player* player = &s->player;
 #endif
@@ -273,16 +289,15 @@ static void server_local_process(struct server_rpc* call, void* user) {
 			});
 			break;
 		case SRPC_PLAYER_POS:
-			if(player->finished_loading) {
-				player->x = call->payload.player_pos.x;
-				player->y = call->payload.player_pos.y;
-				player->z = call->payload.player_pos.z;
-				player->rx = call->payload.player_pos.rx;
-				player->ry = call->payload.player_pos.ry;
-				player->old_vel_y = player->vel_y;
-				player->vel_y = call->payload.player_pos.vel_y;
-				player->has_pos = true;
-			}
+			// Accept position updates as soon as the player slot exists.
+			player->x = call->payload.player_pos.x;
+			player->y = call->payload.player_pos.y;
+			player->z = call->payload.player_pos.z;
+			player->rx = call->payload.player_pos.rx;
+			player->ry = call->payload.player_pos.ry;
+			player->old_vel_y = player->vel_y;
+			player->vel_y = call->payload.player_pos.vel_y;
+			player->has_pos = true;
 			break;
 		case SRPC_HOTBAR_SLOT:
 			if(player->has_pos
@@ -299,6 +314,7 @@ static void server_local_process(struct server_rpc* call, void* user) {
 				call->payload.window_click.right_click, changes);
 
 			clin_rpc_send(&(struct client_rpc) {
+				CRPC_PLAYER_ID(pid)
 				.type = CRPC_WINDOW_TRANSACTION,
 				.payload.window_transaction.accepted = accept,
 				.payload.window_transaction.action_id
@@ -307,7 +323,8 @@ static void server_local_process(struct server_rpc* call, void* user) {
 				= call->payload.window_click.window,
 			});
 
-			server_local_send_inv_changes(changes, player->active_inventory,
+			server_local_send_inv_changes(pid, changes,
+										  player->active_inventory,
 										  call->payload.window_click.window);
 			set_inv_slot_clear(changes);
 			break;
@@ -421,6 +438,7 @@ static void server_local_process(struct server_rpc* call, void* user) {
 										  slot + INVENTORY_SLOT_HOTBAR);
 
 						clin_rpc_send(&(struct client_rpc) {
+							CRPC_PLAYER_ID(pid)
 							.type = CRPC_INVENTORY_SLOT,
 							.payload.inventory_slot.window = WINDOWC_INVENTORY,
 							.payload.inventory_slot.slot
@@ -434,6 +452,13 @@ static void server_local_process(struct server_rpc* call, void* user) {
 			}
 			break;
 		case SRPC_UNLOAD_WORLD:
+			// Splitscreen can send duplicate unload/save requests (e.g. from
+			// multiple local players). If the world is already unloaded, ignore.
+			if(string_get_cstr(s->level_name)[0] == '\0')
+				break;
+			if(!s->world_initialized)
+				break;
+
 			// save chunks here, then destroy all
 			clin_rpc_send(&(struct client_rpc) {
 				.type = CRPC_WORLD_RESET,
@@ -462,10 +487,21 @@ static void server_local_process(struct server_rpc* call, void* user) {
 			}
 			dict_entity_reset(s->entities);
 			server_world_destroy(&s->world);
+			s->world_initialized = false;
 			level_archive_destroy(&s->level);
 
+			// In splitscreen, a single "save/unload world" must stop *all*
+			// server players, otherwise the server tick continues and touches
+			// a destroyed `s->world` (chunks dict no longer initialized).
+#ifdef SPLITSCREEN
+			for(int i = 0; i < MAX_SERVER_PLAYERS; i++) {
+				s->players[i].has_pos = false;
+				s->players[i].finished_loading = false;
+			}
+#else
 			player->has_pos = false;
 			player->finished_loading = false;
+#endif
 			string_reset(s->level_name);
 			break;
 
@@ -488,47 +524,108 @@ static void server_local_process(struct server_rpc* call, void* user) {
 		  }
 		  break;
 		case SRPC_LOAD_WORLD:
+			#ifdef SPLITSCREEN
+			{
+				int player_count = splitscreen_player_count();
+				for(int i = 0; i < player_count; i++) {
+					s->players[i].has_pos = false;
+					s->players[i].finished_loading = false;
+					s->players[i].active_inventory = &s->players[i].inventory;
+					s->players[i].oxygen = MAX_OXYGEN;
+					s->players[i].health = MAX_PLAYER_HEALTH;
+					inventory_clear(&s->players[i].inventory);
+				}
+			}
+			#else
 			assert(!player->has_pos);
-
 			player->finished_loading = false;
+			#endif
 
 			string_set(s->level_name, call->payload.load_world.name);
 			string_clear(call->payload.load_world.name);
 
 			printf("[DEBUG server_local SRPC_LOAD_WORLD] name='%s'\n", string_get_cstr(s->level_name));
 			if(level_archive_create(&s->level, s->level_name)) {
-				vec3 pos;
-				vec2 rot;
-				enum world_dim dim;
-				if(level_archive_read_player(&s->level, pos, rot, NULL, &dim)) {
-					server_world_create(&s->world, s->level_name, dim);
-					player->x = pos[0];
-					player->y = pos[1];
-					player->z = pos[2];
-					player->rx = rot[0];
-					player->ry = rot[1];
-					player->dimension = dim;
+				vec3 base_pos = {0.0f, 80.0f, 0.0f};
+				vec2 base_rot = {0.0f, 0.0f};
+				enum world_dim dim = WORLD_DIM_OVERWORLD;
+
+				// Load base player state (single-player format). If missing, keep defaults.
+				level_archive_read_player(&s->level, base_pos, base_rot, NULL, &dim);
+
+				server_world_create(&s->world, s->level_name, dim);
+				s->world_initialized = true;
+
+				level_archive_read(&s->level, LEVEL_TIME, &s->world_time, 0);
+
+				// Read health/spawn if present (old `level.dat` may not have it).
+				{
+					short health = MAX_PLAYER_HEALTH;
+					if(level_archive_read(&s->level, LEVEL_PLAYER_HEALTH, &health, 0)) {
+						if(health > MAX_PLAYER_HEALTH)
+							health = MAX_PLAYER_HEALTH;
+						if(health < 0)
+							health = MAX_PLAYER_HEALTH;
+					}
+
+					int spawn_x = (int)floorf(base_pos[0]);
+					int spawn_y = (int)floorf(base_pos[1]);
+					int spawn_z = (int)floorf(base_pos[2]);
+					level_archive_read(&s->level, LEVEL_PLAYER_SPAWNX, &spawn_x, 0);
+					level_archive_read(&s->level, LEVEL_PLAYER_SPAWNY, &spawn_y, 0);
+					level_archive_read(&s->level, LEVEL_PLAYER_SPAWNZ, &spawn_z, 0);
+
+#ifdef SPLITSCREEN
+						int player_count = splitscreen_player_count();
+						for(int i = 0; i < player_count; i++) {
+							struct server_player* sp = &s->players[i];
+						sp->dimension = dim;
+						sp->x = base_pos[0] + (float)(i * 2);
+						sp->y = base_pos[1];
+						sp->z = base_pos[2] + (float)(i * 2);
+						sp->rx = base_rot[0];
+						sp->ry = base_rot[1];
+						sp->fall_y = (int)sp->y;
+						sp->old_vel_y = 0;
+						sp->vel_y = 0;
+						sp->has_pos = true;
+						sp->health = health;
+						sp->spawn_x = spawn_x;
+						sp->spawn_y = spawn_y;
+							sp->spawn_z = spawn_z;
+							sp->active_inventory = &sp->inventory;
+							// We already send initial state immediately; allow SRPC_PLAYER_POS right away.
+							sp->finished_loading = true;
+						}
+
+					// Load only the primary inventory from `level.dat` (vanilla format).
+					level_archive_read_inventory(&s->level, &s->players[0].inventory);
+#else
+						player->dimension = dim;
+					player->x = base_pos[0];
+					player->y = base_pos[1];
+					player->z = base_pos[2];
+					player->rx = base_rot[0];
+					player->ry = base_rot[1];
 					player->fall_y = player->y;
 					player->old_vel_y = 0;
 					player->vel_y = 0;
 					player->has_pos = true;
-				}
+					player->health = health;
+					player->spawn_x = spawn_x;
+					player->spawn_y = spawn_y;
+						player->spawn_z = spawn_z;
+						player->active_inventory = &player->inventory;
+						player->finished_loading = true;
 
-				level_archive_read(&s->level, LEVEL_TIME, &s->world_time, 0);
-
-				level_archive_read(&s->level, LEVEL_PLAYER_HEALTH, &player->health, 0);
-				if (player->health > MAX_PLAYER_HEALTH) player->health = MAX_PLAYER_HEALTH;
-				level_archive_read(&s->level, LEVEL_PLAYER_SPAWNX, &player->spawn_x, 0);
-				level_archive_read(&s->level, LEVEL_PLAYER_SPAWNY, &player->spawn_y, 0);
-				level_archive_read(&s->level, LEVEL_PLAYER_SPAWNZ, &player->spawn_z, 0);
+						level_archive_read_inventory(&s->level, &player->inventory);
+#endif
+					}
 
 				chest_archive_read(s->chest_pos, s->chest_items[0], s->level_name);
 				sign_archive_read(s->sign_pos, s->sign_texts[0], s->level_name);
 
-				player->oxygen = MAX_OXYGEN;
-
 				dict_entity_reset(s->entities);
-				player->active_inventory = &player->inventory;
 
 				clin_rpc_send(&(struct client_rpc) {
 					.type = CRPC_WORLD_RESET,
@@ -536,10 +633,49 @@ static void server_local_process(struct server_rpc* call, void* user) {
 					.payload.world_reset.local_entity = 0,
 				});
 
+				// Send initial player positions immediately so the client can
+				// start rendering while chunks stream in.
+#ifdef SPLITSCREEN
+				for(int i = 0; i < splitscreen_player_count(); i++) {
+					struct server_player* sp = &s->players[i];
+					clin_rpc_send(&(struct client_rpc) {
+						CRPC_PLAYER_ID(i)
+						.type = CRPC_PLAYER_POS,
+						.payload.player_pos.position
+							= {sp->x, sp->y, sp->z},
+						.payload.player_pos.rotation
+							= {sp->rx, sp->ry},
+					});
+				}
+#else
+				clin_rpc_send(&(struct client_rpc) {
+					.type = CRPC_PLAYER_POS,
+					.payload.player_pos.position
+						= {player->x, player->y, player->z},
+					.payload.player_pos.rotation
+						= {player->rx, player->ry},
+				});
+#endif
+
+				clin_rpc_send(&(struct client_rpc) {
+					.type = CRPC_TIME_SET,
+					.payload.time_set = s->world_time,
+				});
+
+#ifdef SPLITSCREEN
+				for(int i = 0; i < splitscreen_player_count(); i++) {
+					clin_rpc_send(&(struct client_rpc) {
+						CRPC_PLAYER_ID(i)
+						.type = CRPC_PLAYER_SET_HEALTH,
+						.payload.player_set_health.health = s->players[i].health
+					});
+				}
+#else
 				clin_rpc_send(&(struct client_rpc) {
 					.type = CRPC_PLAYER_SET_HEALTH,
 					.payload.player_set_health.health = player->health
 				});
+#endif
 			}
 			break;
 	}
@@ -620,7 +756,7 @@ static void server_local_update(struct server_local* s) {
 	bool p1_active = false;
 	w_coord_t px1 = px;
 	w_coord_t pz1 = pz;
-	if(gstate.local_players[1]) {
+	if(s->players[1].has_pos && gstate.num_players > 1) {
 		px1 = WCOORD_CHUNK_OFFSET(floor(s->players[1].x));
 		pz1 = WCOORD_CHUNK_OFFSET(floor(s->players[1].z));
 		p1_active = true;
@@ -635,7 +771,7 @@ static void server_local_update(struct server_local* s) {
 	/* Debug: count loaded chunks */
 	size_t loaded_chunks = 0;
 	dict_server_chunks_it_t cit;
-	dict_server_chunks_it(cit, &s->world.chunks);
+	dict_server_chunks_it(cit, s->world.chunks);
 	while(!dict_server_chunks_end_p(cit)) {
 		loaded_chunks++;
 		dict_server_chunks_next(cit);
@@ -655,14 +791,14 @@ static void server_local_update(struct server_local* s) {
 		bool unload_found = false;
 		w_coord_t unload_x = 0;
 		w_coord_t unload_z = 0;
-		w_coord_t unload_dist2 = 0;
+			w_coord_t unload_dist2 = 0;
 
-		dict_server_chunks_it_t u_it;
-		dict_server_chunks_it(u_it, &s->world.chunks);
-		while(!dict_server_chunks_end_p(u_it)) {
-			int64_t id = dict_server_chunks_ref(u_it)->key;
-			w_coord_t ucx = S_CHUNK_X(id);
-			w_coord_t ucz = S_CHUNK_Z(id);
+			dict_server_chunks_it_t u_it;
+			dict_server_chunks_it(u_it, s->world.chunks);
+			while(!dict_server_chunks_end_p(u_it)) {
+				int64_t id = dict_server_chunks_ref(u_it)->key;
+				w_coord_t ucx = S_CHUNK_X(id);
+				w_coord_t ucz = S_CHUNK_Z(id);
 			w_coord_t d0 = CHUNK_DIST2(px, ucx, pz, ucz);
 			w_coord_t d = d0;
 			if(p1_active) {
@@ -834,38 +970,41 @@ unload_done:
 
 #ifdef SPLITSCREEN
 	if(loaded_this_tick == 0 && !finished_loading) {
-		for (int i = 0; i < num_players; i++) {
-			if (!s->players[i].finished_loading) {
-				struct client_rpc pos;
-				pos.type = CRPC_PLAYER_POS;
-				if(level_archive_read_player(&s->level, pos.payload.player_pos.position,
-											 pos.payload.player_pos.rotation, NULL,
-											 NULL))
-					clin_rpc_send(&pos);
+		clin_rpc_send(&(struct client_rpc) {
+			.type = CRPC_TIME_SET,
+			.payload.time_set = s->world_time,
+		});
 
-				clin_rpc_send(&(struct client_rpc) {
-					.type = CRPC_TIME_SET,
-					.payload.time_set = s->world_time,
-				});
+		for(int i = 0; i < num_players; i++) {
+			struct server_player* player = &s->players[i];
+			if(player->finished_loading)
+				continue;
 
-				printf("[server_local] no disk chunk candidate found near player %d,%d (loaded_chunks=%zu)\n",
-					   (int)WCOORD_CHUNK_OFFSET(floor(s->players[i].x)), (int)WCOORD_CHUNK_OFFSET(floor(s->players[i].z)), loaded_chunks);
+			clin_rpc_send(&(struct client_rpc) {
+				CRPC_PLAYER_ID(i)
+				.type = CRPC_PLAYER_POS,
+				.payload.player_pos.position = {player->x, player->y, player->z},
+				.payload.player_pos.rotation = {player->rx, player->ry},
+			});
 
-				if(level_archive_read_inventory(&s->level, &s->players[i].inventory)) {
-					for(size_t k = 0; k < INVENTORY_SIZE; k++) {
-						if(s->players[i].inventory.items[k].id > 0) {
-							clin_rpc_send(&(struct client_rpc) {
-								.type = CRPC_INVENTORY_SLOT,
-								.payload.inventory_slot.window = WINDOWC_INVENTORY,
-								.payload.inventory_slot.slot = k,
-								.payload.inventory_slot.item
-								= s->players[i].inventory.items[k],
-							});
-						}
-					}
+			printf("[server_local] finished loading for player %d near %d,%d (loaded_chunks=%zu)\n",
+				   i, (int)WCOORD_CHUNK_OFFSET(floor(player->x)),
+				   (int)WCOORD_CHUNK_OFFSET(floor(player->z)), loaded_chunks);
+
+			for(size_t k = 0; k < INVENTORY_SIZE; k++) {
+				if(player->inventory.items[k].id > 0) {
+					clin_rpc_send(&(struct client_rpc) {
+						CRPC_PLAYER_ID(i)
+						.type = CRPC_INVENTORY_SLOT,
+						.payload.inventory_slot.window = WINDOWC_INVENTORY,
+						.payload.inventory_slot.slot = k,
+						.payload.inventory_slot.item
+						= player->inventory.items[k],
+					});
 				}
-				s->players[i].finished_loading = true;
 			}
+
+			player->finished_loading = true;
 		}
 	}
 #else
@@ -991,33 +1130,7 @@ for (int i = 0; i < 4; i++) {
 #endif
 }
 
-void server_local_thread(void* user) {
-	while(1) {
-		server_local_update(user);
-		thread_msleep(50);
-	}
-}
-
-
-void server_local_create(struct server_local* s) {
-	assert(s);
-	rand_gen_seed(&s->rand_src);
-	s->paused = false;
-	s->world_time = 0;
-#ifdef SPLITSCREEN
-
-int max_players = 4;
-  for (int i = 0; i < max_players; i++) {
-		s->players[i].has_pos = false;
-		s->players[i].finished_loading = false;
-		inventory_create(&s->players[i].inventory, &inventory_logic_player, s,
-						 INVENTORY_SIZE, 0, 0, 0);
-		s->players[i].active_inventory = &s->players[i].inventory;
-	}
-#endif
-
-void server_local_thread(void* user) {
-
+static void* server_local_thread(void* user) {
 	while(1) {
 		server_local_update(user);
 		thread_msleep(50);
@@ -1025,13 +1138,49 @@ void server_local_thread(void* user) {
 	return NULL;
 }
 
-
+void server_local_create(struct server_local* s) {
+	assert(s);
+	// Ensure `s->world` starts in a known safe state. Some m-lib dict iterators
+	// assert when used on uninitialized dicts; we guard with `world.initialized`
+	// but also zero-init to avoid garbage state.
+	memset(&s->world, 0, sizeof(s->world));
+	rand_gen_seed(&s->rand_src);
+	s->paused = false;
+	s->world_time = 0;
+	s->active_player_id = 0;
+	s->world_initialized = false;
 	s->last_tick = time_get();
+
 	string_init(s->level_name);
 
 	dict_entity_init(s->entities);
-	memset(s->chest_pos, -1, MAX_CHESTS*3*sizeof(int));
-	memset(s->sign_pos, -1, MAX_SIGNS*3*sizeof(int));
+	memset(s->chest_pos, -1, MAX_CHESTS * 3 * sizeof(int));
+	memset(s->sign_pos, -1, MAX_SIGNS * 3 * sizeof(int));
+
+#ifdef SPLITSCREEN
+	for(int i = 0; i < MAX_SERVER_PLAYERS; i++) {
+		s->players[i].has_pos = false;
+		s->players[i].finished_loading = false;
+		s->players[i].dimension = WORLD_DIM_OVERWORLD;
+		s->players[i].rx = 0.0f;
+		s->players[i].ry = 0.0f;
+		s->players[i].x = 0.0;
+		s->players[i].y = 0.0;
+		s->players[i].z = 0.0;
+		s->players[i].vel_y = 0.0f;
+		s->players[i].old_vel_y = 0.0f;
+		s->players[i].fall_y = 0;
+		s->players[i].oxygen = MAX_OXYGEN;
+		s->players[i].health = MAX_PLAYER_HEALTH;
+		s->players[i].spawn_x = 0;
+		s->players[i].spawn_y = 80;
+		s->players[i].spawn_z = 0;
+
+		inventory_create(&s->players[i].inventory, &inventory_logic_player, s,
+						 INVENTORY_SIZE, 0, 0, 0);
+		s->players[i].active_inventory = &s->players[i].inventory;
+	}
+#endif
 
 	struct thread t;
 	thread_create(&t, server_local_thread, s, 8);

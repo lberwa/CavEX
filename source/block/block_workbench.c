@@ -53,9 +53,10 @@ static uint8_t getTextureIndex(struct block_info* this, enum side side) {
 static void onRightClick(struct server_local* s, struct item_data* it,
 						 struct block_info* where, struct block_info* on,
 						 enum side on_side) {
-int player_id = 0;
-if(s->players[0].active_inventory == &s->players[0].inventory) {
+	const uint8_t pid = s->active_player_id;
+	if(s->players[pid].active_inventory == &s->players[pid].inventory) {
 		clin_rpc_send(&(struct client_rpc) {
+			CRPC_PLAYER_ID(pid)
 			.type = CRPC_OPEN_WINDOW,
 			.payload.window_open.window = WINDOWC_CRAFTING,
 			.payload.window_open.type = WINDOW_TYPE_WORKBENCH,
@@ -64,7 +65,7 @@ if(s->players[0].active_inventory == &s->players[0].inventory) {
 
 		struct inventory* inv = malloc(sizeof(struct inventory));
 		inventory_create(inv, &inventory_logic_crafting, s, CRAFTING_SIZE, 0, 0, 0);
-s->players[player_id].active_inventory = inv;
+		s->players[pid].active_inventory = inv;
 	}
 }
 

@@ -66,15 +66,22 @@ void server_world_create(struct server_world* w, string_t level_name,
 						 enum world_dim dimension) {
 	assert(w && dimension >= -1 && dimension <= 0);
 
+	if(w->initialized)
+		server_world_destroy(w);
+
 	dict_server_chunks_init(w->chunks);
 	ilist_regions_init(w->loaded_regions_lru);
 	string_init_set(w->level_name, level_name);
 	w->dimension = dimension;
 	w->loaded_regions_length = 0;
+	w->initialized = true;
 }
 
 void server_world_destroy(struct server_world* w) {
 	assert(w);
+
+	if(!w->initialized)
+		return;
 
 	dict_server_chunks_it_t it;
 	dict_server_chunks_it(it, w->chunks);
@@ -90,6 +97,7 @@ void server_world_destroy(struct server_world* w) {
 
 	dict_server_chunks_clear(w->chunks);
 	string_clear(w->level_name);
+	w->initialized = false;
 }
 
 static bool server_chunk_get_block(void* user, c_coord_t x, w_coord_t y,
@@ -283,29 +291,23 @@ bool server_world_load_chunk(struct server_world* w, w_coord_t x, w_coord_t z,
 	if(server_world_is_chunk_loaded(w, x, z))
 		return false;
 
-	ilist_regions_it_t it;
-	ilist_regions_it(it, w->loaded_regions_lru);
+	// Ensure the corresponding region archive is loaded (LRU is tiny; scanning
+	// can evict the region we need before load happens).
+	struct region_archive* ra = server_world_chunk_region(w, x, z);
+	if(!ra)
+		return false;
 
-	while(!ilist_regions_end_p(it)) {
-		struct region_archive* ra = ilist_regions_ref(it);
+	bool chunk_exists = false;
+	if(!region_archive_contains(ra, x, z, &chunk_exists) || !chunk_exists)
+		return false;
 
-		struct server_chunk tmp = (struct server_chunk) {.modified = false};
+	struct server_chunk tmp = (struct server_chunk) {.modified = false};
+	if(!region_archive_get_blocks(ra, x, z, &tmp))
+		return false;
 
-		bool chunk_exists;
-		if(region_archive_contains(ra, x, z, &chunk_exists)) {
-			if(chunk_exists && region_archive_get_blocks(ra, x, z, &tmp)) {
-				dict_server_chunks_set_at(w->chunks, S_CHUNK_ID(x, z), tmp);
-				*sc = dict_server_chunks_get(w->chunks, S_CHUNK_ID(x, z));
-				return true;
-			} else {
-				return false;
-			}
-		}
-
-		ilist_regions_next(it);
-	}
-
-	return false;
+	dict_server_chunks_set_at(w->chunks, S_CHUNK_ID(x, z), tmp);
+	*sc = dict_server_chunks_get(w->chunks, S_CHUNK_ID(x, z));
+	return true;
 }
 
 void server_world_save_chunk(struct server_world* w, bool erase, w_coord_t x,
@@ -620,4 +622,3 @@ bool server_world_find_empty_spot_nearby(const float pos[3], const struct server
     }
     return false;
 }
-
