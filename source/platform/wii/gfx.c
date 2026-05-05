@@ -52,6 +52,9 @@ static uint32_t current_vp_y = 0;
 static uint32_t current_vp_w = 0;
 static uint32_t current_vp_h = 0;
 
+// Forward declarations (C99 forbids implicit function declarations).
+void gfx_set_texcoord_div(float div);
+
 /*static void* thread_vsync(void* user) {
 	void* current_frame = NULL;
 

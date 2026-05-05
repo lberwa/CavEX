@@ -43,8 +43,9 @@ static void screen_ingame_reset(struct screen* s, int width, int height) {
 void screen_ingame_render3D(struct screen* s, mat4 view) {
 	
 	if (gstate.world_loaded && gstate.camera_hit.entity_hit) {
-    struct entity *e = *dict_entity_get(gstate.entities,
-                                        gstate.camera_hit.entity_id);
+		struct entity **ptr = dict_entity_get(gstate.entities,
+		                                      gstate.camera_hit.entity_id);
+		struct entity *e = ptr ? *ptr : NULL;
 		if (e) {
 			if (e->type != 0 && e->type != 1){
 			gfx_blending(MODE_BLEND);
@@ -177,32 +178,36 @@ void screen_ingame_render3D(struct screen* s, mat4 view) {
 	gfx_depth_range(0.0F, 1.0F);
 }
 
-static void screen_ingame_update_player(struct screen* s, float dt) {
-	// left click interaction
-	if (gstate.camera_hit.entity_hit
-	    && input_pressed(IB_ACTION1, gstate_active_player())
-	    && !gstate.digging.active)
-	{
-	    struct entity **ptr = dict_entity_get(
-	        gstate.entities,
-	        gstate.camera_hit.entity_id
-	    );
-	    if (ptr) {
-	        struct entity *e = *ptr;
-	        if (e && e->onLeftClick) {
-	            e->onLeftClick(e);
-	            // Optionele punch‐animatie (zoals eerder)
-	            struct item_data held;
-	            if (inventory_get_hotbar_item(
-	                   windowc_get_latest(gstate_windows()[WINDOWC_INVENTORY]), &held))
-	            {
-	                gstate.held_item_animation.punch.start = time_get();
-	                gstate.held_item_animation.punch.place = false;
-	            }
-	            return;
-	        }
-	    }
-	}
+	static void screen_ingame_update_player(struct screen* s, float dt) {
+		// left click interaction
+		if (gstate.camera_hit.entity_hit
+		    && input_pressed(IB_ACTION1, gstate_active_player())
+		    && !gstate.digging.active)
+		{
+		    struct entity **ptr = dict_entity_get(
+		        gstate.entities,
+		        gstate.camera_hit.entity_id
+		    );
+		    if (ptr) {
+		        struct entity *e = *ptr;
+				// Ignore floating item pickups: allow block interaction "through" them.
+				if(e && e->type == ENTITY_ITEM) {
+					// fall through to block digging / interaction code below
+				} else
+		        if (e && e->onLeftClick) {
+		            e->onLeftClick(e);
+		            // Optionele punch‐animatie (zoals eerder)
+		            struct item_data held;
+		            if (inventory_get_hotbar_item(
+		                   windowc_get_latest(gstate_windows()[WINDOWC_INVENTORY]), &held))
+		            {
+		                gstate.held_item_animation.punch.start = time_get();
+		                gstate.held_item_animation.punch.place = false;
+		            }
+		            return;
+		        }
+		    }
+		}
 
 	// right click interaction met entity via dict_entity_get
 	if (gstate.camera_hit.entity_hit
@@ -213,12 +218,16 @@ static void screen_ingame_update_player(struct screen* s, float dt) {
 	        gstate.entities,
 	        gstate.camera_hit.entity_id
 	    );
-	    if (ptr) {
-	        struct entity *e = *ptr;
-	        if (e && e->onRightClick) {
-				struct item_data held;
-				struct item_data *held_ptr = NULL;
-				bool TRue;
+		    if (ptr) {
+		        struct entity *e = *ptr;
+				// Ignore floating item pickups: allow block interaction "through" them.
+				if(e && e->type == ENTITY_ITEM) {
+					// fall through
+				} else if(e) {
+		        if (e->onRightClick) {
+					struct item_data held;
+					struct item_data *held_ptr = NULL;
+					bool TRue;
 
 				if (inventory_get_hotbar_item(
 				        windowc_get_latest(gstate_windows()[WINDOWC_INVENTORY]), &held)) {
@@ -230,6 +239,7 @@ static void screen_ingame_update_player(struct screen* s, float dt) {
 	                gstate.held_item_animation.punch.start = time_get();
 	                gstate.held_item_animation.punch.place = false;
 	            }
+	            }
 	            return;
 	        }
 	    }
@@ -240,6 +250,7 @@ static void screen_ingame_update_player(struct screen* s, float dt) {
 	if(gstate.camera_hit.hit && input_pressed(IB_ACTION2, gstate_active_player())
 	   && !gstate.digging.active) {
 		svin_rpc_send(&(struct server_rpc) {
+			RPC_PLAYER_ID(gstate_active_player())
 			.type = SRPC_BLOCK_PLACE,
 			.payload.block_place.x = gstate.camera_hit.x,
 			.payload.block_place.y = gstate.camera_hit.y,
@@ -254,8 +265,8 @@ static void screen_ingame_update_player(struct screen* s, float dt) {
 		}
 	}
 
-	// block dig
-	if(gstate.digging.active) {
+		// block dig
+		if(gstate.digging.active) {
 		struct block_data blk
 			= world_get_block(&gstate.world, gstate.digging.x, gstate.digging.y,
 							  gstate.digging.z);
@@ -275,6 +286,7 @@ static void screen_ingame_update_player(struct screen* s, float dt) {
 			gstate.digging.z = gstate.camera_hit.z;
 
 			svin_rpc_send(&(struct server_rpc) {
+				RPC_PLAYER_ID(gstate_active_player())
 				.type = SRPC_BLOCK_DIG,
 				.payload.block_dig.x = gstate.digging.x,
 				.payload.block_dig.y = gstate.digging.y,
@@ -287,6 +299,7 @@ static void screen_ingame_update_player(struct screen* s, float dt) {
 		if(delay > 0
 		   && time_diff_ms(gstate.digging.start, time_get()) >= delay) {
 			svin_rpc_send(&(struct server_rpc) {
+				RPC_PLAYER_ID(gstate_active_player())
 				.type = SRPC_BLOCK_DIG,
 				.payload.block_dig.x = gstate.digging.x,
 				.payload.block_dig.y = gstate.digging.y,
@@ -299,18 +312,23 @@ static void screen_ingame_update_player(struct screen* s, float dt) {
 			gstate.digging.active = false;
 		}
 
-		if(input_released(IB_ACTION1, gstate_active_player()))
+		// Require the button to be held while mining.
+		// Using `input_released()` here can miss quick tap/release sequences for
+		// non-master players (shared PC keyboard/mouse), leaving digging active
+		// and letting blocks break after a single tap.
+		if(!input_held(IB_ACTION1, gstate_active_player()))
 			gstate.digging.active = false;
-	} else {
-		if(gstate.camera_hit.hit && input_held(IB_ACTION1, gstate_active_player())
-		   && time_diff_ms(gstate.digging.cooldown, time_get()) >= 250) {
-			gstate.digging.active = true;
-			gstate.digging.start = time_get();
-			gstate.digging.x = gstate.camera_hit.x;
-			gstate.digging.y = gstate.camera_hit.y;
-			gstate.digging.z = gstate.camera_hit.z;
+		} else {
+			if(gstate.camera_hit.hit && input_held(IB_ACTION1, gstate_active_player())
+			   && time_diff_ms(gstate.digging.cooldown, time_get()) >= 250) {
+				gstate.digging.active = true;
+				gstate.digging.start = time_get();
+				gstate.digging.x = gstate.camera_hit.x;
+				gstate.digging.y = gstate.camera_hit.y;
+				gstate.digging.z = gstate.camera_hit.z;
 
 			svin_rpc_send(&(struct server_rpc) {
+				RPC_PLAYER_ID(gstate_active_player())
 				.type = SRPC_BLOCK_DIG,
 				.payload.block_dig.x = gstate.digging.x,
 				.payload.block_dig.y = gstate.digging.y,
@@ -376,6 +394,7 @@ static void screen_ingame_update_player(struct screen* s, float dt) {
 			gstate.digging.start = time_get();
 
 		svin_rpc_send(&(struct server_rpc) {
+			RPC_PLAYER_ID(gstate_active_player())
 			.type = SRPC_HOTBAR_SLOT,
 			.payload.hotbar_slot.slot = next_slot,
 		});
@@ -399,12 +418,13 @@ static void screen_ingame_update_player(struct screen* s, float dt) {
 			gstate.digging.start = time_get();
 
 		svin_rpc_send(&(struct server_rpc) {
+			RPC_PLAYER_ID(gstate_active_player())
 			.type = SRPC_HOTBAR_SLOT,
 			.payload.hotbar_slot.slot = next_slot,
 		});
 	}
 
-	if(input_pressed(IB_HOME, gstate_active_player()) || input_pressed(IB_GUI_UP, gstate_active_player())) {
+	if(input_pressed(IB_HOME, gstate_active_player())) {
 		screen_set(&screen_game_menu);
 		/*
 		gstate.paused = true;
@@ -419,48 +439,52 @@ static void screen_ingame_update_player(struct screen* s, float dt) {
 		screen_set(&screen_inventory);
 }
 
-static void screen_ingame_update(struct screen* s, float dt) {
-#ifdef SPLITSCREEN
-	if(splitscreen_enabled()) {
-		int player_count = splitscreen_player_count();
-		for(int p = 0; p < player_count; p++) {
-			splitscreen_load_player(p);
-			screen_ingame_update_player(s, dt);
-			splitscreen_store_player(p);
+	static void screen_ingame_update(struct screen* s, float dt) {
+	#ifdef SPLITSCREEN
+		if(splitscreen_enabled()) {
+			int player_count = splitscreen_player_count();
+			for(int p = 0; p < player_count; p++) {
+				splitscreen_load_player(p);
+				screen_ingame_update_player(s, dt);
+				splitscreen_store_player(p);
+			}
+			splitscreen_load_player(0);
+			return;
 		}
-		splitscreen_load_player(0);
-		return;
+	#endif
+		screen_ingame_update_player(s, dt);
 	}
-#endif
-	screen_ingame_update_player(s, dt);
-}
 
 static void screen_ingame_render2D(struct screen* s, int width, int height) {
-	char str[64];
+	char str[128];
 	
 #ifdef NDEBUG
-	sprintf(str, GAME_NAME " Alpha %i.%i.%i_f%i (impl. B1.7.3)", VERSION_MAJOR,
-			VERSION_MINOR, VERSION_PATCH, VERSION_FORK);
+	snprintf(str, sizeof(str),
+	         GAME_NAME " Alpha %i.%i.%i_f%i (impl. B1.7.3)",
+	         VERSION_MAJOR, VERSION_MINOR, VERSION_PATCH, VERSION_FORK);
 	gutil_text(4, 4 + (GFX_GUI_SCALE * 8 + 1) * 0, str, GFX_GUI_SCALE * 8, true);
 
 
-	sprintf(str, "%0.1f fps, wait: gpu %0.1fms, vsync %0.1fms",
-			gstate.stats.fps, gstate.stats.dt_gpu * 1000.0F,
-			gstate.stats.dt_vsync * 1000.0F);
+	snprintf(str, sizeof(str), "%0.1f fps, wait: gpu %0.1fms, vsync %0.1fms",
+	         gstate.stats.fps, gstate.stats.dt_gpu * 1000.0F,
+	         gstate.stats.dt_vsync * 1000.0F);
 	gutil_text(4, 4 + (GFX_GUI_SCALE * 8 + 1) * 1, str, GFX_GUI_SCALE * 8, true);
 
-	sprintf(str, "%zu chunks", gstate.stats.chunks_rendered);
+	snprintf(str, sizeof(str), "%zu chunks", gstate.stats.chunks_rendered);
 	gutil_text(4, 4 + (GFX_GUI_SCALE * 8 + 1) * 2, str, GFX_GUI_SCALE * 8, true);
 
-	sprintf(str, "(%0.1f, %0.1f, %0.1f) (%0.1f, %0.1f)", gstate.camera.x,
-			gstate.camera.y, gstate.camera.z, glm_deg(gstate.camera.rx),
-			glm_deg(gstate.camera.ry));
+	snprintf(str, sizeof(str), "(%0.1f, %0.1f, %0.1f) (%0.1f, %0.1f)",
+	         gstate.camera.x, gstate.camera.y, gstate.camera.z,
+	         glm_deg(gstate.camera.rx), glm_deg(gstate.camera.ry));
 	gutil_text(4, 4 + (GFX_GUI_SCALE * 8 + 1) * 3, str, GFX_GUI_SCALE * 8, true);
 
-float time = gstate.world_time + time_diff_s(gstate.world_time_start, time_get()) * 1000.0f / 50.0f;
-float day_ticks = fmodf(time, 24000.0f);
-float angle = daytime_celestial_angle(day_ticks / 24000.0f);
-sprintf(str, "time: %.0f (%.0f)  angle: %.3f", time, day_ticks, angle);
+	float time = gstate.world_time
+	             + time_diff_s(gstate.world_time_start, time_get()) * 1000.0f
+	                   / 50.0f;
+	float day_ticks = fmodf(time, 24000.0f);
+	float angle = daytime_celestial_angle(day_ticks / 24000.0f);
+	snprintf(str, sizeof(str), "time: %.0f (%.0f)  angle: %.3f", time,
+	         day_ticks, angle);
 	gutil_text(4, 4 + (GFX_GUI_SCALE * 8 + 1) * 4, str, GFX_GUI_SCALE * 8, true);
 
 	if (gstate.camera_hit.entity_hit) {
@@ -470,17 +494,14 @@ sprintf(str, "time: %.0f (%.0f)  angle: %.3f", time, day_ticks, angle);
 		);
 		if (ptr) {
 		    struct entity *e = *ptr;
-		    const char *ename = e->name;
-		    sprintf(str, "(%i, %i, %i), %s (%u)",
-		            gstate.camera_hit.x,
-		            gstate.camera_hit.y,
-		            gstate.camera_hit.z,
-		            ename, e->id);
+		    const char *ename = e && e->name ? e->name : "<unnamed>";
+		    snprintf(str, sizeof(str), "(%i, %i, %i), %s (%u)",
+		             gstate.camera_hit.x, gstate.camera_hit.y,
+		             gstate.camera_hit.z, ename, e ? e->id : 0);
 		} else {
-		    sprintf(str, "(%i, %i, %i)",
-		            gstate.camera_hit.x,
-		            gstate.camera_hit.y,
-		            gstate.camera_hit.z);
+		    snprintf(str, sizeof(str), "(%i, %i, %i)",
+		             gstate.camera_hit.x, gstate.camera_hit.y,
+		             gstate.camera_hit.z);
 		}
 		gutil_text(4, 4 + (GFX_GUI_SCALE * 8 + 1) * 5, str, GFX_GUI_SCALE * 8, true);
 	} else	if(gstate.camera_hit.hit) {
@@ -488,10 +509,11 @@ sprintf(str, "time: %.0f (%.0f)  angle: %.3f", time, day_ticks, angle);
 			= world_get_block(&gstate.world, gstate.camera_hit.x,
 							  gstate.camera_hit.y, gstate.camera_hit.z);
 		struct block* b = blocks[bd.type];
-		sprintf(str, "side: %s, (%i, %i, %i), %s, (%i:%i)",
-				block_side_name(gstate.camera_hit.side), gstate.camera_hit.x,
-				gstate.camera_hit.y, gstate.camera_hit.z, b ? b->name : NULL,
-				bd.type, bd.metadata);
+		snprintf(str, sizeof(str), "side: %s, (%i, %i, %i), %s, (%i:%i)",
+		         block_side_name(gstate.camera_hit.side), gstate.camera_hit.x,
+		         gstate.camera_hit.y, gstate.camera_hit.z,
+		         (b && b->name) ? b->name : "<unknown>", bd.type,
+		         bd.metadata);
 		gutil_text(4, 4 + (GFX_GUI_SCALE * 8 + 1) * 5, str, GFX_GUI_SCALE * 8, true);
 	}
 #endif
@@ -575,62 +597,11 @@ sprintf(str, "time: %.0f (%.0f)  angle: %.3f", time, day_ticks, angle);
 							  gstate_windows()[WINDOWC_INVENTORY])),
 				  height - (GFX_GUI_SCALE * 16) * 8 / 5 - 23 * GFX_GUI_SCALE, 208, 0, 24, 24, 24 * GFX_GUI_SCALE, 24 * GFX_GUI_SCALE);
 
-#ifdef SPLITSCREEN
-	if(splitscreen_enabled()) {
-		int player_count = splitscreen_player_count();
-		int heart_start_x = (width - 182 * GFX_GUI_SCALE) / 2;
-		int heart_spacing = 8 * GFX_GUI_SCALE;
-		int player_heart_offset
-			= GFX_GUI_SCALE * 20; // offset per player for stacking
-
-		for(int p = 0; p < player_count; p++) {
-			splitscreen_load_player(p);
-			int heart_x_base = heart_start_x + p * player_heart_offset;
-
-			for(int k = 0; k < MAX_PLAYER_HEALTH / HEALTH_PER_HEART; k++) {
-				// draw black hearts
-				gutil_texquad(
-					heart_x_base + k * heart_spacing,
-					height - (GFX_GUI_SCALE * 16) * 8 / 5
-						- (22 + 10) * GFX_GUI_SCALE,
-					16, 229, 9, 9, 9 * GFX_GUI_SCALE, 9 * GFX_GUI_SCALE);
-			}
-			if(gstate.local_player) {
-				for(int k = 0;
-					k < (gstate.local_player->health / HEALTH_PER_HEART); k++) {
-					// draw red hearts
-					gutil_texquad(
-						heart_x_base + k * heart_spacing,
-						height - (GFX_GUI_SCALE * 16) * 8 / 5
-							- (22 + 10) * GFX_GUI_SCALE,
-						52, 229, 9, 9, 9 * GFX_GUI_SCALE,
-						9 * GFX_GUI_SCALE);
-				}
-			}
-
-			// draw oxygen bar if underwater
-			if(gstate.in_water && gstate.oxygen >= OXYGEN_THRESHOLD) {
-				int oxy_x_base = heart_x_base;
-				for(int k = 0; k < ((gstate.oxygen - OXYGEN_THRESHOLD) / 32);
-					k++) {
-					gutil_texquad(
-						oxy_x_base + k * heart_spacing,
-						height - (GFX_GUI_SCALE * 20) * 8 / 5
-							- (22 + 10) * GFX_GUI_SCALE,
-						17, 249, 9, 9, 9 * GFX_GUI_SCALE,
-						9 * GFX_GUI_SCALE);
-				}
-			}
-			splitscreen_store_player(p);
-		}
-		// Leave gstate in a deterministic player slot.
-		splitscreen_load_player(0);
-	} else
-#endif
 	{
-		// Single-player: do NOT call splitscreen_load/store, it would overwrite
-		// the live `gstate.*` structs with stale per-player copies and break
-		// things like digging timers.
+		// HUD is rendered once per viewport. In splitscreen mode `main.c` already
+		// loaded the active player via `splitscreen_load_player(p)` before
+		// calling render2D, so we must NOT swap players here (it corrupts player
+		// state, e.g. digging timers for player 2).
 		int heart_start_x = (width - 182 * GFX_GUI_SCALE) / 2;
 		int heart_spacing = 8 * GFX_GUI_SCALE;
 		int heart_x_base = heart_start_x;
@@ -663,6 +634,27 @@ sprintf(str, "time: %.0f (%.0f)  angle: %.3f", time, day_ticks, angle);
 					17, 249, 9, 9, 9 * GFX_GUI_SCALE, 9 * GFX_GUI_SCALE);
 			}
 		}
+
+#ifdef DIGGING_DEBUG
+		{
+			static ptime_t last_dbg_by_player[4];
+			int ap = gstate_active_player();
+			ptime_t now_dbg = time_get();
+			if(ap >= 0 && ap < 4
+			   && time_diff_ms(last_dbg_by_player[ap], now_dbg) >= 250) {
+				printf("[dig p=%d] hit=%d ent=%d active=%d start_age=%dms cd_age=%dms pos=(%d %d %d) cur=(%d %d %d)\n",
+					   ap,
+					   (int)gstate.camera_hit.hit,
+					   (int)gstate.camera_hit.entity_hit,
+					   (int)gstate.digging.active,
+					   (int)time_diff_ms(gstate.digging.start, now_dbg),
+					   (int)time_diff_ms(gstate.digging.cooldown, now_dbg),
+					   (int)gstate.digging.x, (int)gstate.digging.y, (int)gstate.digging.z,
+					   (int)gstate.camera_hit.x, (int)gstate.camera_hit.y, (int)gstate.camera_hit.z);
+				last_dbg_by_player[ap] = now_dbg;
+			}
+		}
+#endif
 	}
 }
 

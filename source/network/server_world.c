@@ -77,14 +77,23 @@ void server_world_create(struct server_world* w, string_t level_name,
 	w->initialized = true;
 }
 
-void server_world_destroy(struct server_world* w) {
-	assert(w);
+	void server_world_destroy(struct server_world* w) {
+		assert(w);
 
-	if(!w->initialized)
-		return;
+		if(!w->initialized)
+			return;
+		// m-dict iterators assert on uninitialized dicts (index == NULL). In
+		// practice this can happen if a caller destroys a zeroed server_world
+		// without having created it successfully.
+		if(w->chunks->index == NULL) {
+			// Can't safely iterate/clear an uninitialized dict. Just mark the
+			// world as destroyed to avoid iterator asserts.
+			w->initialized = false;
+			return;
+		}
 
-	dict_server_chunks_it_t it;
-	dict_server_chunks_it(it, w->chunks);
+		dict_server_chunks_it_t it;
+		dict_server_chunks_it(it, w->chunks);
 
 	while(!dict_server_chunks_end_p(it)) {
 		struct server_chunk* sc = &dict_server_chunks_ref(it)->value;
@@ -95,10 +104,10 @@ void server_world_destroy(struct server_world* w) {
 		dict_server_chunks_next(it);
 	}
 
-	dict_server_chunks_clear(w->chunks);
-	string_clear(w->level_name);
-	w->initialized = false;
-}
+		dict_server_chunks_clear(w->chunks);
+		string_clear(w->level_name);
+		w->initialized = false;
+	}
 
 static bool server_chunk_get_block(void* user, c_coord_t x, w_coord_t y,
 								   c_coord_t z, struct block_data* blk) {

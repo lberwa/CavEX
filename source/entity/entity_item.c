@@ -262,12 +262,12 @@ static void entity_render(struct entity* e, mat4 view, float tick_delta) {
 	}
 }
 
-void entity_item(uint32_t id, struct entity* e, bool server, void* world,
-				 struct item_data it) {
-	assert(e && world);
+	void entity_item(uint32_t id, struct entity* e, bool server, void* world,
+					 struct item_data it) {
+		assert(e && world);
 
-    e->name = "Item";
-	e->id = id;
+	    e->name = "Item";
+		e->id = id;
 //	e->drop_item = NULL;
 	e->tick_server = entity_server_tick;
 	e->tick_client = entity_client_tick;
@@ -277,10 +277,10 @@ void entity_item(uint32_t id, struct entity* e, bool server, void* world,
 	e->data.item.age = 0;
 	e->data.item.item = it;
 	e->getBoundingBox = getBoundingBox;
-    e->leftClickText = NULL;
-//    e->onLeftClick   = onLeftClick;
-    e->rightClickText = NULL;
-//    e->onRightClick   = onRightClick;
+	    e->leftClickText = NULL;
+	    e->onLeftClick   = NULL;
+	    e->rightClickText = NULL;
+	    e->onRightClick   = NULL;
 
-	entity_default_init(e, server, world);
-}
+		entity_default_init(e, server, world);
+	}

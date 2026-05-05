@@ -20,10 +20,72 @@
 #include <assert.h>
 #include <stdlib.h>
 
+#include "../game/game_state.h"
 #include "../network/server_local.h"
 #include "blocks.h"
 
 struct block* blocks[256];
+
+static bool block_place_collides_with_player(struct server_local* s,
+											 struct block_info* blk_info) {
+	int player_count = 1;
+#ifdef SPLITSCREEN
+	player_count = splitscreen_player_count();
+#endif
+
+	for(int i = 0; i < player_count; i++) {
+		if(!s->players[i].has_pos || !s->players[i].finished_loading)
+			continue;
+
+		if(entity_local_player_block_collide(
+			   (vec3) {s->players[i].x, s->players[i].y, s->players[i].z},
+			   blk_info))
+			return true;
+	}
+
+	return false;
+}
+
+static bool block_place_collides_with_entity(struct server_local* s,
+											 struct block_info* blk_info) {
+	struct block *b = blocks[blk_info->block->type];
+	if(!b || !b->getBoundingBox)
+		return false;
+
+	size_t block_bbox_count = b->getBoundingBox(blk_info, true, NULL);
+	if(block_bbox_count == 0)
+		return false;
+
+	struct AABB block_bbox[block_bbox_count];
+	b->getBoundingBox(blk_info, true, block_bbox);
+
+	for(size_t i = 0; i < block_bbox_count; i++)
+		aabb_translate(block_bbox + i, blk_info->x, blk_info->y, blk_info->z);
+
+	dict_entity_it_t it;
+	dict_entity_it(it, s->entities);
+
+	while(!dict_entity_end_p(it)) {
+		struct entity *e = dict_entity_ref(it)->value;
+		dict_entity_next(it);
+
+		// Allow placement through loose item drops, but not through mobs/carts.
+		if(!e || !e->getBoundingBox || e->type == ENTITY_ITEM
+		   || e->type == ENTITY_LOCAL_PLAYER)
+			continue;
+
+		struct AABB entity_bbox;
+		if(e->getBoundingBox(e, &entity_bbox) == 0)
+			continue;
+
+		for(size_t i = 0; i < block_bbox_count; i++) {
+			if(aabb_intersection(block_bbox + i, &entity_bbox))
+				return true;
+		}
+	}
+
+	return false;
+}
 
 void blocks_init() {
 	for(int k = 0; k < 256; k++)
@@ -219,11 +281,8 @@ bool block_place_default(struct server_local* s, struct item_data* it,
 	struct block_info blk_info = *where;
 	blk_info.block = &blk;
 
-	if(entity_local_player_block_collide(
-		   (vec3) {s->players[s->active_player_id].x,
-				   s->players[s->active_player_id].y,
-				   s->players[s->active_player_id].z},
-		   &blk_info))
+	if(block_place_collides_with_player(s, &blk_info)
+	   || block_place_collides_with_entity(s, &blk_info))
 		return false;
 
 	server_world_set_block(s, where->x, where->y, where->z, blk);
