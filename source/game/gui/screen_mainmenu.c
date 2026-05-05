@@ -94,12 +94,12 @@ static void screen_mainmenu_update(struct screen* s, float dt) {
 		sound_play(pcm_click);
         switch(gui_selection) {
             case 0: // Start 
-				#ifdef PLATFORM_WII
+				//#ifdef PLATFORM_WII
 				menu_screen_set(&spieleranzahl_auswählen);
-                #endif
+                /*#endif
 				#ifdef PLATFORM_PC
 				menu_screen_set(&screen_select_world);
-				#endif
+				#endif*/
 				break;
             case 1: // Server
 				if (gstate.network) {

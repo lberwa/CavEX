@@ -1,6 +1,6 @@
 #include "../game_state.h"
 
-#ifdef PLATFORM_WII
+//#ifdef PLATFORM_WII
 
 #include <stdbool.h>
 #include <stdio.h>
@@ -248,7 +248,7 @@ static void screen_controllerauswahl_render2D(struct screen* s, int width, int h
     icon_offset += gutil_control_icon(icon_offset, IB_JUMP, "Back");
 
 
-#if 1 < 1
+#if 0
 
     char buf[128];  // Jede Zeile separat
 
@@ -298,4 +298,4 @@ struct screen screen_controllerauswahl = {
     .render3D = NULL,
     .render_world = false,
 };
-#endif /*PLATFORM_WII*/
+//#endif /*PLATFORM_WII*/

@@ -81,9 +81,9 @@ static void screen_gmenu_update(struct screen* s, float dt) {
         gui_selection++;
 
     // Aktion beim A-Knopf
-    if(input_pressed(IB_GUI_CLICK, 0)) {
-		sound_play(pcm_click);
-        switch(gui_selection) {
+	    if(input_pressed(IB_GUI_CLICK, 0)) {
+			sound_play(pcm_click);
+	        switch(gui_selection) {
             case 0:  
 				screen_set(&screen_ingame);
 				break;
@@ -96,20 +96,19 @@ static void screen_gmenu_update(struct screen* s, float dt) {
         			.type = SRPC_TOGGLE_PAUSE,
 		        });
                 break;
-            case 3:
-                svin_rpc_send(&(struct server_rpc) {
-		        	.type = SRPC_TOGGLE_PAUSE,
-        		});
-        		gstate.paused = false;
-
-		        screen_set(&screen_select_world);
-		        svin_rpc_send(&(struct server_rpc) {
-			        .type = SRPC_UNLOAD_WORLD,
-        		});
-                break;
-        }
-    }
-}
+	            case 3:
+					// Save & quit: unload the world but do NOT toggle pause here.
+					// `screen_game_menu` itself doesn't pause the server, so toggling
+					// would leave the server stuck in paused state for the next world.
+					gstate.paused = false;
+					screen_set(&screen_select_world);
+					svin_rpc_send(&(struct server_rpc) {
+						.type = SRPC_UNLOAD_WORLD,
+					});
+	                break;
+	        }
+	    }
+	}
 
 
 static void screen_gmenu_render2D(struct screen* s, int width, int height) { 

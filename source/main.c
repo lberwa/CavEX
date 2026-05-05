@@ -200,7 +200,9 @@ int main(void) {
 	#endif
 #endif
 
-	config_create(&gstate.config_user, "config.json");
+	if (!config_create(&gstate.config_user, "config.json")) {
+		printf("Failed to load config.json\n");
+	}
 
 	input_init();
 	blocks_init();
@@ -379,17 +381,20 @@ int main(void) {
 					camera_get_ray(&gstate.camera, origin, dir);
 
 					float tHit;
-					struct entity *hitE = raycast_entity(&gstate.entities,
-														 origin, dir,
-														 4.5f,
-														 &tHit);
-					if(hitE == gstate.local_player)
-						hitE = NULL;
+						struct entity *hitE = raycast_entity(&gstate.entities,
+															 origin, dir,
+															 4.5f,
+															 &tHit);
+						if(hitE == gstate.local_player)
+							hitE = NULL;
+						// Ignore floating item pickups for block interactions.
+						if(hitE && hitE->type == ENTITY_ITEM)
+							hitE = NULL;
 
-					if(hitE) {
-						gstate.camera_hit.entity_hit = true;
-						gstate.camera_hit.entity_id  = hitE->id;
-						gstate.camera_hit.hit = false;
+						if(hitE) {
+							gstate.camera_hit.entity_hit = true;
+							gstate.camera_hit.entity_id  = hitE->id;
+							gstate.camera_hit.hit = false;
 					} else {
 						gstate.camera_hit.entity_hit = false;
 						gstate.camera_hit.entity_id  = 0;
@@ -461,18 +466,21 @@ int main(void) {
 
 					// 2) Probeer eerst een entiteit te raken binnen 4.5 eenheid
 					float tHit;
-					struct entity *hitE = raycast_entity(&gstate.entities,
-														 origin, dir,
-														 4.5f,
-														 &tHit);
-					if (hitE == gstate.local_player) {
-					    hitE = NULL;
-					}
+						struct entity *hitE = raycast_entity(&gstate.entities,
+															 origin, dir,
+															 4.5f,
+															 &tHit);
+						if (hitE == gstate.local_player) {
+						    hitE = NULL;
+						}
+						// Ignore floating item pickups for block interactions.
+						if(hitE && hitE->type == ENTITY_ITEM)
+							hitE = NULL;
 
-					if (hitE) {
-						gstate.camera_hit.entity_hit = true;
-						gstate.camera_hit.entity_id  = hitE->id;
-						gstate.camera_hit.hit = false;
+						if (hitE) {
+							gstate.camera_hit.entity_hit = true;
+							gstate.camera_hit.entity_id  = hitE->id;
+							gstate.camera_hit.hit = false;
 					}
 					else {
 						gstate.camera_hit.entity_hit = false;
@@ -535,13 +543,17 @@ int main(void) {
 						gfx_clear_buffers(128, 128, 128);
 					}
 
-					gfx_fog_color(atmosphere_color[0], atmosphere_color[1],
-									atmosphere_color[2]);
+						gfx_fog_color(atmosphere_color[0], atmosphere_color[1],
+										atmosphere_color[2]);
 
-					camera_update_viewport(&gstate.camera, gstate.in_water,
-										   (float)vp_w / (float)vp_h);
-					world_pre_render(&gstate.world, &gstate.camera,
-									 gstate.camera.view);
+						// In splitscreen the viewport is smaller, but we keep the
+						// original full-screen aspect ratio for 3D projection to
+						// avoid "wide" distortion (e.g. vp_h/2 making aspect 2x).
+						camera_update_viewport(&gstate.camera, gstate.in_water,
+											   (float)gfx_width()
+												   / (float)gfx_height());
+						world_pre_render(&gstate.world, &gstate.camera,
+										 gstate.camera.view);
 
 					gfx_mode_world();
 					gfx_matrix_projection(gstate.camera.projection, true);

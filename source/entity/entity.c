@@ -29,6 +29,12 @@ void entity_default_init(struct entity* e, bool server, void* world) {
 	e->world = world;
 	e->on_ground = true;
 	e->delay_destroy = -1;
+	e->name = NULL;
+	e->leftClickText = NULL;
+	e->rightClickText = NULL;
+	e->onRightClick = NULL;
+	e->onLeftClick = NULL;
+	e->getBoundingBox = NULL;
 
 	glm_vec3_zero(e->pos);
 	glm_vec3_zero(e->pos_old);
@@ -407,11 +413,6 @@ raycast_entity(dict_entity_t *entities,
 
     while (!dict_entity_end_p(it)) {
         struct entity *e = dict_entity_ref(it)->value;
-
-        if (e->id == 0) {
-            dict_entity_next(it);
-            continue;
-        }
 
         float tHit;
         if (entity_aabb_intersect_ray(origin, dir, e, &tHit)) {

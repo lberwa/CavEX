@@ -451,7 +451,7 @@ static void server_local_process(struct server_rpc* call, void* user) {
 				}
 			}
 			break;
-		case SRPC_UNLOAD_WORLD:
+			case SRPC_UNLOAD_WORLD:
 			// Splitscreen can send duplicate unload/save requests (e.g. from
 			// multiple local players). If the world is already unloaded, ignore.
 			if(string_get_cstr(s->level_name)[0] == '\0')
@@ -502,8 +502,10 @@ static void server_local_process(struct server_rpc* call, void* user) {
 			player->has_pos = false;
 			player->finished_loading = false;
 #endif
-			string_reset(s->level_name);
-			break;
+				string_reset(s->level_name);
+				// Ensure we don't stay paused across worlds.
+				s->paused = false;
+				break;
 
 		case SRPC_ENTITY_ATTACK:
 		  uint32_t id = call->payload.entity_attack.entity_id;
@@ -522,6 +524,19 @@ static void server_local_process(struct server_rpc* call, void* user) {
 		      }
 		    }
 		  }
+		  break;
+		case SRPC_PLAYER_ATTACK:
+#ifdef SPLITSCREEN
+		  if(call->payload.player_attack.target_player_id < splitscreen_player_count()
+		     && call->payload.player_attack.target_player_id != pid) {
+			uint8_t target_pid = call->payload.player_attack.target_player_id;
+			struct server_player* target = &s->players[target_pid];
+			if(target->has_pos) {
+				server_local_set_player_health(
+					s, target_pid, target->health - HEALTH_PER_HEART);
+			}
+		  }
+#endif
 		  break;
 		case SRPC_LOAD_WORLD:
 			#ifdef SPLITSCREEN
@@ -594,8 +609,7 @@ static void server_local_process(struct server_rpc* call, void* user) {
 						sp->spawn_y = spawn_y;
 							sp->spawn_z = spawn_z;
 							sp->active_inventory = &sp->inventory;
-							// We already send initial state immediately; allow SRPC_PLAYER_POS right away.
-							sp->finished_loading = true;
+							sp->finished_loading = false;
 						}
 
 					// Load only the primary inventory from `level.dat` (vanilla format).
@@ -616,7 +630,7 @@ static void server_local_process(struct server_rpc* call, void* user) {
 					player->spawn_y = spawn_y;
 						player->spawn_z = spawn_z;
 						player->active_inventory = &player->inventory;
-						player->finished_loading = true;
+						player->finished_loading = false;
 
 						level_archive_read_inventory(&s->level, &player->inventory);
 #endif
@@ -695,18 +709,25 @@ static void server_local_update(struct server_local* s) {
 
 	svin_process_messages(server_local_process, s, false);
 
-#ifdef SPLITSCREEN
-	int max_players = 4;
-	bool any_active = false;
-	for(int i = 0; i < max_players; i++) {
-		if(s->players[i].has_pos) any_active = true;
-	}
-	if(!any_active || s->paused)
+	#ifdef SPLITSCREEN
+		int max_players = 4;
+		bool any_active = false;
+		for(int i = 0; i < max_players; i++) {
+			if(s->players[i].has_pos) any_active = true;
+		}
+		if(!any_active || s->paused)
+			return;
+	#else
+		if(!s->player.has_pos || s->paused)
+			return;
+	#endif
+
+	// World might not be loaded yet (or just got unloaded). Avoid touching the
+	// server_world / chunk dict in that case (m-dict iterators assert when the
+	// dict isn't initialized).
+	if(!s->world_initialized || !s->world.initialized
+	   || s->world.chunks->index == NULL)
 		return;
-#else
-	if(!s->player.has_pos || s->paused)
-		return;
-#endif
 
 	s->world_time++;
 

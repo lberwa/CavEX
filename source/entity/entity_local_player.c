@@ -18,17 +18,25 @@
 */
 
 #include "../block/blocks_data.h"
+#include "../graphics/render_entity.h"
+#include "../graphics/render_model.h"
 #include "../platform/input.h"
+#include "../platform/gfx.h"
 #include "../game/game_state.h"
 #include "../network/server_local.h"
+#include "../network/server_interface.h"
 #include "entity.h"
 
 #define EYE_HEIGHT 1.62F
+#define PLAYER_HITBOX_WIDTH 0.9F
+#define PLAYER_HITBOX_HEIGHT 1.9F
 
 static size_t getBoundingBox(const struct entity* e, struct AABB* out) {
 	assert(e && out);
-	aabb_setsize_centered(out, 0.6F, 1.8F, 0.6F);
-	aabb_translate(out, e->pos[0], e->pos[1] + 1.8F / 2.0F - EYE_HEIGHT,
+	aabb_setsize_centered(out, PLAYER_HITBOX_WIDTH, PLAYER_HITBOX_HEIGHT,
+	                      PLAYER_HITBOX_WIDTH);
+	aabb_translate(out, e->pos[0],
+	               e->pos[1] + PLAYER_HITBOX_HEIGHT / 2.0F - EYE_HEIGHT,
 				   e->pos[2]);
 	return 1;
 }
@@ -63,6 +71,93 @@ static bool test_in_water(struct AABB* entity, struct block_info* blk_info) {
 
 static bool test_in_liquid(struct AABB* entity, struct block_info* blk_info) {
 	return test_in_water(entity, blk_info) || test_in_lava(entity, blk_info);
+}
+
+static void entity_render(struct entity* e, mat4 view, float td) {
+	assert(e);
+
+	if(e == gstate.local_player)
+		return;
+
+	vec3 p;
+	glm_vec3_lerp(e->pos_old, e->pos, td, p);
+
+	struct block_data blk_eye = {0};
+	struct block_data blk_body = {0};
+	entity_get_block(e, floorf(p[0]), floorf(p[1]), floorf(p[2]), &blk_eye);
+	entity_get_block(e, floorf(p[0]), floorf(p[1] - EYE_HEIGHT + 1.0F),
+	                 floorf(p[2]), &blk_body);
+	uint8_t sky_light = blk_eye.sky_light > blk_body.sky_light ?
+		blk_eye.sky_light :
+		blk_body.sky_light;
+	uint8_t torch_light = blk_eye.torch_light > blk_body.torch_light ?
+		blk_eye.torch_light :
+		blk_body.torch_light;
+	render_entity_update_light((torch_light << 4) | sky_light);
+
+	mat4 model, mv;
+	glm_translate_make(model, (vec3) {p[0], p[1] - EYE_HEIGHT, p[2]});
+	glm_rotate_y(model, glm_rad(180.0f - glm_deg(e->orient[0])), model);
+	glm_scale_uni(model, 1.0f / 16.0f);
+	glm_translate(model, (vec3) {0.0f, 10.0f, 0.0f});
+	glm_mat4_mul(view, model, mv);
+
+	float dx = e->pos[0] - e->pos_old[0];
+	float dz = e->pos[2] - e->pos_old[2];
+	float walk_speed = sqrtf(dx * dx + dz * dz);
+	ptime_t now = time_get();
+	float t = (float)now.tv_sec + (float)now.tv_nsec / 1000000000.0f;
+	float foot_angle
+		= walk_speed > 0.001f ? sinf(t * 2.0f * GLM_PI * 2.0f) * 30.0f : 0.0f;
+
+	struct item_data held_item, helmet, chestplate, leggings, boots;
+	struct item_data *held_ptr = NULL, *helmet_ptr = NULL, *chest_ptr = NULL,
+	                 *legs_ptr = NULL, *boots_ptr = NULL;
+#ifdef SPLITSCREEN
+	int player_index = e->data.local_player.player_index;
+#else
+	int player_index = 0;
+#endif
+	struct window_container* wc
+		= gstate.windows_by_player[player_index][WINDOWC_INVENTORY];
+	if(wc) {
+		struct inventory* inv = windowc_get_latest(wc);
+		held_ptr = inventory_get_hotbar_item(inv, &held_item) ? &held_item : NULL;
+		helmet_ptr = inventory_get_slot(inv, INVENTORY_SLOT_ARMOR + 0, &helmet) ?
+			&helmet :
+			NULL;
+		chest_ptr
+			= inventory_get_slot(inv, INVENTORY_SLOT_ARMOR + 1, &chestplate) ?
+				  &chestplate :
+				  NULL;
+		legs_ptr = inventory_get_slot(inv, INVENTORY_SLOT_ARMOR + 2, &leggings) ?
+			&leggings :
+			NULL;
+		boots_ptr = inventory_get_slot(inv, INVENTORY_SLOT_ARMOR + 3, &boots) ?
+			&boots :
+			NULL;
+	}
+
+	render_model_player(mv, 0.0f, 0.0f, foot_angle, foot_angle, held_ptr,
+	                    helmet_ptr, chest_ptr, legs_ptr, boots_ptr);
+
+	struct AABB shadow_bb;
+	aabb_setsize_centered(&shadow_bb, 0.25f, 0.25f, 0.25f);
+	aabb_translate(&shadow_bb, p[0], p[1] - EYE_HEIGHT + 0.04f, p[2]);
+	entity_shadow(e, &shadow_bb, view);
+}
+
+static bool onLeftClick(struct entity* e) {
+	assert(e);
+#ifdef SPLITSCREEN
+	svin_rpc_send(&(struct server_rpc) {
+		RPC_PLAYER_ID(gstate_active_player())
+		.type = SRPC_PLAYER_ATTACK,
+		.payload.player_attack.target_player_id
+			= (uint8_t)e->data.local_player.player_index,
+	});
+#endif
+	return true;
 }
 
 static bool entity_tick(struct entity* e) {
@@ -139,8 +234,11 @@ static bool entity_tick(struct entity* e) {
 			e->vel[k] = 0.0F;
 
 	struct AABB bbox;
-	aabb_setsize_centered(&bbox, 0.6F, 1.0F, 0.6F);
-	aabb_translate(&bbox, e->pos[0], e->pos[1] + 1.8F / 2.0F - EYE_HEIGHT, e->pos[2]);
+	aabb_setsize_centered(&bbox, PLAYER_HITBOX_WIDTH, 1.0F,
+	                      PLAYER_HITBOX_WIDTH);
+	aabb_translate(&bbox, e->pos[0],
+	               e->pos[1] + PLAYER_HITBOX_HEIGHT / 2.0F - EYE_HEIGHT,
+	               e->pos[2]);
 
 	bool in_water = entity_intersection(e, &bbox, test_in_water);
 	bool in_lava  = entity_intersection(e, &bbox, test_in_lava);
@@ -158,6 +256,19 @@ static bool entity_tick(struct entity* e) {
 		if(input_held(IB_LEFT, player_index))     strafe--;
 		jumping = input_held(IB_JUMP, player_index);
 	}
+
+#ifdef PLATFORM_PC
+	static ptime_t last_move_dbg[4];
+	ptime_t move_dbg_now = time_get();
+	if(player_index >= 0 && player_index < 4
+	   && time_diff_ms(last_move_dbg[player_index], move_dbg_now) >= 200
+	   && (forward != 0 || strafe != 0 || jumping)) {
+		printf("[entity_move] pidx=%d capture=%d forward=%d strafe=%d jump=%d orient=(%.3f, %.3f)\n",
+			   player_index, (int)e->data.local_player.capture_input, forward,
+			   strafe, (int)jumping, e->orient[0], e->orient[1]);
+		last_move_dbg[player_index] = move_dbg_now;
+	}
+#endif
 
 	int dist = forward * forward + strafe * strafe;
 	if(dist > 0) {
@@ -183,8 +294,9 @@ static bool entity_tick(struct entity* e) {
 		e->data.local_player.jump_ticks = 0;
 	}
 
-	aabb_setsize_centered(&bbox, 0.6F, 1.8F, 0.6F);
-	aabb_translate(&bbox, 0.0F, 1.8F / 2.0F - EYE_HEIGHT, 0.0F);
+	aabb_setsize_centered(&bbox, PLAYER_HITBOX_WIDTH, PLAYER_HITBOX_HEIGHT,
+	                      PLAYER_HITBOX_WIDTH);
+	aabb_translate(&bbox, 0.0F, PLAYER_HITBOX_HEIGHT / 2.0F - EYE_HEIGHT, 0.0F);
 
 	// Unstuck (cheap vertical nudge)
 	struct AABB tmp1 = bbox, tmp2 = bbox;
@@ -253,9 +365,11 @@ static bool entity_tick(struct entity* e) {
 
 	if(collision_xz && (in_lava || in_water)) {
 		struct AABB tmp;
-		aabb_setsize_centered(&tmp, 0.6F, 1.8F, 0.6F);
+		aabb_setsize_centered(&tmp, PLAYER_HITBOX_WIDTH, PLAYER_HITBOX_HEIGHT,
+		                      PLAYER_HITBOX_WIDTH);
 		aabb_translate(&tmp, e->pos[0] + e->vel[0],
-		               e->pos[1] + e->vel[1] + 1.8F / 2.0F - 1.62F + 0.6F,
+		               e->pos[1] + e->vel[1]
+		                   + PLAYER_HITBOX_HEIGHT / 2.0F - EYE_HEIGHT + 0.6F,
 		               e->pos[2] + e->vel[2]);
 		if(!entity_intersection(e, &tmp, test_in_liquid))
 			e->vel[1] = 0.3F;
@@ -278,31 +392,33 @@ bool entity_local_player_block_collide(vec3 pos, struct block_info* blk_info) {
 	assert(pos && blk_info);
 
 	struct AABB bbox;
-	aabb_setsize_centered(&bbox, 0.6F, 1.8F, 0.6F);
-	aabb_translate(&bbox, pos[0], 1.8F / 2.0F - EYE_HEIGHT + pos[1], pos[2]);
+	aabb_setsize_centered(&bbox, PLAYER_HITBOX_WIDTH, PLAYER_HITBOX_HEIGHT,
+	                      PLAYER_HITBOX_WIDTH);
+	aabb_translate(&bbox, pos[0],
+	               PLAYER_HITBOX_HEIGHT / 2.0F - EYE_HEIGHT + pos[1], pos[2]);
 
 	return entity_block_aabb_test(&bbox, blk_info);
 }
 
-void entity_local_player(uint32_t id, struct entity* e, struct world* w) {
-	assert(e && w);
+	void entity_local_player(uint32_t id, struct entity* e, struct world* w) {
+		assert(e && w);
 
+	entity_default_init(e, false, w);
 	e->id = id;
 	e->tick_server = NULL;
 	e->tick_client = entity_tick;
-	e->render = NULL;
+	e->render = entity_render;
 	e->teleport = entity_default_teleport;
 	e->type = ENTITY_LOCAL_PLAYER;
+	e->name = "Player";
 	e->getBoundingBox = getBoundingBox;
 	e->data.local_player.capture_input = true;
-#ifdef SPLITSCREEN
-	e->data.local_player.player_index = 0;
-#endif
-    e->leftClickText = NULL;
-//    e->onLeftClick   = onLeftClick;
-    e->rightClickText = NULL;
-//    e->onRightClick   = onRightClick;
-
-	entity_default_init(e, false, w);
-	e->data.local_player.jump_ticks = 0;
-}
+	// `player_index` is assigned by the caller (e.g. splitscreen setup).
+	// Do not overwrite it here, otherwise all local players end up with index 0.
+	    e->leftClickText = "Attack";
+	    e->onLeftClick   = onLeftClick;
+	    e->rightClickText = NULL;
+	    e->onRightClick   = NULL;
+	e->health = MAX_PLAYER_HEALTH;
+		e->data.local_player.jump_ticks = 0;
+	}
