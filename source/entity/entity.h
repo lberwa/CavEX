@@ -87,6 +87,8 @@ struct entity {
 		struct entity_local_player {
 			int jump_ticks;
 			bool capture_input;
+			float body_yaw;
+			float body_yaw_old;
 #ifdef SPLITSCREEN
 			uint8_t player_index;
 #endif
@@ -172,6 +174,7 @@ bool entity_aabb_intersect_ray(const vec3 origin,
 struct entity *raycast_entity(dict_entity_t *entities,
                               const vec3 origin,
                               const vec3 dir,
+                              const struct entity *ignore,
                               float maxDist,
                               float *out_tNear);
 void entity_damp_velocity(struct entity* e, float threshold);
