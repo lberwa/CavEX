@@ -30,6 +30,22 @@
 #define EYE_HEIGHT 1.62F
 #define PLAYER_HITBOX_WIDTH 0.9F
 #define PLAYER_HITBOX_HEIGHT 1.9F
+#define PLAYER_MODEL_Y_OFFSET 1.125F
+#define PLAYER_HEAD_YAW_LIMIT glm_rad(45.0F)
+#define PLAYER_BODY_FOLLOW_IDLE 0.18F
+#define PLAYER_BODY_FOLLOW_MOVING 0.28F
+
+static float angle_normalize(float angle) {
+	while(angle > GLM_PI)
+		angle -= 2.0F * GLM_PI;
+	while(angle < -GLM_PI)
+		angle += 2.0F * GLM_PI;
+	return angle;
+}
+
+static float angle_lerp(float from, float to, float t) {
+	return from + angle_normalize(to - from) * t;
+}
 
 static size_t getBoundingBox(const struct entity* e, struct AABB* out) {
 	assert(e && out);
@@ -82,22 +98,40 @@ static void entity_render(struct entity* e, mat4 view, float td) {
 	vec3 p;
 	glm_vec3_lerp(e->pos_old, e->pos, td, p);
 
-	struct block_data blk_eye = {0};
+	float model_y = p[1] - EYE_HEIGHT + PLAYER_MODEL_Y_OFFSET;
+	struct block_data blk_feet = {0};
 	struct block_data blk_body = {0};
-	entity_get_block(e, floorf(p[0]), floorf(p[1]), floorf(p[2]), &blk_eye);
-	entity_get_block(e, floorf(p[0]), floorf(p[1] - EYE_HEIGHT + 1.0F),
-	                 floorf(p[2]), &blk_body);
-	uint8_t sky_light = blk_eye.sky_light > blk_body.sky_light ?
-		blk_eye.sky_light :
-		blk_body.sky_light;
-	uint8_t torch_light = blk_eye.torch_light > blk_body.torch_light ?
-		blk_eye.torch_light :
-		blk_body.torch_light;
+	struct block_data blk_head = {0};
+	entity_get_block(e, floorf(p[0]), floorf(model_y + 0.2F), floorf(p[2]),
+	                 &blk_feet);
+	entity_get_block(e, floorf(p[0]), floorf(model_y + 1.0F), floorf(p[2]),
+	                 &blk_body);
+	entity_get_block(e, floorf(p[0]), floorf(model_y + 1.7F), floorf(p[2]),
+	                 &blk_head);
+	uint8_t sky_light = blk_feet.sky_light;
+	if(blk_body.sky_light > sky_light)
+		sky_light = blk_body.sky_light;
+	if(blk_head.sky_light > sky_light)
+		sky_light = blk_head.sky_light;
+	uint8_t torch_light = blk_feet.torch_light;
+	if(blk_body.torch_light > torch_light)
+		torch_light = blk_body.torch_light;
+	if(blk_head.torch_light > torch_light)
+		torch_light = blk_head.torch_light;
 	render_entity_update_light((torch_light << 4) | sky_light);
 
+	float body_yaw = angle_lerp(e->data.local_player.body_yaw_old,
+	                            e->data.local_player.body_yaw, td);
+	float head_yaw = angle_normalize(
+		angle_lerp(e->orient_old[0], e->orient[0], td) - body_yaw);
+	float pitch = e->orient_old[1] + (e->orient[1] - e->orient_old[1]) * td;
+	float head_pitch = glm_deg(pitch) - 90.0F;
+
 	mat4 model, mv;
-	glm_translate_make(model, (vec3) {p[0], p[1] - EYE_HEIGHT, p[2]});
-	glm_rotate_y(model, glm_rad(180.0f - glm_deg(e->orient[0])), model);
+	glm_translate_make(model,
+	                   (vec3) {p[0], p[1] - EYE_HEIGHT + PLAYER_MODEL_Y_OFFSET,
+	                           p[2]});
+	glm_rotate_y(model, glm_rad(-glm_deg(body_yaw) + 90.0f), model);
 	glm_scale_uni(model, 1.0f / 16.0f);
 	glm_translate(model, (vec3) {0.0f, 10.0f, 0.0f});
 	glm_mat4_mul(view, model, mv);
@@ -138,8 +172,11 @@ static void entity_render(struct entity* e, mat4 view, float td) {
 			NULL;
 	}
 
-	render_model_player(mv, 0.0f, 0.0f, foot_angle, foot_angle, held_ptr,
-	                    helmet_ptr, chest_ptr, legs_ptr, boots_ptr);
+	gfx_lighting(false);
+	render_model_player(mv, head_pitch, -glm_deg(head_yaw), foot_angle,
+	                    foot_angle, held_ptr, helmet_ptr, chest_ptr, legs_ptr,
+	                    boots_ptr);
+	gfx_lighting(true);
 
 	struct AABB shadow_bb;
 	aabb_setsize_centered(&shadow_bb, 0.25f, 0.25f, 0.25f);
@@ -270,6 +307,8 @@ static bool entity_tick(struct entity* e) {
 	}
 #endif
 
+	e->data.local_player.body_yaw_old = e->data.local_player.body_yaw;
+
 	int dist = forward * forward + strafe * strafe;
 	if(dist > 0) {
 		float distf = fmaxf(sqrtf(dist), 1.0F);
@@ -386,6 +425,25 @@ static bool entity_tick(struct entity* e) {
 	else gstate.oxygen = MAX_OXYGEN;
 #endif
 
+	vec3 movement_delta;
+	entity_get_delta(e, movement_delta);
+	float walk_speed = sqrtf(movement_delta[0] * movement_delta[0]
+	                         + movement_delta[2] * movement_delta[2]);
+	float head_world_yaw = e->orient[0];
+	float yaw_diff
+		= angle_normalize(head_world_yaw - e->data.local_player.body_yaw);
+	float follow_factor = walk_speed > 0.001F ? PLAYER_BODY_FOLLOW_MOVING :
+	                                          PLAYER_BODY_FOLLOW_IDLE;
+	entity_blend_body_to_head(&e->data.local_player.body_yaw, head_world_yaw,
+	                          follow_factor);
+	yaw_diff = angle_normalize(head_world_yaw - e->data.local_player.body_yaw);
+	if(yaw_diff > PLAYER_HEAD_YAW_LIMIT)
+		e->data.local_player.body_yaw
+			= angle_normalize(head_world_yaw - PLAYER_HEAD_YAW_LIMIT);
+	else if(yaw_diff < -PLAYER_HEAD_YAW_LIMIT)
+		e->data.local_player.body_yaw
+			= angle_normalize(head_world_yaw + PLAYER_HEAD_YAW_LIMIT);
+
 	return false;
 }
 bool entity_local_player_block_collide(vec3 pos, struct block_info* blk_info) {
@@ -421,4 +479,6 @@ bool entity_local_player_block_collide(vec3 pos, struct block_info* blk_info) {
 	    e->onRightClick   = NULL;
 	e->health = MAX_PLAYER_HEALTH;
 		e->data.local_player.jump_ticks = 0;
+		e->data.local_player.body_yaw = e->orient[0];
+		e->data.local_player.body_yaw_old = e->orient[0];
 	}

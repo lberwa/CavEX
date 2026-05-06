@@ -401,6 +401,7 @@ struct entity *
 raycast_entity(dict_entity_t *entities,
                const vec3 origin,
                const vec3 dir,
+               const struct entity *ignore,
                float maxDist,
                float *out_tNear)
 {
@@ -413,6 +414,11 @@ raycast_entity(dict_entity_t *entities,
 
     while (!dict_entity_end_p(it)) {
         struct entity *e = dict_entity_ref(it)->value;
+
+        if(!e || e == ignore) {
+            dict_entity_next(it);
+            continue;
+        }
 
         float tHit;
         if (entity_aabb_intersect_ray(origin, dir, e, &tHit)) {

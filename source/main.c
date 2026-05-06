@@ -383,10 +383,9 @@ int main(void) {
 					float tHit;
 						struct entity *hitE = raycast_entity(&gstate.entities,
 															 origin, dir,
+															 gstate.local_player,
 															 4.5f,
 															 &tHit);
-						if(hitE == gstate.local_player)
-							hitE = NULL;
 						// Ignore floating item pickups for block interactions.
 						if(hitE && hitE->type == ENTITY_ITEM)
 							hitE = NULL;
@@ -468,11 +467,9 @@ int main(void) {
 					float tHit;
 						struct entity *hitE = raycast_entity(&gstate.entities,
 															 origin, dir,
+															 gstate.local_player,
 															 4.5f,
 															 &tHit);
-						if (hitE == gstate.local_player) {
-						    hitE = NULL;
-						}
 						// Ignore floating item pickups for block interactions.
 						if(hitE && hitE->type == ENTITY_ITEM)
 							hitE = NULL;

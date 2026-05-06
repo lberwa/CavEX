@@ -413,6 +413,7 @@ static void server_local_process(struct server_rpc* call, void* user) {
 					struct item_data it_data;
 					inventory_get_hotbar_item(&player->inventory, &it_data);
 					struct item* it = item_get(&it_data);
+					bool placed = false;
 
 					if(blocks[blk_on.type]
 					   && blocks[blk_on.type]->onRightClick) {
@@ -420,18 +421,22 @@ static void server_local_process(struct server_rpc* call, void* user) {
 						blocks[blk_on.type]->onRightClick(
 							s, &it_data, &where, &on,
 							call->payload.block_place.side);
-						if (place_block) {
-							goto p_block;
-							place_block = false;
-						}
+						bool do_place = place_block;
+						place_block = false;
+						if (do_place && it && it->onItemPlace)
+							placed = it->onItemPlace(
+								s, &it_data, &where, &on,
+								call->payload.block_place.side);
 					} else if((!blocks[blk_where.type]
 							   || blocks[blk_where.type]->place_ignore)
 							  && it && it->onItemPlace
-							  && it->onItemPlace(
+							  && (placed = it->onItemPlace(
 								  s, &it_data, &where, &on,
-								  call->payload.block_place.side)) {
+								  call->payload.block_place.side))) {
 						//printf("false2");
-						p_block:
+					}
+
+					if(placed) {
 						size_t slot
 							= inventory_get_hotbar(&player->inventory);
 						inventory_consume(&player->inventory,
