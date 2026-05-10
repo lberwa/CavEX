@@ -1,0 +1,87 @@
+{
+	"paths": {
+		"texturepack": "$(HOME_PATH)/assets",
+		"worlds": "$(HOME_PATH)/saves",
+		"bg": ".$(HOME_PATH)/bg",
+		"MP3": "$(HOME_PATH)/mp32",
+		"sounds": "$(HOME_PATH)/mp32/sound",
+		"tmp": "$(HOME_PATH)/tmp"
+	},
+	"input": {
+		"p1": {
+    "player_forward": [84],      
+    "player_backward": [71],    
+    "player_left": [70],       
+    "player_right": [72],    
+
+    "player_jump": [89],        
+    "player_sneak": [78],
+
+    "item_action_left": [90],
+    "item_action_right": [85],  
+
+    "scroll_left": [90],       
+    "scroll_right": [88],        
+
+    "inventory": [67],          
+    "open_menu": [86],       
+
+    "gui_up": [84],
+    "gui_down": [71],
+    "gui_left": [70],
+    "gui_right": [72],
+
+    "gui_click": [90],
+    "gui_click_alt": [85],
+
+    "screenshot": [79],       
+    "gui_back": [86],
+	"any_button": [71, 84, 72, 90, 85]
+},
+"p2": {
+	"player_forward": [87],
+		"player_backward": [83],
+		"player_left": [65],
+		"player_right": [68],
+		"player_jump": [32],
+		"player_sneak": [340],
+		"item_action_left": [1000],
+		"item_action_right": [1001],
+		"scroll_left": [292],
+		"scroll_right": [293],
+		"inventory": [69],
+		"open_menu": [256],
+		"gui_up": [87, 265],
+		"gui_down": [83, 264],
+		"gui_left": [65, 263],
+		"gui_right": [68, 262],
+		"gui_click": [1000, 257],
+		"gui_click_alt": [1001],
+		"screenshot": [291],
+		"gui_back": [256],
+		"any_button": [87, 83, 65]
+},
+	
+		"player_forward": [87],
+		"player_backward": [83],
+		"player_left": [65],
+		"player_right": [68],
+		"player_jump": [32],
+		"player_sneak": [340],
+		"item_action_left": [1000],
+		"item_action_right": [1001],
+		"scroll_left": [292],
+		"scroll_right": [293],
+		"inventory": [69],
+		"open_menu": [256],
+		"gui_up": [87, 265],
+		"gui_down": [83, 264],
+		"gui_left": [65, 263],
+		"gui_right": [68, 262],
+		"gui_click": [1000, 257],
+		"gui_click_alt": [1001],
+		"screenshot": [291],
+		"gui_back": [256],
+		"any_button": [87, 83, 65]
+	}
+}

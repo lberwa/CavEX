@@ -21,7 +21,7 @@
 #define SERVER_INTERFACE_H
 
 #include "../world.h"
-#include <m-lib/m-string.h>
+#include "../m-lib/m-string.h"
 #include <stdbool.h>
 #include <stdint.h>
 

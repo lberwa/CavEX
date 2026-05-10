@@ -34,6 +34,10 @@
 
 #include <malloc.h>
 
+static struct window_container* active_inventory_window(void) {
+	return gstate_windows()[WINDOWC_INVENTORY];
+}
+
 static void screen_ingame_reset(struct screen* s, int width, int height) {
 	input_pointer_enable(false);
 
@@ -41,6 +45,8 @@ static void screen_ingame_reset(struct screen* s, int width, int height) {
 }
 
 void screen_ingame_render3D(struct screen* s, mat4 view) {
+	if(!active_inventory_window())
+		return;
 	
 	if (gstate.world_loaded && gstate.camera_hit.entity_hit) {
 		struct entity **ptr = dict_entity_get(gstate.entities,
@@ -179,6 +185,14 @@ void screen_ingame_render3D(struct screen* s, mat4 view) {
 }
 
 	static void screen_ingame_update_player(struct screen* s, float dt) {
+		if(input_pressed(IB_HOME, gstate_active_player())) {
+			screen_set_player(gstate_active_player(), &screen_game_menu);
+			return;
+		}
+
+		if(!active_inventory_window())
+			return;
+
 		// left click interaction
 		if (gstate.camera_hit.entity_hit
 		    && input_pressed(IB_ACTION1, gstate_active_player())
@@ -424,19 +438,8 @@ void screen_ingame_render3D(struct screen* s, mat4 view) {
 		});
 	}
 
-	if(input_pressed(IB_HOME, gstate_active_player())) {
-		screen_set(&screen_game_menu);
-		/*
-		gstate.paused = true;
-
-		svin_rpc_send(&(struct server_rpc) {
-			.type = SRPC_TOGGLE_PAUSE,
-		});
-		*/
-	}
-
 	if(input_pressed(IB_INVENTORY, gstate_active_player()))
-		screen_set(&screen_inventory);
+		screen_set_player(gstate_active_player(), &screen_inventory);
 }
 
 	static void screen_ingame_update(struct screen* s, float dt) {
@@ -445,18 +448,30 @@ void screen_ingame_render3D(struct screen* s, mat4 view) {
 			int player_count = splitscreen_player_count();
 			for(int p = 0; p < player_count; p++) {
 				splitscreen_load_player(p);
-				screen_ingame_update_player(s, dt);
+				struct screen* ps = screen_get_player(p);
+				if(ps == &screen_ingame)
+					screen_ingame_update_player(s, dt);
+				else if(ps && ps->update)
+					ps->update(ps, dt);
 				splitscreen_store_player(p);
 			}
 			splitscreen_load_player(0);
 			return;
 		}
 	#endif
-		screen_ingame_update_player(s, dt);
+		{
+			struct screen* ps = screen_get_player(0);
+			if(ps == &screen_ingame)
+				screen_ingame_update_player(s, dt);
+			else if(ps && ps->update)
+				ps->update(ps, dt);
+		}
 	}
 
 static void screen_ingame_render2D(struct screen* s, int width, int height) {
 	char str[128];
+	if(!active_inventory_window())
+		return;
 	
 #ifdef NDEBUG
 	snprintf(str, sizeof(str),
@@ -478,6 +493,9 @@ static void screen_ingame_render2D(struct screen* s, int width, int height) {
 	         glm_deg(gstate.camera.rx), glm_deg(gstate.camera.ry));
 	gutil_text(4, 4 + (GFX_GUI_SCALE * 8 + 1) * 3, str, GFX_GUI_SCALE * 8, true);
 
+	snprintf(str, sizeof(str), "player: %d", gstate_active_player() + 1);
+	gutil_text(4, 4 + (GFX_GUI_SCALE * 8 + 1) * 4, str, GFX_GUI_SCALE * 8, true);
+
 	float time = gstate.world_time
 	             + time_diff_s(gstate.world_time_start, time_get()) * 1000.0f
 	                   / 50.0f;
@@ -485,7 +503,7 @@ static void screen_ingame_render2D(struct screen* s, int width, int height) {
 	float angle = daytime_celestial_angle(day_ticks / 24000.0f);
 	snprintf(str, sizeof(str), "time: %.0f (%.0f)  angle: %.3f", time,
 	         day_ticks, angle);
-	gutil_text(4, 4 + (GFX_GUI_SCALE * 8 + 1) * 4, str, GFX_GUI_SCALE * 8, true);
+	gutil_text(4, 4 + (GFX_GUI_SCALE * 8 + 1) * 5, str, GFX_GUI_SCALE * 8, true);
 
 	if (gstate.camera_hit.entity_hit) {
 		struct entity **ptr = dict_entity_get(
@@ -503,7 +521,7 @@ static void screen_ingame_render2D(struct screen* s, int width, int height) {
 		             gstate.camera_hit.x, gstate.camera_hit.y,
 		             gstate.camera_hit.z);
 		}
-		gutil_text(4, 4 + (GFX_GUI_SCALE * 8 + 1) * 5, str, GFX_GUI_SCALE * 8, true);
+		gutil_text(4, 4 + (GFX_GUI_SCALE * 8 + 1) * 6, str, GFX_GUI_SCALE * 8, true);
 	} else	if(gstate.camera_hit.hit) {
 		struct block_data bd
 			= world_get_block(&gstate.world, gstate.camera_hit.x,
@@ -514,7 +532,7 @@ static void screen_ingame_render2D(struct screen* s, int width, int height) {
 		         gstate.camera_hit.y, gstate.camera_hit.z,
 		         (b && b->name) ? b->name : "<unknown>", bd.type,
 		         bd.metadata);
-		gutil_text(4, 4 + (GFX_GUI_SCALE * 8 + 1) * 5, str, GFX_GUI_SCALE * 8, true);
+		gutil_text(4, 4 + (GFX_GUI_SCALE * 8 + 1) * 6, str, GFX_GUI_SCALE * 8, true);
 	}
 #endif
 
@@ -642,6 +660,7 @@ static void screen_ingame_render2D(struct screen* s, int width, int height) {
 			ptime_t now_dbg = time_get();
 			if(ap >= 0 && ap < 4
 			   && time_diff_ms(last_dbg_by_player[ap], now_dbg) >= 250) {
+#ifdef PLATFORM_PC
 				printf("[dig p=%d] hit=%d ent=%d active=%d start_age=%dms cd_age=%dms pos=(%d %d %d) cur=(%d %d %d)\n",
 					   ap,
 					   (int)gstate.camera_hit.hit,
@@ -651,6 +670,7 @@ static void screen_ingame_render2D(struct screen* s, int width, int height) {
 					   (int)time_diff_ms(gstate.digging.cooldown, now_dbg),
 					   (int)gstate.digging.x, (int)gstate.digging.y, (int)gstate.digging.z,
 					   (int)gstate.camera_hit.x, (int)gstate.camera_hit.y, (int)gstate.camera_hit.z);
+#endif
 				last_dbg_by_player[ap] = now_dbg;
 			}
 		}

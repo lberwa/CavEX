@@ -20,7 +20,7 @@
 #ifndef SERVER_WORLD_H
 #define SERVER_WORLD_H
 
-#include <m-lib/m-dict.h>
+#include "../m-lib/m-dict.h"
 #include <stdbool.h>
 #include <stdint.h>
 

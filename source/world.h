@@ -20,7 +20,7 @@
 #ifndef WORLD_H
 #define WORLD_H
 
-#include <m-lib/m-dict.h>
+#include "m-lib/m-dict.h"
 #include <stddef.h>
 #include <stdint.h>
 

@@ -489,32 +489,6 @@ bool entity_try_auto_jump(struct entity* e, float jump_force, float threshold) {
     struct block_data blk1, blk2;
     bool has_front = entity_get_block(e, tx, ty,     tz, &blk1);
     bool has_top   = entity_get_block(e, tx, ty + 1, tz, &blk2);
-	
-	/*
-	if (blk2.type < 0 || blk2.type >= 256 || blocks[blk2.type] == NULL) {
-    	// sicherer Pfad, keine Dereferenzierung
-    	printf("blocks[blk2.type] ist NULL oder ungültig! type=%d\n", blk2.type);
-	} else if (!blocks[blk2.type]->can_see_through) {
-	    // jetzt ist der Zeiger sicher
-    	printf("Block vor Creeper ist nicht durchsichtbar\n");
-	}
-
-	if (!blocks[blk1.type]->can_see_through) {
-		printf("blocks blk2 is NULL");
-	} 
-	if (!blocks[blk2.type]->can_see_through) {
-		printf("block ahea blk2 is NULL");
-	}
-    
-	bool blocked_ahead = has_front && !blocks[blk1.type]->can_see_through;
-    bool space_above   = !has_top || blocks[blk2.type]->can_see_through;
-
-    if (blocked_ahead && space_above) {
-        e->vel[1] = jump_force;
-        return true;
-    }
-    return false;
-	*/
 
 	bool blocked_ahead = false;
     bool space_above   = true;  // Default: Luft / durchlässig

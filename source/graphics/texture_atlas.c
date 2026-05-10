@@ -103,18 +103,20 @@ void tex_atlas_reg_grass(dict_atlas_src_t atlas, enum tex_atlas_entry name,
 
 void* tex_atlas_compute(dict_atlas_src_t atlas, uint8_t* atlas_dst,
 						uint8_t* image, size_t width, size_t height) {
+#if 0
 	if (!image) {
-    printf("Error: image is NULL\n");
-    return NULL;
-}
-if (width < 16) {
-    printf("Error: image width too small (%zu)\n", width);
-    return NULL;
-}
-if (width != height) {
-    printf("Error: image not square (%zu x %zu)\n", width, height);
-    return NULL;
-}
+	    printf("Error: image is NULL\n");
+	    return NULL;
+	}
+	if (width < 16) {
+	    printf("Error: image width too small (%zu)\n", width);
+	    return NULL;
+	}
+	if (width != height) {
+	    printf("Error: image not square (%zu x %zu)\n", width, height);
+	    return NULL;
+	}
+#endif
 
 	assert(image && width >= 16 && width == height);
 

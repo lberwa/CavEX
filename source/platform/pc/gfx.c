@@ -358,6 +358,10 @@ void gfx_viewport(uint32_t x, uint32_t y, uint32_t width, uint32_t height) {
 	glViewport(x, y, width, height);
 }
 
+void gfx_viewport_reset(void) {
+	glViewport(0, 0, fb_width, fb_height);
+}
+
 void gfx_matrix_projection(mat4 proj, bool is_perspective) {
 	assert(proj);
 	glUniformMatrix4fv(glGetUniformLocation(shader_prog, "proj"), 1, GL_FALSE,

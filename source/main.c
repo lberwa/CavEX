@@ -25,11 +25,8 @@
 #include <time.h>
 
 #ifdef PLATFORM_WII
-	#include <fat.h>
+	#include "fat.h"
 	#include <gccore.h> 
-	#ifdef NDEBUG
-		#include <my_text_renderer.h>
-	#endif
 	#include <network.h>
 #endif
 
@@ -111,8 +108,12 @@ static void splitscreen_viewport_rect(int player_index, int player_count,
 		*out_x = 0;
 		*out_w = w;
 		*out_h = vp_h;
+		#ifdef PLATFORM_WII
+		*out_y = (player_index == 0) ? 0 : vp_h;
+		#else
 		// OpenGL viewport/scissor origin is bottom-left -> player 0 on top.
 		*out_y = (player_index == 0) ? vp_h : 0;
+		#endif
 		return;
 	}
 
@@ -124,7 +125,11 @@ static void splitscreen_viewport_rect(int player_index, int player_count,
 		*out_w = vp_w;
 		*out_h = vp_h;
 		*out_x = col * vp_w;
+		#ifdef PLATFORM_WII
+		*out_y = row * vp_h;
+		#else
 		*out_y = (1 - row) * vp_h;
+		#endif
 		return;
 	}
 
@@ -137,10 +142,65 @@ static void splitscreen_viewport_rect(int player_index, int player_count,
 }
 #endif
 
+#ifdef PLATFORM_PC // find out which path it is
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+
+#include <stdio.h>
+#include <unistd.h>
+#include <string.h>
+#include <libgen.h>   // dirname
+
+int load_config(void) {
+    char exe_path[512];
+    char base_dir[512];
+    char config_path[512];
+
+    // Pfad der eigenen Executable holen
+    ssize_t len = readlink("/proc/self/exe", exe_path, sizeof(exe_path) - 1);
+    if (len == -1) {
+        printf("Failed to get exe path\n");
+        return 0;
+    }
+    exe_path[len] = '\0';
+
+    // Ordner der Executable extrahieren
+    strcpy(base_dir, exe_path);
+    dirname(base_dir);
+
+    // config Pfad bauen
+    snprintf(config_path, sizeof(config_path),
+             "%s/Cavex/config_pc.json",
+             base_dir);
+
+    // config laden
+    if (!config_create(&gstate.config_user, config_path)) {
+        printf("Failed to load config: %s\n", config_path);
+        return 0;
+    }
+
+    return 1;
+}
+
+#endif
+
 int main(void) {
 
 	#ifdef PLATFORM_PC
 	signal(SIGPIPE, SIG_IGN);
+
+	// find out which path it is
+	char pictures[256];
+
+    FILE *fp = popen("xdg-user-dir PICTURES", "r");
+    if (!fp) return 1;
+
+    fgets(pictures, sizeof(pictures), fp);
+    pclose(fp);
+
+    pictures[strcspn(pictures, "\n")] = 0;
 	#endif
 
 	//video_init_custom();
@@ -182,7 +242,14 @@ int main(void) {
 		gstate.held_item_animations[i] = gstate.held_item_animation;
 		gstate.in_water_arr[i] = false;
 		gstate.oxygen_arr[i] = MAX_OXYGEN;
+		gstate.player_screens[i] = &screen_ingame;
 	}
+#endif
+#ifdef SPLITSCREEN
+	for(int i = 2; i < 4; i++)
+		gstate.player_screens[i] = &screen_ingame;
+#else
+	gstate.player_screens[0] = &screen_ingame;
 #endif
 
 	for(int i=1; i<4; i++) {
@@ -200,9 +267,13 @@ int main(void) {
 	#endif
 #endif
 
-	if (!config_create(&gstate.config_user, "config.json")) {
+#ifdef PLATFORM_WII
+	if (!config_create(&gstate.config_user, "config_wii.json")) {
 		printf("Failed to load config.json\n");
 	}
+#else
+	load_config();
+#endif
 
 	input_init();
 	blocks_init();
@@ -300,6 +371,7 @@ int main(void) {
 			clin_update();
 
 #ifdef TEST_MULTIPLAYER_INPUT
+#ifdef PLATFORM_PC
 #ifdef SPLITSCREEN
 			// Debug: verify splitscreen player pointers stay distinct and stable.
 			static ptime_t last_lp_dbg;
@@ -317,6 +389,7 @@ int main(void) {
 					   (p0 && p1 && p0 == p1) ? 1 : 0);
 				last_lp_dbg = now_lp_dbg;
 			}
+#endif
 #endif
 #endif
 
@@ -508,6 +581,9 @@ int main(void) {
 			gstate.current_screen->update(gstate.current_screen,
 											gstate.stats.dt);
 
+		render_world
+			= gstate.current_screen->render_world && gstate.world_loaded;
+
 		gfx_flip_buffers(&gstate.stats.dt_gpu, &gstate.stats.dt_vsync);
 
 		bool rendered_2d = false;
@@ -525,10 +601,14 @@ int main(void) {
 				int player_count = splitscreen_player_count();
 				for(int p = 0; p < player_count; p++) {
 					int vp_x, vp_y, vp_w, vp_h;
+					int gui_w, gui_h;
 					splitscreen_viewport_rect(p, player_count, &vp_x, &vp_y,
 											  &vp_w, &vp_h);
-
 					splitscreen_load_player(p);
+					struct screen* active_screen
+						= gstate.current_screen == &screen_ingame ?
+							  screen_get_player(p) :
+							  gstate.current_screen;
 
 					gfx_viewport(vp_x, vp_y, vp_w, vp_h);
 					gfx_scissor(true, vp_x, vp_y, vp_w, vp_h);
@@ -570,10 +650,9 @@ int main(void) {
 						gstate.stats.chunks_rendered = 0;
 					}
 
-					if(gstate.current_screen->render3D) {
+					if(active_screen->render3D) {
 						gfx_fog(false);
-						gstate.current_screen->render3D(gstate.current_screen,
-														gstate.camera.view);
+						active_screen->render3D(active_screen, gstate.camera.view);
 					}
 
 					if(render_world) {
@@ -603,7 +682,12 @@ int main(void) {
 						#endif
 					}
 
-					gfx_mode_gui_viewport(vp_w, vp_h);
+					gui_w = vp_w;
+					gui_h = vp_h;
+					if(active_screen != &screen_ingame)
+						screen_viewport_size(p, &gui_w, &gui_h);
+
+					gfx_mode_gui_viewport(gui_w, gui_h);
 
 					if(gstate.in_water) {
 						gfx_bind_texture(&texture_water);
@@ -615,9 +699,8 @@ int main(void) {
 											0x80);
 					}
 
-					if(gstate.current_screen->render2D)
-						gstate.current_screen->render2D(gstate.current_screen,
-														vp_w, vp_h);
+					if(active_screen->render2D)
+						active_screen->render2D(active_screen, gui_w, gui_h);
 
 					splitscreen_store_player(p);
 				}
@@ -654,10 +737,14 @@ int main(void) {
 					gstate.stats.chunks_rendered = 0;
 				}
 
-				if(gstate.current_screen->render3D) {
+				struct screen* active_screen
+					= gstate.current_screen == &screen_ingame ?
+						  screen_get_player(0) :
+						  gstate.current_screen;
+
+				if(active_screen->render3D) {
 					gfx_fog(false);
-					gstate.current_screen->render3D(gstate.current_screen,
-													gstate.camera.view);
+					active_screen->render3D(active_screen, gstate.camera.view);
 				}
 
 				if(render_world) {
@@ -693,13 +780,19 @@ int main(void) {
 				}
 #ifdef SPLITSCREEN
 			}
-#endif
-
+			gfx_viewport_reset();
+			gfx_scissor(false, 0, 0, 0, 0);
+#endif // SPLITSCREEN
 		}
 
-		if(gstate.current_screen->render2D && !rendered_2d)
-			gstate.current_screen->render2D(gstate.current_screen, gfx_width(),
-											gfx_height());
+		if(!rendered_2d) {
+			struct screen* active_screen = gstate.current_screen == &screen_ingame ?
+				screen_get_player(0) :
+				gstate.current_screen;
+			if(active_screen->render2D)
+				active_screen->render2D(active_screen, gfx_width(),
+										gfx_height());
+		}
 
 #ifdef SPLITSCREEN
 		if(splitscreen_enabled() && render_world) {
@@ -717,8 +810,11 @@ int main(void) {
 				gfx_copy_framebuffer(image, &width, &height);
 
 				char name[64];
+#ifdef PLATFORM_WII
 				snprintf(name, sizeof(name), "%ld.png", (long)time(NULL));
-
+#else
+				snprintf(name, sizeof(name), "%s/%ld.png", pictures, (long)time(NULL));
+#endif
 				lodepng_encode32_file(name, image, width, height);
 				free(image);
 			}

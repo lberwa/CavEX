@@ -30,7 +30,7 @@
 
 #include <assert.h>
 #include <dirent.h>
-#include <m-lib/m-string.h>
+#include "../../m-lib/m-string.h"
 #include <string.h>
 #include <time.h>
 #include <stdbool.h>
@@ -42,7 +42,7 @@ static const char* menu_options[4] = {
     "Save & Quit"
 };
 
-static size_t gui_selection;
+static size_t gui_selection[4];
 static bool server_failed = false;
 
 static enum mp3_sound bg_playlist[16] = {
@@ -59,6 +59,7 @@ static enum mp3_sound bg_playlist[16] = {
 };
 
 static void screen_gmenu_reset(struct screen* s, int width, int height) { 
+	int player = gstate_active_player();
 	gstate.game_run = false;
 #ifndef SPLITSCREEN
 	gstate.num_players = 2;
@@ -66,26 +67,28 @@ static void screen_gmenu_reset(struct screen* s, int width, int height) {
 	server_failed = false;
 	input_pointer_enable(true);
 
-	gstate_set_capture_input_all(false);
+	gstate_set_capture_input_player(player, false);
+	gui_selection[player] = 0;
 
 	sound_init();
 	sound_play_bg(bg_playlist);
 }
 
 static void screen_gmenu_update(struct screen* s, float dt) { 
+	int player = gstate_active_player();
     // Navigation
-    if(input_pressed(IB_GUI_UP, 0) && gui_selection > 0)
-        gui_selection--;
+    if(input_pressed(IB_GUI_UP, player) && gui_selection[player] > 0)
+        gui_selection[player]--;
 
-    if(input_pressed(IB_GUI_DOWN, 0) && gui_selection < 3)
-        gui_selection++;
+    if(input_pressed(IB_GUI_DOWN, player) && gui_selection[player] < 3)
+        gui_selection[player]++;
 
     // Aktion beim A-Knopf
-	    if(input_pressed(IB_GUI_CLICK, 0)) {
+	    if(input_pressed(IB_GUI_CLICK, player)) {
 			sound_play(pcm_click);
-	        switch(gui_selection) {
+	        switch(gui_selection[player]) {
             case 0:  
-				screen_set(&screen_ingame);
+				screen_set_player(player, &screen_ingame);
 				break;
             case 1: 
 				break;
@@ -112,10 +115,9 @@ static void screen_gmenu_update(struct screen* s, float dt) {
 
 
 static void screen_gmenu_render2D(struct screen* s, int width, int height) { 
-	gfx_bind_texture(&texture_particles);
-	gutil_texquad(50, 50, 0, 0, 100, 100, 100, 100);
 
-	int start_y = height / 3;
+
+	int start_y = (gstate.num_players < 2) ? (height / 3) : 7;
 	int button_height = 40;
 	int button_width  = 300;
 	int button_spacing = 20;
@@ -125,7 +127,7 @@ static void screen_gmenu_render2D(struct screen* s, int width, int height) {
 	for(int i = 0; i < 4; i++) {
 	    int y = start_y + i * (button_height + button_spacing);
 
-    	bool selected = (gui_selection == i);
+    	bool selected = (gui_selection[gstate_active_player()] == (size_t)i);
 
     	// Texcoords für hell/dunkel
     	int tex_x = 0;

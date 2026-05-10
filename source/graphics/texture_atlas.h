@@ -22,7 +22,7 @@
 
 #include <stdint.h>
 
-#include <m-lib/m-array.h>
+#include "../m-lib/m-array.h"
 
 enum tex_atlas_entry {
 	TEXAT_STONE,

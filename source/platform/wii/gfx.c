@@ -365,12 +365,30 @@ void gfx_mode_gui_viewport(uint32_t width, uint32_t height) {
 }
 
 void gfx_viewport(uint32_t x, uint32_t y, uint32_t width, uint32_t height) {
-	current_vp_x = x;
-	current_vp_y = y;
-	current_vp_w = width;
-	current_vp_h = height;
-	GX_SetViewport((f32)x, (f32)y, (f32)width, (f32)height, 0.0f, 1.0f);
-	GX_SetScissor(x, y, width, height);
+	float scale_x = (float)screenMode->fbWidth / (float)gfx_width();
+	float scale_y = (float)screenMode->efbHeight / (float)gfx_height();
+	uint32_t phys_x = (uint32_t)lroundf((float)x * scale_x);
+	uint32_t phys_y = (uint32_t)lroundf((float)y * scale_y);
+	uint32_t phys_w = (uint32_t)lroundf((float)width * scale_x);
+	uint32_t phys_h = (uint32_t)lroundf((float)height * scale_y);
+
+	current_vp_x = phys_x;
+	current_vp_y = phys_y;
+	current_vp_w = phys_w;
+	current_vp_h = phys_h;
+	GX_SetViewport((f32)phys_x, (f32)phys_y, (f32)phys_w, (f32)phys_h, 0.0f,
+	               1.0f);
+	GX_SetScissor(phys_x, phys_y, phys_w, phys_h);
+}
+
+void gfx_viewport_reset(void) {
+	current_vp_x = 0;
+	current_vp_y = 0;
+	current_vp_w = screenMode->fbWidth;
+	current_vp_h = screenMode->efbHeight;
+	GX_SetViewport(0.0f, 0.0f, (f32)screenMode->fbWidth,
+	               (f32)screenMode->efbHeight, 0.0f, 1.0f);
+	GX_SetScissor(0, 0, screenMode->fbWidth, screenMode->efbHeight);
 }
 
 void gfx_matrix_projection(mat4 proj, bool is_perspective) {

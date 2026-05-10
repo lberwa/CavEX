@@ -20,7 +20,7 @@
 #ifndef LEVEL_ARCHIVE_H
 #define LEVEL_ARCHIVE_H
 
-#include <m-lib/m-string.h>
+#include "../m-lib/m-string.h"
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>

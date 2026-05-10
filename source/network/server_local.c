@@ -563,8 +563,9 @@ static void server_local_process(struct server_rpc* call, void* user) {
 
 			string_set(s->level_name, call->payload.load_world.name);
 			string_clear(call->payload.load_world.name);
-
+#ifdef SRPC_LOAD_WORLD_DEBUG
 			printf("[DEBUG server_local SRPC_LOAD_WORLD] name='%s'\n", string_get_cstr(s->level_name));
+#endif
 			if(level_archive_create(&s->level, s->level_name)) {
 				vec3 base_pos = {0.0f, 80.0f, 0.0f};
 				vec2 base_rot = {0.0f, 0.0f};
@@ -845,8 +846,10 @@ static void server_local_update(struct server_local* s) {
 
 		if(unload_found) {
 			// unload just one chunk
+#ifdef SRPC_LOAD_WORLD_DEBUG
 			printf("[server_local] unloading chunk %d,%d (player chunk %d,%d) loaded_chunks=%zu\n",
 				   (int)unload_x, (int)unload_z, (int)px, (int)pz, loaded_chunks);
+#endif
 			server_world_save_chunk(&s->world, true, unload_x, unload_z);
 			clin_rpc_send(&(struct client_rpc) {
 				.type = CRPC_UNLOAD_CHUNK,
@@ -859,9 +862,11 @@ unload_done:
 #else
 	if(server_world_furthest_chunk(&s->world, MAX_VIEW_DISTANCE, px, pz, &cx,
 								   &cz)) {
+#ifdef SRPC_LOAD_WORLD_DEBUG
 		// unload just one chunk
 		printf("[server_local] unloading chunk %d,%d (player chunk %d,%d) loaded_chunks=%zu\n",
 			   (int)cx, (int)cz, (int)px, (int)pz, loaded_chunks);
+#endif
 		server_world_save_chunk(&s->world, true, cx, cz);
 		clin_rpc_send(&(struct client_rpc) {
 			.type = CRPC_UNLOAD_CHUNK,
@@ -988,9 +993,11 @@ unload_done:
 
 			loaded_this_tick++;
 		} else {
+#ifdef SRPC_LOAD_WORLD_DEBUG
 			/* failed to load this candidate, try next iteration */
 			printf("[server_local] server_world_load_chunk failed for %d,%d\n",
 				   (int)cand_x, (int)cand_z);
+#endif
 		}
 	}
 
@@ -1013,9 +1020,11 @@ unload_done:
 				.payload.player_pos.rotation = {player->rx, player->ry},
 			});
 
+#ifdef SRPC_LOAD_WORLD_DEBUG
 			printf("[server_local] finished loading for player %d near %d,%d (loaded_chunks=%zu)\n",
 				   i, (int)WCOORD_CHUNK_OFFSET(floor(player->x)),
 				   (int)WCOORD_CHUNK_OFFSET(floor(player->z)), loaded_chunks);
+#endif
 
 			for(size_t k = 0; k < INVENTORY_SIZE; k++) {
 				if(player->inventory.items[k].id > 0) {
@@ -1046,9 +1055,10 @@ unload_done:
 			.type = CRPC_TIME_SET,
 			.payload.time_set = s->world_time,
 		});
-
+#ifdef SRPC_LOAD_WORLD_DEBUG
 		printf("[server_local] no disk chunk candidate found near player %d,%d (loaded_chunks=%zu)\n",
 			   (int)px, (int)pz, loaded_chunks);
+#endif
 
 		if(level_archive_read_inventory(&s->level, &s->player.inventory)) {
 			for(size_t k = 0; k < INVENTORY_SIZE; k++) {

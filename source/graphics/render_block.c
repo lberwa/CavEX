@@ -728,7 +728,7 @@ size_t render_block_rail(struct displaylist* dl,
 }
 
 // ----------- render_block_redstone_wire() -----------------
-#define REDSTONE_CASE_DEBUG
+// #define REDSTONE_CASE_DEBUG
 
 static inline int neighbours_ext_index(int dx, int dy, int dz) {
 	int idx = 0;
@@ -1214,7 +1214,9 @@ size_t render_block_redstone_wire(struct displaylist* dl, struct block_info* thi
 		
 		uint8_t variant;
 		//cases = 5;
+		#ifdef REDSTONE_CASE_DEBUG
 		printf("cases=%d\n", cases);
+		#endif
 
 		switch (cases) {
 			case 0: { // ----------------------- 0 ------------

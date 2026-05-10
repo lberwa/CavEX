@@ -116,9 +116,11 @@ static bool server_tick_creeper(struct entity* e, struct server_local* s) {
     vec3 center = { e->pos[0], e->pos[1], e->pos[2] };
 
     if (e->data.monster.fuse >= 0) {
+#ifdef CREEPER_DEBUG
         printf("[DEBUG] Creeper %u fuse remaining: %d ticks\n",
                (unsigned)e->id,
                e->data.monster.fuse);
+#endif
         particle_generate_explosion_smoke(center, 2.0f);
 
 

@@ -22,7 +22,7 @@
 
 #include <stdbool.h>
 
-#include "cglm/cglm.h"
+#include "../../cglm/cglm.h"
 
 #define MAX_SCREEN_STACK 16 
 
@@ -52,16 +52,20 @@ extern struct screen screen_sign;
 extern struct screen screen_pause;
 
 void screen_set(struct screen* s);
-
-void screen_set(struct screen* s);
 void menu_screen_set(struct screen* s);
+void screen_set_player(int player, struct screen* s);
+struct screen* screen_get_player(int player);
 void screen_back(void);
+int screen_gui_scale(int width, int height, int gui_width, int gui_height);
+void screen_viewport_size(int player, int* width, int* height);
+bool screen_pointer_local(int player, int view_width, int view_height,
+						  float* x, float* y, float* angle);
 
 
-void screen_crafting_set_windowc(uint8_t container);
-void screen_furnace_set_windowc(uint8_t container);
-void screen_chest_set_windowc(uint8_t container);
-void screen_iron_chest_set_windowc(uint8_t container);
-void screen_sign_set_windowc(uint8_t container);
+void screen_crafting_set_windowc(int player, uint8_t container);
+void screen_furnace_set_windowc(int player, uint8_t container);
+void screen_chest_set_windowc(int player, uint8_t container);
+void screen_iron_chest_set_windowc(int player, uint8_t container);
+void screen_sign_set_windowc(int player, uint8_t container);
 
 #endif

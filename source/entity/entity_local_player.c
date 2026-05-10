@@ -122,16 +122,14 @@ static void entity_render(struct entity* e, mat4 view, float td) {
 
 	float body_yaw = angle_lerp(e->data.local_player.body_yaw_old,
 	                            e->data.local_player.body_yaw, td);
-	float head_yaw = angle_normalize(
-		angle_lerp(e->orient_old[0], e->orient[0], td) - body_yaw);
-	float pitch = e->orient_old[1] + (e->orient[1] - e->orient_old[1]) * td;
-	float head_pitch = glm_deg(pitch) - 90.0F;
+	float head_yaw = angle_normalize(e->orient[0] - body_yaw);
+	float head_pitch = glm_deg(e->orient[1]) - 90.0F;
 
 	mat4 model, mv;
 	glm_translate_make(model,
 	                   (vec3) {p[0], p[1] - EYE_HEIGHT + PLAYER_MODEL_Y_OFFSET,
 	                           p[2]});
-	glm_rotate_y(model, glm_rad(-glm_deg(body_yaw) + 90.0f), model);
+	glm_rotate_y(model, glm_rad(glm_deg(body_yaw)), model);
 	glm_scale_uni(model, 1.0f / 16.0f);
 	glm_translate(model, (vec3) {0.0f, 10.0f, 0.0f});
 	glm_mat4_mul(view, model, mv);
@@ -139,8 +137,7 @@ static void entity_render(struct entity* e, mat4 view, float td) {
 	float dx = e->pos[0] - e->pos_old[0];
 	float dz = e->pos[2] - e->pos_old[2];
 	float walk_speed = sqrtf(dx * dx + dz * dz);
-	ptime_t now = time_get();
-	float t = (float)now.tv_sec + (float)now.tv_nsec / 1000000000.0f;
+	float t = time_diff_s(gstate.world_time_start, time_get());
 	float foot_angle
 		= walk_speed > 0.001f ? sinf(t * 2.0f * GLM_PI * 2.0f) * 30.0f : 0.0f;
 
@@ -173,7 +170,7 @@ static void entity_render(struct entity* e, mat4 view, float td) {
 	}
 
 	gfx_lighting(false);
-	render_model_player(mv, head_pitch, -glm_deg(head_yaw), foot_angle,
+	render_model_player(mv, head_pitch, glm_deg(head_yaw), foot_angle,
 	                    foot_angle, held_ptr, helmet_ptr, chest_ptr, legs_ptr,
 	                    boots_ptr);
 	gfx_lighting(true);

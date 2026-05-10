@@ -20,12 +20,12 @@
 #ifndef CHUNK_H
 #define CHUNK_H
 
-#include <m-lib/m-i-list.h>
+#include "m-lib/m-i-list.h"
 #include <stdbool.h>
 #include <stdint.h>
 
 #include "cglm/cglm.h"
-#include <m-lib/m-i-list.h>
+#include "m-lib/m-i-list.h"
 
 #include "block/blocks.h"
 #include "chunk_mesher.h"

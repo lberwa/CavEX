@@ -524,16 +524,17 @@ static inline const char* input_config_suffix(const char* key) {
 	return (strncmp(key, "input.", 6) == 0) ? (key + 6) : key;
 }
 
-	static bool input_read_mapping(enum input_button b, int player, int* mapping,
-								   size_t* length) {
-		const char* base = input_config_translate(b);
-		if(!base)
-			return false;
+static bool input_read_mapping(enum input_button b, int player, int* mapping,
+							   size_t* length) {
+	const char* base = input_config_translate(b);
+	if(!base)
+		return false;
 
-	#ifdef SPLITSCREEN
-		// Optional per-player overrides: input.p1.player_forward, input.p2..., etc.
-		if(player > 0) {
-			char keybuf[96];
+#ifdef PLATFORM_PC
+#ifdef SPLITSCREEN
+	// Optional per-player overrides: input.p1.player_forward, input.p2..., etc.
+	if(player > 0) {
+		char keybuf[96];
 		const char* suffix = input_config_suffix(base);
 		if(suffix) {
 			snprintf(keybuf, sizeof(keybuf), "input.p%d.%s", player, suffix);
@@ -543,8 +544,10 @@ static inline const char* input_config_suffix(const char* key) {
 		}
 	}
 #endif
+#endif
 
-	// Fallback to legacy single-player mapping: input.player_forward, etc.
+	// On Wii this intentionally stays at the original single-player mapping
+	// behavior from the old input.c implementation.
 	return config_read_int_array(&gstate.config_user, base, mapping, length);
 }
 
@@ -579,13 +582,13 @@ bool input_symbol(enum input_button b, int* symbol, int* symbol_help,
 	}
 
 	return has_any;
-	}
+}
 
-	bool input_pressed(enum input_button b, int player) {
-		int vplayer = gstate.player_sequence[player];
-		if(vplayer == -1) {
+bool input_pressed(enum input_button b, int player) {
+	int vplayer = gstate.player_sequence[player];
+	if(vplayer == -1) {
 	#ifdef PLATFORM_PC
-			// On PC the keyboard is shared; treat all players as available.
+		// On PC the keyboard is shared; treat all players as available.
 		// Still pass `player` through so the callsite can differentiate later.
 		vplayer = player;
 #else
@@ -620,13 +623,13 @@ bool input_symbol(enum input_button b, int* symbol, int* symbol_help,
 	}
 
 	return any_pressed && !any_held && !any_released;
-	}
+}
 
-	bool input_released(enum input_button b,int player) {
-		int vplayer = gstate.player_sequence[player];
-		if(vplayer == -1) {
+bool input_released(enum input_button b,int player) {
+	int vplayer = gstate.player_sequence[player];
+	if(vplayer == -1) {
 	#ifdef PLATFORM_PC
-			vplayer = player;
+		vplayer = player;
 #else
 		return false;
 #endif
@@ -794,6 +797,7 @@ bool input_joystick(float dt, float* x, float* y, int player) {
 
 // real channels
 bool rinput_pressed(enum input_button b, int player) {
+#ifdef PLATFORM_PC
 	// `rinput_*` are intended to operate on the "real channel" (`player` is not
 	// translated through `gstate.player_sequence`).
 	//
@@ -833,6 +837,7 @@ bool rinput_pressed(enum input_button b, int player) {
 
 		return any_pressed && !any_held && !any_released;
 	}
+#endif
 
 	size_t length = 8;
 	int mapping[length];

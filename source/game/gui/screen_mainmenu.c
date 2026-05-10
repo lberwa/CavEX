@@ -30,7 +30,7 @@
 
 #include <assert.h>
 #include <dirent.h>
-#include <m-lib/m-string.h>
+#include "../../m-lib/m-string.h"
 #include <string.h>
 #include <time.h>
 #include <stdbool.h>
@@ -38,8 +38,8 @@
 static const char* menu_options[4] = {
     "Start",
     "Server",
-    "Einstellungen",
-    "Beenden"
+    "Settings",
+    "Quit"
 };
 
 static size_t gui_selection;

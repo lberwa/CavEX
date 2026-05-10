@@ -348,7 +348,9 @@ void server_world_save_chunk_obj(struct server_world* w, bool erase,
 
 		bool saved = region_archive_set_blocks(ra, x, z, c);
 		if(!saved) {
+#ifdef CHUNK_DEBUG
 			fprintf(stderr, "server_world_save_chunk_obj: failed to save chunk %d,%d — keeping in memory\n", (int)x, (int)z);
+#endif
 		} else {
 			c->modified = false;
 		}
@@ -359,7 +361,9 @@ void server_world_save_chunk_obj(struct server_world* w, bool erase,
 		 * otherwise keep it so we can retry saving later — prevents data loss when
 		 * region writes fail. */
 		if(c->modified) {
+#ifdef CHUNK_DEBUG
 			fprintf(stderr, "server_world_save_chunk_obj: skip erase of chunk %d,%d because save failed\n", (int)x, (int)z);
+#endif
 			return;
 		}
 
