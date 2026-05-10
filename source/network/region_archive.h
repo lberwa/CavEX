@@ -20,8 +20,8 @@
 #ifndef REGION_ARCHIVE_H
 #define REGION_ARCHIVE_H
 
-#include <m-lib/m-i-list.h>
-#include <m-lib/m-string.h>
+#include "../m-lib/m-i-list.h"
+#include "../m-lib/m-string.h"
 #include <stdbool.h>
 #include <stdint.h>
 

@@ -18,7 +18,7 @@
 */
 
 #include "../../block/blocks_data.h"
-#include "cglm/types.h"
+#include "../../cglm/types.h"
 #include "../../entity/entity.h"
 #include "../../graphics/render_item.h"
 #include "../../network/server_local.h"

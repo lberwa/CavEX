@@ -20,7 +20,7 @@
 #ifndef WINDOW_CONTAINER_H
 #define WINDOW_CONTAINER_H
 
-#include <m-lib/m-i-list.h>
+#include "../m-lib/m-i-list.h"
 #include <stdint.h>
 
 #include "inventory.h"

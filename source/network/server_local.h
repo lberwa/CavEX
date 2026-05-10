@@ -20,7 +20,7 @@
 #ifndef SERVER_LOCAL
 #define SERVER_LOCAL
 
-#include <m-lib/m-string.h>
+#include "../m-lib/m-string.h"
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>

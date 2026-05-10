@@ -20,7 +20,7 @@
 #ifndef ENTITY_H
 #define ENTITY_H
 
-#include <m-lib/m-dict.h>
+#include "../m-lib/m-dict.h"
 #include <stdbool.h>
 #include <stdint.h>
 

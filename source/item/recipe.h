@@ -20,7 +20,7 @@
 #ifndef RECIPE_H
 #define RECIPE_H
 
-#include <m-lib/m-array.h>
+#include "../m-lib/m-array.h"
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>

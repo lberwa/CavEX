@@ -1,0 +1,36 @@
+# .*
+.vscode
+.venv
+.codex
+
+#anderes
+vorher.zip
+übersicht.txt
+TODO.md
+tester.py
+source.zip
+printf.txt
+Makefile3
+Makefile2
+fd
+fCavex-master/
+fCavex.zip
+
+# build
+cmake_install.cmake
+CMakeFiles/
+CMakeCache.txt
+buildpc/
+build/
+boot.elf
+boot.dol
+ffCavEX.dol
+ffCavEX.elf
+
+backup/
+assets2/
+anderes/
+assets/rest/
+assets/textures/
+saves2/
+saves3/

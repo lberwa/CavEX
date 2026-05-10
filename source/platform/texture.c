@@ -18,7 +18,7 @@
 */
 
 #include <assert.h>
-#include <m-lib/m-string.h>
+#include "../m-lib/m-string.h"
 #include <stdlib.h>
 
 #include "../config.h"
@@ -95,6 +95,8 @@ static void gen_texture_fog(uint8_t* img, size_t size) {
 	}
 }
 
+// #define PARTICLES_PNG_DEBUG
+
 void tex_init() {
 	tex_init_pre();
 
@@ -114,9 +116,13 @@ void tex_init() {
 
     size_t pw, ph;
     void* pout = tex_atlas_particles("particles.png", &pw, &ph);
+#ifdef PARTICLES_PNG_DEBUG
 	printf("\n?\n\n");
+#endif
     if(pout) {
+#ifdef PARTICLES_PNG_DEBUG
 		printf("pout is not NULL \n");
+#endif
         tex_gfx_load(&texture_particles, pout, pw, ph, TEX_FMT_RGBA16, false);
     }
 

@@ -31,9 +31,13 @@
 
 #include <assert.h>
 #include <dirent.h>
-#include <m-lib/m-string.h>
+#include "../../m-lib/m-string.h"
 #include <string.h>
 #include <time.h>
+
+#ifdef PLATFORM_PC
+// #define DEBUG_SCREEN_SELECT_WORLD
+#endif
 
 static struct stack* worlds = NULL;
 
@@ -100,15 +104,20 @@ static void screen_sworld_reset(struct screen* s, int width, int height) {
 			if(dir->d_type & DT_DIR && *dir->d_name != '.') {
 				struct world_option opt;
 				string_init_printf(opt.path, "%s/%s", saves_path, dir->d_name);
-
+#ifdef DEBUG_SCREEN_SELECT_WORLD
 				printf("[DEBUG screen_select_world] scanning '%s'\n", string_get_cstr(opt.path));
+#endif
 				struct level_archive la;
 				if(level_archive_create(&la, opt.path)) {
+#ifdef DEBUG_SCREEN_SELECT_WORLD
 					printf("[DEBUG screen_select_world] create OK for '%s'\n", string_get_cstr(opt.path));
+#endif
 					char name[64];
 
 					if(!level_archive_read(&la, LEVEL_NAME, name, sizeof(name))) {
+#ifdef DEBUG_SCREEN_SELECT_WORLD
 						printf("[DEBUG screen_select_world] LEVEL_NAME read failed\n");
+#endif
 						strcpy(name, "Missing name");
 					}
 

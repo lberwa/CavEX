@@ -40,7 +40,7 @@
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 3
 #define VERSION_PATCH 0
-#define VERSION_FORK  2
+#define VERSION_FORK  3
 
 struct game_state {
 	bool network;
@@ -63,6 +63,7 @@ struct game_state {
 		float fog_distance;
 	} config;
 	struct screen* current_screen;
+	struct screen* player_screens[4];
 	struct camera camera;
 	struct camera_ray_result camera_hit;
 	struct world world;
@@ -152,6 +153,11 @@ static inline void gstate_set_capture_input_all(bool enable) {
 			gstate.local_players[i]->data.local_player.capture_input = enable;
 	}
 }
+static inline void gstate_set_capture_input_player(int player, bool enable) {
+	if(player >= 0 && player < splitscreen_player_count()
+	   && gstate.local_players[player])
+		gstate.local_players[player]->data.local_player.capture_input = enable;
+}
 #else
 static inline struct window_container** gstate_windows(void) {
 	return gstate.windows;
@@ -160,6 +166,11 @@ static inline int gstate_active_player(void) {
 	return 0;
 }
 static inline void gstate_set_capture_input_all(bool enable) {
+	if(gstate.local_player)
+		gstate.local_player->data.local_player.capture_input = enable;
+}
+static inline void gstate_set_capture_input_player(int player, bool enable) {
+	(void)player;
 	if(gstate.local_player)
 		gstate.local_player->data.local_player.capture_input = enable;
 }

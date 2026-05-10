@@ -1,0 +1,223 @@
+cmake_minimum_required(VERSION 3.14)
+
+project(cavex C)
+
+add_compile_options(-O3 -DSPLITSCREEN=2 -DMULTIPLAYER -march=native -g)
+
+option(TEST_MULTIPLAYER_INPUT "Hardcoded 2-player input mapping (PC test)" OFF)
+if(TEST_MULTIPLAYER_INPUT)
+	add_compile_definitions(TEST_MULTIPLAYER_INPUT)
+endif()
+
+find_package(ZLIB REQUIRED)
+find_package(ALSA REQUIRED)
+find_package(Threads REQUIRED)
+find_package(glfw3 3.3 REQUIRED)
+find_package(OpenGL REQUIRED)
+find_package(GLEW REQUIRED)
+
+add_executable(cavex
+				source/block/aabb.c
+				source/block/block_bed.c
+				source/block/block_bedrock.c
+				source/block/block_bookshelf.c
+				source/block/block_bricks.c
+				source/block/block_brown_mushroom.c
+				source/block/block_cactus.c
+				source/block/block_cake.c
+				source/block/block_cast_block.c
+				source/block/block_chest.c
+				source/block/block_clay.c
+				source/block/block_cobblestone.c
+				source/block/block_cobweb.c
+				source/block/block_crops.c
+				source/block/block_dirt.c
+				source/block/block_dispenser.c
+				source/block/block_door.c
+				source/block/block_double_slab.c
+				source/block/block_farmland.c
+				source/block/block_fence.c
+				source/block/block_fire.c
+				source/block/block_flower.c
+				source/block/block_furnace.c
+				source/block/block_glass.c
+				source/block/block_glowstone.c
+				source/block/block_grass.c
+				source/block/block_gravel.c
+				source/block/block_ice.c
+				source/block/block_iron_chest.c
+				source/block/block_jukebox.c
+				source/block/block_ladder.c
+				source/block/block_lava.c
+				source/block/block_leaves.c
+				source/block/block_log.c
+				source/block/block_minecart.c
+				source/block/block_netherrack.c
+				source/block/block_noteblock.c
+				source/block/block_obsidian.c
+				source/block/block_ore.c
+				source/block/block_planks.c
+				source/block/block_portal.c
+				source/block/block_pressure_plate.c
+				source/block/block_pumpkin.c
+				source/block/block_rail.c
+				source/block/block_red_mushroom.c
+				source/block/block_redstone_wire.c
+				source/block/block_reed.c
+				source/block/block_rose.c
+				source/block/block_sand.c
+				source/block/block_sandstone.c
+				source/block/block_sapling.c
+				source/block/blocks.c
+				source/block/block_sign.c
+				source/block/block_slab.c
+				source/block/block_snow.c
+				source/block/block_spawner.c
+				source/block/block_sponge.c
+				source/block/block_stairs.c
+				source/block/block_stone.c
+				source/block/block_tallgrass.c
+				source/block/block_tnt.c
+				source/block/block_torch.c
+				source/block/block_trapdoor.c
+				source/block/block_tree2d.c
+				source/block/block_water.c
+				source/block/block_wool.c
+				source/block/block_workbench.c
+				source/block/block_tree2d.c
+				source/block/face_occlusion.c
+
+				source/entity/entity.c
+				source/entity/entity_local_player.c
+				source/entity/entity_item.c
+				source/entity/entity_monster.c
+				source/entity/entity_minecart.c
+
+				source/cNBT/buffer.c
+				source/cNBT/nbt_loading.c
+				source/cNBT/nbt_parsing.c
+				source/cNBT/nbt_treeops.c
+				source/cNBT/nbt_util.c
+
+				source/game/gui/screen_ingame.c
+				source/game/gui/screen_game_menu.c
+				source/game/gui/screen_load_world.c
+				source/game/gui/screen_select_world.c
+				source/game/gui/screen_inventory.c
+				source/game/gui/screen_iron_chest.c
+				source/game/gui/screen_crafting.c
+				source/game/gui/screen_furnace.c
+				source/game/gui/screen_chest.c
+				source/game/gui/screen_sign.c
+				source/game/gui/screen_pause.c
+				source/game/gui/screen_mainmenu.c
+				source/game/gui/screen_players.c
+				source/game/gui/screen_server.c
+				source/game/gui/screen_controllers.c
+				source/game/gui/screen.c
+				source/game/camera.c
+				source/game/game_state.c
+
+				source/item/window_container.c
+				source/item/inventory.c
+				source/item/items.c
+				source/item/tool.c
+				source/item/recipe.c
+				source/item/items/item_sugarcane.c
+				source/item/items/item_porkchop.c
+				source/item/items/item_porkchop_cooked.c
+				source/item/items/item_door_wood.c
+				source/item/items/item_door_iron.c
+				source/item/items/item_apple.c
+				source/item/items/item_apple_golden.c
+				source/item/items/item_fish.c
+				source/item/items/item_fish_cooked.c
+				source/item/items/item_bread.c
+				source/item/items/item_mushroom_stew.c
+				source/item/items/item_egg_zombie.c
+				source/item/items/item_egg_pig.c
+				source/item/items/item_egg_sheep.c
+				source/item/items/item_flint_steel.c
+				source/item/items/item_seeds.c
+				source/item/items/item_bed.c
+				source/item/items/item_bucket_lava.c
+				source/item/items/item_bucket_water.c
+				source/item/items/item_bucket.c
+				source/item/items/item_minecart.c
+				source/item/items/item_redstone.c
+
+				source/network/client_interface.c
+				source/network/complex_block_archive.c
+				source/network/level_archive.c
+				source/network/region_archive.c
+				source/network/server_interface.c
+				source/network/server_local.c
+				source/network/server_world.c
+				source/network/inventory_logic.c
+				source/network/inventory_player.c
+				source/network/inventory_crafting.c
+				source/network/inventory_furnace.c
+				source/network/inventory_chest.c
+				source/network/inventory_iron_chest.c
+				source/network/inventory_sign.c
+				source/network/server_comunication.c
+
+				source/graphics/gfx_util.c
+				source/graphics/gui_util.c
+				source/graphics/render_block.c
+				source/graphics/render_item.c
+				source/graphics/render_model.c
+				#source/graphics/render_monster.c
+				source/graphics/texture_atlas.c
+				source/graphics/render_entity.c
+
+				source/platform/displaylist.c
+				source/platform/gfx.c
+				source/platform/input.c
+				source/platform/thread.c
+				source/platform/time.c
+				source/platform/texture.c
+
+				source/chunk_mesher.c
+				source/chunk.c
+				source/daytime.c
+				source/lighting.c
+				source/main.c
+				source/stack.c
+				source/util.c
+				source/world.c
+				source/config.c
+				source/particle.c
+				source/sound.c
+
+				source/lodepng/lodepng.c
+
+				source/parson/parson.c
+
+				source/pc_sound/src/common/pa_allocation.c
+				source/pc_sound/src/common/pa_converters.c
+				source/pc_sound/src/common/pa_cpuload.c
+				source/pc_sound/src/common/pa_debugprint.c
+				source/pc_sound/src/common/pa_dither.c
+				source/pc_sound/src/common/pa_process.c
+				source/pc_sound/src/common/pa_ringbuffer.c
+				source/pc_sound/src/common/pa_stream.c
+				source/pc_sound/src/common/pa_trace.c
+				source/pc_sound/src/common/pa_front.c
+
+				source/pc_sound/src/hostapi/alsa/pa_linux_alsa.c
+				source/pc_sound/src/os/unix/pa_unix_hostapis.c
+				source/pc_sound/src/os/unix/pa_pthread_util.c
+				source/pc_sound/src/os/unix/pa_unix_util.c
+			)
+
+target_compile_definitions(cavex PRIVATE PLATFORM_PC CGLM_ALL_UNALIGNED)
+
+set_target_properties(
+	cavex PROPERTIES
+	C_STANDARD 99
+)
+
+set_property(TARGET cavex PROPERTY INTERPROCEDURAL_OPTIMIZATION False)
+
+target_link_libraries(cavex ${CMAKE_THREAD_LIBS_INIT} ZLIB::ZLIB ${ALSA_LIBRARIES} glfw GLEW::GLEW OpenGL::GL m)

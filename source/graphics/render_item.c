@@ -91,7 +91,8 @@ void render_item_flat(struct item* item, struct item_data* stack, mat4 view,
 
 	if(env == R_ITEM_ENV_INVENTORY) {
 		gfx_matrix_modelview(view);
-		gutil_texquad(0, 0, s, t, 16, 16, 16 * GFX_GUI_SCALE, 16 * GFX_GUI_SCALE);
+		int scale = gutil_get_gui_scale();
+		gutil_texquad(0, 0, s, t, 16, 16, 16 * scale, 16 * scale);
 	} else {
 		displaylist_reset(&dl);
 
@@ -327,8 +328,15 @@ void render_item_block(struct item* item, struct item_data* stack, mat4 view,
 		mat4 model;
 
 		if(env == R_ITEM_ENV_INVENTORY) {
-			glm_translate_make(model, (vec3) {3 * 2, 3 * 2, -16});
-			glm_scale(model, (vec3) {20, 20, -20});
+			float gui_scale = (float)gutil_get_gui_scale()
+			                  / (float)GFX_GUI_SCALE;
+			float gui_offset = ((1.0F - gui_scale) * 6.0F);
+			glm_translate_make(
+				model,
+				(vec3) {3 * 2 - gui_offset, 3 * 2 - gui_offset, -16});
+			glm_scale(model,
+			          (vec3) {20.0F * gui_scale, 20.0F * gui_scale,
+			                  -20.0F * gui_scale});
 			glm_translate(model, (vec3) {0.5F, 0.5F, 0.5F});
 			glm_rotate_z(model, glm_rad(180.0F), model);
 			glm_rotate_x(model, glm_rad(-30.0F), model);

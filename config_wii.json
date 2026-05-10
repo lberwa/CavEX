@@ -1,0 +1,41 @@
+{
+	"paths": {
+		"texturepack": "assets",
+		"worlds": "saves",
+		"bg": "bg",
+		"MP3": "mp32",
+		"sounds": "mp32/sound",
+		"tmp": "tmp"
+	},
+	"input": {
+		"player_forward": [0, 200, 910],
+		"player_backward": [1, 201, 911],
+		"player_left": [2, 202, 912],
+		"player_right": [3, 203, 913],
+		"player_jump": [5, 210],
+		"player_sneak": [211],
+		"item_action_left": [100, 204],
+		"item_action_right": [101, 205],
+		"scroll_left": [9, 208, 213],
+		"scroll_right": [8, 209, 212],
+		"inventory": [6, 206],
+		"open_menu": [10, 214],
+		"gui_up": [0, 200, 900, 910, 920],
+		"gui_down": [1, 201, 901, 911, 921],
+		"gui_left": [2, 202, 902, 912, 922],
+		"gui_right": [3, 203, 903, 913, 923],
+		"gui_click": [4, 204],
+		"gui_click_alt": [5, 205],
+		"screenshot": [7],
+		"gui_back": [5, 210],
+		"any_button": [0, 1, 2, 3, 4, 5, 6, 7,
+		8, 9, 10, 100, 101, 900, 901, 902, 903,
+		200, 201, 202, 203, 204, 205, 206, 207,
+		208, 209, 210, 211, 212, 213, 214, 910,
+		911, 912, 913, 920, 921, 922, 923, 300,
+		301, 302, 303, 304, 305, 306, 307, 308]
+	},
+	"server": {
+		"wii_id": [100]
+	}
+}

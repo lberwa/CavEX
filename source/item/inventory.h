@@ -20,8 +20,8 @@
 #ifndef INVENTORY_H
 #define INVENTORY_H
 
-#include <m-lib/m-dict.h>
-#include <m-lib/m-i-list.h>
+#include "../m-lib/m-dict.h"
+#include "../m-lib/m-i-list.h"
 #include <stdbool.h>
 #include <stddef.h>
 

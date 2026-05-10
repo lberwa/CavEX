@@ -27,6 +27,15 @@
 #include "texture_atlas.h"
 
 static int gutil_text_collor = 15;
+static int gutil_gui_scale = GFX_GUI_SCALE;
+
+void gutil_set_gui_scale(int scale) {
+	gutil_gui_scale = scale > 0 ? scale : 1;
+}
+
+int gutil_get_gui_scale(void) {
+	return gutil_gui_scale;
+}
 
 int gutil_control_icon(int x, enum input_button b, const char* str) {
 	int symbol, symbol_help;
@@ -36,8 +45,8 @@ int gutil_control_icon(int x, enum input_button b, const char* str) {
 		return 0;
 
 	gfx_bind_texture(&texture_controls);
-	int scale = 16 * GFX_GUI_SCALE;
-	int text_scale = 5 * GFX_GUI_SCALE;
+	int scale = 16 * gutil_gui_scale;
+	int text_scale = 5 * gutil_gui_scale;
 
 	gutil_texquad(x, gfx_height() - scale * 8 / 5, (symbol_help % 8) * 32,
 				  (symbol_help / 8) * 32 * 2, 32, 32 * 2, scale, scale);
@@ -252,6 +261,7 @@ void gutil_text(int x, int y, const char* str, int scale, bool shadow) {
 
 void gutil_draw_item(struct item_data* item, int x, int y, int layer) {
 	assert(item);
+	int scale = gutil_gui_scale;
 
 	struct item* it = item_get(item);
 
@@ -267,29 +277,31 @@ void gutil_draw_item(struct item_data* item, int x, int y, int layer) {
 
 		if(it->has_damage && item->durability > 0) {
 			gfx_texture(false);
-			gutil_texquad_col(x + 4, y + 26, 0, 0, 0, 0, 26, 4, 0, 0, 0, 255);
+			gutil_texquad_col(x + 2 * scale, y + 13 * scale, 0, 0, 0, 0,
+			                  13 * scale, 2 * scale, 0, 0, 0, 255);
 			gutil_texquad_col(
-				x + 4, y + 26, 0, 0, 0, 0,
-				26 * (1.0F - (float)item->durability / (float)it->max_damage),
-				2, 4, 251, 0, 255);
+				x + 2 * scale, y + 13 * scale, 0, 0, 0, 0,
+				(int)(13 * scale * (1.0F - (float)item->durability
+				                    / (float)it->max_damage)),
+				scale, 4, 251, 0, 255);
 			gfx_texture(true);
 		}
 
 		if(item->count > 1) {
 			char count[4];
 			snprintf(count, sizeof(count), "%u", item->count);
-			gutil_text(17 * GFX_GUI_SCALE - gutil_font_width(count, 8 * GFX_GUI_SCALE) + x, y + 9 * GFX_GUI_SCALE, count,
-					   8 * GFX_GUI_SCALE, true);
+			gutil_text(17 * scale - gutil_font_width(count, 8 * scale) + x,
+			           y + 9 * scale, count, 8 * scale, true);
 		}
 	} else {
 		char tmp[16];
 		snprintf(tmp, sizeof(tmp), "%u", item->id);
-		gutil_text(17 * GFX_GUI_SCALE - gutil_font_width(tmp, 8 * GFX_GUI_SCALE) + x, y + GFX_GUI_SCALE, tmp, 8 * GFX_GUI_SCALE,
-				   true);
+		gutil_text(17 * scale - gutil_font_width(tmp, 8 * scale) + x,
+		           y + scale, tmp, 8 * scale, true);
 
 		snprintf(tmp, sizeof(tmp), "%u", item->count);
-		gutil_text(17 * GFX_GUI_SCALE - gutil_font_width(tmp, 8 * GFX_GUI_SCALE) + x, y + 9 * GFX_GUI_SCALE, tmp, 8 * GFX_GUI_SCALE,
-				   true);
+		gutil_text(17 * scale - gutil_font_width(tmp, 8 * scale) + x,
+		           y + 9 * scale, tmp, 8 * scale, true);
 	}
 }
 

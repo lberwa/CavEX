@@ -252,6 +252,7 @@ void camera_attach(struct camera* c, struct entity* e, float tick_delta,
 	if(time_diff_ms(last_dbg_print, now) >= 250) {
 		float rx_after = c->rx;
 		float ry_after = c->ry;
+#ifdef PLATFORM_PC
 		printf("[camera_attach p=%d eid=%u cap=%d joy=%d] pos=(%.2f %.2f %.2f) "
 			   "ent=(%.2f %.2f %.2f old=(%.2f %.2f %.2f) td=%.2f) "
 			   "j=(%.5f %.5f) ddeg=(%.2f %.2f) "
@@ -269,6 +270,7 @@ void camera_attach(struct camera* c, struct entity* e, float tick_delta,
 			   glm_deg(rx_before), glm_deg(rx_after),
 			   glm_deg(ry_before), glm_deg(ry_unclamped),
 			   glm_deg(ry_unclamped), glm_deg(ry_after));
+#endif
 		last_dbg_print = now;
 	}
 #endif

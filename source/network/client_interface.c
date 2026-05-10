@@ -319,31 +319,27 @@ void clin_process(struct client_rpc* call) {
 							   call->payload.window_open.type,
 							   call->payload.window_open.slot_count);
 
-				// UI screens are currently global. For now, only player 0
-				// actually opens those screens.
-				if(pid == 0) {
-					switch(call->payload.window_open.type) {
-						case WINDOW_TYPE_WORKBENCH:
-							screen_crafting_set_windowc(window);
-							screen_set(&screen_crafting);
-							break;
-						case WINDOW_TYPE_FURNACE:
-							screen_furnace_set_windowc(window);
-							screen_set(&screen_furnace);
-							break;
-						case WINDOW_TYPE_CHEST:
-							screen_chest_set_windowc(window);
-							screen_set(&screen_chest);
-							break;
-						case WINDOW_TYPE_IRON_CHEST:
-							screen_iron_chest_set_windowc(window);
-							screen_set(&screen_iron_chest);
-							break;
-						case WINDOW_TYPE_SIGN:
-							screen_sign_set_windowc(window);
-							screen_set(&screen_sign);
-						default: break;
-					}
+				switch(call->payload.window_open.type) {
+					case WINDOW_TYPE_WORKBENCH:
+						screen_crafting_set_windowc(pid, window);
+						screen_set_player(pid, &screen_crafting);
+						break;
+					case WINDOW_TYPE_FURNACE:
+						screen_furnace_set_windowc(pid, window);
+						screen_set_player(pid, &screen_furnace);
+						break;
+					case WINDOW_TYPE_CHEST:
+						screen_chest_set_windowc(pid, window);
+						screen_set_player(pid, &screen_chest);
+						break;
+					case WINDOW_TYPE_IRON_CHEST:
+						screen_iron_chest_set_windowc(pid, window);
+						screen_set_player(pid, &screen_iron_chest);
+						break;
+					case WINDOW_TYPE_SIGN:
+						screen_sign_set_windowc(pid, window);
+						screen_set_player(pid, &screen_sign);
+					default: break;
 				}
 			}
 

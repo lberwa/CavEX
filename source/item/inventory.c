@@ -90,15 +90,23 @@ void inventory_clear(struct inventory* inv) {
 	inv->hotbar_slot = 0;
 }
 
+// #define ITEM_DEBUG
+
 void inventory_consume(struct inventory* inv, size_t slot) {
 	assert(inv && slot < inv->capacity);
 
+#ifdef ITEM_DEBUG
 	printf("consuming\n");
 	printf("count is: %d\n", inv->items[slot].count);
+#endif
 	if(inv->items[slot].count > 0) {
+#ifdef ITEM_DEBUG	
 		printf("count is > 0\n");
+#endif
 		inv->items[slot].count--;
+#ifdef ITEM_DEBUG
 		printf("count is now: %d\n", inv->items[slot].count);
+#endif	
 		if(inv->items[slot].count == 0) {
 			inv->items[slot].id = 0;
 			inv->items[slot].durability = 0;

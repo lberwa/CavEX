@@ -28,6 +28,8 @@
 #include "../platform/texture.h"
 
 int gutil_control_icon(int x, enum input_button b, const char* str);
+void gutil_set_gui_scale(int scale);
+int gutil_get_gui_scale(void);
 void gutil_texquad_col(int x, int y, int tx, int ty, int sx, int sy, int width,
 					   int height, uint8_t r, uint8_t g, uint8_t b, uint8_t a);
 void gutil_texquad(int x, int y, int tx, int ty, int sx, int sy, int width,
