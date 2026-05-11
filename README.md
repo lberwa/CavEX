@@ -6,18 +6,27 @@
 
 **Changes, compared to jilleb's fCavEX**
 
-* Redstone functionality with bug's but it looks like redstone now.
-* Added Sheeps and Pigs and fix the crash with autojump
-* Added Splitscreen and Multiplayer (in the pc inputs you can change in the config_pc.json or when you install the game in ~/usr/local/bin/Cavex/input_pc.json)
+* Redstone functionality with bugs but it looks like redstone now.
+
+* Added sheep and pigs and fix the crash with autojump
+
+* Added local  Splitscreen and Multiplayer support
+
+  (in the PC version, you can change the inputs in config_pc.json or, if installed, in /usr/local/bin/Cavex/input_pc.json)
+
 * Added a main menu
+
 * Added a controller menu like in Mario Kart Wii
+
 * Added sound in the menu
+
 * Fixed Minecart bug
 
 ---
 
 **Planned features** *(in no particular order, not complete)*
 * Sounds in the game
+* Server multiplayer
 * Block gravity: sand and gravel drop down when there's nothing underneath them to support
 * Water/lava flow: once a brick has been removed next to, or underneath a liquid, it will flow there
 * Additional controller support
@@ -25,7 +34,7 @@
 * Fixes to existing bugs:
 	- Furnace has 4 identical sides
 
- 	- leaves stay floatingin the air after log has been removed
+ 	- leaves stay floating in the air after log has been removed
 
 **Known issues**
 
@@ -36,7 +45,7 @@
 
 * Particles already spark fire before the torch is showing, after placing a torch
 
-* Probably more, but don't be a hater please.
+* Probably more
 
   
 
@@ -56,6 +65,8 @@ See the `LICENSE` file for full details.
 ![ingame0](docs/main.png)
 
 *(from the PC version)*
+
+
 
 There should then be a boot.dol file in the ready-wii directory that your Wii can run. To copy the game to your `apps/` folder, it needs to look like this:
 ```
@@ -97,11 +108,20 @@ or if you want to install:
 sudo make pc-install IS_PC_BUILD=1
 ```
 
-run:
+## Run
 
-if installed:
+If installed:
 
 ```bash
 cavex
 ```
+
+else:
+
+```bash
+cd buildpc
+./cavex
+```
+
+
 
