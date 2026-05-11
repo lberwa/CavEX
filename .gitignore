@@ -26,6 +26,9 @@ boot.elf
 boot.dol
 ffCavEX.dol
 ffCavEX.elf
+!ready_wii/
+!ready_wii/boot.elf
+!ready_wii/boot.dol
 
 backup/
 assets2/
