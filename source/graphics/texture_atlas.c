@@ -337,12 +337,16 @@ void* tex_atlas_block(const char* filename, size_t* width, size_t* height) {
 	tex_atlas_reg(atlas, TEXAT_SANDSTONE_TOP, 0, 11);
 	tex_atlas_reg(atlas, TEXAT_RAIL_POWERED_ON, 3, 11);
 
-	tex_atlas_reg(atlas, TEXAT_SANDSTONE_SIDE, 0, 12);
-	tex_atlas_reg(atlas, TEXAT_RAIL_DETECTOR, 3, 12);
+		tex_atlas_reg(atlas, TEXAT_SANDSTONE_SIDE, 0, 12);
+		tex_atlas_reg(atlas, TEXAT_RAIL_DETECTOR, 3, 12);
 
-	tex_atlas_reg(atlas, TEXAT_SANDSTONE_BOTTOM, 0, 13);
+		tex_atlas_reg(atlas, TEXAT_SANDSTONE_BOTTOM, 0, 13);
+		tex_atlas_reg(atlas, TEXAT_PISTON_PLATE, 11, 6);
+		tex_atlas_reg(atlas, TEXAT_PISTON_SIDE, 12, 6);
+		tex_atlas_reg(atlas, TEXAT_PISTON_BACK, 13, 6);
+		tex_atlas_reg(atlas, TEXAT_PISTON_FRONT_EXTENDED, 14, 6);
 
-	tex_atlas_reg(atlas, TEXAT_WOOL_0, 0, 4);   // White
+		tex_atlas_reg(atlas, TEXAT_WOOL_0, 0, 4);   // White
 	tex_atlas_reg(atlas, TEXAT_WOOL_1, 2, 13);  // Orange
 	tex_atlas_reg(atlas, TEXAT_WOOL_2, 2, 12);  // Magenta
 	tex_atlas_reg(atlas, TEXAT_WOOL_3, 2, 11);  // Light Blue

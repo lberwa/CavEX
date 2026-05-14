@@ -30,8 +30,8 @@ static bool onItemPlace(struct server_local* s, struct item_data* it,
 	return false; // spawn eggs have infinite uses
 }
 
-struct item item_egg_zombie = {
-	.name = "Zombie Egg",
+struct item item_egg_creeper = {
+	.name = "Creeper Egg",
 	.has_damage = false,
 	.max_stack = 64,
 	.fuel = 0,

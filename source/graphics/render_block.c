@@ -322,6 +322,367 @@ static inline void render_block_side(struct displaylist* d, int16_t x,
 	}
 }
 
+static size_t render_cuboid_side(struct displaylist* d, struct block_info* this,
+								 enum side side, uint8_t* vertex_light,
+								 bool count_only, int16_t x0, int16_t y0,
+								 int16_t z0, int16_t x1, int16_t y1,
+								 int16_t z1, uint8_t tex, int tex_rotate) {
+	if(x0 == x1 || y0 == y1 || z0 == z1)
+		return 0;
+
+	if(!count_only) {
+		uint8_t tex_x = TEX_OFFSET(TEXTURE_X(tex));
+		uint8_t tex_y = TEX_OFFSET(TEXTURE_Y(tex));
+		int16_t bx = W2C_COORD(this->x) * BLK_LEN;
+		int16_t by = W2C_COORD(this->y) * BLK_LEN;
+		int16_t bz = W2C_COORD(this->z) * BLK_LEN;
+		uint16_t width;
+		uint16_t height;
+
+		switch(side) {
+			case SIDE_LEFT:
+				width = z1 - z0;
+				height = y1 - y0;
+				render_block_side_adv(d, bx + x0, by + y0, bz + z0, width, height,
+									  tex_x, tex_y + (16 - height / 16), false,
+									  tex_rotate,
+									  true, side, vertex_light,
+									  blocks[this->block->type]->luminance);
+				break;
+			case SIDE_RIGHT:
+				width = z1 - z0;
+				height = y1 - y0;
+				render_block_side_adv(d, bx + x1, by + y0, bz + z0, width, height,
+									  tex_x, tex_y + (16 - height / 16), false,
+									  tex_rotate,
+									  true, side, vertex_light,
+									  blocks[this->block->type]->luminance);
+				break;
+			case SIDE_BOTTOM:
+				width = x1 - x0;
+				height = z1 - z0;
+				render_block_side_adv(d, bx + x0, by + y0, bz + z0, width, height,
+									  tex_x, tex_y, false, tex_rotate, true, side,
+									  vertex_light,
+									  blocks[this->block->type]->luminance);
+				break;
+			case SIDE_TOP:
+				width = x1 - x0;
+				height = z1 - z0;
+				render_block_side_adv(d, bx + x0, by + y1, bz + z0, width, height,
+									  tex_x, tex_y, false, tex_rotate, true, side,
+									  vertex_light,
+									  blocks[this->block->type]->luminance);
+				break;
+			case SIDE_FRONT:
+				width = x1 - x0;
+				height = y1 - y0;
+				render_block_side_adv(d, bx + x0, by + y0, bz + z0, width, height,
+									  tex_x, tex_y + (16 - height / 16), false,
+									  tex_rotate,
+									  true, side, vertex_light,
+									  blocks[this->block->type]->luminance);
+				break;
+			case SIDE_BACK:
+				width = x1 - x0;
+				height = y1 - y0;
+				render_block_side_adv(d, bx + x0, by + y0, bz + z1, width, height,
+									  tex_x, tex_y + (16 - height / 16), false,
+									  tex_rotate,
+									  true, side, vertex_light,
+									  blocks[this->block->type]->luminance);
+				break;
+			default: break;
+		}
+	}
+
+	return 1;
+}
+
+static size_t render_cuboid_side_tex(struct displaylist* d,
+									 struct block_info* this, enum side side,
+									 uint8_t* vertex_light, bool count_only,
+									 int16_t x0, int16_t y0, int16_t z0,
+									 int16_t x1, int16_t y1, int16_t z1,
+									 uint8_t tex, int tex_rotate,
+									 uint8_t tex_off_x, uint8_t tex_off_y) {
+	if(x0 == x1 || y0 == y1 || z0 == z1)
+		return 0;
+
+	if(!count_only) {
+		uint8_t tex_x = TEX_OFFSET(TEXTURE_X(tex)) + tex_off_x;
+		uint8_t tex_y = TEX_OFFSET(TEXTURE_Y(tex)) + tex_off_y;
+		int16_t bx = W2C_COORD(this->x) * BLK_LEN;
+		int16_t by = W2C_COORD(this->y) * BLK_LEN;
+		int16_t bz = W2C_COORD(this->z) * BLK_LEN;
+		uint16_t width;
+		uint16_t height;
+
+		switch(side) {
+			case SIDE_LEFT:
+				width = z1 - z0;
+				height = y1 - y0;
+				render_block_side_adv(d, bx + x0, by + y0, bz + z0, width, height,
+									  tex_x, tex_y + (16 - height / 16), false,
+									  tex_rotate, true, side, vertex_light,
+									  blocks[this->block->type]->luminance);
+				break;
+			case SIDE_RIGHT:
+				width = z1 - z0;
+				height = y1 - y0;
+				render_block_side_adv(d, bx + x1, by + y0, bz + z0, width, height,
+									  tex_x, tex_y + (16 - height / 16), false,
+									  tex_rotate, true, side, vertex_light,
+									  blocks[this->block->type]->luminance);
+				break;
+			case SIDE_BOTTOM:
+				width = x1 - x0;
+				height = z1 - z0;
+				render_block_side_adv(d, bx + x0, by + y0, bz + z0, width, height,
+									  tex_x, tex_y, false, tex_rotate, true,
+									  side, vertex_light,
+									  blocks[this->block->type]->luminance);
+				break;
+			case SIDE_TOP:
+				width = x1 - x0;
+				height = z1 - z0;
+				render_block_side_adv(d, bx + x0, by + y1, bz + z0, width, height,
+									  tex_x, tex_y, false, tex_rotate, true,
+									  side, vertex_light,
+									  blocks[this->block->type]->luminance);
+				break;
+			case SIDE_FRONT:
+				width = x1 - x0;
+				height = y1 - y0;
+				render_block_side_adv(d, bx + x0, by + y0, bz + z0, width, height,
+									  tex_x, tex_y + (16 - height / 16), false,
+									  tex_rotate, true, side, vertex_light,
+									  blocks[this->block->type]->luminance);
+				break;
+			case SIDE_BACK:
+				width = x1 - x0;
+				height = y1 - y0;
+				render_block_side_adv(d, bx + x0, by + y0, bz + z1, width, height,
+									  tex_x, tex_y + (16 - height / 16), false,
+									  tex_rotate, true, side, vertex_light,
+									  blocks[this->block->type]->luminance);
+				break;
+			default: break;
+		}
+	}
+
+	return 1;
+}
+
+static size_t render_cuboid_side_texrect(struct displaylist* d,
+										 struct block_info* this, enum side side,
+										 uint8_t* vertex_light, bool count_only,
+										 int16_t x0, int16_t y0, int16_t z0,
+										 int16_t x1, int16_t y1, int16_t z1,
+										 uint8_t tex, int tex_rotate,
+										 uint8_t tex_off_x, uint8_t tex_off_y,
+										 uint8_t tex_w, uint8_t tex_h) {
+	if(x0 == x1 || y0 == y1 || z0 == z1)
+		return 0;
+
+	if(!count_only) {
+		uint8_t tex_x = TEX_OFFSET(TEXTURE_X(tex)) + tex_off_x;
+		uint8_t tex_y = TEX_OFFSET(TEXTURE_Y(tex)) + tex_off_y;
+		int16_t bx = W2C_COORD(this->x) * BLK_LEN;
+		int16_t by = W2C_COORD(this->y) * BLK_LEN;
+		int16_t bz = W2C_COORD(this->z) * BLK_LEN;
+		const uint8_t tex_coords[2][4][2] = {
+			{
+				{tex_x, tex_y},
+				{tex_x + tex_w, tex_y},
+				{tex_x + tex_w, tex_y + tex_h},
+				{tex_x, tex_y + tex_h},
+			},
+			{
+				{tex_x + tex_w, tex_y},
+				{tex_x, tex_y},
+				{tex_x, tex_y + tex_h},
+				{tex_x + tex_w, tex_y + tex_h},
+			},
+		};
+
+#define PISTON_TEXCOORD(v)                                                     \
+	displaylist_texcoord(d,                                                    \
+					 tex_coords[0][(tex_rotate + (v)) % 4][0],                \
+					 tex_coords[0][(tex_rotate + (v)) % 4][1])
+
+		switch(side) {
+			case SIDE_LEFT:
+				displaylist_pos(d, bx + x0, by + y0, bz + z0);
+				displaylist_color(d, DIM_LIGHT(vertex_light[8], level_table_1, true,
+											  blocks[this->block->type]->luminance));
+				PISTON_TEXCOORD(3);
+				displaylist_pos(d, bx + x0, by + y1, bz + z0);
+				displaylist_color(d, DIM_LIGHT(vertex_light[9], level_table_1, true,
+											  blocks[this->block->type]->luminance));
+				PISTON_TEXCOORD(0);
+				displaylist_pos(d, bx + x0, by + y1, bz + z1);
+				displaylist_color(d, DIM_LIGHT(vertex_light[10], level_table_1, true,
+											   blocks[this->block->type]->luminance));
+				PISTON_TEXCOORD(1);
+				displaylist_pos(d, bx + x0, by + y0, bz + z1);
+				displaylist_color(d, DIM_LIGHT(vertex_light[11], level_table_1, true,
+											   blocks[this->block->type]->luminance));
+				PISTON_TEXCOORD(2);
+				break;
+			case SIDE_RIGHT:
+				displaylist_pos(d, bx + x1, by + y0, bz + z0);
+				displaylist_color(d, DIM_LIGHT(vertex_light[12], level_table_1, true,
+											  blocks[this->block->type]->luminance));
+				PISTON_TEXCOORD(2);
+				displaylist_pos(d, bx + x1, by + y0, bz + z1);
+				displaylist_color(d, DIM_LIGHT(vertex_light[13], level_table_1, true,
+											  blocks[this->block->type]->luminance));
+				PISTON_TEXCOORD(3);
+				displaylist_pos(d, bx + x1, by + y1, bz + z1);
+				displaylist_color(d, DIM_LIGHT(vertex_light[14], level_table_1, true,
+											   blocks[this->block->type]->luminance));
+				PISTON_TEXCOORD(0);
+				displaylist_pos(d, bx + x1, by + y1, bz + z0);
+				displaylist_color(d, DIM_LIGHT(vertex_light[15], level_table_1, true,
+											   blocks[this->block->type]->luminance));
+				PISTON_TEXCOORD(1);
+				break;
+			case SIDE_BOTTOM:
+				displaylist_pos(d, bx + x0, by + y0, bz + z0);
+				displaylist_color(d, DIM_LIGHT(vertex_light[4], level_table_0, true,
+											  blocks[this->block->type]->luminance));
+				PISTON_TEXCOORD(3);
+				displaylist_pos(d, bx + x0, by + y0, bz + z1);
+				displaylist_color(d, DIM_LIGHT(vertex_light[5], level_table_0, true,
+											  blocks[this->block->type]->luminance));
+				PISTON_TEXCOORD(0);
+				displaylist_pos(d, bx + x1, by + y0, bz + z1);
+				displaylist_color(d, DIM_LIGHT(vertex_light[6], level_table_0, true,
+											   blocks[this->block->type]->luminance));
+				PISTON_TEXCOORD(1);
+				displaylist_pos(d, bx + x1, by + y0, bz + z0);
+				displaylist_color(d, DIM_LIGHT(vertex_light[7], level_table_0, true,
+											   blocks[this->block->type]->luminance));
+				PISTON_TEXCOORD(2);
+				break;
+			case SIDE_TOP:
+				displaylist_pos(d, bx + x0, by + y1, bz + z0);
+				displaylist_color(d, DIM_LIGHT(vertex_light[0], level_table_0, true,
+											  blocks[this->block->type]->luminance));
+				PISTON_TEXCOORD(0);
+				displaylist_pos(d, bx + x1, by + y1, bz + z0);
+				displaylist_color(d, DIM_LIGHT(vertex_light[1], level_table_0, true,
+											  blocks[this->block->type]->luminance));
+				PISTON_TEXCOORD(1);
+				displaylist_pos(d, bx + x1, by + y1, bz + z1);
+				displaylist_color(d, DIM_LIGHT(vertex_light[2], level_table_0, true,
+											   blocks[this->block->type]->luminance));
+				PISTON_TEXCOORD(2);
+				displaylist_pos(d, bx + x0, by + y1, bz + z1);
+				displaylist_color(d, DIM_LIGHT(vertex_light[3], level_table_0, true,
+											   blocks[this->block->type]->luminance));
+				PISTON_TEXCOORD(3);
+				break;
+			case SIDE_FRONT:
+				displaylist_pos(d, bx + x0, by + y0, bz + z0);
+				displaylist_color(d, DIM_LIGHT(vertex_light[20], level_table_2, true,
+											  blocks[this->block->type]->luminance));
+				PISTON_TEXCOORD(3);
+				displaylist_pos(d, bx + x1, by + y0, bz + z0);
+				displaylist_color(d, DIM_LIGHT(vertex_light[21], level_table_2, true,
+											  blocks[this->block->type]->luminance));
+				PISTON_TEXCOORD(2);
+				displaylist_pos(d, bx + x1, by + y1, bz + z0);
+				displaylist_color(d, DIM_LIGHT(vertex_light[22], level_table_2, true,
+											   blocks[this->block->type]->luminance));
+				PISTON_TEXCOORD(1);
+				displaylist_pos(d, bx + x0, by + y1, bz + z0);
+				displaylist_color(d, DIM_LIGHT(vertex_light[23], level_table_2, true,
+											   blocks[this->block->type]->luminance));
+				PISTON_TEXCOORD(0);
+				break;
+			case SIDE_BACK:
+				displaylist_pos(d, bx + x0, by + y0, bz + z1);
+				displaylist_color(d, DIM_LIGHT(vertex_light[16], level_table_2, true,
+											  blocks[this->block->type]->luminance));
+				PISTON_TEXCOORD(0);
+				displaylist_pos(d, bx + x0, by + y1, bz + z1);
+				displaylist_color(d, DIM_LIGHT(vertex_light[17], level_table_2, true,
+											  blocks[this->block->type]->luminance));
+				PISTON_TEXCOORD(1);
+				displaylist_pos(d, bx + x1, by + y1, bz + z1);
+				displaylist_color(d, DIM_LIGHT(vertex_light[18], level_table_2, true,
+											   blocks[this->block->type]->luminance));
+				PISTON_TEXCOORD(2);
+				displaylist_pos(d, bx + x1, by + y0, bz + z1);
+				displaylist_color(d, DIM_LIGHT(vertex_light[19], level_table_2, true,
+											   blocks[this->block->type]->luminance));
+				PISTON_TEXCOORD(3);
+				break;
+			default: break;
+		}
+
+#undef PISTON_TEXCOORD
+	}
+
+	return 1;
+}
+
+static int piston_texture_rotate(enum side facing, enum side side) {
+	switch(facing) {
+		case SIDE_FRONT:
+			if(side == SIDE_FRONT) return 1;
+			if(side == SIDE_TOP)   return 0;
+			if(side == SIDE_BOTTOM)return 2;
+			if(side == SIDE_BACK)  return 1;
+			if(side == SIDE_LEFT)  return 1;
+			if(side == SIDE_RIGHT) return 3;
+			return 0;
+		case SIDE_BACK:
+			if(side == SIDE_FRONT) return 1;
+			if(side == SIDE_TOP)   return 2;
+			if(side == SIDE_BOTTOM)return 0;
+			if(side == SIDE_BACK)  return 1;
+			if(side == SIDE_LEFT)  return 3;
+			if(side == SIDE_RIGHT) return 1;
+			return 0;
+		case SIDE_TOP:
+			if(side == SIDE_FRONT) return 0;
+			if(side == SIDE_TOP)   return 0;
+			if(side == SIDE_BOTTOM)return 0;
+			if(side == SIDE_BACK)  return 0;
+			if(side == SIDE_LEFT)  return 0;
+			if(side == SIDE_RIGHT) return 0;
+			return 0;
+		case SIDE_BOTTOM:
+			if(side == SIDE_FRONT) return 2;
+			if(side == SIDE_TOP)   return 1;
+			if(side == SIDE_BOTTOM)return 0;
+			if(side == SIDE_BACK)  return 2;
+			if(side == SIDE_LEFT)  return 2;
+			if(side == SIDE_RIGHT) return 2;
+			return 0;
+		case SIDE_RIGHT:
+			if(side == SIDE_FRONT) return 1;
+			if(side == SIDE_TOP)   return 3;
+			if(side == SIDE_BOTTOM)return 3;
+			if(side == SIDE_BACK)  return 3;
+			if(side == SIDE_LEFT)  return 3;
+			if(side == SIDE_RIGHT) return 3;
+			return 0;
+		case SIDE_LEFT:
+			if(side == SIDE_FRONT) return 3;
+			if(side == SIDE_TOP)   return 1;
+			if(side == SIDE_BOTTOM)return 1;
+			if(side == SIDE_BACK)  return 1;
+			if(side == SIDE_LEFT)  return 3;
+			if(side == SIDE_RIGHT) return 3;
+			return 0;
+		default: return 0;
+	}
+}
+
 size_t render_block_cross(struct displaylist* d, struct block_info* this,
 						  enum side side, struct block_info* it,
 						  uint8_t* vertex_light, bool count_only) {
@@ -611,6 +972,180 @@ size_t render_block_cactus(struct displaylist* d, struct block_info* this,
 			(side == SIDE_TOP || side == SIDE_BOTTOM) ? 0 : 16, false, 0, side,
 			vertex_light);
 	return 1;
+}
+
+size_t render_block_piston(struct displaylist* d, struct block_info* this,
+						   enum side side, struct block_info* it,
+						   uint8_t* vertex_light, bool count_only) {
+	enum side facing = (enum side)(this->block->metadata & 0x7);
+	int tex_rotate = piston_texture_rotate(facing, side);
+
+	if(!count_only)
+		render_block_side(
+			d, W2C_COORD(this->x), W2C_COORD(this->y), W2C_COORD(this->z), 0,
+			BLK_LEN, blocks[this->block->type]->getTextureIndex(this, side),
+			blocks[this->block->type]->luminance, true, 0, false, tex_rotate,
+			side, vertex_light);
+	return 1;
+}
+
+size_t render_block_piston_head(struct displaylist* d, struct block_info* this,
+								enum side side, struct block_info* it,
+								uint8_t* vertex_light, bool count_only) {
+	enum side facing = (enum side)(this->block->metadata & 0x7);
+	const int16_t tip = BLK_LEN / 4;
+	int16_t x0 = 0;
+	int16_t x1 = BLK_LEN;
+	int16_t y0 = 0;
+	int16_t y1 = BLK_LEN;
+	int16_t z0 = 0;
+	int16_t z1 = BLK_LEN;
+
+	switch(facing) {
+		case SIDE_RIGHT:
+			x0 = BLK_LEN - tip;
+			break;
+		case SIDE_LEFT:
+			x1 = tip;
+			break;
+		case SIDE_TOP:
+			y0 = BLK_LEN - tip;
+			break;
+		case SIDE_BOTTOM:
+			y1 = tip;
+			break;
+		case SIDE_BACK:
+			z0 = BLK_LEN - tip;
+			break;
+		case SIDE_FRONT:
+		default:
+			z1 = tip;
+			break;
+	}
+
+	if(side == facing || side == blocks_side_opposite(facing)) {
+		uint8_t tex = tex_atlas_lookup(TEXAT_PISTON_PLATE);
+		return render_cuboid_side(d, this, side, vertex_light, count_only, x0,
+								  y0, z0, x1, y1, z1, tex,
+								  piston_texture_rotate(facing, side));
+	}
+
+	return render_cuboid_side_texrect(
+		d, this, side, vertex_light, count_only, x0, y0, z0, x1, y1, z1,
+		tex_atlas_lookup(TEXAT_PISTON_SIDE), piston_texture_rotate(facing, side),
+		0, 0, 16, 4);
+}
+
+size_t render_block_piston_always(struct displaylist* d, struct block_info* this,
+								  enum side side, struct block_info* it,
+								  uint8_t* vertex_light, bool count_only) {
+	if(!(this->block->metadata & 0x8))
+		return 0;
+
+	const int16_t rod_min = BLK_LEN * 3 / 8;
+	const int16_t rod_max = BLK_LEN * 5 / 8;
+	uint8_t tex_side = tex_atlas_lookup(TEXAT_PISTON_PLATE);
+	uint8_t tex_front = tex_atlas_lookup(TEXAT_PISTON_FRONT_EXTENDED);
+	int16_t x0 = rod_min;
+	int16_t x1 = rod_max;
+	int16_t y0 = rod_min;
+	int16_t y1 = rod_max;
+	int16_t z0 = rod_min;
+	int16_t z1 = rod_max;
+
+	switch((enum side)(this->block->metadata & 0x7)) {
+		case SIDE_RIGHT:
+			x0 = BLK_LEN;
+			x1 = BLK_LEN * 2;
+			y0 = 0;
+			y1 = BLK_LEN;
+			z0 = 0;
+			z1 = BLK_LEN;
+			if(side == SIDE_RIGHT)
+				return render_cuboid_side(d, this, side, vertex_light,
+										  count_only, x0, y0, z0, x1, y1, z1,
+										  tex_front,
+										  piston_texture_rotate(SIDE_RIGHT, side));
+			return render_cuboid_side(d, this, side, vertex_light, count_only,
+									  x0, y0, z0, x1, y1, z1, tex_side,
+									  piston_texture_rotate(SIDE_RIGHT, side));
+		case SIDE_LEFT:
+			x0 = -BLK_LEN;
+			x1 = 0;
+			y0 = 0;
+			y1 = BLK_LEN;
+			z0 = 0;
+			z1 = BLK_LEN;
+			if(side == SIDE_LEFT)
+				return render_cuboid_side(d, this, side, vertex_light,
+										  count_only, x0, y0, z0, x1, y1, z1,
+										  tex_front,
+										  piston_texture_rotate(SIDE_LEFT, side));
+			return render_cuboid_side(d, this, side, vertex_light, count_only,
+									  x0, y0, z0, x1, y1, z1, tex_side,
+									  piston_texture_rotate(SIDE_LEFT, side));
+		case SIDE_TOP:
+			x0 = 0;
+			x1 = BLK_LEN;
+			y0 = BLK_LEN;
+			y1 = BLK_LEN * 2;
+			z0 = 0;
+			z1 = BLK_LEN;
+			if(side == SIDE_TOP)
+				return render_cuboid_side(d, this, side, vertex_light,
+										  count_only, x0, y0, z0, x1, y1, z1,
+										  tex_front,
+										  piston_texture_rotate(SIDE_TOP, side));
+			return render_cuboid_side(d, this, side, vertex_light, count_only,
+									  x0, y0, z0, x1, y1, z1, tex_side,
+									  piston_texture_rotate(SIDE_TOP, side));
+		case SIDE_BOTTOM:
+			x0 = 0;
+			x1 = BLK_LEN;
+			y0 = -BLK_LEN;
+			y1 = 0;
+			z0 = 0;
+			z1 = BLK_LEN;
+			if(side == SIDE_BOTTOM)
+				return render_cuboid_side(d, this, side, vertex_light,
+										  count_only, x0, y0, z0, x1, y1, z1,
+										  tex_front,
+										  piston_texture_rotate(SIDE_BOTTOM, side));
+			return render_cuboid_side(d, this, side, vertex_light, count_only,
+									  x0, y0, z0, x1, y1, z1, tex_side,
+									  piston_texture_rotate(SIDE_BOTTOM, side));
+		case SIDE_BACK:
+			x0 = 0;
+			x1 = BLK_LEN;
+			y0 = 0;
+			y1 = BLK_LEN;
+			z0 = BLK_LEN;
+			z1 = BLK_LEN * 2;
+			if(side == SIDE_BACK)
+				return render_cuboid_side(d, this, side, vertex_light,
+										  count_only, x0, y0, z0, x1, y1, z1,
+										  tex_front,
+										  piston_texture_rotate(SIDE_BACK, side));
+			return render_cuboid_side(d, this, side, vertex_light, count_only,
+									  x0, y0, z0, x1, y1, z1, tex_side,
+									  piston_texture_rotate(SIDE_BACK, side));
+		case SIDE_FRONT:
+		default:
+			x0 = 0;
+			x1 = BLK_LEN;
+			y0 = 0;
+			y1 = BLK_LEN;
+			z0 = -BLK_LEN;
+			z1 = 0;
+			if(side == SIDE_FRONT)
+				return render_cuboid_side(d, this, side, vertex_light,
+										  count_only, x0, y0, z0, x1, y1, z1,
+										  tex_front,
+										  piston_texture_rotate(SIDE_FRONT, side));
+			return render_cuboid_side(d, this, side, vertex_light, count_only,
+									  x0, y0, z0, x1, y1, z1, tex_side,
+									  piston_texture_rotate(SIDE_FRONT, side));
+	}
 }
 
 size_t render_block_portal(struct displaylist* d, struct block_info* this,

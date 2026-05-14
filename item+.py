@@ -54,9 +54,9 @@ def get_inventory(player_index, create=False):
 
 
 def show_inventory(player_index, inventory):
-    print(f"Spieler {player_index}:")
+    print(f"Player {player_index}:")
     if len(inventory) == 0:
-        print("  Inventar leer.")
+        print("  Inventar is empty.")
         return
 
     for item in inventory:
@@ -87,13 +87,13 @@ def write_item():
         slot = int(input("Slot: "))
         item_id = int(input("Item-ID: "))
         count = int(input("Anzahl: "))
-        damage = int(input("Damage (meist 0): "))
+        damage = int(input("Damage (mostly 0): "))
     except ValueError:
-        print("Ungültige Eingabe.")
+        print("invalid input.")
         return
 
     if player_index not in PLAYER_PATHS:
-        print("Ungültiger Spieler.")
+        print("invalid Player.")
         return
 
     inventory = get_inventory(player_index, create=True)
@@ -104,7 +104,7 @@ def write_item():
             item["id"] = Short(item_id)
             item["Count"] = Byte(count)
             item["Damage"] = Short(damage)
-            print(f"Spieler {player_index}: Slot überschrieben.")
+            print(f"Player {player_index}: Slot overwritten.")
             return
 
     # sonst neu anlegen
@@ -114,16 +114,16 @@ def write_item():
         "Count": Byte(count),
         "Damage": Short(damage),
     }))
-    print(f"Spieler {player_index}: Neues Item hinzugefügt.")
+    print(f"Player {player_index}: Added new Item.")
 
 def help_text():
     print("""
 Befehle:
- read   - Inventare aller Spieler anzeigen
- write  - Item in Slot eines Spielers setzen
- save   - level.dat speichern
- help   - diese Hilfe
- exit   - Programm beenden
+ read   - Show inventory
+ write  - write Item
+ save   - saving
+ help   - this help
+ exit   - exit program
 """)
 
 help_text()
@@ -143,4 +143,4 @@ while True:
     elif cmd == "exit":
         break
     else:
-        print("Unbekannter Befehl.")
+        print(f"{cmd}: command not found!")
