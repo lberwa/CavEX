@@ -76,6 +76,7 @@ static size_t getDroppedItem(struct block_info* this, struct item_data* it,
 }
 
 static void onRandomTick(struct server_local* s, struct block_info* this) {
+	//printf("pos: %d %d %d  ---  ", this->x, this->y, this->z);
 	for(int y = -4; y <= 4; y++) {
 		for(int x = -4; x <= 4; x++) {
 			for(int z = -4; z <= 4; z++) {
@@ -83,11 +84,14 @@ static void onRandomTick(struct server_local* s, struct block_info* this) {
 				if((x != 0 || y != 0 || z != 0)
 				   && server_world_get_block(&s->world, this->x + x,
 											 this->y + y, this->z + z, &log)
-				   && log.type == BLOCK_LOG)
+				   && log.type == BLOCK_LOG) {
+					//printf("BLOCK: %d %d %d\n", this->x + x, this->y + y, this->z + z);
 					return;
+				}
 			}
 		}
 	}
+	//printf(" air------------------- \n");
 
 	server_world_set_block(s, this->x, this->y, this->z,
 						   (struct block_data) {

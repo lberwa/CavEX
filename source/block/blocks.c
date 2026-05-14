@@ -118,6 +118,7 @@ void blocks_init() {
 	blocks[23] = &block_dispenser;
 	blocks[24] = &block_sandstone;
 	blocks[25] = &block_noteblock;
+	blocks[34] = &block_piston_head;
 	blocks[26] = &block_bed;
 	blocks[27] = &block_powered_rail;
 	blocks[28] = &block_detector_rail;
@@ -125,8 +126,7 @@ void blocks_init() {
 	blocks[30] = &block_cobweb;
 	blocks[31] = &block_tallgrass;
 	blocks[32] = &block_deadbush;
-	// piston
-	// piston head
+	blocks[33] = &block_piston;
 	blocks[35] = &block_wool;
 	// moving piston head
 	blocks[37] = &block_flower;
@@ -187,9 +187,9 @@ void blocks_init() {
 	blocks[92] = &block_cake;
 	// repeater
 	// repeater
-	blocks[95] = &block_iron_chest;
+	blocks[253] = &block_iron_chest;
 	blocks[96] = &block_trapdoor;
-	blocks[97] = &block_tree2d;
+	blocks[254] = &block_tree2d;
 	//blocks[98] = &block_minecart;
 
 	for(int k = 0; k < 256; k++) {

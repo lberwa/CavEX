@@ -2,7 +2,7 @@
 
 [Cave Explorer](https://github.com/xtreme8000/CavEX) by [xtreme8000](https://github.com/xtreme8000) is a Wii homebrew and PC game with the goal to recreate most of the core survival aspects up until Beta 1.7.3. 
 
-*CavEX* is a fork of [fCavEX](https://github.com/jilleb/fCavEX), made by [jilleb](https://avatars.githubusercontent.com/u/8352494?v=4&size=40), with all kinds of changes and additions. Some additions may not be from the original game and some mechanics may be different - this fork is not aiming for a 1:1 recreation. Unlike CavEX, fCavEX does not aim for complete save compatibility - for instance, chests and signs use an incompatible saving system with static limits and some blocks may use metadata values differently. Until stated otherwise, a freshly created save should be compatible, as fCavEX does not have its own world generator yet.
+*CavEX* is a fork of [fCavEX](https://github.com/jilleb/fCavEX), made by [jilleb](https://avatars.githubusercontent.com/u/8352494?v=4&size=40), with all kinds of changes and additions. Some additions may not be from the original game and some mechanics may be different - this fork is not aiming for a 1:1 recreation. Unlike original CavEX, this CavEX does not aim for complete save compatibility - for instance, chests and signs use an incompatible saving system with static limits and some blocks may use metadata values differently. Until stated otherwise, a freshly created save should be compatible, as fCavEX does not have its own world generator yet.
 
 **Changes, compared to jilleb's fCavEX**
 
@@ -29,12 +29,14 @@
 * Server multiplayer
 * Block gravity: sand and gravel drop down when there's nothing underneath them to support
 * Water/lava flow: once a brick has been removed next to, or underneath a liquid, it will flow there
+* Nether
+* Sneaking if press A button on the wii/ Shift on PC
 * Additional controller support
-* Mobs
+* add more Mobs
+* droped items and entitys saving when you save the world
+* All blocks from blocks.txt
 * Fixes to existing bugs:
 	- Furnace has 4 identical sides
-
- 	- leaves stay floating in the air after log has been removed
 
 **Known issues**
 
@@ -44,6 +46,8 @@
 * Random crashes, once in a while.. Maybe I'll implement an optional auto-save, to prevent some headaches and tears
 
 * Particles already spark fire before the torch is showing, after placing a torch
+
+* If you jump into water, you take damage
 
 * Probably more
 

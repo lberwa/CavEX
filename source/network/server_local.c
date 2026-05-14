@@ -28,6 +28,7 @@
 
 #include "../item/window_container.h"
 #include "../platform/thread.h"
+#include "../daytime.h"
 #ifdef SPLITSCREEN
 #include "../game/game_state.h"
 #endif
@@ -37,9 +38,259 @@
 #include "server_local.h"
 #include "server_world.h"
 #include "complex_block_archive.h"
+#include "../entity/entity_monster.h"
 
 #define CHUNK_DIST2(x1, x2, z1, z2)                                            \
 	(((x1) - (x2)) * ((x1) - (x2)) + ((z1) - (z2)) * ((z1) - (z2)))
+
+#define ANIMAL_SPAWN_INTERVAL_TICKS 200
+#define ANIMAL_NEARBY_LIMIT 2
+#define ANIMAL_NEARBY_RADIUS 24
+#define ANIMAL_SPAWN_MIN_DIST 8
+#define ANIMAL_SPAWN_MAX_DIST 18
+#define MONSTER_MAX_TORCH_LIGHT 0
+#define MONSTER_MAX_DAY_SKY_LIGHT 0
+
+static const int server_local_spawn_animals[] = {
+	ANIMAIL_PIG,
+	ANIMAIL_SHEEP,
+};
+
+static const int server_local_spawn_dark_monsters[] = {
+	MONSTER_CREEPER,
+};
+
+static bool server_local_is_spawn_animal(int monster_id) {
+	for(size_t i = 0; i < sizeof(server_local_spawn_animals)
+						 / sizeof(server_local_spawn_animals[0]);
+		i++) {
+		if(server_local_spawn_animals[i] == monster_id)
+			return true;
+	}
+
+	return false;
+}
+
+static bool server_local_is_spawn_dark_monster(int monster_id) {
+	for(size_t i = 0; i < sizeof(server_local_spawn_dark_monsters)
+						 / sizeof(server_local_spawn_dark_monsters[0]);
+		i++) {
+		if(server_local_spawn_dark_monsters[i] == monster_id)
+			return true;
+	}
+
+	return false;
+}
+
+static bool server_local_is_daytime(const struct server_local* s) {
+	assert(s);
+
+	float time = fmodf((float)s->world_time, (float)DAY_LENGTH_TICKS);
+	return time >= 0.0f && time < 1300.0f;
+}
+
+static size_t server_local_count_nearby_animals(struct server_local* s, float px,
+												float py, float pz, float radius) {
+	assert(s);
+
+	size_t count = 0;
+	float radius2 = radius * radius;
+
+	dict_entity_it_t it;
+	dict_entity_it(it, s->entities);
+	while(!dict_entity_end_p(it)) {
+		struct entity* e = dict_entity_ref(it)->value;
+		if(e && e->type == ENTITY_MONSTER
+		   && server_local_is_spawn_animal(e->data.monster.id)) {
+			float dx = e->pos[0] - px;
+			float dy = e->pos[1] - py;
+			float dz = e->pos[2] - pz;
+			if(dx * dx + dy * dy + dz * dz <= radius2)
+				count++;
+		}
+		dict_entity_next(it);
+	}
+
+	return count;
+}
+
+static int server_local_choose_spawn_animal(struct server_local* s) {
+	assert(s);
+
+	size_t count = sizeof(server_local_spawn_animals)
+				   / sizeof(server_local_spawn_animals[0]);
+	return server_local_spawn_animals[rand_gen_range(&s->rand_src, 0, count)];
+}
+
+static size_t server_local_count_nearby_dark_monsters(struct server_local* s,
+													  float px, float py,
+													  float pz, float radius) {
+	assert(s);
+
+	size_t count = 0;
+	float radius2 = radius * radius;
+
+	dict_entity_it_t it;
+	dict_entity_it(it, s->entities);
+	while(!dict_entity_end_p(it)) {
+		struct entity* e = dict_entity_ref(it)->value;
+		if(e && e->type == ENTITY_MONSTER
+		   && server_local_is_spawn_dark_monster(e->data.monster.id)) {
+			float dx = e->pos[0] - px;
+			float dy = e->pos[1] - py;
+			float dz = e->pos[2] - pz;
+			if(dx * dx + dy * dy + dz * dz <= radius2)
+				count++;
+		}
+		dict_entity_next(it);
+	}
+
+	return count;
+}
+
+static int server_local_choose_spawn_dark_monster(struct server_local* s) {
+	assert(s);
+
+	size_t count = sizeof(server_local_spawn_dark_monsters)
+				   / sizeof(server_local_spawn_dark_monsters[0]);
+	return server_local_spawn_dark_monsters[rand_gen_range(&s->rand_src, 0,
+														   count)];
+}
+
+static bool server_local_is_dark_monster_spawn(const struct server_local* s,
+												   const struct block_data* body,
+												   const struct block_data* head) {
+	assert(s && body && head);
+
+	if(body->torch_light > MONSTER_MAX_TORCH_LIGHT
+	   || head->torch_light > MONSTER_MAX_TORCH_LIGHT)
+		return false;
+
+	if(server_local_is_daytime(s)
+	   && (body->sky_light > MONSTER_MAX_DAY_SKY_LIGHT
+		   || head->sky_light > MONSTER_MAX_DAY_SKY_LIGHT))
+		return false;
+
+	return true;
+}
+
+static bool server_local_find_animal_spawn(struct server_local* s, float px,
+										   float pz, vec3 out_pos) {
+	assert(s && out_pos);
+
+	for(int attempt = 0; attempt < 12; attempt++) {
+		int sx = (int)floorf(px)
+				 + rand_gen_range(&s->rand_src, -ANIMAL_SPAWN_MAX_DIST,
+								  ANIMAL_SPAWN_MAX_DIST + 1);
+		int sz = (int)floorf(pz)
+				 + rand_gen_range(&s->rand_src, -ANIMAL_SPAWN_MAX_DIST,
+								  ANIMAL_SPAWN_MAX_DIST + 1);
+		int dx = sx - (int)floorf(px);
+		int dz = sz - (int)floorf(pz);
+		int dist2 = dx * dx + dz * dz;
+
+		if(dist2 < ANIMAL_SPAWN_MIN_DIST * ANIMAL_SPAWN_MIN_DIST
+		   || dist2 > ANIMAL_SPAWN_MAX_DIST * ANIMAL_SPAWN_MAX_DIST)
+			continue;
+
+		struct block_data ground, body, head;
+		for(int y = WORLD_HEIGHT - 2; y >= 1; y--) {
+			if(!server_world_get_block(&s->world, sx, y - 1, sz, &ground)
+			   || !server_world_get_block(&s->world, sx, y, sz, &body)
+			   || !server_world_get_block(&s->world, sx, y + 1, sz, &head))
+				break;
+
+			if((ground.type == BLOCK_GRASS || ground.type == BLOCK_DIRT)
+			   && body.type == BLOCK_AIR && head.type == BLOCK_AIR) {
+				out_pos[0] = (float)sx + 0.5f;
+				out_pos[1] = (float)y;
+				out_pos[2] = (float)sz + 0.5f;
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
+static bool server_local_find_dark_monster_spawn(struct server_local* s, float px,
+												 float pz, vec3 out_pos) {
+	assert(s && out_pos);
+
+	for(int attempt = 0; attempt < 12; attempt++) {
+		int sx = (int)floorf(px)
+				 + rand_gen_range(&s->rand_src, -ANIMAL_SPAWN_MAX_DIST,
+								  ANIMAL_SPAWN_MAX_DIST + 1);
+		int sz = (int)floorf(pz)
+				 + rand_gen_range(&s->rand_src, -ANIMAL_SPAWN_MAX_DIST,
+								  ANIMAL_SPAWN_MAX_DIST + 1);
+		int dx = sx - (int)floorf(px);
+		int dz = sz - (int)floorf(pz);
+		int dist2 = dx * dx + dz * dz;
+
+		if(dist2 < ANIMAL_SPAWN_MIN_DIST * ANIMAL_SPAWN_MIN_DIST
+		   || dist2 > ANIMAL_SPAWN_MAX_DIST * ANIMAL_SPAWN_MAX_DIST)
+			continue;
+
+		struct block_data ground, body, head;
+		for(int y = WORLD_HEIGHT - 2; y >= 1; y--) {
+			if(!server_world_get_block(&s->world, sx, y - 1, sz, &ground)
+			   || !server_world_get_block(&s->world, sx, y, sz, &body)
+			   || !server_world_get_block(&s->world, sx, y + 1, sz, &head))
+				break;
+
+			if((ground.type == BLOCK_GRASS || ground.type == BLOCK_DIRT)
+			   && body.type == BLOCK_AIR && head.type == BLOCK_AIR
+			   && server_local_is_dark_monster_spawn(s, &body, &head)) {
+				out_pos[0] = (float)sx + 0.5f;
+				out_pos[1] = (float)y;
+				out_pos[2] = (float)sz + 0.5f;
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
+static void server_local_try_spawn_nearby_animal(struct server_local* s, float px,
+												 float py, float pz) {
+	assert(s);
+
+	if(!server_local_is_daytime(s))
+		return;
+
+	if(s->world_time % ANIMAL_SPAWN_INTERVAL_TICKS != 0)
+		return;
+
+	if(server_local_count_nearby_animals(s, px, py, pz, ANIMAL_NEARBY_RADIUS)
+	   >= ANIMAL_NEARBY_LIMIT)
+		return;
+
+	vec3 spawn_pos;
+	if(server_local_find_animal_spawn(s, px, pz, spawn_pos))
+		server_local_spawn_monster(spawn_pos,
+								   server_local_choose_spawn_animal(s), s);
+}
+
+static void server_local_try_spawn_nearby_dark_monster(struct server_local* s,
+													   float px, float py,
+													   float pz) {
+	assert(s);
+
+	if(s->world_time % ANIMAL_SPAWN_INTERVAL_TICKS != 0)
+		return;
+
+	if(server_local_count_nearby_dark_monsters(
+		   s, px, py, pz, ANIMAL_NEARBY_RADIUS)
+	   >= ANIMAL_NEARBY_LIMIT)
+		return;
+
+	vec3 spawn_pos;
+	if(server_local_find_dark_monster_spawn(s, px, pz, spawn_pos))
+		server_local_spawn_monster(
+			spawn_pos, server_local_choose_spawn_dark_monster(s), s);
+}
 
 
 struct entity* server_local_spawn_minecart(vec3 pos, struct server_local* s) {
@@ -773,11 +1024,17 @@ static void server_local_update(struct server_local* s) {
 	}
 
 #ifdef SPLITSCREEN
-	w_coord_t px = WCOORD_CHUNK_OFFSET(floor(s->players[0].x));
-	w_coord_t pz = WCOORD_CHUNK_OFFSET(floor(s->players[0].z));
+		w_coord_t px = WCOORD_CHUNK_OFFSET(floor(s->players[0].x));
+		w_coord_t pz = WCOORD_CHUNK_OFFSET(floor(s->players[0].z));
+		float player_x = (float)s->players[0].x;
+		float player_y = (float)s->players[0].y;
+		float player_z = (float)s->players[0].z;
 #else
-	w_coord_t px = WCOORD_CHUNK_OFFSET(floor(s->player.x));
-	w_coord_t pz = WCOORD_CHUNK_OFFSET(floor(s->player.z));
+		w_coord_t px = WCOORD_CHUNK_OFFSET(floor(s->player.x));
+		w_coord_t pz = WCOORD_CHUNK_OFFSET(floor(s->player.z));
+		float player_x = (float)s->player.x;
+		float player_y = (float)s->player.y;
+		float player_z = (float)s->player.z;
 #endif
 #ifdef SPLITSCREEN
 	bool p1_active = false;
@@ -793,6 +1050,9 @@ static void server_local_update(struct server_local* s) {
 	server_world_random_tick(&s->world, &s->rand_src, s, px, pz,
 							 MAX_VIEW_DISTANCE - 2);
 	server_world_tick(&s->world, s);
+	server_local_try_spawn_nearby_animal(s, player_x, player_y, player_z);
+	server_local_try_spawn_nearby_dark_monster(s, player_x, player_y,
+												player_z);
 
 	w_coord_t cx, cz;
 	/* Debug: count loaded chunks */

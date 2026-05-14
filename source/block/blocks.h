@@ -125,6 +125,8 @@ extern struct block block_torch;
 extern struct block block_rail;
 extern struct block block_powered_rail;
 extern struct block block_detector_rail;
+extern struct block block_piston;
+extern struct block block_piston_head;
 extern struct block block_redstone_torch;
 extern struct block block_redstone_torch_lit;
 extern struct block block_ladder;

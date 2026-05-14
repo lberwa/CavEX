@@ -40,6 +40,19 @@ size_t render_block_pressure_plate(struct displaylist* d,
 								   struct block_info* it, uint8_t* vertex_light,
 								   bool count_only);
 
+size_t render_block_piston(struct displaylist* d, struct block_info* this,
+						   enum side side, struct block_info* it,
+						   uint8_t* vertex_light, bool count_only);
+
+size_t render_block_piston_head(struct displaylist* d, struct block_info* this,
+								enum side side, struct block_info* it,
+								uint8_t* vertex_light, bool count_only);
+
+size_t render_block_piston_always(struct displaylist* d,
+								  struct block_info* this, enum side side,
+								  struct block_info* it,
+								  uint8_t* vertex_light, bool count_only);
+
 size_t render_block_fence(struct displaylist* d, struct block_info* this,
 						  enum side side, struct block_info* it,
 						  uint8_t* vertex_light, bool count_only);

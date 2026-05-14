@@ -146,9 +146,9 @@ void items_init() {
 	// map
 	items[359] = &item_shears;
 
-	items[360] = &item_egg_zombie;
-	items[361] = &item_egg_pig;
-	items[362] = &item_egg_sheep;
+	items[423] = &item_egg_creeper;
+	items[424] = &item_egg_pig;
+	items[425] = &item_egg_sheep;
 	// golden record
 	// green record
 }
@@ -162,5 +162,4 @@ bool item_is_block(struct item_data* item) {
 	assert(item);
 	return item_get(item) && item->id < 256 && blocks[item->id];
 }
-
 
