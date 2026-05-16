@@ -42,6 +42,7 @@ enum client_rpc_type {
 	CRPC_ENTITY_DESTROY,
 	CRPC_ENTITY_MOVE,
 	CRPC_OPEN_WINDOW,
+	CRPC_FURNACE_STATE,
 	CRPC_PLAYER_SET_HEALTH,
 	CRPC_SPAWN_MONSTER,
 	CRPC_SPAWN_MINECART,
@@ -98,6 +99,13 @@ struct client_rpc {
 			enum window_type type;
 			uint8_t slot_count;
 		} window_open;
+		struct {
+			uint8_t window;
+			uint16_t burn_time;
+			uint16_t burn_total;
+			uint16_t cook_time;
+			uint16_t cook_total;
+		} furnace_state;
 		struct {
 			uint32_t entity_id;
 			struct item_data item;

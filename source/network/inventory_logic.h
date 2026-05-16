@@ -18,6 +18,7 @@
 */
 
 #include "../item/inventory.h"
+#include "server_local.h"
 
 bool inventory_collect(struct inventory* inv, struct item_data* item,
 					   uint8_t* slot_priority, size_t slot_length,
@@ -30,3 +31,8 @@ extern struct inventory_logic inventory_logic_chest;
 extern struct inventory_logic inventory_logic_iron_chest;
 extern struct inventory_logic inventory_logic_sign;
 
+struct furnace_data* furnace_data_get(struct server_local* s, w_coord_t x,
+									  w_coord_t y, w_coord_t z, bool create);
+struct item_data furnace_recipe_result(struct item_data input);
+void furnace_send_updates(struct server_local* s, w_coord_t x, w_coord_t y,
+						  w_coord_t z, bool send_slots, bool send_state);

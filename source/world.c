@@ -18,11 +18,14 @@
 */
 
 #include <assert.h>
+#include <math.h>
 #include <stdlib.h>
 
 #include "game/game_state.h"
+#include "graphics/render_entity.h"
 #include "lighting.h"
 #include "platform/gfx.h"
+#include "platform/time.h"
 #include "world.h"
 
 // params depend on fog texture
@@ -519,6 +522,71 @@ void world_render_completed(struct world* w, bool new_render) {
 	}
 }
 
+static void world_render_spawner_mob(struct block_data* blk, mat4 view,
+									 w_coord_t x, w_coord_t y, w_coord_t z) {
+	assert(blk && view);
+
+	uint8_t spawner_type = blk->metadata & 0xF;
+	if(spawner_type == 0)
+		return;
+
+	int32_t ms = time_diff_ms(gstate.world_time_start, time_get());
+	float spin_y = fmodf((float)ms * 0.5f, 360.0f);  // speed
+	float spin_x = sinf((float)ms * 0.035f) * 22.0f;
+	float spin_z = cosf((float)ms * 0.027f) * 18.0f;
+	int frame = (ms / 40) % 60;
+
+	render_entity_update_light((blk->torch_light << 4) | blk->sky_light);
+
+	mat4 model, mv;
+	glm_translate_make(model, (vec3) {x + 0.5f, y + 0.14f, z + 0.5f});
+	glm_rotate_y(model, glm_rad(spin_y), model);
+	glm_rotate_x(model, glm_rad(spin_x), model);
+	glm_rotate_z(model, glm_rad(spin_z), model);
+	glm_scale_uni(model, 0.28f);
+	glm_mat4_mul(view, model, mv);
+
+	switch(spawner_type) {
+		case 1:
+			render_entity_creeper(mv, spin_y, spin_y, frame);
+			break;
+		case 2:
+			render_entity_pig(mv, spin_y, frame);
+			break;
+		case 3:
+			render_entity_sheep(mv, spin_y, frame, false);
+			break;
+		default:
+			break;
+	}
+}
+
+static void world_render_spawners(struct world* w, struct camera* c) {
+	assert(w && c);
+
+	ilist_chunks_it_t it;
+	ilist_chunks_it(it, w->render);
+
+	while(!ilist_chunks_end_p(it)) {
+		struct chunk* chunk = ilist_chunks_ref(it);
+
+		for(c_coord_t cy = 0; cy < CHUNK_SIZE; cy++) {
+			for(c_coord_t cz = 0; cz < CHUNK_SIZE; cz++) {
+				for(c_coord_t cx = 0; cx < CHUNK_SIZE; cx++) {
+					struct block_data blk = chunk_get_block(chunk, cx, cy, cz);
+					if(blk.type != BLOCK_SPAWNER || blk.metadata == 0)
+						continue;
+
+					world_render_spawner_mob(&blk, c->view, chunk->x + cx,
+											 chunk->y + cy, chunk->z + cz);
+				}
+			}
+		}
+
+		ilist_chunks_next(it);
+	}
+}
+
 size_t world_render(struct world* w, struct camera* c, bool pass) {
 	assert(w && c);
 
@@ -540,6 +608,8 @@ size_t world_render(struct world* w, struct camera* c, bool pass) {
 			in_view++;
 			ilist_chunks_next(it);
 		}
+
+		world_render_spawners(w, c);
 	} else {
 		gfx_alpha_test(false);
 		gfx_blending(MODE_BLEND);

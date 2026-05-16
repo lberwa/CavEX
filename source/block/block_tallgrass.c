@@ -44,10 +44,6 @@ static uint8_t getTextureIndex1(struct block_info* this, enum side side) {
 	}
 }
 
-static uint8_t getTextureIndex2(struct block_info* this, enum side side) {
-	return tex_atlas_lookup(TEXAT_DEADBUSH); // deadbush
-}
-
 static bool onItemPlace1(struct server_local* s, struct item_data* it,
 						 struct block_info* where, struct block_info* on,
 						 enum side on_side) {
@@ -57,20 +53,6 @@ static bool onItemPlace1(struct server_local* s, struct item_data* it,
 		return false;
 
 	if(blk.type != BLOCK_DIRT && blk.type != BLOCK_GRASS)
-		return false;
-
-	return block_place_default(s, it, where, on, on_side);
-}
-
-static bool onItemPlace2(struct server_local* s, struct item_data* it,
-						 struct block_info* where, struct block_info* on,
-						 enum side on_side) {
-	struct block_data blk;
-	if(!server_world_get_block(&s->world, where->x, where->y - 1, where->z,
-							   &blk))
-		return false;
-
-	if(!blocks[blk.type] || blocks[blk.type]->can_see_through)
 		return false;
 
 	return block_place_default(s, it, where, on, on_side);
@@ -87,11 +69,6 @@ static size_t drop_seed(struct block_info* this, struct item_data* it,
 	}
 
 	return drop_seed ? 1 : 0;
-}
-
-static size_t drop_nothing(struct block_info* this, struct item_data* it,
-						   struct random_gen* g, struct server_local* s) {
-	return 0;
 }
 
 struct block block_tallgrass = {
@@ -123,41 +100,6 @@ struct block block_tallgrass = {
 		.max_stack = 64,
 		.renderItem = render_item_flat,
 		.onItemPlace = onItemPlace1,
-		.fuel = 0,
-		.armor.is_armor = false,
-		.tool.type = TOOL_TYPE_ANY,
-	},
-};
-
-struct block block_deadbush = {
-	.name = "Deadbush",
-	.getSideMask = getSideMask,
-	.getBoundingBox = getBoundingBox,
-	.getMaterial = getMaterial,
-	.getTextureIndex = getTextureIndex2,
-	.getDroppedItem = drop_nothing,
-	.onRandomTick = NULL,
-	.onRightClick = NULL,
-	.transparent = false,
-	.renderBlock = render_block_cross,
-	.renderBlockAlways = NULL,
-	.luminance = 0,
-	.double_sided = true,
-	.can_see_through = true,
-	.opacity = 0,
-	.render_block_data.cross_random_displacement = false,
-	.ignore_lighting = false,
-	.flammable = true,
-	.place_ignore = false,
-	.digging.hardness = 50,
-	.digging.tool = TOOL_TYPE_ANY,
-	.digging.min = TOOL_TIER_ANY,
-	.digging.best = TOOL_TIER_ANY,
-	.block_item = {
-		.has_damage = false,
-		.max_stack = 64,
-		.renderItem = render_item_flat,
-		.onItemPlace = onItemPlace2,
 		.fuel = 0,
 		.armor.is_armor = false,
 		.tool.type = TOOL_TYPE_ANY,

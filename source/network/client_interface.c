@@ -345,6 +345,13 @@ void clin_process(struct client_rpc* call) {
 
 			break;
 		}
+		case CRPC_FURNACE_STATE:
+			screen_furnace_set_state(pid,
+									 call->payload.furnace_state.burn_time,
+									 call->payload.furnace_state.burn_total,
+									 call->payload.furnace_state.cook_time,
+									 call->payload.furnace_state.cook_total);
+			break;
 		case CRPC_TIME_SET:
 			gstate.world_time = call->payload.time_set;
 			gstate.world_time_start = time_get();

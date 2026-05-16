@@ -158,8 +158,18 @@ struct item* item_get(struct item_data* item) {
 	return item->id < ITEMS_MAX ? items[item->id] : NULL;
 }
 
+const char* item_get_name(struct item_data* item) {
+	struct item* it = item_get(item);
+	if(!it)
+		return "Unknown";
+
+	if(item->id == ITEM_COAL && item->durability == 1)
+		return "Charcoal";
+
+	return it->name;
+}
+
 bool item_is_block(struct item_data* item) {
 	assert(item);
 	return item_get(item) && item->id < 256 && blocks[item->id];
 }
-

@@ -19,57 +19,146 @@
 
 #include "../item/recipe.h"
 #include "../item/window_container.h"
+#include "client_interface.h"
 #include "inventory_logic.h"
 #include "server_local.h"
 
+struct furnace_data* furnace_data_get(struct server_local* s, w_coord_t x,
+									  w_coord_t y, w_coord_t z, bool create) {
+	for(int i = 0; i < MAX_FURNACES; i++) {
+		if(s->furnaces[i].pos.x == x && s->furnaces[i].pos.y == y
+		   && s->furnaces[i].pos.z == z)
+			return &s->furnaces[i];
+	}
+
+	if(!create)
+		return NULL;
+
+	for(int i = 0; i < MAX_FURNACES; i++) {
+		if(s->furnaces[i].pos.x != -1)
+			continue;
+
+		s->furnaces[i].pos.x = x;
+		s->furnaces[i].pos.y = y;
+		s->furnaces[i].pos.z = z;
+		for(int k = 0; k < FURNACE_SIZE_STORAGE; k++) {
+			s->furnaces[i].items[k].id = 0;
+			s->furnaces[i].items[k].durability = 0;
+			s->furnaces[i].items[k].count = 0;
+		}
+		s->furnaces[i].burn_time = 0;
+		s->furnaces[i].burn_total = 0;
+		s->furnaces[i].cook_time = 0;
+		s->furnaces[i].cook_total = 0;
+		return &s->furnaces[i];
+	}
+
+	return NULL;
+}
+
+struct item_data furnace_recipe_result(struct item_data input) {
+	switch(input.id) {
+		case ITEM_CLAY_BALL:
+			return (struct item_data) {.id = ITEM_BRICK, .durability = 0, .count = 1};
+		case BLOCK_CACTUS:
+			return (struct item_data) {.id = ITEM_DYE, .durability = 2, .count = 1};
+		case BLOCK_LOG:
+			return (struct item_data) {.id = ITEM_COAL, .durability = 1, .count = 1};
+		case BLOCK_COBBLESTONE:
+			return (struct item_data) {.id = BLOCK_STONE, .durability = 0, .count = 1};
+		case BLOCK_DIAMOND_ORE:
+			return (struct item_data) {.id = ITEM_DIAMOND, .durability = 0, .count = 1};
+		case BLOCK_SAND:
+			return (struct item_data) {.id = BLOCK_GLASS, .durability = 0, .count = 1};
+		case ITEM_FISH:
+			return (struct item_data) {.id = ITEM_FISH_COOKED, .durability = 0, .count = 1};
+		case BLOCK_GOLD_ORE:
+			return (struct item_data) {.id = ITEM_GOLD, .durability = 0, .count = 1};
+		case BLOCK_IRON_ORE:
+			return (struct item_data) {.id = ITEM_IRON, .durability = 0, .count = 1};
+		case ITEM_PORKCHOP:
+			return (struct item_data) {.id = ITEM_PORKCHOP_COOKED, .durability = 0, .count = 1};
+		default:
+			return (struct item_data) {.id = 0, .durability = 0, .count = 0};
+	}
+}
+
+void furnace_send_updates(struct server_local* s, w_coord_t x, w_coord_t y,
+						  w_coord_t z, bool send_slots, bool send_state) {
+	struct furnace_data* furnace = furnace_data_get(s, x, y, z, false);
+	if(!furnace)
+		return;
+
+	for(uint8_t pid = 0; pid < MAX_SERVER_PLAYERS; pid++) {
+		struct server_player* player = &s->players[pid];
+		struct inventory* inv = player->active_inventory;
+		if(!inv || inv == &player->inventory || inv->logic != &inventory_logic_furnace)
+			continue;
+
+		if(inv->x != x || inv->y != y || inv->z != z)
+			continue;
+
+		if(send_slots) {
+			for(size_t slot = 0; slot < FURNACE_SIZE_STORAGE; slot++) {
+				inv->items[slot] = furnace->items[slot];
+				clin_rpc_send(&(struct client_rpc) {
+					CRPC_PLAYER_ID(pid)
+					.type = CRPC_INVENTORY_SLOT,
+					.payload.inventory_slot.window = WINDOWC_FURNACE,
+					.payload.inventory_slot.slot = slot,
+					.payload.inventory_slot.item = furnace->items[slot],
+				});
+			}
+		}
+
+		if(send_state) {
+			clin_rpc_send(&(struct client_rpc) {
+				CRPC_PLAYER_ID(pid)
+				.type = CRPC_FURNACE_STATE,
+				.payload.furnace_state.window = WINDOWC_FURNACE,
+				.payload.furnace_state.burn_time = furnace->burn_time,
+				.payload.furnace_state.burn_total = furnace->burn_total,
+				.payload.furnace_state.cook_time = furnace->cook_time,
+				.payload.furnace_state.cook_total = furnace->cook_total,
+			});
+		}
+	}
+}
+
 static bool inv_pre_action(struct inventory* inv, size_t slot, bool right,
 						   set_inv_slot_t changes) {
-	struct server_local* s = inv->user;
 	if(slot == FURNACE_SLOT_OUTPUT) {
 		struct item_data output;
-		struct block_data blk;
-		server_world_get_block(&s->world, inv->x, inv->y, inv->z, &blk);
 		if(!right && inventory_get_slot(inv, FURNACE_SLOT_OUTPUT, &output)) {
-			bool can_take = false;
+			bool took = false;
 			bool default_action;
 
 			struct item_data picked;
 			if(inventory_get_picked_item(inv, &picked)) {
 				struct item* it_type = item_get(&picked);
-
 				if(it_type && picked.id == output.id
 				   && picked.durability == output.durability
-				   && picked.count + output.count <= it_type->max_stack
-					 && blk.metadata != 0) {
+				   && picked.count + output.count <= it_type->max_stack) {
 					picked.count += output.count;
 					inventory_set_picked_item(inv, picked);
 					set_inv_slot_push(changes, SPECIAL_SLOT_PICKED_ITEM);
 					default_action = false;
-					can_take = true;
+					took = true;
 				}
 			} else {
 				default_action = true;
-				can_take = true;
+				took = true;
 			}
 
-			if(blk.metadata == 0) can_take = false;
-
-			if(can_take) {
-				struct item_data it;
-				if(inventory_get_slot(inv, FURNACE_SLOT_INPUT, &it)
-				   && it.count > 1) {
-					it.count--;
-					inventory_set_slot(inv, FURNACE_SLOT_INPUT, it);
-				} else {
-					inventory_clear_slot(inv, FURNACE_SLOT_INPUT);
-				}
-
-				set_inv_slot_push(changes, FURNACE_SLOT_INPUT);
-				blk.metadata--;
-				server_world_set_block(s, inv->x, inv->y, inv->z, blk);
+			if(took)
 				return default_action;
-			}
 		}
+
+		if(!inventory_get_slot(inv, FURNACE_SLOT_OUTPUT, &output))
+			return false;
+
+		if(right)
+			return false;
 
 		return false;
 	}
@@ -79,101 +168,59 @@ static bool inv_pre_action(struct inventory* inv, size_t slot, bool right,
 
 static void inv_post_action(struct inventory* inv, size_t slot, bool right,
 							bool accepted, set_inv_slot_t changes) {
-	if(slot == FURNACE_SLOT_INPUT || slot == FURNACE_SLOT_OUTPUT) {
-		struct item_data result = (struct item_data) {.count = 0};
-		struct item_data it;
+	struct server_local* s = inv->user;
+	struct furnace_data* furnace
+		= furnace_data_get(s, inv->x, inv->y, inv->z, true);
+	if(!furnace)
+		return;
 
-		if(inventory_get_slot(inv, FURNACE_SLOT_INPUT, &it)) {
-			switch(it.id) {
-				case ITEM_CLAY_BALL:
-					result = (struct item_data) {
-						.id = ITEM_BRICK, .durability = 0, .count = 1};
-					break;
-				case BLOCK_CACTUS:
-					result = (struct item_data) {
-						.id = ITEM_DYE, .durability = 2, .count = 1};
-					break;
-				case BLOCK_LOG:
-					result = (struct item_data) {
-						.id = ITEM_COAL, .durability = 1, .count = 1};
-					break;
-				case BLOCK_COBBLESTONE:
-					result = (struct item_data) {
-						.id = BLOCK_STONE, .durability = 0, .count = 1};
-					break;
-				case BLOCK_DIAMOND_ORE:
-					result = (struct item_data) {
-						.id = ITEM_DIAMOND, .durability = 0, .count = 1};
-					break;
-				case BLOCK_SAND:
-					result = (struct item_data) {
-						.id = BLOCK_GLASS, .durability = 0, .count = 1};
-					break;
-				case ITEM_FISH:
-					result = (struct item_data) {
-						.id = ITEM_FISH_COOKED, .durability = 0, .count = 1};
-					break;
-				case BLOCK_GOLD_ORE:
-					result = (struct item_data) {
-						.id = ITEM_GOLD, .durability = 0, .count = 1};
-					break;
-				case BLOCK_IRON_ORE:
-					result = (struct item_data) {
-						.id = ITEM_IRON, .durability = 0, .count = 1};
-					break;
-				case ITEM_PORKCHOP:
-					result = (struct item_data) {.id = ITEM_PORKCHOP_COOKED,
-												 .durability = 0,
-												 .count = 1};
-					break;
-				default: break;
-			}
-		}
-
-		if(result.count <= 0) {
-			inventory_clear_slot(inv, FURNACE_SLOT_OUTPUT);
-		} else {
-			inventory_set_slot(inv, FURNACE_SLOT_OUTPUT, result);
-		}
-
-		set_inv_slot_push(changes, FURNACE_SLOT_OUTPUT);
+	if(slot < FURNACE_SIZE_STORAGE) {
+		set_inv_slot_push(changes, slot);
+		set_inv_slot_push(changes, SPECIAL_SLOT_PICKED_ITEM);
 	}
+
+	if(slot == FURNACE_SLOT_OUTPUT && !right && accepted) {
+		inventory_clear_slot(inv, FURNACE_SLOT_OUTPUT);
+		set_inv_slot_push(changes, FURNACE_SLOT_OUTPUT);
+		set_inv_slot_push(changes, SPECIAL_SLOT_PICKED_ITEM);
+	}
+
+	for(size_t k = 0; k < FURNACE_SIZE_STORAGE; k++)
+		furnace->items[k] = inv->items[k];
+
+	struct item_data result = furnace_recipe_result(
+		furnace->items[FURNACE_SLOT_INPUT]);
+	if(result.id == 0) {
+		inventory_clear_slot(inv, FURNACE_SLOT_OUTPUT);
+		furnace->items[FURNACE_SLOT_OUTPUT].id = 0;
+		furnace->items[FURNACE_SLOT_OUTPUT].durability = 0;
+		furnace->items[FURNACE_SLOT_OUTPUT].count = 0;
+		furnace->cook_time = 0;
+	} else {
+		inventory_set_slot(inv, FURNACE_SLOT_OUTPUT, furnace->items[FURNACE_SLOT_OUTPUT]);
+	}
+
+	furnace_send_updates(s, inv->x, inv->y, inv->z, true, true);
 }
 
 static void inv_on_close(struct inventory* inv) {
 	struct server_local* s = inv->user;
 	uint8_t pid = s->active_player_id;
 	struct server_player* player = &s->players[pid];
+	struct furnace_data* furnace
+		= furnace_data_get(s, inv->x, inv->y, inv->z, true);
 
-	set_inv_slot_t changes;
-	set_inv_slot_init(changes);
-
-	inventory_clear_slot(inv, FURNACE_SLOT_OUTPUT);
-	set_inv_slot_push(changes, FURNACE_SLOT_OUTPUT);
-
-	for(size_t k = FURNACE_SLOT_INPUT;
-		k < FURNACE_SLOT_INPUT + FURNACE_SIZE_INPUT; k++) {
-		struct item_data item;
-		inventory_get_slot(inv, k, &item);
-
-		if(item.id != 0) {
-			inventory_clear_slot(inv, k);
-			set_inv_slot_push(changes, k);
-server_local_spawn_item(
-				(vec3) {player->x, player->y, player->z}, &item, true, s);
-		}
+	if(furnace) {
+		for(size_t k = 0; k < FURNACE_SIZE_STORAGE; k++)
+			furnace->items[k] = inv->items[k];
 	}
 
 	struct item_data picked_item;
 	if(inventory_get_picked_item(inv, &picked_item)) {
 		inventory_clear_picked_item(inv);
-		set_inv_slot_push(changes, SPECIAL_SLOT_PICKED_ITEM);
 		server_local_spawn_item((vec3) {player->x, player->y, player->z},
 								&picked_item, true, s);
 	}
-
-	server_local_send_inv_changes(pid, changes, inv, WINDOWC_FURNACE);
-	set_inv_slot_clear(changes);
 
 	inventory_destroy(inv);
 }
@@ -205,6 +252,8 @@ static void inv_on_create(struct inventory* inv) {
 	struct server_local* s = inv->user;
 	uint8_t pid = s->active_player_id;
 	struct server_player* player = &s->players[pid];
+	struct furnace_data* furnace
+		= furnace_data_get(s, inv->x, inv->y, inv->z, true);
 
 	set_inv_slot_t changes;
 	set_inv_slot_init(changes);
@@ -221,8 +270,27 @@ static void inv_on_create(struct inventory* inv) {
 		set_inv_slot_push(changes, k + FURNACE_SLOT_MAIN);
 	}
 
+	if(furnace) {
+		for(size_t k = 0; k < FURNACE_SIZE_STORAGE; k++) {
+			inv->items[k] = furnace->items[k];
+			set_inv_slot_push(changes, k);
+		}
+	}
+
 	server_local_send_inv_changes(pid, changes, inv, WINDOWC_FURNACE);
 	set_inv_slot_clear(changes);
+
+	if(furnace) {
+		clin_rpc_send(&(struct client_rpc) {
+			CRPC_PLAYER_ID(pid)
+			.type = CRPC_FURNACE_STATE,
+			.payload.furnace_state.window = WINDOWC_FURNACE,
+			.payload.furnace_state.burn_time = furnace->burn_time,
+			.payload.furnace_state.burn_total = furnace->burn_total,
+			.payload.furnace_state.cook_time = furnace->cook_time,
+			.payload.furnace_state.cook_total = furnace->cook_total,
+		});
+	}
 }
 
 static bool inv_on_destroy(struct inventory* inv) {

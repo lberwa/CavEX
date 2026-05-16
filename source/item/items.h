@@ -190,6 +190,7 @@ extern struct item* items[ITEMS_MAX];
 
 void items_init(void);
 struct item* item_get(struct item_data* item);
+const char* item_get_name(struct item_data* item);
 bool item_is_block(struct item_data* item);
 
 #endif

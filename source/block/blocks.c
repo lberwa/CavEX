@@ -123,7 +123,7 @@ void blocks_init() {
 	blocks[27] = &block_powered_rail;
 	blocks[28] = &block_detector_rail;
 	// sticky piston
-	blocks[30] = &block_cobweb;
+	blocks[30] = &block_gobweb;
 	blocks[31] = &block_tallgrass;
 	blocks[32] = &block_deadbush;
 	blocks[33] = &block_piston;
@@ -161,7 +161,7 @@ void blocks_init() {
 	blocks[66] = &block_rail;
 	blocks[67] = &block_stone_stairs;
 	blocks[68] = &block_sign;
-	// lever
+	blocks[69] = &block_lever;
 	blocks[70] = &block_stone_pressure_plate;
 	blocks[71] = &block_iron_door;
 	blocks[72] = &block_wooden_pressure_plate;
@@ -169,7 +169,7 @@ void blocks_init() {
 	blocks[74] = &block_redstoneore_lit;
 	blocks[75] = &block_redstone_torch;
 	blocks[76] = &block_redstone_torch_lit;
-	// button
+	blocks[77] = &block_stone_button;
 	blocks[78] = &block_snow;
 	blocks[79] = &block_ice;
 	blocks[80] = &block_snow_block;
@@ -185,10 +185,11 @@ void blocks_init() {
 	blocks[90] = &block_portal;
 	blocks[91] = &block_pumpkin_lit;
 	blocks[92] = &block_cake;
-	// repeater
-	// repeater
+	blocks[93] = &block_repeater_off;
+	blocks[94] = &block_repeater_on;
 	blocks[253] = &block_iron_chest;
 	blocks[96] = &block_trapdoor;
+	blocks[98] = &block_stonebrick;
 	blocks[254] = &block_tree2d;
 	//blocks[98] = &block_minecart;
 

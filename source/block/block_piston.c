@@ -58,47 +58,56 @@ static bool piston_is_power_source(struct block_data blk) {
 
 	return (blk.type == BLOCK_REDSTONE_WIRE && meta > 0)
 		   || blk.type == BLOCK_REDSTONE_TORCH_LIT
+		   || (blk.type == BLOCK_LEVER && (meta & 0x08))
+		   || (blk.type == BLOCK_STONE_BUTTON && (meta & 0x04))
+		   || blk.type == BLOCK_REPEATER_ON
 		   || ((blk.type == BLOCK_STONE_PRESSURE_PLATE
 				|| blk.type == BLOCK_WOOD_PRESSURE_PLATE)
 			   && (meta & 0x01));
 }
 
+static enum side piston_relative_left(enum side facing) {
+	switch(facing) {
+		case SIDE_FRONT: return SIDE_RIGHT;
+		case SIDE_BACK: return SIDE_LEFT;
+		case SIDE_LEFT: return SIDE_FRONT;
+		case SIDE_RIGHT: return SIDE_BACK;
+		default: return SIDE_LEFT;
+	}
+}
+
+static enum side piston_relative_right(enum side facing) {
+	switch(facing) {
+		case SIDE_FRONT: return SIDE_LEFT;
+		case SIDE_BACK: return SIDE_RIGHT;
+		case SIDE_LEFT: return SIDE_BACK;
+		case SIDE_RIGHT: return SIDE_FRONT;
+		default: return SIDE_RIGHT;
+	}
+}
+
 static bool piston_is_powered(struct server_local* s, struct block_info* info) {
 	struct block_data tmp;
+	enum side facing = piston_facing(info->block);
+	enum side checks[4] = {
+		SIDE_TOP,
+		blocks_side_opposite(facing),
+		piston_relative_left(facing),
+		piston_relative_right(facing),
+	};
 
-	for(int side = 0; side < SIDE_MAX; side++) {
+	if(facing == SIDE_TOP || facing == SIDE_BOTTOM) {
+		checks[1] = SIDE_FRONT;
+		checks[2] = SIDE_LEFT;
+		checks[3] = SIDE_RIGHT;
+	}
+
+	for(size_t i = 0; i < 4; i++) {
 		int ox, oy, oz;
-		blocks_side_offset((enum side)side, &ox, &oy, &oz);
+		blocks_side_offset(checks[i], &ox, &oy, &oz);
 		piston_get_block(s, info->x + ox, info->y + oy, info->z + oz, &tmp);
 		if(piston_is_power_source(tmp))
 			return true;
-	}
-
-	const enum side horiz[4]
-		= {SIDE_RIGHT, SIDE_LEFT, SIDE_FRONT, SIDE_BACK};
-
-	piston_get_block(s, info->x, info->y + 1, info->z, &tmp);
-	bool above_air = tmp.type == BLOCK_AIR;
-
-	for(int i = 0; i < 4; i++) {
-		int ox, oy, oz;
-		blocks_side_offset(horiz[i], &ox, &oy, &oz);
-
-		piston_get_block(s, info->x + ox, info->y, info->z + oz, &tmp);
-		if(piston_is_power_source(tmp))
-			return true;
-
-		if(tmp.type == BLOCK_AIR) {
-			piston_get_block(s, info->x + ox, info->y - 1, info->z + oz, &tmp);
-			if(piston_is_power_source(tmp))
-				return true;
-		}
-
-		if(above_air) {
-			piston_get_block(s, info->x + ox, info->y + 1, info->z + oz, &tmp);
-			if(piston_is_power_source(tmp))
-				return true;
-		}
 	}
 
 	return false;
@@ -185,6 +194,9 @@ static size_t getBoundingBox(struct block_info* this, bool entity,
 
 static struct face_occlusion*
 getSideMask(struct block_info* this, enum side side, struct block_info* it) {
+	if(piston_is_extended(this->block))
+		return face_occlusion_empty();
+
 	return face_occlusion_full();
 }
 
@@ -367,7 +379,7 @@ struct block block_piston = {
 	.onNeighbourBlockChange = piston_onNeighbourBlockChange,
 	.transparent = false,
 	.renderBlock = render_block_piston,
-	.renderBlockAlways = NULL,
+	.renderBlockAlways = render_block_piston_always,
 	.luminance = 0,
 	.double_sided = false,
 	.can_see_through = false,

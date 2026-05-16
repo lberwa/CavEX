@@ -64,6 +64,9 @@ bool screen_pointer_local(int player, int view_width, int view_height,
 
 void screen_crafting_set_windowc(int player, uint8_t container);
 void screen_furnace_set_windowc(int player, uint8_t container);
+void screen_furnace_set_state(int player, uint16_t burn_time,
+							  uint16_t burn_total, uint16_t cook_time,
+							  uint16_t cook_total);
 void screen_chest_set_windowc(int player, uint8_t container);
 void screen_iron_chest_set_windowc(int player, uint8_t container);
 void screen_sign_set_windowc(int player, uint8_t container);

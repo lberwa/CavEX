@@ -52,6 +52,7 @@
 // furnace
 #define FURNACE_SIZE 39
 #define FURNACE_SIZE_INPUT 2
+#define FURNACE_SIZE_STORAGE 3
 
 #define FURNACE_SLOT_INPUT 0
 #define FURNACE_SLOT_OUTPUT 2
