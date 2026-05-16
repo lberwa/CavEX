@@ -198,6 +198,8 @@ $(BUILD):
 	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
 	cp build/boot.dol boot.dol
 	cp build/boot.elf boot.elf
+	cp boot.dol ready_wii/
+	cp boot.elf ready_wii/
 
 #---------------------------------------------------------------------------------
 clean:

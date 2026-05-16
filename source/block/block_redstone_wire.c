@@ -67,7 +67,10 @@ static void onWorldTick(struct server_local* s, struct block_info* blk) {
 
         // redstone torch always powers at level 15
         if (ntype == BLOCK_REDSTONE_TORCH ||
-            ntype == BLOCK_REDSTONE_TORCH_LIT ){
+            ntype == BLOCK_REDSTONE_TORCH_LIT ||
+            (ntype == BLOCK_LEVER && (nmeta & 0x08)) ||
+            (ntype == BLOCK_STONE_BUTTON && (nmeta & 0x04)) ||
+            ntype == BLOCK_REPEATER_ON) {
             strong = 15;
             break;
         }
@@ -114,7 +117,10 @@ static void onWorldTick(struct server_local* s, struct block_info* blk) {
                     if (p > maxWire) maxWire = p;
                 }
                 if (btmp.type == BLOCK_REDSTONE_TORCH ||
-                    btmp.type == BLOCK_REDSTONE_TORCH_LIT) {
+                    btmp.type == BLOCK_REDSTONE_TORCH_LIT ||
+                    (btmp.type == BLOCK_LEVER && (btmp.metadata & 0x08)) ||
+                    (btmp.type == BLOCK_STONE_BUTTON && (btmp.metadata & 0x04)) ||
+                    btmp.type == BLOCK_REPEATER_ON) {
                     strong = 15;
                 }
             }
@@ -128,7 +134,10 @@ static void onWorldTick(struct server_local* s, struct block_info* blk) {
                     if (p > maxWire) maxWire = p;
                 }
                 if (btmp.type == BLOCK_REDSTONE_TORCH ||
-                    btmp.type == BLOCK_REDSTONE_TORCH_LIT) {
+                    btmp.type == BLOCK_REDSTONE_TORCH_LIT ||
+                    (btmp.type == BLOCK_LEVER && (btmp.metadata & 0x08)) ||
+                    (btmp.type == BLOCK_STONE_BUTTON && (btmp.metadata & 0x04)) ||
+                    btmp.type == BLOCK_REPEATER_ON) {
                     strong = 15;
                 }
             }

@@ -732,6 +732,7 @@ static void server_local_process(struct server_rpc* call, void* user) {
 			level_archive_write(&s->level, LEVEL_PLAYER_HEALTH, &player->health);
 
 			chest_archive_write(s->chest_pos, s->chest_items[0], s->level_name);
+			furnace_archive_write(s->furnaces, s->level_name);
 			sign_archive_write(s->sign_pos, s->sign_texts[0], s->level_name);
 
 			dict_entity_it_t it;
@@ -894,6 +895,7 @@ static void server_local_process(struct server_rpc* call, void* user) {
 					}
 
 				chest_archive_read(s->chest_pos, s->chest_items[0], s->level_name);
+				furnace_archive_read(s->furnaces, s->level_name);
 				sign_archive_read(s->sign_pos, s->sign_texts[0], s->level_name);
 
 				dict_entity_reset(s->entities);
@@ -1451,6 +1453,8 @@ void server_local_create(struct server_local* s) {
 
 	dict_entity_init(s->entities);
 	memset(s->chest_pos, -1, MAX_CHESTS * 3 * sizeof(int));
+	memset(s->buttons, -1, sizeof(s->buttons));
+	memset(s->repeaters, -1, sizeof(s->repeaters));
 	memset(s->sign_pos, -1, MAX_SIGNS * 3 * sizeof(int));
 
 #ifdef SPLITSCREEN

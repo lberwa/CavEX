@@ -595,6 +595,26 @@ void recipe_init() {
 								   .count = 1},
 			   2, 1, (uint8_t[]) {1, 1},
 			   (struct item_data) {.id = BLOCK_PLANKS}, false);
+	recipe_add(recipes_crafting,
+			   (struct item_data) {.id = BLOCK_STONE_BUTTON,
+								   .durability = 0,
+								   .count = 1},
+			   1, 1, (uint8_t[]) {1}, (struct item_data) {.id = BLOCK_STONE},
+			   false);
+	recipe_add(recipes_crafting,
+			   (struct item_data) {.id = BLOCK_REPEATER_OFF,
+								   .durability = 0,
+								   .count = 1},
+			   3, 2, (uint8_t[]) {1, 2, 1, 3, 3, 3},
+			   (struct item_data) {.id = BLOCK_REDSTONE_TORCH_LIT}, false,
+			   (struct item_data) {.id = ITEM_REDSTONE}, false,
+			   (struct item_data) {.id = BLOCK_STONE}, false);
+	recipe_add(recipes_crafting,
+			   (struct item_data) {.id = BLOCK_STONE_BRICKS,
+								   .durability = 0,
+								   .count = 4},
+			   2, 2, (uint8_t[]) {1, 1, 1, 1},
+			   (struct item_data) {.id = BLOCK_STONE}, false);
 	recipe_add(
 		recipes_crafting,
 		(struct item_data) {.id = ITEM_GOLD, .durability = 0, .count = 9}, 1, 1,

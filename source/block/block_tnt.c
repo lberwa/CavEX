@@ -100,6 +100,9 @@ static void onWorldTick(struct server_local* s, struct block_info* info) {
             uint8_t m = nb.metadata & 0x0F;
             if ((nb.type == BLOCK_REDSTONE_WIRE && m > 0) ||
                 nb.type == BLOCK_REDSTONE_TORCH_LIT ||
+                (nb.type == BLOCK_LEVER && (m & 0x08)) ||
+                (nb.type == BLOCK_STONE_BUTTON && (m & 0x04)) ||
+                nb.type == BLOCK_REPEATER_ON ||
                 ((nb.type == BLOCK_STONE_PRESSURE_PLATE ||
                   nb.type == BLOCK_WOOD_PRESSURE_PLATE) &&
                  (m & 0x01)))

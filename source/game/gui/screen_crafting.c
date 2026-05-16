@@ -282,7 +282,7 @@ static void screen_crafting_render2D(struct screen* s, int width, int height) {
 							0);
 		}
 	} else if(inventory_get_slot(inv, selection->slot, &item)) {
-		char* tmp = item_get(&item) ? item_get(&item)->name : "Unknown";
+		const char* tmp = item_get_name(&item);
 		gfx_blending(MODE_BLEND);
 		gfx_texture(false);
 		gutil_texquad_col(off_x + selection->x - 2 * scale + 8 * scale

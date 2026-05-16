@@ -38,13 +38,36 @@
 #define MAX_HIGH_DETAIL_CHUNKS ((MAX_HIGH_DETAIL_VIEW_DISTANCE * 2 + 2) * (MAX_HIGH_DETAIL_VIEW_DISTANCE * 2 + 2))
 #define MAX_CHESTS 256
 #define MAX_CHEST_SLOTS 54
+#define MAX_FURNACES 256
 #define MAX_SIGNS 256
+#define MAX_BUTTONS 256
+#define MAX_REPEATERS 256
 
 #define MAX_OXYGEN 351
 #define OXYGEN_THRESHOLD 0
 
 struct complex_block_pos {
 	int x, y, z;
+};
+
+struct furnace_data {
+	struct complex_block_pos pos;
+	struct item_data items[FURNACE_SIZE_STORAGE];
+	uint16_t burn_time;
+	uint16_t burn_total;
+	uint16_t cook_time;
+	uint16_t cook_total;
+};
+
+struct button_state {
+	struct complex_block_pos pos;
+	uint8_t timer;
+};
+
+struct repeater_state {
+	struct complex_block_pos pos;
+	uint8_t timer;
+	uint8_t target_type;
 };
 
 struct server_player {
@@ -74,6 +97,9 @@ struct server_local {
 	dict_entity_t entities;
 	struct complex_block_pos chest_pos[MAX_CHESTS];
 	struct item_data chest_items[MAX_CHESTS][MAX_CHEST_SLOTS];
+	struct furnace_data furnaces[MAX_FURNACES];
+	struct button_state buttons[MAX_BUTTONS];
+	struct repeater_state repeaters[MAX_REPEATERS];
 	struct complex_block_pos sign_pos[MAX_SIGNS];
 	char sign_texts[MAX_SIGNS][SIGN_SIZE];
 	uint64_t world_time;

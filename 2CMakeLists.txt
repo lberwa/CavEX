@@ -21,6 +21,7 @@ add_executable(cavex
 				source/block/block_bed.c
 				source/block/block_bedrock.c
 				source/block/block_bookshelf.c
+				source/block/block_button.c
 				source/block/block_bricks.c
 				source/block/block_brown_mushroom.c
 				source/block/block_cactus.c
@@ -30,7 +31,9 @@ add_executable(cavex
 				source/block/block_clay.c
 				source/block/block_cobblestone.c
 				source/block/block_cobweb.c
+				source/block/block_gobweb.c
 				source/block/block_crops.c
+				source/block/block_dead_bush.c
 				source/block/block_dirt.c
 				source/block/block_dispenser.c
 				source/block/block_door.c
@@ -50,12 +53,14 @@ add_executable(cavex
 				source/block/block_ladder.c
 				source/block/block_lava.c
 				source/block/block_leaves.c
+				source/block/block_lever.c
 				source/block/block_log.c
 				source/block/block_minecart.c
 				source/block/block_netherrack.c
 				source/block/block_noteblock.c
 				source/block/block_obsidian.c
 				source/block/block_ore.c
+				source/block/block_piston.c
 				source/block/block_planks.c
 				source/block/block_portal.c
 				source/block/block_pressure_plate.c
@@ -63,6 +68,7 @@ add_executable(cavex
 				source/block/block_rail.c
 				source/block/block_red_mushroom.c
 				source/block/block_redstone_wire.c
+				source/block/block_repeater.c
 				source/block/block_reed.c
 				source/block/block_rose.c
 				source/block/block_sand.c
@@ -74,6 +80,7 @@ add_executable(cavex
 				source/block/block_snow.c
 				source/block/block_spawner.c
 				source/block/block_sponge.c
+				source/block/block_stonebrick.c
 				source/block/block_stairs.c
 				source/block/block_stone.c
 				source/block/block_tallgrass.c

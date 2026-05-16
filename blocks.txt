@@ -1,18 +1,18 @@
-sticky_piston
-piston
-piston_head
-moving_piston
-cobweb
-dead_bush
-mob_spawner
-lit_furnace
+sticky_piston        ✅
+piston               ✅
+piston_head          ✅
+moving_piston        ✅
+gobweb               ✅
+dead_bush            ✅
+mob_spawner          ✅
+lit_furnace          ✅
 standing_sign
 wall_sign
-lever
-stone_button
-unpowered_repeater
-powered_repeater
-stonebrick
+lever                ✅
+stone_button         ✅
+unpowered_repeater   ✅
+powered_repeater     ✅
+stonebrick           ✅
 brown_mushroom_block
 red_mushroom_block
 iron_bars

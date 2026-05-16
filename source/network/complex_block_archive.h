@@ -36,6 +36,8 @@
 
 void chest_archive_read(struct complex_block_pos* pos, struct item_data* items, string_t path);
 void chest_archive_write(struct complex_block_pos* pos, struct item_data* items, string_t path);
+void furnace_archive_read(struct furnace_data* furnaces, string_t path);
+void furnace_archive_write(struct furnace_data* furnaces, string_t path);
 void sign_archive_read(struct complex_block_pos* pos, char* texts, string_t path);
 void sign_archive_write(struct complex_block_pos* pos, char* texts, string_t path);
 #endif

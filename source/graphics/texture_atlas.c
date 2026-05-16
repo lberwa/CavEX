@@ -201,6 +201,7 @@ void* tex_atlas_block(const char* filename, size_t* width, size_t* height) {
 	dict_atlas_src_init(atlas);
 
 	tex_atlas_reg(atlas, TEXAT_STONE, 1, 0);
+	tex_atlas_reg(atlas, TEXAT_STONE_BUTTON, 1, 0);
 	tex_atlas_reg(atlas, TEXAT_DIRT, 2, 0);
 	tex_atlas_reg(atlas, TEXAT_PLANKS, 4, 0);
 	tex_atlas_reg(atlas, TEXAT_SLAB_STONE_SIDE, 5, 0);
@@ -259,6 +260,10 @@ void* tex_atlas_block(const char* filename, size_t* width, size_t* height) {
 
 	tex_atlas_reg(atlas, TEXAT_SPAWNER, 1, 4);
 	tex_atlas_reg(atlas, TEXAT_SNOW, 2, 4);
+	tex_atlas_reg(atlas, TEXAT_REPEATER_TORCH_ON, 3, 6);
+	tex_atlas_reg(atlas, TEXAT_REPEATER_TORCH_OFF, 3, 7);
+	tex_atlas_reg(atlas, TEXAT_REPEATER_OFF, 3, 8);
+	tex_atlas_reg(atlas, TEXAT_REPEATER_ON, 3, 9);
 	tex_atlas_reg(atlas, TEXAT_GRASS_SIDE_SNOW, 4, 4);
 	tex_atlas_reg(atlas, TEXAT_CACTUS_TOP, 5, 4);
 	tex_atlas_reg(atlas, TEXAT_CACTUS_SIDE, 6, 4);
@@ -285,7 +290,7 @@ void* tex_atlas_block(const char* filename, size_t* width, size_t* height) {
 	tex_atlas_reg(atlas, TEXAT_CROPS_6, 14, 5);
 	tex_atlas_reg(atlas, TEXAT_CROPS_7, 15, 5);
 
-	// tex_atlas_reg(atlas, "lever", 0, 6);
+	tex_atlas_reg(atlas, TEXAT_LEVER, 0, 6);
 	tex_atlas_reg(atlas, TEXAT_DOOR_WOOD_BOTTOM, 1, 6);
 	tex_atlas_reg(atlas, TEXAT_DOOR_IRON_BOTTOM, 2, 6);
 	tex_atlas_reg(atlas, TEXAT_REDSTONE_TORCH_LIT, 3, 6);
@@ -341,6 +346,7 @@ void* tex_atlas_block(const char* filename, size_t* width, size_t* height) {
 		tex_atlas_reg(atlas, TEXAT_RAIL_DETECTOR, 3, 12);
 
 		tex_atlas_reg(atlas, TEXAT_SANDSTONE_BOTTOM, 0, 13);
+		tex_atlas_reg(atlas, TEXAT_STONEBRICK, 5, 0);
 		tex_atlas_reg(atlas, TEXAT_PISTON_PLATE, 11, 6);
 		tex_atlas_reg(atlas, TEXAT_PISTON_SIDE, 12, 6);
 		tex_atlas_reg(atlas, TEXAT_PISTON_BACK, 13, 6);

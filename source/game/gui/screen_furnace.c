@@ -46,9 +46,22 @@ static size_t slots_index;
 static size_t selected_slot[4];
 static uint8_t furnace_container[4];
 static int gui_scale[4];
+static uint16_t furnace_burn_time[4];
+static uint16_t furnace_burn_total[4];
+static uint16_t furnace_cook_time[4];
+static uint16_t furnace_cook_total[4];
 
 void screen_furnace_set_windowc(int player, uint8_t container) {
 	furnace_container[player] = container;
+}
+
+void screen_furnace_set_state(int player, uint16_t burn_time,
+							  uint16_t burn_total, uint16_t cook_time,
+							  uint16_t cook_total) {
+	furnace_burn_time[player] = burn_time;
+	furnace_burn_total[player] = burn_total;
+	furnace_cook_time[player] = cook_time;
+	furnace_cook_total[player] = cook_total;
 }
 
 static void screen_furnace_reset(struct screen* s, int width, int height) {
@@ -65,6 +78,10 @@ static void screen_furnace_reset(struct screen* s, int width, int height) {
 	pointer_available[player] = false;
 	pointer_has_item[player] = false;
 	gui_scale[player] = scale;
+	furnace_burn_time[player] = 0;
+	furnace_burn_total[player] = 0;
+	furnace_cook_time[player] = 0;
+	furnace_cook_total[player] = 0;
 
 	slots_index = 0;
 
@@ -244,7 +261,26 @@ static void screen_furnace_render2D(struct screen* s, int width, int height) {
 	gfx_bind_texture(&texture_gui_furnace);
 	gutil_texquad(off_x, off_y, 0, 0, GUI_WIDTH, GUI_HEIGHT, GUI_WIDTH * scale,
 				  GUI_HEIGHT * scale);
-	gutil_text(off_x + 60 * scale, off_y + 6 * scale, "\2478Furnace", 8 * scale, false);
+				  
+	gutil_text(off_x + 60 * scale, off_y + 6 * scale, "\2478furnace", 8 * scale, false);
+
+	gfx_bind_texture(&texture_gui_furnace);
+
+	if(furnace_burn_total[player] > 0 && furnace_burn_time[player] > 0) {
+		int h = (14 * furnace_burn_time[player]) / furnace_burn_total[player];
+		if(h < 1)
+			h = 1;
+		gutil_texquad(off_x + 56 * scale, off_y + (36 + 14 - h) * scale,
+					  176, 14 - h, 14, h, 14 * scale, h * scale);
+	}
+
+	if(furnace_cook_total[player] > 0 && furnace_cook_time[player] > 0) {
+		int w = (24 * furnace_cook_time[player]) / furnace_cook_total[player];
+		if(w < 1)
+			w = 1;
+		gutil_texquad(off_x + 79 * scale, off_y + 35 * scale, 176, 14, w, 17,
+					  w * scale, 17 * scale);
+	}
 
 	struct inv_slot* selection = slots + selected_slot[player];
 
@@ -286,7 +322,7 @@ static void screen_furnace_render2D(struct screen* s, int width, int height) {
 							0);
 		}
 	} else if(inventory_get_slot(inv, selection->slot, &item)) {
-		char* tmp = item_get(&item) ? item_get(&item)->name : "Unknown";
+		const char* tmp = item_get_name(&item);
 		gfx_blending(MODE_BLEND);
 		gfx_texture(false);
 		gutil_texquad_col(off_x + selection->x - 2 * scale + 8 * scale

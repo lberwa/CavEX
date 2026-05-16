@@ -17,6 +17,7 @@
 	along with CavEX.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 
@@ -683,6 +684,15 @@ static int piston_texture_rotate(enum side facing, enum side side) {
 	}
 }
 
+static int piston_head_side_rotate(enum side facing, enum side side) {
+	int rot = piston_texture_rotate(facing, side);
+
+	if((facing == SIDE_LEFT || facing == SIDE_RIGHT) && side == SIDE_BACK)
+		rot = (rot + 1) % 4;
+
+	return rot;
+}
+
 size_t render_block_cross(struct displaylist* d, struct block_info* this,
 						  enum side side, struct block_info* it,
 						  uint8_t* vertex_light, bool count_only) {
@@ -799,6 +809,372 @@ size_t render_block_tree2d(struct displaylist* d, struct block_info* this,
 	}
 
 	return 2;
+}
+
+struct lever_pt {
+	float x;
+	float y;
+	float z;
+};
+
+static struct lever_pt lever_rotate_pt(struct lever_pt p, float pivot_x,
+									   float pivot_y, float pivot_z, float rot_x,
+									   float rot_y, float rot_z) {
+	if(rot_x != 0.0f) {
+		float ny = p.y * cosf(rot_x) - p.z * sinf(rot_x);
+		float nz = p.y * sinf(rot_x) + p.z * cosf(rot_x);
+		p.y = ny;
+		p.z = nz;
+	}
+	if(rot_y != 0.0f) {
+		float nx = p.x * cosf(rot_y) + p.z * sinf(rot_y);
+		float nz = -p.x * sinf(rot_y) + p.z * cosf(rot_y);
+		p.x = nx;
+		p.z = nz;
+	}
+	if(rot_z != 0.0f) {
+		float nx = p.x * cosf(rot_z) - p.y * sinf(rot_z);
+		float ny = p.x * sinf(rot_z) + p.y * cosf(rot_z);
+		p.x = nx;
+		p.y = ny;
+	}
+	p.x += pivot_x;
+	p.y += pivot_y;
+	p.z += pivot_z;
+	return p;
+}
+
+static void lever_emit_pt(struct displaylist* d, int16_t x, int16_t y, int16_t z,
+						  struct lever_pt p, uint8_t vlight, uint8_t u,
+						  uint8_t v) {
+	displaylist_pos(d, x + (int16_t)lroundf(p.x), y + (int16_t)lroundf(p.y),
+					z + (int16_t)lroundf(p.z));
+	displaylist_color(d, vlight);
+	displaylist_texcoord(d, u, v);
+}
+
+size_t render_block_lever(struct displaylist* d, struct block_info* this,
+						  enum side side, struct block_info* it,
+						  uint8_t* vertex_light, bool count_only) {
+	static const uint8_t side_uvs[4][2] = {
+		{7, 16},
+		{7, 6},
+		{9, 6},
+		{9, 16},
+	};
+	static const uint8_t top_uvs[4][2] = {
+		{7, 6},
+		{9, 6},
+		{9, 8},
+		{7, 8},
+	};
+
+	uint8_t meta = this->block->metadata & 0x07;
+	bool on = (this->block->metadata & 0x08) != 0;
+	uint8_t base_tex = tex_atlas_lookup(TEXAT_COBBLESTONE);
+	int16_t bx0 = 5 * 16, by0 = 0, bz0 = 5 * 16;
+	int16_t bx1 = 11 * 16, by1 = 2 * 16, bz1 = 11 * 16;
+	uint8_t tex = blocks[this->block->type]->getTextureIndex(this, side);
+	uint8_t tex_x = TEX_OFFSET(TEXTURE_X(tex));
+	uint8_t tex_y = TEX_OFFSET(TEXTURE_Y(tex));
+	uint8_t light = (MAX_U8(this->block->torch_light,
+							blocks[this->block->type]->luminance)
+					 << 4)
+		| this->block->sky_light;
+	int16_t x = W2C_COORD(this->x) * BLK_LEN;
+	int16_t y = W2C_COORD(this->y) * BLK_LEN;
+	int16_t z = W2C_COORD(this->z) * BLK_LEN;
+	float pivot_x = 128.0f;
+	float pivot_y = 32.0f;
+	float pivot_z = 128.0f;
+	float rot_x = 0.0f;
+	float rot_y = 0.0f;
+	float rot_z = 0.0f;
+	bool  wall_lever = (meta >= 1 && meta <= 4);
+	float angle = (on ? -0.70f : 0.70f)
+				  - (wall_lever ? (float)GLM_PI_2 : 0.0f);
+	float rod_half = 16.0f;
+	float rod_len = 144.0f;
+
+	switch(meta) {
+		case 1:
+			bx0 = 0; by0 = 5 * 16; bz0 = 5 * 16;
+			bx1 = 2 * 16; by1 = 11 * 16; bz1 = 11 * 16;
+			pivot_x = 32.0f;
+			pivot_y = 128.0f;
+			pivot_z = 128.0f;
+			rot_x = angle;
+			rot_y = -(float)GLM_PI_2;
+			break;
+		case 2:
+			bx0 = 14 * 16; by0 = 5 * 16; bz0 = 5 * 16;
+			bx1 = 16 * 16; by1 = 11 * 16; bz1 = 11 * 16;
+			pivot_x = 224.0f;
+			pivot_y = 128.0f;
+			pivot_z = 128.0f;
+			rot_x = angle;
+			rot_y = (float)GLM_PI_2;
+			break;
+		case 3:
+			bx0 = 5 * 16; by0 = 5 * 16; bz0 = 0;
+			bx1 = 11 * 16; by1 = 11 * 16; bz1 = 2 * 16;
+			pivot_x = 128.0f;
+			pivot_y = 128.0f;
+			pivot_z = 32.0f;
+			rot_x = angle;
+			rot_y = (float)M_PI;
+			break;
+		case 4:
+			bx0 = 5 * 16; by0 = 5 * 16; bz0 = 14 * 16;
+			bx1 = 11 * 16; by1 = 11 * 16; bz1 = 16 * 16;
+			pivot_x = 128.0f;
+			pivot_y = 128.0f;
+			pivot_z = 224.0f;
+			rot_x = angle;
+			rot_y = 0.0f;
+			break;
+		case 6:
+			pivot_x = 128.0f;
+			pivot_y = 32.0f;
+			pivot_z = 128.0f;
+			rot_z = -angle;
+			break;
+		case 7:
+			by0 = 14 * 16; by1 = 16 * 16;
+			pivot_x = 128.0f;
+			pivot_y = 224.0f;
+			pivot_z = 128.0f;
+			rot_z = angle;
+			rod_len = -144.0f;
+			break;
+		case 5:
+		default:
+			pivot_x = 128.0f;
+			pivot_y = 32.0f;
+			pivot_z = 128.0f;
+			rot_x = angle;
+			break;
+	}
+
+	size_t count = render_cuboid_side(d, this, side, vertex_light, count_only,
+									  bx0, by0, bz0, bx1, by1, bz1, base_tex, 0);
+
+	if(side == SIDE_BOTTOM)
+		return count;
+
+	if(!count_only) {
+		struct lever_pt p0, p1, p2, p3;
+		uint8_t vlight = light;
+
+		switch(side) {
+			case SIDE_LEFT:
+				vlight = DIM_LIGHT(light, level_table_1, true, 0);
+				p0 = lever_rotate_pt((struct lever_pt){-rod_half, 0.0f, -rod_half},
+									pivot_x, pivot_y, pivot_z, rot_x, rot_y, rot_z);
+				p1 = lever_rotate_pt((struct lever_pt){-rod_half, rod_len, -rod_half},
+									pivot_x, pivot_y, pivot_z, rot_x, rot_y, rot_z);
+				p2 = lever_rotate_pt((struct lever_pt){-rod_half, rod_len, rod_half},
+									pivot_x, pivot_y, pivot_z, rot_x, rot_y, rot_z);
+				p3 = lever_rotate_pt((struct lever_pt){-rod_half, 0.0f, rod_half},
+									pivot_x, pivot_y, pivot_z, rot_x, rot_y, rot_z);
+				lever_emit_pt(d, x, y, z, p0, vlight, tex_x + side_uvs[0][0], tex_y + side_uvs[0][1]);
+				lever_emit_pt(d, x, y, z, p1, vlight, tex_x + side_uvs[1][0], tex_y + side_uvs[1][1]);
+				lever_emit_pt(d, x, y, z, p2, vlight, tex_x + side_uvs[2][0], tex_y + side_uvs[2][1]);
+				lever_emit_pt(d, x, y, z, p3, vlight, tex_x + side_uvs[3][0], tex_y + side_uvs[3][1]);
+				break;
+			case SIDE_RIGHT:
+				vlight = DIM_LIGHT(light, level_table_1, true, 0);
+				p0 = lever_rotate_pt((struct lever_pt){rod_half, 0.0f, -rod_half},
+									pivot_x, pivot_y, pivot_z, rot_x, rot_y, rot_z);
+				p1 = lever_rotate_pt((struct lever_pt){rod_half, 0.0f, rod_half},
+									pivot_x, pivot_y, pivot_z, rot_x, rot_y, rot_z);
+				p2 = lever_rotate_pt((struct lever_pt){rod_half, rod_len, rod_half},
+									pivot_x, pivot_y, pivot_z, rot_x, rot_y, rot_z);
+				p3 = lever_rotate_pt((struct lever_pt){rod_half, rod_len, -rod_half},
+									pivot_x, pivot_y, pivot_z, rot_x, rot_y, rot_z);
+				lever_emit_pt(d, x, y, z, p0, vlight, tex_x + side_uvs[3][0], tex_y + side_uvs[3][1]);
+				lever_emit_pt(d, x, y, z, p1, vlight, tex_x + side_uvs[0][0], tex_y + side_uvs[0][1]);
+				lever_emit_pt(d, x, y, z, p2, vlight, tex_x + side_uvs[1][0], tex_y + side_uvs[1][1]);
+				lever_emit_pt(d, x, y, z, p3, vlight, tex_x + side_uvs[2][0], tex_y + side_uvs[2][1]);
+				break;
+			case SIDE_BACK:
+				vlight = DIM_LIGHT(light, level_table_2, true, 0);
+				p0 = lever_rotate_pt((struct lever_pt){-rod_half, 0.0f, rod_half},
+									pivot_x, pivot_y, pivot_z, rot_x, rot_y, rot_z);
+				p1 = lever_rotate_pt((struct lever_pt){-rod_half, rod_len, rod_half},
+									pivot_x, pivot_y, pivot_z, rot_x, rot_y, rot_z);
+				p2 = lever_rotate_pt((struct lever_pt){rod_half, rod_len, rod_half},
+									pivot_x, pivot_y, pivot_z, rot_x, rot_y, rot_z);
+				p3 = lever_rotate_pt((struct lever_pt){rod_half, 0.0f, rod_half},
+									pivot_x, pivot_y, pivot_z, rot_x, rot_y, rot_z);
+				lever_emit_pt(d, x, y, z, p0, vlight, tex_x + side_uvs[0][0], tex_y + side_uvs[0][1]);
+				lever_emit_pt(d, x, y, z, p1, vlight, tex_x + side_uvs[1][0], tex_y + side_uvs[1][1]);
+				lever_emit_pt(d, x, y, z, p2, vlight, tex_x + side_uvs[2][0], tex_y + side_uvs[2][1]);
+				lever_emit_pt(d, x, y, z, p3, vlight, tex_x + side_uvs[3][0], tex_y + side_uvs[3][1]);
+				break;
+			case SIDE_FRONT:
+				vlight = DIM_LIGHT(light, level_table_2, true, 0);
+				p0 = lever_rotate_pt((struct lever_pt){-rod_half, 0.0f, -rod_half},
+									pivot_x, pivot_y, pivot_z, rot_x, rot_y, rot_z);
+				p1 = lever_rotate_pt((struct lever_pt){rod_half, 0.0f, -rod_half},
+									pivot_x, pivot_y, pivot_z, rot_x, rot_y, rot_z);
+				p2 = lever_rotate_pt((struct lever_pt){rod_half, rod_len, -rod_half},
+									pivot_x, pivot_y, pivot_z, rot_x, rot_y, rot_z);
+				p3 = lever_rotate_pt((struct lever_pt){-rod_half, rod_len, -rod_half},
+									pivot_x, pivot_y, pivot_z, rot_x, rot_y, rot_z);
+				lever_emit_pt(d, x, y, z, p0, vlight, tex_x + side_uvs[3][0], tex_y + side_uvs[3][1]);
+				lever_emit_pt(d, x, y, z, p1, vlight, tex_x + side_uvs[0][0], tex_y + side_uvs[0][1]);
+				lever_emit_pt(d, x, y, z, p2, vlight, tex_x + side_uvs[1][0], tex_y + side_uvs[1][1]);
+				lever_emit_pt(d, x, y, z, p3, vlight, tex_x + side_uvs[2][0], tex_y + side_uvs[2][1]);
+				break;
+			case SIDE_TOP:
+				p0 = lever_rotate_pt((struct lever_pt){-rod_half, rod_len, -rod_half},
+									pivot_x, pivot_y, pivot_z, rot_x, rot_y, rot_z);
+				p1 = lever_rotate_pt((struct lever_pt){rod_half, rod_len, -rod_half},
+									pivot_x, pivot_y, pivot_z, rot_x, rot_y, rot_z);
+				p2 = lever_rotate_pt((struct lever_pt){rod_half, rod_len, rod_half},
+									pivot_x, pivot_y, pivot_z, rot_x, rot_y, rot_z);
+				p3 = lever_rotate_pt((struct lever_pt){-rod_half, rod_len, rod_half},
+									pivot_x, pivot_y, pivot_z, rot_x, rot_y, rot_z);
+				lever_emit_pt(d, x, y, z, p0, light, tex_x + top_uvs[0][0], tex_y + top_uvs[0][1]);
+				lever_emit_pt(d, x, y, z, p1, light, tex_x + top_uvs[1][0], tex_y + top_uvs[1][1]);
+				lever_emit_pt(d, x, y, z, p2, light, tex_x + top_uvs[2][0], tex_y + top_uvs[2][1]);
+				lever_emit_pt(d, x, y, z, p3, light, tex_x + top_uvs[3][0], tex_y + top_uvs[3][1]);
+				break;
+			default: break;
+		}
+	}
+
+	return count + 1;
+}
+
+static size_t render_button_box(struct displaylist* d, struct block_info* this,
+								enum side side, uint8_t* vertex_light,
+								bool count_only, int16_t x0, int16_t y0,
+								int16_t z0, int16_t x1, int16_t y1,
+								int16_t z1) {
+	uint8_t tex = tex_atlas_lookup(TEXAT_STONE_BUTTON);
+	return render_cuboid_side(d, this, side, vertex_light, count_only, x0, y0,
+							  z0, x1, y1, z1, tex, 0);
+}
+
+size_t render_block_button(struct displaylist* d, struct block_info* this,
+						   enum side side, struct block_info* it,
+						   uint8_t* vertex_light, bool count_only) {
+	uint8_t meta = this->block->metadata & 0x07;
+	bool pressed = (this->block->metadata & 0x08) != 0;
+	int16_t depth = pressed ? 8 : 16;
+
+	switch(meta) {
+		case 1:
+			return render_button_box(d, this, side, vertex_light, count_only,
+									 0, 96, 80, depth, 160, 176);
+		case 2:
+			return render_button_box(d, this, side, vertex_light, count_only,
+									 256 - depth, 96, 80, 256, 160, 176);
+		case 3:
+			return render_button_box(d, this, side, vertex_light, count_only,
+									 80, 96, 0, 176, 160, depth);
+		case 4:
+			return render_button_box(d, this, side, vertex_light, count_only,
+									 80, 96, 256 - depth, 176, 160, 256);
+		default:
+			return render_button_box(d, this, side, vertex_light, count_only,
+									 80, 256 - depth, 80, 176, 256, 176);
+	}
+}
+
+static void repeater_orient_box(uint8_t dir, int16_t* x0, int16_t* z0,
+								int16_t* x1, int16_t* z1) {
+	int16_t ax0 = *x0, az0 = *z0, ax1 = *x1, az1 = *z1;
+	int16_t pts[4][2] = {
+		{ax0, az0},
+		{ax1, az0},
+		{ax1, az1},
+		{ax0, az1},
+	};
+	int16_t min_x = 256, min_z = 256, max_x = 0, max_z = 0;
+
+	for(size_t i = 0; i < 4; i++) {
+		int16_t x = pts[i][0];
+		int16_t z = pts[i][1];
+		int16_t rx = x;
+		int16_t rz = z;
+
+		switch(dir & 0x03) {
+			case 1: rx = 256 - z; rz = x; break;
+			case 2: rx = 256 - x; rz = 256 - z; break;
+			case 3: rx = z; rz = 256 - x; break;
+			default: break;
+		}
+
+		if(rx < min_x)
+			min_x = rx;
+		if(rx > max_x)
+			max_x = rx;
+		if(rz < min_z)
+			min_z = rz;
+		if(rz > max_z)
+			max_z = rz;
+	}
+
+	*x0 = min_x;
+	*z0 = min_z;
+	*x1 = max_x;
+	*z1 = max_z;
+}
+
+static size_t render_repeater_box(struct displaylist* d, struct block_info* this,
+								  enum side side, uint8_t* vertex_light,
+								  bool count_only, int16_t x0, int16_t y0,
+								  int16_t z0, int16_t x1, int16_t y1,
+								  int16_t z1, uint8_t tex, int tex_rotate) {
+	return render_cuboid_side(d, this, side, vertex_light, count_only, x0, y0,
+							  z0, x1, y1, z1, tex, tex_rotate);
+}
+
+size_t render_block_repeater(struct displaylist* d, struct block_info* this,
+							 enum side side, struct block_info* it,
+							 uint8_t* vertex_light, bool count_only) {
+	uint8_t dir = this->block->metadata & 0x03;
+	uint8_t delay = (this->block->metadata >> 2) & 0x03;
+	uint8_t top_tex = blocks[this->block->type]->getTextureIndex(this, side);
+	uint8_t lamp_tex = tex_atlas_lookup(this->block->type == BLOCK_REPEATER_ON ?
+											TEXAT_REPEATER_TORCH_ON :
+											TEXAT_REPEATER_TORCH_OFF);
+	size_t count = 0;
+	int tex_rotate = dir & 0x03;
+	int16_t x0, z0, x1, z1;
+
+	if(side == SIDE_TOP) {
+		count += render_repeater_box(d, this, side, vertex_light, count_only, 0,
+									 16, 0, 256, 32, 256, top_tex, tex_rotate);
+	} else if(side == SIDE_BOTTOM) {
+		count += render_repeater_box(d, this, side, vertex_light, count_only, 0,
+									 0, 0, 256, 16, 256,
+									 tex_atlas_lookup(TEXAT_STONE), 0);
+	} else {
+		count += render_repeater_box(d, this, side, vertex_light, count_only, 0,
+									 0, 0, 256, 32, 256,
+									 tex_atlas_lookup(TEXAT_STONE), 0);
+	}
+
+	x0 = 64; z0 = 176; x1 = 96; z1 = 208;
+	repeater_orient_box(dir, &x0, &z0, &x1, &z1);
+	count += render_repeater_box(d, this, side, vertex_light, count_only, x0, 32,
+								 z0, x1, 80, z1, lamp_tex, 0);
+
+	x0 = 160; z0 = 176; x1 = 192; z1 = 208;
+	repeater_orient_box(dir, &x0, &z0, &x1, &z1);
+	count += render_repeater_box(d, this, side, vertex_light, count_only, x0, 32,
+								 z0, x1, 80, z1, lamp_tex, 0);
+
+	x0 = 112; z0 = 64 + delay * 24; x1 = 144; z1 = 96 + delay * 24;
+	repeater_orient_box(dir, &x0, &z0, &x1, &z1);
+	count += render_repeater_box(d, this, side, vertex_light, count_only, x0, 32,
+								 z0, x1, 80, z1, lamp_tex, 0);
+
+	return count;
 }
 
 size_t render_block_torch(struct displaylist* d, struct block_info* this,
@@ -979,6 +1355,55 @@ size_t render_block_piston(struct displaylist* d, struct block_info* this,
 						   uint8_t* vertex_light, bool count_only) {
 	enum side facing = (enum side)(this->block->metadata & 0x7);
 	int tex_rotate = piston_texture_rotate(facing, side);
+	const int16_t tip = BLK_LEN / 4;
+
+	if(this->block->metadata & 0x8) {
+		int16_t x0 = 0;
+		int16_t x1 = BLK_LEN;
+		int16_t y0 = 0;
+		int16_t y1 = BLK_LEN;
+		int16_t z0 = 0;
+		int16_t z1 = BLK_LEN;
+		uint8_t tex = blocks[this->block->type]->getTextureIndex(this, side);
+
+		switch(facing) {
+			case SIDE_RIGHT:
+				x1 -= tip;
+				break;
+			case SIDE_LEFT:
+				x0 += tip;
+				break;
+			case SIDE_TOP:
+				y1 -= tip;
+				break;
+			case SIDE_BOTTOM:
+				y0 += tip;
+				break;
+			case SIDE_BACK:
+				z1 -= tip;
+				break;
+			case SIDE_FRONT:
+			default:
+				z0 += tip;
+				break;
+		}
+
+		if(side == facing) {
+			return render_cuboid_side(
+				d, this, side, vertex_light, count_only, x0, y0, z0, x1, y1, z1,
+				tex_atlas_lookup(TEXAT_PISTON_FRONT_EXTENDED), tex_rotate);
+		}
+
+		if(side != blocks_side_opposite(facing)) {
+			tex = tex_atlas_lookup(TEXAT_PISTON_SIDE);
+			return render_cuboid_side_texrect(
+				d, this, side, vertex_light, count_only, x0, y0, z0, x1, y1, z1,
+				tex, tex_rotate, 0, 4, 16, 12);
+		}
+
+		return render_cuboid_side(d, this, side, vertex_light, count_only, x0,
+								  y0, z0, x1, y1, z1, tex, tex_rotate);
+	}
 
 	if(!count_only)
 		render_block_side(
@@ -1027,12 +1452,13 @@ size_t render_block_piston_head(struct displaylist* d, struct block_info* this,
 		uint8_t tex = tex_atlas_lookup(TEXAT_PISTON_PLATE);
 		return render_cuboid_side(d, this, side, vertex_light, count_only, x0,
 								  y0, z0, x1, y1, z1, tex,
-								  piston_texture_rotate(facing, side));
+								  piston_head_side_rotate(facing, side));
 	}
 
 	return render_cuboid_side_texrect(
 		d, this, side, vertex_light, count_only, x0, y0, z0, x1, y1, z1,
-		tex_atlas_lookup(TEXAT_PISTON_SIDE), piston_texture_rotate(facing, side),
+		tex_atlas_lookup(TEXAT_PISTON_SIDE),
+		piston_head_side_rotate(facing, side),
 		0, 0, 16, 4);
 }
 
@@ -1042,10 +1468,9 @@ size_t render_block_piston_always(struct displaylist* d, struct block_info* this
 	if(!(this->block->metadata & 0x8))
 		return 0;
 
-	const int16_t rod_min = BLK_LEN * 3 / 8;
-	const int16_t rod_max = BLK_LEN * 5 / 8;
-	uint8_t tex_side = tex_atlas_lookup(TEXAT_PISTON_PLATE);
-	uint8_t tex_front = tex_atlas_lookup(TEXAT_PISTON_FRONT_EXTENDED);
+	const int16_t rod_min = BLK_LEN * 6 / 16;
+	const int16_t rod_max = BLK_LEN * 10 / 16;
+	const int16_t tip = BLK_LEN / 4;
 	int16_t x0 = rod_min;
 	int16_t x1 = rod_max;
 	int16_t y0 = rod_min;
@@ -1055,97 +1480,39 @@ size_t render_block_piston_always(struct displaylist* d, struct block_info* this
 
 	switch((enum side)(this->block->metadata & 0x7)) {
 		case SIDE_RIGHT:
-			x0 = BLK_LEN;
-			x1 = BLK_LEN * 2;
-			y0 = 0;
-			y1 = BLK_LEN;
-			z0 = 0;
-			z1 = BLK_LEN;
-			if(side == SIDE_RIGHT)
-				return render_cuboid_side(d, this, side, vertex_light,
-										  count_only, x0, y0, z0, x1, y1, z1,
-										  tex_front,
-										  piston_texture_rotate(SIDE_RIGHT, side));
-			return render_cuboid_side(d, this, side, vertex_light, count_only,
-									  x0, y0, z0, x1, y1, z1, tex_side,
-									  piston_texture_rotate(SIDE_RIGHT, side));
+			x0 = BLK_LEN - tip;
+			x1 = BLK_LEN * 2 - tip;
+			break;
 		case SIDE_LEFT:
-			x0 = -BLK_LEN;
-			x1 = 0;
-			y0 = 0;
-			y1 = BLK_LEN;
-			z0 = 0;
-			z1 = BLK_LEN;
-			if(side == SIDE_LEFT)
-				return render_cuboid_side(d, this, side, vertex_light,
-										  count_only, x0, y0, z0, x1, y1, z1,
-										  tex_front,
-										  piston_texture_rotate(SIDE_LEFT, side));
-			return render_cuboid_side(d, this, side, vertex_light, count_only,
-									  x0, y0, z0, x1, y1, z1, tex_side,
-									  piston_texture_rotate(SIDE_LEFT, side));
+			x0 = -BLK_LEN + tip;
+			x1 = tip;
+			break;
 		case SIDE_TOP:
-			x0 = 0;
-			x1 = BLK_LEN;
-			y0 = BLK_LEN;
-			y1 = BLK_LEN * 2;
-			z0 = 0;
-			z1 = BLK_LEN;
-			if(side == SIDE_TOP)
-				return render_cuboid_side(d, this, side, vertex_light,
-										  count_only, x0, y0, z0, x1, y1, z1,
-										  tex_front,
-										  piston_texture_rotate(SIDE_TOP, side));
-			return render_cuboid_side(d, this, side, vertex_light, count_only,
-									  x0, y0, z0, x1, y1, z1, tex_side,
-									  piston_texture_rotate(SIDE_TOP, side));
+			y0 = BLK_LEN - tip;
+			y1 = BLK_LEN * 2 - tip;
+			break;
 		case SIDE_BOTTOM:
-			x0 = 0;
-			x1 = BLK_LEN;
-			y0 = -BLK_LEN;
-			y1 = 0;
-			z0 = 0;
-			z1 = BLK_LEN;
-			if(side == SIDE_BOTTOM)
-				return render_cuboid_side(d, this, side, vertex_light,
-										  count_only, x0, y0, z0, x1, y1, z1,
-										  tex_front,
-										  piston_texture_rotate(SIDE_BOTTOM, side));
-			return render_cuboid_side(d, this, side, vertex_light, count_only,
-									  x0, y0, z0, x1, y1, z1, tex_side,
-									  piston_texture_rotate(SIDE_BOTTOM, side));
+			y0 = -BLK_LEN + tip;
+			y1 = tip;
+			break;
 		case SIDE_BACK:
-			x0 = 0;
-			x1 = BLK_LEN;
-			y0 = 0;
-			y1 = BLK_LEN;
-			z0 = BLK_LEN;
-			z1 = BLK_LEN * 2;
-			if(side == SIDE_BACK)
-				return render_cuboid_side(d, this, side, vertex_light,
-										  count_only, x0, y0, z0, x1, y1, z1,
-										  tex_front,
-										  piston_texture_rotate(SIDE_BACK, side));
-			return render_cuboid_side(d, this, side, vertex_light, count_only,
-									  x0, y0, z0, x1, y1, z1, tex_side,
-									  piston_texture_rotate(SIDE_BACK, side));
+			z0 = BLK_LEN - tip;
+			z1 = BLK_LEN * 2 - tip;
+			break;
 		case SIDE_FRONT:
 		default:
-			x0 = 0;
-			x1 = BLK_LEN;
-			y0 = 0;
-			y1 = BLK_LEN;
-			z0 = -BLK_LEN;
-			z1 = 0;
-			if(side == SIDE_FRONT)
-				return render_cuboid_side(d, this, side, vertex_light,
-										  count_only, x0, y0, z0, x1, y1, z1,
-										  tex_front,
-										  piston_texture_rotate(SIDE_FRONT, side));
-			return render_cuboid_side(d, this, side, vertex_light, count_only,
-									  x0, y0, z0, x1, y1, z1, tex_side,
-									  piston_texture_rotate(SIDE_FRONT, side));
+			z0 = -BLK_LEN + tip;
+			z1 = tip;
+			break;
 	}
+
+	return render_cuboid_side_texrect(
+		d, this, side, vertex_light, count_only, x0, y0, z0, x1, y1, z1,
+		tex_atlas_lookup(TEXAT_PISTON_SIDE),
+		(piston_head_side_rotate((enum side)(this->block->metadata & 0x7), side)
+		 + 1)
+			% 4,
+		0, 0, 16, 4);
 }
 
 size_t render_block_portal(struct displaylist* d, struct block_info* this,

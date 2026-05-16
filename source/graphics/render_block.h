@@ -154,4 +154,16 @@ size_t render_block_door(struct displaylist* d, struct block_info* this,
 						 enum side side, struct block_info* it,
 						 uint8_t* vertex_light, bool count_only);
 
+size_t render_block_lever(struct displaylist* d, struct block_info* this,
+						  enum side side, struct block_info* it,
+						  uint8_t* vertex_light, bool count_only);
+
+size_t render_block_button(struct displaylist* d, struct block_info* this,
+						   enum side side, struct block_info* it,
+						   uint8_t* vertex_light, bool count_only);
+
+size_t render_block_repeater(struct displaylist* d, struct block_info* this,
+							 enum side side, struct block_info* it,
+							 uint8_t* vertex_light, bool count_only);
+
 #endif
