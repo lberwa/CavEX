@@ -21,7 +21,6 @@
 #define CHUNK_MESHER_H
 
 #include <stdbool.h>
-#include <stddef.h>
 
 #define CHUNK_MESHER_QLENGTH 8
 
@@ -29,7 +28,6 @@ struct chunk;
 
 void chunk_mesher_init(void);
 void chunk_mesher_receive(void);
-void chunk_mesher_receive_limit(size_t max_results);
 bool chunk_mesher_send(struct chunk* c);
 
 #endif

@@ -51,12 +51,13 @@ struct chunk {
 	struct displaylist mesh[13];
 	bool has_displist[13];
 	bool rebuild_displist;
+	bool has_spawner;
 	struct world* world;
 	uint8_t reachable[6];
 	size_t reference_count;
 	bool has_fog;
 	struct chunk_step {
-		bool visited;
+		uint32_t visit_stamp;
 		enum side from;
 		uint8_t used_exit_sides;
 		int steps;
@@ -78,6 +79,8 @@ struct block_data chunk_lookup_block(struct chunk* c, w_coord_t x, w_coord_t y,
 									 w_coord_t z);
 void chunk_set_block(struct chunk* c, c_coord_t x, c_coord_t y, c_coord_t z,
 					 struct block_data blk);
+void chunk_set_block_raw(struct chunk* c, c_coord_t x, c_coord_t y,
+						 c_coord_t z, struct block_data blk);
 bool chunk_check_built(struct chunk* c);
 void chunk_set_light(struct chunk* c, c_coord_t x, c_coord_t y, c_coord_t z,
 					 uint8_t light);

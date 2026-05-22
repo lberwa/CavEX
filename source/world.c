@@ -83,20 +83,10 @@ static void world_bfs(struct world* w, ilist_chunks_t render, float x, float y,
 					  float z, vec4* planes) {
 	assert(w && render && planes);
 
-	dict_wsection_it_t it;
-	dict_wsection_it(it, w->sections);
-
-	while(!dict_wsection_end_p(it)) {
-		struct world_section* s = &dict_wsection_ref(it)->value;
-		for(size_t k = 0; k < COLUMN_HEIGHT; k++) {
-			if(s->column[k])
-				s->column[k]->tmp_data = (struct chunk_step) {
-					.visited = false,
-					.steps = 0,
-				};
-		}
-
-		dict_wsection_next(it);
+	uint32_t stamp = ++w->visit_token;
+	if(stamp == 0) {
+		w->visit_token = 1;
+		stamp = 1;
 	}
 
 	enum side sides[6]
@@ -116,7 +106,7 @@ static void world_bfs(struct world* w, ilist_chunks_t render, float x, float y,
 		.from = SIDE_MAX,
 		.used_exit_sides = 0,
 		.steps = 0,
-		.visited = true,
+		.visit_stamp = stamp,
 	};
 
 	while(!ilist_chunks_empty_p(queue)) {
@@ -128,7 +118,7 @@ static void world_bfs(struct world* w, ilist_chunks_t render, float x, float y,
 			struct chunk* neigh
 				= world_find_chunk_neighbour(w, current, sides[s]);
 
-			if(neigh && !neigh->tmp_data.visited && neigh->tmp_data.steps < 6
+			if(neigh && neigh->tmp_data.visit_stamp != stamp
 			   && !(current->tmp_data.used_exit_sides & (1 << sides[s]))
 			   && (current->tmp_data.from == SIDE_MAX
 				   || current->reachable[current->tmp_data.from]
@@ -145,7 +135,7 @@ static void world_bfs(struct world* w, ilist_chunks_t render, float x, float y,
 					.used_exit_sides = current->tmp_data.used_exit_sides
 						| (1 << blocks_side_opposite(sides[s])),
 					.steps = current->tmp_data.steps + (neigh->y < 64) ? 1 : 0,
-					.visited = true,
+					.visit_stamp = stamp,
 				};
 			}
 		}
@@ -162,6 +152,7 @@ void world_create(struct world* w) {
 				 sizeof(struct world_modification_entry));
 	w->world_chunk_cache = NULL;
 	w->anim_timer = time_get();
+	w->visit_token = 1;
 }
 
 void world_destroy(struct world* w) {
@@ -222,6 +213,91 @@ static bool wsection_heightmap_get_block(void* user, c_coord_t x, w_coord_t y,
 	return c;
 }
 
+static struct world_section* world_get_or_create_section(struct world* w,
+														 w_coord_t cx,
+														 w_coord_t cz) {
+	assert(w);
+
+	struct world_section* s
+		= dict_wsection_get(w->sections, SECTION_TO_ID(cx, cz));
+	if(!s) {
+		s = dict_wsection_safe_get(w->sections, SECTION_TO_ID(cx, cz));
+		assert(s);
+		memset(s->heightmap, 0, sizeof(s->heightmap));
+		memset(s->column, 0, sizeof(s->column));
+	}
+
+	return s;
+}
+
+static struct chunk* world_get_or_create_chunk(struct world* w,
+											   struct world_section* s,
+											   w_coord_t cx, w_coord_t cy,
+											   w_coord_t cz) {
+	assert(w && s);
+
+	struct chunk* c = s->column[cy];
+	if(!c) {
+		c = malloc(sizeof(struct chunk));
+		assert(c);
+		chunk_init(c, w, cx * CHUNK_SIZE, cy * CHUNK_SIZE, cz * CHUNK_SIZE);
+		chunk_ref(c);
+		s->column[cy] = c;
+	}
+
+	return c;
+}
+
+static void world_recompute_section_heightmap(struct world_section* s) {
+	assert(s);
+
+	for(c_coord_t z = 0; z < CHUNK_SIZE; z++) {
+		for(c_coord_t x = 0; x < CHUNK_SIZE; x++) {
+			uint8_t height = 0;
+
+			for(int y = WORLD_HEIGHT - 1; y >= 0; y--) {
+				struct chunk* c = s->column[y / CHUNK_SIZE];
+				if(!c)
+					continue;
+
+				struct block_data blk = chunk_get_block(c, x, W2C_COORD(y), z);
+				if(blocks[blk.type]
+				   && (!blocks[blk.type]->can_see_through
+					   || blocks[blk.type]->opacity > 0)) {
+					height = (uint8_t)(y + 1);
+					break;
+				}
+			}
+
+			s->heightmap[x + z * CHUNK_SIZE] = height;
+		}
+	}
+}
+
+static void world_mark_column_neighbours_rebuild(struct world* w,
+												 w_coord_t cx, w_coord_t cz) {
+	assert(w);
+
+	static const int offsets[4][2] = {
+		{-1, 0},
+		{1, 0},
+		{0, -1},
+		{0, 1},
+	};
+
+	for(size_t i = 0; i < 4; i++) {
+		struct world_section* s = dict_wsection_get(
+			w->sections, SECTION_TO_ID(cx + offsets[i][0], cz + offsets[i][1]));
+		if(!s)
+			continue;
+
+		for(size_t cy = 0; cy < COLUMN_HEIGHT; cy++) {
+			if(s->column[cy])
+				s->column[cy]->rebuild_displist = true;
+		}
+	}
+}
+
 void world_set_block(struct world* w, w_coord_t x, w_coord_t y, w_coord_t z,
 					 struct block_data blk, bool light_update) {
 	assert(w);
@@ -269,6 +345,58 @@ void world_set_block(struct world* w, w_coord_t x, w_coord_t y, w_coord_t z,
 		lighting_heightmap_update(s->heightmap, W2C_COORD(x), y, W2C_COORD(z),
 								  blk.type, wsection_heightmap_get_block, s);
 	}
+}
+
+bool world_import_chunk_column(struct world* w, w_coord_t x, w_coord_t y,
+							   w_coord_t z, w_coord_t sx, w_coord_t sy,
+							   w_coord_t sz, const uint8_t* ids,
+							   const uint8_t* metadata,
+							   const uint8_t* lighting_sky,
+							   const uint8_t* lighting_torch) {
+	assert(w);
+
+	if(x % CHUNK_SIZE != 0 || z % CHUNK_SIZE != 0 || y != 0
+	   || sx != CHUNK_SIZE || sy != WORLD_HEIGHT || sz != CHUNK_SIZE
+	   || !ids || !metadata || !lighting_sky || !lighting_torch)
+		return false;
+
+	w_coord_t cx = WCOORD_CHUNK_OFFSET(x);
+	w_coord_t cz = WCOORD_CHUNK_OFFSET(z);
+	struct world_section* s = world_get_or_create_section(w, cx, cz);
+
+	for(w_coord_t cy = 0; cy < COLUMN_HEIGHT; cy++) {
+		struct chunk* c = world_get_or_create_chunk(w, s, cx, cy, cz);
+		c->rebuild_displist = true;
+		c->has_spawner = false;
+
+		for(c_coord_t lx = 0; lx < CHUNK_SIZE; lx++) {
+			for(c_coord_t lz = 0; lz < CHUNK_SIZE; lz++) {
+				for(c_coord_t ly = 0; ly < CHUNK_SIZE; ly++) {
+					size_t world_y = (size_t)cy * CHUNK_SIZE + ly;
+					size_t idx = (size_t)lx * CHUNK_SIZE * WORLD_HEIGHT
+						+ (size_t)lz * WORLD_HEIGHT + world_y;
+					uint8_t md = (metadata[idx / 2] >> ((idx & 1u) * 4)) & 0xF;
+					uint8_t sky
+						= (lighting_sky[idx / 2] >> ((idx & 1u) * 4)) & 0xF;
+					uint8_t torch
+						= (lighting_torch[idx / 2] >> ((idx & 1u) * 4)) & 0xF;
+
+					chunk_set_block_raw(c, lx, ly, lz,
+										(struct block_data) {
+											.type = ids[idx],
+											.metadata = md,
+											.sky_light = sky,
+											.torch_light = torch,
+										});
+				}
+			}
+		}
+	}
+
+	world_recompute_section_heightmap(s);
+	world_mark_column_neighbours_rebuild(w, cx, cz);
+	w->world_chunk_cache = s->column[0];
+	return true;
 }
 
 void world_redraw_chunks(struct world* w) {
@@ -579,6 +707,10 @@ static void world_render_spawners(struct world* w, struct camera* c) {
 
 	while(!ilist_chunks_end_p(it)) {
 		struct chunk* chunk = ilist_chunks_ref(it);
+		if(!chunk->has_spawner) {
+			ilist_chunks_next(it);
+			continue;
+		}
 
 		for(c_coord_t cy = 0; cy < CHUNK_SIZE; cy++) {
 			for(c_coord_t cz = 0; cz < CHUNK_SIZE; cz++) {

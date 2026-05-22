@@ -29,7 +29,6 @@
 #include "../../particle.h"
 #include "../../platform/gfx.h"
 #include "../../platform/input.h"
-#include "../../platform/texture.h"
 #include "../game_state.h"
 #include "../../daytime.h"
 
@@ -70,17 +69,6 @@ void screen_ingame_render3D(struct screen* s, mat4 view) {
 		struct block_data blk
 			= world_get_block(&gstate.world, gstate.camera_hit.x,
 							  gstate.camera_hit.y, gstate.camera_hit.z);
-		struct block_data neighbours[SIDE_MAX];
-
-		for(int k = 0; k < SIDE_MAX; k++) {
-			int ox, oy, oz;
-			blocks_side_offset((enum side)k, &ox, &oy, &oz);
-
-			neighbours[k]
-				= world_get_block(&gstate.world, gstate.camera_hit.x + ox,
-								  gstate.camera_hit.y + oy,
-								  gstate.camera_hit.z + oz);
-		}
 
 		if(gstate.digging.active)
 			render_block_cracks(&blk, view, gstate.camera_hit.x,
@@ -92,7 +80,6 @@ void screen_ingame_render3D(struct screen* s, mat4 view) {
 		gutil_block_selection(view,
 							  &(struct block_info) {
 								  .block = &blk,
-								  .neighbours = neighbours,
 								  .x = gstate.camera_hit.x,
 								  .y = gstate.camera_hit.y,
 								  .z = gstate.camera_hit.z,
@@ -509,23 +496,6 @@ static void screen_ingame_render2D(struct screen* s, int width, int height) {
 	snprintf(str, sizeof(str), "player: %d", gstate_active_player() + 1);
 	gutil_text(4, 4 + (GFX_GUI_SCALE * 8 + 1) * 4, str, GFX_GUI_SCALE * 8, true);
 
-	if(gstate.stats.spike_age > 0 && gstate.stats.spike_max_label) {
-		snprintf(str, sizeof(str), "spike: %s %.1f/%.1fms",
-				 gstate.stats.spike_max_label, gstate.stats.spike_max_ms,
-				 gstate.stats.spike_frame_ms);
-		gutil_text(4, 4 + (GFX_GUI_SCALE * 8 + 1) * 5, str,
-				   GFX_GUI_SCALE * 8, true);
-
-		snprintf(str, sizeof(str),
-				 "c %.0f w %.0f b %.0f f %.0f m %.0f r %.0f fin %.0f",
-				 gstate.stats.spike_clin_ms, gstate.stats.spike_world_ms,
-				 gstate.stats.spike_build_ms, gstate.stats.spike_flip_ms,
-				 gstate.stats.spike_mesher_ms, gstate.stats.spike_render_ms,
-				 gstate.stats.spike_finish_ms);
-		gutil_text(4, 4 + (GFX_GUI_SCALE * 8 + 1) * 6, str,
-				   GFX_GUI_SCALE * 8, true);
-	}
-
 	float time = gstate.world_time
 	             + time_diff_s(gstate.world_time_start, time_get()) * 1000.0f
 	                   / 50.0f;
@@ -533,7 +503,7 @@ static void screen_ingame_render2D(struct screen* s, int width, int height) {
 	float angle = daytime_celestial_angle(day_ticks / 24000.0f);
 	snprintf(str, sizeof(str), "time: %.0f (%.0f)  angle: %.3f", time,
 	         day_ticks, angle);
-	gutil_text(4, 4 + (GFX_GUI_SCALE * 8 + 1) * 7, str, GFX_GUI_SCALE * 8, true);
+	gutil_text(4, 4 + (GFX_GUI_SCALE * 8 + 1) * 5, str, GFX_GUI_SCALE * 8, true);
 
 	if (gstate.camera_hit.entity_hit) {
 		struct entity **ptr = dict_entity_get(
@@ -551,7 +521,7 @@ static void screen_ingame_render2D(struct screen* s, int width, int height) {
 		             gstate.camera_hit.x, gstate.camera_hit.y,
 		             gstate.camera_hit.z);
 		}
-		gutil_text(4, 4 + (GFX_GUI_SCALE * 8 + 1) * 8, str, GFX_GUI_SCALE * 8, true);
+		gutil_text(4, 4 + (GFX_GUI_SCALE * 8 + 1) * 6, str, GFX_GUI_SCALE * 8, true);
 	} else	if(gstate.camera_hit.hit) {
 		struct block_data bd
 			= world_get_block(&gstate.world, gstate.camera_hit.x,
@@ -562,7 +532,7 @@ static void screen_ingame_render2D(struct screen* s, int width, int height) {
 		         gstate.camera_hit.y, gstate.camera_hit.z,
 		         (b && b->name) ? b->name : "<unknown>", bd.type,
 		         bd.metadata);
-		gutil_text(4, 4 + (GFX_GUI_SCALE * 8 + 1) * 8, str, GFX_GUI_SCALE * 8, true);
+		gutil_text(4, 4 + (GFX_GUI_SCALE * 8 + 1) * 6, str, GFX_GUI_SCALE * 8, true);
 	}
 #endif
 
