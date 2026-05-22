@@ -270,6 +270,140 @@ render_block_side_adv(struct displaylist* d, int16_t x, int16_t y, int16_t z,
 							 vertex_light, luminance);
 }
 
+static inline void render_block_side_adv_fulltex(
+	struct displaylist* d, int16_t x, int16_t y, int16_t z, uint16_t width,
+	uint16_t height, uint8_t tex_u0, uint8_t tex_y, uint8_t tex_u1,
+	uint8_t tex_v1, bool tex_flip_h,
+	int tex_rotate, bool shade_sides, enum side side,
+	const uint8_t* vertex_light, uint8_t luminance) {
+	const uint8_t tex_coords[2][4][2] = {
+		{
+			{tex_u0, tex_y},
+			{tex_u1, tex_y},
+			{tex_u1, tex_v1},
+			{tex_u0, tex_v1},
+		},
+		{
+			{tex_u1, tex_y},
+			{tex_u0, tex_y},
+			{tex_u0, tex_v1},
+			{tex_u1, tex_v1},
+		},
+	};
+
+	switch(side) {
+		case SIDE_LEFT:
+			displaylist_pos(d, x, y, z);
+			displaylist_color(
+				d, DIM_LIGHT(vertex_light[8], level_table_1, shade_sides, luminance));
+			displaylist_texcoord(d,
+								 tex_coords[tex_flip_h][(tex_rotate + 3) % 4][0],
+								 tex_coords[tex_flip_h][(tex_rotate + 3) % 4][1]);
+			displaylist_pos(d, x, y + height, z);
+			displaylist_color(
+				d, DIM_LIGHT(vertex_light[9], level_table_1, shade_sides, luminance));
+			displaylist_texcoord(d,
+								 tex_coords[tex_flip_h][(tex_rotate + 0) % 4][0],
+								 tex_coords[tex_flip_h][(tex_rotate + 0) % 4][1]);
+			displaylist_pos(d, x, y + height, z + width);
+			displaylist_color(
+				d, DIM_LIGHT(vertex_light[10], level_table_1, shade_sides, luminance));
+			displaylist_texcoord(d,
+								 tex_coords[tex_flip_h][(tex_rotate + 1) % 4][0],
+								 tex_coords[tex_flip_h][(tex_rotate + 1) % 4][1]);
+			displaylist_pos(d, x, y, z + width);
+			displaylist_color(
+				d, DIM_LIGHT(vertex_light[11], level_table_1, shade_sides, luminance));
+			displaylist_texcoord(d,
+								 tex_coords[tex_flip_h][(tex_rotate + 2) % 4][0],
+								 tex_coords[tex_flip_h][(tex_rotate + 2) % 4][1]);
+			break;
+		case SIDE_RIGHT:
+			displaylist_pos(d, x, y, z);
+			displaylist_color(
+				d, DIM_LIGHT(vertex_light[12], level_table_1, shade_sides, luminance));
+			displaylist_texcoord(d,
+								 tex_coords[tex_flip_h][(tex_rotate + 2) % 4][0],
+								 tex_coords[tex_flip_h][(tex_rotate + 2) % 4][1]);
+			displaylist_pos(d, x, y, z + width);
+			displaylist_color(
+				d, DIM_LIGHT(vertex_light[15], level_table_1, shade_sides, luminance));
+			displaylist_texcoord(d,
+								 tex_coords[tex_flip_h][(tex_rotate + 3) % 4][0],
+								 tex_coords[tex_flip_h][(tex_rotate + 3) % 4][1]);
+			displaylist_pos(d, x, y + height, z + width);
+			displaylist_color(
+				d, DIM_LIGHT(vertex_light[14], level_table_1, shade_sides, luminance));
+			displaylist_texcoord(d,
+								 tex_coords[tex_flip_h][(tex_rotate + 0) % 4][0],
+								 tex_coords[tex_flip_h][(tex_rotate + 0) % 4][1]);
+			displaylist_pos(d, x, y + height, z);
+			displaylist_color(
+				d, DIM_LIGHT(vertex_light[13], level_table_1, shade_sides, luminance));
+			displaylist_texcoord(d,
+								 tex_coords[tex_flip_h][(tex_rotate + 1) % 4][0],
+								 tex_coords[tex_flip_h][(tex_rotate + 1) % 4][1]);
+			break;
+		case SIDE_FRONT:
+			displaylist_pos(d, x, y, z);
+			displaylist_color(
+				d, DIM_LIGHT(vertex_light[16], level_table_2, shade_sides, luminance));
+			displaylist_texcoord(d,
+								 tex_coords[tex_flip_h][(tex_rotate + 0) % 4][0],
+								 tex_coords[tex_flip_h][(tex_rotate + 0) % 4][1]);
+			displaylist_pos(d, x + width, y, z);
+			displaylist_color(
+				d, DIM_LIGHT(vertex_light[17], level_table_2, shade_sides, luminance));
+			displaylist_texcoord(d,
+								 tex_coords[tex_flip_h][(tex_rotate + 1) % 4][0],
+								 tex_coords[tex_flip_h][(tex_rotate + 1) % 4][1]);
+			displaylist_pos(d, x + width, y + height, z);
+			displaylist_color(
+				d, DIM_LIGHT(vertex_light[18], level_table_2, shade_sides, luminance));
+			displaylist_texcoord(d,
+								 tex_coords[tex_flip_h][(tex_rotate + 2) % 4][0],
+								 tex_coords[tex_flip_h][(tex_rotate + 2) % 4][1]);
+			displaylist_pos(d, x, y + height, z);
+			displaylist_color(
+				d, DIM_LIGHT(vertex_light[19], level_table_2, shade_sides, luminance));
+			displaylist_texcoord(d,
+								 tex_coords[tex_flip_h][(tex_rotate + 3) % 4][0],
+								 tex_coords[tex_flip_h][(tex_rotate + 3) % 4][1]);
+			break;
+		case SIDE_BACK:
+			displaylist_pos(d, x, y, z);
+			displaylist_color(
+				d, DIM_LIGHT(vertex_light[20], level_table_2, shade_sides, luminance));
+			displaylist_texcoord(d,
+								 tex_coords[tex_flip_h][(tex_rotate + 3) % 4][0],
+								 tex_coords[tex_flip_h][(tex_rotate + 3) % 4][1]);
+			displaylist_pos(d, x, y + height, z);
+			displaylist_color(
+				d, DIM_LIGHT(vertex_light[23], level_table_2, shade_sides, luminance));
+			displaylist_texcoord(d,
+								 tex_coords[tex_flip_h][(tex_rotate + 0) % 4][0],
+								 tex_coords[tex_flip_h][(tex_rotate + 0) % 4][1]);
+			displaylist_pos(d, x + width, y + height, z);
+			displaylist_color(
+				d, DIM_LIGHT(vertex_light[22], level_table_2, shade_sides, luminance));
+			displaylist_texcoord(d,
+								 tex_coords[tex_flip_h][(tex_rotate + 1) % 4][0],
+								 tex_coords[tex_flip_h][(tex_rotate + 1) % 4][1]);
+			displaylist_pos(d, x + width, y, z);
+			displaylist_color(
+				d, DIM_LIGHT(vertex_light[21], level_table_2, shade_sides, luminance));
+			displaylist_texcoord(d,
+								 tex_coords[tex_flip_h][(tex_rotate + 2) % 4][0],
+								 tex_coords[tex_flip_h][(tex_rotate + 2) % 4][1]);
+			break;
+		default:
+			render_block_side_adv(d, x, y, z, width, height, tex_u0, tex_y,
+								  tex_flip_h, tex_rotate, shade_sides, side,
+								  vertex_light, luminance);
+			break;
+	}
+}
+
 static inline void render_block_side(struct displaylist* d, int16_t x,
 									 int16_t y, int16_t z, int16_t yoffset,
 									 uint16_t height, uint8_t tex,
@@ -509,9 +643,8 @@ static size_t render_cuboid_side_texrect(struct displaylist* d,
 
 #define PISTON_TEXCOORD(v)                                                     \
 	displaylist_texcoord(d,                                                    \
-					 tex_coords[0][(tex_rotate + (v)) % 4][0],                \
-					 tex_coords[0][(tex_rotate + (v)) % 4][1])
-
+						 tex_coords[0][(tex_rotate + (v)) % 4][0],                \
+						 tex_coords[0][(tex_rotate + (v)) % 4][1])
 		switch(side) {
 			case SIDE_LEFT:
 				displaylist_pos(d, bx + x0, by + y0, bz + z0);
@@ -623,7 +756,6 @@ static size_t render_cuboid_side_texrect(struct displaylist* d,
 				break;
 			default: break;
 		}
-
 #undef PISTON_TEXCOORD
 	}
 
@@ -1078,10 +1210,808 @@ size_t render_block_button(struct displaylist* d, struct block_info* this,
 		case 4:
 			return render_button_box(d, this, side, vertex_light, count_only,
 									 80, 96, 256 - depth, 176, 160, 256);
+		case 5:
+			return render_button_box(d, this, side, vertex_light, count_only,
+									 80, 0, 80, 176, depth, 176);
 		default:
 			return render_button_box(d, this, side, vertex_light, count_only,
 									 80, 256 - depth, 80, 176, 256, 176);
 	}
+}
+
+static bool pane_connects_to(struct block_info* this, enum side side) {
+	if(!this->neighbours)
+		return false;
+
+	struct block_data neighbour = this->neighbours[side];
+
+	if(neighbour.type == this->block->type)
+		return true;
+	if(!blocks[neighbour.type])
+		return false;
+
+	return !blocks[neighbour.type]->can_see_through;
+}
+
+static size_t render_pane_box_uv(struct displaylist* d, struct block_info* this,
+								 enum side side, uint8_t* vertex_light,
+								 bool count_only, int16_t x0, int16_t y0,
+								 int16_t z0, int16_t x1, int16_t y1,
+								 int16_t z1, uint8_t tex_u_offset) {
+	if(x0 == x1 || y0 == y1 || z0 == z1)
+		return 0;
+
+	if(!count_only) {
+		uint8_t tex = blocks[this->block->type]->getTextureIndex(this, side);
+		uint8_t tex_x = TEX_OFFSET(TEXTURE_X(tex)) + tex_u_offset;
+		uint8_t tex_y = TEX_OFFSET(TEXTURE_Y(tex));
+		int16_t bx = W2C_COORD(this->x) * BLK_LEN;
+		int16_t by = W2C_COORD(this->y) * BLK_LEN;
+		int16_t bz = W2C_COORD(this->z) * BLK_LEN;
+		uint16_t width;
+		uint16_t height;
+
+		switch(side) {
+			case SIDE_LEFT:
+				width = z1 - z0;
+				height = y1 - y0;
+				render_block_side_adv(d, bx + x0, by + y0, bz + z0, width, height,
+									  tex_x, tex_y + (16 - height / 16), false, 0,
+									  true, side, vertex_light,
+									  blocks[this->block->type]->luminance);
+				break;
+			case SIDE_RIGHT:
+				width = z1 - z0;
+				height = y1 - y0;
+				render_block_side_adv(d, bx + x1, by + y0, bz + z0, width, height,
+									  tex_x, tex_y + (16 - height / 16), false, 0,
+									  true, side, vertex_light,
+									  blocks[this->block->type]->luminance);
+				break;
+			case SIDE_BOTTOM:
+				width = x1 - x0;
+				height = z1 - z0;
+				render_block_side_adv(d, bx + x0, by + y0, bz + z0, width, height,
+									  tex_x, tex_y, false, 0, true, side,
+									  vertex_light,
+									  blocks[this->block->type]->luminance);
+				break;
+			case SIDE_TOP:
+				width = x1 - x0;
+				height = z1 - z0;
+				render_block_side_adv(d, bx + x0, by + y1, bz + z0, width, height,
+									  tex_x, tex_y, false, 0, true, side,
+									  vertex_light,
+									  blocks[this->block->type]->luminance);
+				break;
+			case SIDE_FRONT:
+				width = x1 - x0;
+				height = y1 - y0;
+				render_block_side_adv(d, bx + x0, by + y0, bz + z0, width, height,
+									  tex_x, tex_y + (16 - height / 16), false, 0,
+									  true, side, vertex_light,
+									  blocks[this->block->type]->luminance);
+				break;
+			case SIDE_BACK:
+				width = x1 - x0;
+				height = y1 - y0;
+				render_block_side_adv(d, bx + x0, by + y0, bz + z1, width, height,
+									  tex_x, tex_y + (16 - height / 16), false, 0,
+									  true, side, vertex_light,
+									  blocks[this->block->type]->luminance);
+				break;
+			default: break;
+		}
+	}
+
+	return 1;
+}
+
+/*
+ * Experimental iron-bars renderer disabled for this test.
+ * The custom geometry stays commented out so we can compare against a plain
+ * full-block render of the raw iron-bars tile.
+ */
+
+size_t render_block_pane(struct displaylist* d, struct block_info* this,
+						 enum side side, struct block_info* it,
+						 uint8_t* vertex_light, bool count_only) {
+	(void)it;
+	return render_pane_box_uv(d, this, side, vertex_light, count_only, 112, 0,
+							  112, 144, 256, 144, 2);
+}
+
+size_t render_block_pane_always(struct displaylist* d, struct block_info* this,
+								enum side side, struct block_info* it,
+								uint8_t* vertex_light, bool count_only) {
+	(void)d;
+	(void)this;
+	(void)side;
+	(void)it;
+	(void)vertex_light;
+	(void)count_only;
+	return 0;
+}
+
+static bool render_glass_pane_connects_to(struct block_info* this, enum side side) {
+	if(!this->neighbours)
+		return false;
+
+	struct block_data neighbour = this->neighbours[side];
+	if(neighbour.type == BLOCK_GLASS_PANE || neighbour.type == BLOCK_GLASS
+	   || neighbour.type == BLOCK_IRON_BARS)
+		return true;
+	if(!blocks[neighbour.type])
+		return false;
+
+	return !blocks[neighbour.type]->can_see_through;
+}
+
+static size_t render_glass_pane_strip(struct displaylist* d,
+									  struct block_info* this, enum side side,
+									  uint8_t* vertex_light, bool count_only,
+									  int16_t x0, int16_t y0, int16_t z0,
+									  int16_t x1, int16_t y1, int16_t z1,
+									  bool x_axis) {
+	const uint8_t edge_tex = tex_atlas_lookup(TEXAT_GLASS_PANE_EDGE);
+	const uint8_t face_tex = tex_atlas_lookup(TEXAT_GLASS);
+
+	switch(side) {
+		case SIDE_TOP:
+		case SIDE_BOTTOM:
+			return render_cuboid_side(d, this, side, vertex_light, count_only, x0,
+									  y0, z0, x1, y1, z1, edge_tex, 0);
+		case SIDE_LEFT:
+		case SIDE_RIGHT:
+			return render_cuboid_side(d, this, side, vertex_light, count_only, x0,
+									  y0, z0, x1, y1, z1,
+									  x_axis ? edge_tex : face_tex, 0);
+		case SIDE_FRONT:
+		case SIDE_BACK:
+			return render_cuboid_side(d, this, side, vertex_light, count_only, x0,
+									  y0, z0, x1, y1, z1,
+									  x_axis ? face_tex : edge_tex, 0);
+		default: return 0;
+	}
+}
+
+static size_t render_glass_pane_post(struct displaylist* d,
+									 struct block_info* this, enum side side,
+									 uint8_t* vertex_light, bool count_only) {
+	const int16_t x0 = 112;
+	const int16_t x1 = 144;
+	const int16_t z0 = 112;
+	const int16_t z1 = 144;
+	uint8_t glass_tex = tex_atlas_lookup(TEXAT_GLASS);
+	uint8_t snow_tex = tex_atlas_lookup(TEXAT_SNOW);
+
+	switch(side) {
+		case SIDE_TOP:
+		case SIDE_BOTTOM:
+			return render_cuboid_side_texrect(d, this, side, vertex_light,
+											  count_only, x0, 0, z0, x1, 256, z1,
+											  snow_tex, 0, 6, 6, 4, 4);
+		case SIDE_LEFT:
+		case SIDE_RIGHT:
+		case SIDE_FRONT:
+		case SIDE_BACK:
+			return render_cuboid_side_texrect(d, this, side, vertex_light,
+											  count_only, x0, 0, z0, x1, 256, z1,
+											  glass_tex, 0, 7, 0, 2, 16);
+		default: return 0;
+	}
+}
+
+size_t render_block_glass_pane(struct displaylist* d, struct block_info* this,
+							   enum side side, struct block_info* it,
+							   uint8_t* vertex_light, bool count_only) {
+	(void)d;
+	(void)this;
+	(void)side;
+	(void)it;
+	(void)vertex_light;
+	(void)count_only;
+	return 0;
+}
+
+size_t render_block_glass_pane_always(struct displaylist* d,
+									  struct block_info* this, enum side side,
+									  struct block_info* it,
+									  uint8_t* vertex_light, bool count_only) {
+	(void)it;
+	const bool connect_left = render_glass_pane_connects_to(this, SIDE_LEFT);
+	const bool connect_right = render_glass_pane_connects_to(this, SIDE_RIGHT);
+	const bool connect_front = render_glass_pane_connects_to(this, SIDE_FRONT);
+	const bool connect_back = render_glass_pane_connects_to(this, SIDE_BACK);
+	const bool no_connections = !connect_left && !connect_right
+		&& !connect_front && !connect_back;
+	size_t count = 0;
+
+	if(no_connections) {
+		return render_glass_pane_post(d, this, side, vertex_light, count_only);
+	}
+
+	if(connect_left || connect_right) {
+		count += render_glass_pane_strip(
+			d, this, side, vertex_light, count_only,
+			connect_left ? 0 : 112, 0, 112, connect_right ? 256 : 144, 256, 144,
+			true);
+	}
+	if(connect_front || connect_back) {
+		count += render_glass_pane_strip(
+			d, this, side, vertex_light, count_only, 112, 0,
+			connect_front ? 0 : 112, 144, 256, connect_back ? 256 : 144, false);
+	}
+
+	return count;
+}
+
+static bool render_iron_bars_connects_to(struct block_info* this, enum side side) {
+	if(!this->neighbours)
+		return false;
+
+	struct block_data neighbour = this->neighbours[side];
+
+	if(neighbour.type == BLOCK_IRON_BARS)
+		return true;
+	if(!blocks[neighbour.type])
+		return false;
+
+	return !blocks[neighbour.type]->can_see_through;
+}
+
+static bool render_iron_bars_same_type(struct block_info* this, enum side side) {
+	return this->neighbours && this->neighbours[side].type == BLOCK_IRON_BARS;
+}
+
+static bool render_iron_bars_ext_same_type(struct block_info* this, int dx, int dy,
+										   int dz) {
+	if(!this || !this->neighbours_ext)
+		return false;
+
+	int idx = 0;
+	for(int z = -1; z <= 1; ++z) {
+		for(int y = -1; y <= 1; ++y) {
+			for(int x = -1; x <= 1; ++x) {
+				if(x == 0 && y == 0 && z == 0)
+					continue;
+				if(x == dx && y == dy && z == dz)
+					return this->neighbours_ext[idx].type == BLOCK_IRON_BARS;
+				idx++;
+			}
+		}
+	}
+
+	return false;
+}
+
+static int render_iron_bars_vertical_neighbour_connections(struct block_info* this,
+															int dy) {
+	int count = 0;
+
+	count += render_iron_bars_ext_same_type(this, -1, dy, 0) ? 1 : 0;
+	count += render_iron_bars_ext_same_type(this, 1, dy, 0) ? 1 : 0;
+	count += render_iron_bars_ext_same_type(this, 0, dy, -1) ? 1 : 0;
+	count += render_iron_bars_ext_same_type(this, 0, dy, 1) ? 1 : 0;
+	return count;
+}
+
+static void render_iron_bars_extent_x(bool connect_left, bool connect_right,
+									  int16_t* x0, int16_t* x1) {
+	if(connect_left && connect_right) {
+		*x0 = 0;
+		*x1 = BLK_LEN;
+	} else if(connect_left) {
+		*x0 = 0;
+		*x1 = BLK_LEN / 2;
+	} else if(connect_right) {
+		*x0 = BLK_LEN / 2;
+		*x1 = BLK_LEN;
+	} else {
+		*x0 = 112;
+		*x1 = 144;
+	}
+}
+
+static void render_iron_bars_extent_z(bool connect_front, bool connect_back,
+									  int16_t* z0, int16_t* z1) {
+	if(connect_front && connect_back) {
+		*z0 = 0;
+		*z1 = BLK_LEN;
+	} else if(connect_front) {
+		*z0 = 0;
+		*z1 = BLK_LEN / 2;
+	} else if(connect_back) {
+		*z0 = BLK_LEN / 2;
+		*z1 = BLK_LEN;
+	} else {
+		*z0 = 112;
+		*z1 = 144;
+	}
+}
+
+static size_t render_iron_bars_plane_x(struct displaylist* d,
+										   struct block_info* this,
+										   uint8_t* vertex_light, bool count_only,
+										   int16_t x0, int16_t x1, uint8_t tex_u0) {
+	int16_t bx = W2C_COORD(this->x) * BLK_LEN;
+	int16_t by = W2C_COORD(this->y) * BLK_LEN;
+	int16_t bz = W2C_COORD(this->z) * BLK_LEN;
+	uint8_t tex = blocks[this->block->type]->getTextureIndex(this, SIDE_FRONT);
+	uint8_t tex_x = TEX_OFFSET(TEXTURE_X(tex)) + tex_u0;
+	uint8_t tex_y = TEX_OFFSET(TEXTURE_Y(tex));
+	uint8_t luminance = blocks[this->block->type]->luminance;
+	const int16_t z0 = 127;
+	const int16_t z1 = 129;
+
+	if(!count_only) {
+		render_block_side_adv_v2(d, bx + x0, by, bz + z0, x1 - x0, BLK_LEN, 0, 0,
+								 tex_x, tex_y, false, 0, true, SIDE_FRONT,
+								 vertex_light, luminance);
+	}
+
+	return 1;
+}
+
+static size_t render_iron_bars_plane_x_texrect(struct displaylist* d,
+												   struct block_info* this,
+												   uint8_t* vertex_light,
+												   bool count_only, int16_t x0,
+												   int16_t x1, uint8_t tex_u0,
+												   uint8_t tex_w) {
+	uint8_t tex = blocks[this->block->type]->getTextureIndex(this, SIDE_FRONT);
+	size_t count = 0;
+
+	return render_cuboid_side_texrect(d, this, SIDE_FRONT, vertex_light,
+									   count_only, x0, 0, 127, x1, BLK_LEN, 129,
+									   tex, 0, tex_u0, 0, tex_w, 16);
+}
+
+static size_t render_iron_bars_plane_z(struct displaylist* d,
+										   struct block_info* this,
+										   uint8_t* vertex_light, bool count_only,
+										   int16_t z0, int16_t z1, uint8_t tex_u0) {
+	int16_t bx = W2C_COORD(this->x) * BLK_LEN;
+	int16_t by = W2C_COORD(this->y) * BLK_LEN;
+	int16_t bz = W2C_COORD(this->z) * BLK_LEN;
+	uint8_t tex = blocks[this->block->type]->getTextureIndex(this, SIDE_LEFT);
+	uint8_t tex_x = TEX_OFFSET(TEXTURE_X(tex)) + tex_u0;
+	uint8_t tex_y = TEX_OFFSET(TEXTURE_Y(tex));
+	uint8_t luminance = blocks[this->block->type]->luminance;
+	const int16_t x0 = 127;
+	const int16_t x1 = 129;
+
+	if(!count_only) {
+		render_block_side_adv_v2(d, bx + x0, by, bz + z0, z1 - z0, BLK_LEN, 0, 0,
+								 tex_x, tex_y, false, 0, true, SIDE_LEFT,
+								 vertex_light, luminance);
+	}
+
+	return 1;
+}
+
+static size_t render_iron_bars_plane_z_texrect(struct displaylist* d,
+												   struct block_info* this,
+												   uint8_t* vertex_light,
+												   bool count_only, int16_t z0,
+												   int16_t z1, uint8_t tex_u0,
+												   uint8_t tex_w) {
+	uint8_t tex = blocks[this->block->type]->getTextureIndex(this, SIDE_LEFT);
+	size_t count = 0;
+
+	return render_cuboid_side_texrect(d, this, SIDE_LEFT, vertex_light,
+									   count_only, 127, 0, z0, 129, BLK_LEN, z1,
+									   tex, 0, tex_u0, 0, tex_w, 16);
+}
+
+static size_t render_iron_bars_arm_x(struct displaylist* d,
+									 struct block_info* this,
+									 uint8_t* vertex_light, bool count_only,
+									 bool right_side) {
+	int16_t x0 = right_side ? 128 : 112;
+	int16_t x1 = right_side ? 144 : 128;
+	uint8_t tex_u0 = right_side ? 3 : 2;
+
+	return render_iron_bars_plane_x_texrect(d, this, vertex_light, count_only,
+											x0, x1, tex_u0, 1);
+}
+
+static size_t render_iron_bars_arm_z(struct displaylist* d,
+									 struct block_info* this,
+									 uint8_t* vertex_light, bool count_only,
+									 bool back_side) {
+	int16_t z0 = back_side ? 128 : 112;
+	int16_t z1 = back_side ? 144 : 128;
+	uint8_t tex_u0 = back_side ? 3 : 2;
+
+	return render_iron_bars_plane_z_texrect(d, this, vertex_light, count_only,
+											z0, z1, tex_u0, 1);
+}
+
+static size_t render_iron_bars_center_cap(struct displaylist* d,
+											  struct block_info* this,
+											  uint8_t* vertex_light,
+											  bool count_only) {
+	uint8_t tex = blocks[this->block->type]->getTextureIndex(this, SIDE_TOP);
+	uint8_t tex_x = TEX_OFFSET(TEXTURE_X(tex)) + 2;
+	uint8_t tex_y = TEX_OFFSET(TEXTURE_Y(tex));
+	uint8_t luminance = blocks[this->block->type]->luminance;
+	int16_t bx = W2C_COORD(this->x) * BLK_LEN;
+	int16_t by = W2C_COORD(this->y) * BLK_LEN;
+	int16_t bz = W2C_COORD(this->z) * BLK_LEN;
+	size_t count = 0;
+
+	/* Caps should be lit like the side planes instead of as top/bottom faces. */
+	if(!count_only) {
+		displaylist_pos(d, bx + 112, by + 254, bz + 112);
+		displaylist_color(d,
+						  DIM_LIGHT(vertex_light[8], level_table_1, true,
+									luminance));
+		displaylist_texcoord(d, tex_x, tex_y);
+		displaylist_pos(d, bx + 144, by + 254, bz + 112);
+		displaylist_color(d,
+						  DIM_LIGHT(vertex_light[9], level_table_1, true,
+									luminance));
+		displaylist_texcoord(d, tex_x + 2, tex_y);
+		displaylist_pos(d, bx + 144, by + 254, bz + 144);
+		displaylist_color(d,
+						  DIM_LIGHT(vertex_light[10], level_table_1, true,
+									luminance));
+		displaylist_texcoord(d, tex_x + 2, tex_y + 2);
+		displaylist_pos(d, bx + 112, by + 254, bz + 144);
+		displaylist_color(d,
+						  DIM_LIGHT(vertex_light[11], level_table_1, true,
+									luminance));
+		displaylist_texcoord(d, tex_x, tex_y + 2);
+
+		displaylist_pos(d, bx + 112, by + 2, bz + 112);
+		displaylist_color(d,
+						  DIM_LIGHT(vertex_light[8], level_table_1, true,
+									luminance));
+		displaylist_texcoord(d, tex_x, tex_y + 2);
+		displaylist_pos(d, bx + 112, by + 2, bz + 144);
+		displaylist_color(d,
+						  DIM_LIGHT(vertex_light[9], level_table_1, true,
+									luminance));
+		displaylist_texcoord(d, tex_x, tex_y);
+		displaylist_pos(d, bx + 144, by + 2, bz + 144);
+		displaylist_color(d,
+						  DIM_LIGHT(vertex_light[10], level_table_1, true,
+									luminance));
+		displaylist_texcoord(d, tex_x + 2, tex_y);
+		displaylist_pos(d, bx + 144, by + 2, bz + 112);
+		displaylist_color(d,
+						  DIM_LIGHT(vertex_light[11], level_table_1, true,
+									luminance));
+		displaylist_texcoord(d, tex_x + 2, tex_y + 2);
+	}
+	count += 2;
+	return count;
+}
+
+static size_t render_iron_bars_horizontal_cap(struct displaylist* d,
+											  struct block_info* this,
+											  uint8_t* vertex_light,
+											  bool count_only, int16_t x0,
+											  int16_t x1, int16_t z0,
+											  int16_t z1, int16_t y) {
+	uint8_t tex = blocks[this->block->type]->getTextureIndex(this, SIDE_TOP);
+	uint8_t tex_x = TEX_OFFSET(TEXTURE_X(tex)) + 2;
+	uint8_t tex_y = TEX_OFFSET(TEXTURE_Y(tex));
+	uint8_t luminance = blocks[this->block->type]->luminance;
+	int16_t bx = W2C_COORD(this->x) * BLK_LEN;
+	int16_t by = W2C_COORD(this->y) * BLK_LEN;
+	int16_t bz = W2C_COORD(this->z) * BLK_LEN;
+	int16_t width = x1 - x0;
+	int16_t depth = z1 - z0;
+	uint8_t tex_h = MIN_U8(16, MAX_U8(width, depth) / 16);
+
+	if(!count_only) {
+		if(width >= depth) {
+			displaylist_pos(d, bx + x0, by + y, bz + z0);
+			displaylist_color(d,
+							  DIM_LIGHT(vertex_light[8], level_table_1, true,
+										luminance));
+			displaylist_texcoord(d, tex_x, tex_y);
+			displaylist_pos(d, bx + x1, by + y, bz + z0);
+			displaylist_color(d,
+							  DIM_LIGHT(vertex_light[9], level_table_1, true,
+										luminance));
+			displaylist_texcoord(d, tex_x, tex_y + tex_h);
+			displaylist_pos(d, bx + x1, by + y, bz + z1);
+			displaylist_color(d,
+							  DIM_LIGHT(vertex_light[10], level_table_1, true,
+										luminance));
+			displaylist_texcoord(d, tex_x + 2, tex_y + tex_h);
+			displaylist_pos(d, bx + x0, by + y, bz + z1);
+			displaylist_color(d,
+							  DIM_LIGHT(vertex_light[11], level_table_1, true,
+										luminance));
+			displaylist_texcoord(d, tex_x + 2, tex_y);
+		} else {
+			displaylist_pos(d, bx + x0, by + y, bz + z0);
+			displaylist_color(d,
+							  DIM_LIGHT(vertex_light[8], level_table_1, true,
+										luminance));
+			displaylist_texcoord(d, tex_x, tex_y);
+			displaylist_pos(d, bx + x1, by + y, bz + z0);
+			displaylist_color(d,
+							  DIM_LIGHT(vertex_light[9], level_table_1, true,
+										luminance));
+			displaylist_texcoord(d, tex_x + 2, tex_y);
+			displaylist_pos(d, bx + x1, by + y, bz + z1);
+			displaylist_color(d,
+							  DIM_LIGHT(vertex_light[10], level_table_1, true,
+										luminance));
+			displaylist_texcoord(d, tex_x + 2, tex_y + tex_h);
+			displaylist_pos(d, bx + x0, by + y, bz + z1);
+			displaylist_color(d,
+							  DIM_LIGHT(vertex_light[11], level_table_1, true,
+										luminance));
+			displaylist_texcoord(d, tex_x, tex_y + tex_h);
+		}
+	}
+
+	return 1;
+}
+
+static size_t render_iron_bars_side_cap_x(struct displaylist* d,
+										  struct block_info* this,
+										  uint8_t* vertex_light, bool count_only,
+										  int16_t x0, int16_t z0, int16_t z1,
+										  enum side side) {
+	uint8_t tex = blocks[this->block->type]->getTextureIndex(this, side);
+	int16_t x1 = x0 + 2;
+
+	return render_cuboid_side_texrect(d, this, side, vertex_light, count_only,
+									  x0, 0, z0, x1, BLK_LEN, z1, tex, 0, 2, 0, 2,
+									  16);
+}
+
+static size_t render_iron_bars_side_cap_z(struct displaylist* d,
+										  struct block_info* this,
+										  uint8_t* vertex_light, bool count_only,
+										  int16_t x0, int16_t x1, int16_t z0,
+										  enum side side) {
+	uint8_t tex = blocks[this->block->type]->getTextureIndex(this, side);
+	int16_t z1 = z0 + 2;
+
+	return render_cuboid_side_texrect(d, this, side, vertex_light, count_only,
+									  x0, 0, z0, x1, BLK_LEN, z1, tex, 0, 2, 0, 2,
+									  16);
+}
+
+size_t render_block_iron_bars(struct displaylist* d, struct block_info* this,
+							  enum side side, struct block_info* it,
+							  uint8_t* vertex_light, bool count_only) {
+	(void)d;
+	(void)this;
+	(void)side;
+	(void)it;
+	(void)vertex_light;
+	(void)count_only;
+	return 0;
+}
+
+size_t render_block_iron_bars_always(struct displaylist* d,
+									 struct block_info* this, enum side side,
+									 struct block_info* it,
+									 uint8_t* vertex_light, bool count_only) {
+	(void)it;
+	bool connect_left;
+	bool connect_right;
+	bool connect_front;
+	bool connect_back;
+	bool bars_above;
+	bool bars_below;
+	int above_connections;
+	int below_connections;
+	bool x_axis_active;
+	bool z_axis_active;
+	bool corner;
+	bool straight_x;
+	bool straight_z;
+	bool end_x;
+	bool end_z;
+	int connection_count;
+	int16_t x0, x1, z0, z1;
+	int16_t cap_x0, cap_x1, cap_z0, cap_z1;
+	size_t count = 0;
+
+	if(side != SIDE_TOP)
+		return 0;
+
+	connect_left = render_iron_bars_connects_to(this, SIDE_LEFT);
+	connect_right = render_iron_bars_connects_to(this, SIDE_RIGHT);
+	connect_front = render_iron_bars_connects_to(this, SIDE_FRONT);
+	connect_back = render_iron_bars_connects_to(this, SIDE_BACK);
+	bars_above = render_iron_bars_same_type(this, SIDE_TOP);
+	bars_below = render_iron_bars_same_type(this, SIDE_BOTTOM);
+	above_connections = bars_above
+		? render_iron_bars_vertical_neighbour_connections(this, +1)
+		: 0;
+	below_connections = bars_below
+		? render_iron_bars_vertical_neighbour_connections(this, -1)
+		: 0;
+	bars_above = bars_above && above_connections >= 2;
+	bars_below = bars_below && below_connections >= 2;
+	connection_count = (connect_left ? 1 : 0) + (connect_right ? 1 : 0)
+		+ (connect_front ? 1 : 0) + (connect_back ? 1 : 0);
+	x_axis_active = connect_left || connect_right;
+	z_axis_active = connect_front || connect_back;
+	corner = x_axis_active && z_axis_active;
+	straight_x = connect_left && connect_right && !z_axis_active;
+	straight_z = connect_front && connect_back && !x_axis_active;
+	end_x = x_axis_active && !z_axis_active && connection_count == 1;
+	end_z = z_axis_active && !x_axis_active && connection_count == 1;
+	if(connection_count <= 1) {
+		bars_above = false;
+		bars_below = false;
+	}
+	render_iron_bars_extent_x(connect_left, connect_right, &x0, &x1);
+	render_iron_bars_extent_z(connect_front, connect_back, &z0, &z1);
+	cap_x0 = x0;
+	cap_x1 = x1;
+	cap_z0 = z0;
+	cap_z1 = z1;
+	if(end_x) {
+		if(connect_left && !connect_right) {
+			cap_x0 = 0;
+			cap_x1 = 146;
+		} else if(connect_right && !connect_left) {
+			cap_x0 = 111;
+			cap_x1 = BLK_LEN;
+		}
+	}
+	if(end_z) {
+		if(connect_front && !connect_back) {
+			cap_z0 = 0;
+			cap_z1 = 146;
+		} else if(connect_back && !connect_front) {
+			cap_z0 = 111;
+			cap_z1 = BLK_LEN;
+		}
+	}
+	if(corner && x_axis_active) {
+		if(connect_left && !connect_right)
+			cap_x1 -= 16;
+		else if(connect_right && !connect_left)
+			cap_x0 += 16;
+	}
+	if(corner && z_axis_active) {
+		if(connect_front && !connect_back)
+			cap_z1 += 16;
+		else if(connect_back && !connect_front)
+			cap_z0 -= 16;
+	}
+
+	if(connection_count == 0) {
+		count += render_iron_bars_arm_x(d, this, vertex_light, count_only, false);
+		count += render_iron_bars_arm_x(d, this, vertex_light, count_only, true);
+		count += render_iron_bars_arm_z(d, this, vertex_light, count_only, false);
+		count += render_iron_bars_arm_z(d, this, vertex_light, count_only, true);
+	} else if(connection_count == 1) {
+		if(connect_left || connect_right) {
+			count += render_iron_bars_arm_x(d, this, vertex_light, count_only,
+											false);
+			count += render_iron_bars_arm_x(d, this, vertex_light, count_only, true);
+		} else {
+			count += render_iron_bars_arm_z(d, this, vertex_light, count_only,
+											false);
+			count += render_iron_bars_arm_z(d, this, vertex_light, count_only, true);
+		}
+	} else {
+			if(straight_x || straight_z) {
+				/* Straight runs in Minecraft don't show the middle support bars. */
+			} else {
+			if(connect_left && connect_right) {
+				/* A continuous X run should not render extra X support bars. */
+			} else {
+			if(connect_left)
+				count += render_iron_bars_arm_x(d, this, vertex_light, count_only,
+												false);
+			if(connect_right)
+				count += render_iron_bars_arm_x(d, this, vertex_light, count_only, true);
+			}
+			if(connect_front)
+				count += render_iron_bars_arm_z(d, this, vertex_light, count_only,
+												false);
+			if(connect_back)
+				count += render_iron_bars_arm_z(d, this, vertex_light, count_only, true);
+			}
+		}
+
+	if(connect_left || connect_right) {
+		if(straight_x) {
+			count += render_iron_bars_plane_x(d, this, vertex_light, count_only, 0,
+											  BLK_LEN / 2, 8);
+			count += render_iron_bars_plane_x(d, this, vertex_light, count_only,
+											  BLK_LEN / 2, BLK_LEN, 0);
+		} else {
+		if(connect_left) {
+			/* Trim the center-most texel; the support arm already renders it. */
+			count += render_iron_bars_plane_x(d, this, vertex_light, count_only, 0,
+											  112, 8);
+		}
+		if(connect_right) {
+			count += render_iron_bars_plane_x(d, this, vertex_light, count_only,
+											  144, BLK_LEN, 1);
+		}
+		}
+	}
+
+	if(connect_front || connect_back) {
+		if(straight_z) {
+			count += render_iron_bars_plane_z(d, this, vertex_light, count_only, 0,
+											  BLK_LEN / 2, 8);
+			count += render_iron_bars_plane_z(d, this, vertex_light, count_only,
+											  BLK_LEN / 2, BLK_LEN, 0);
+		} else {
+		if(connect_front) {
+			count += render_iron_bars_plane_z(d, this, vertex_light, count_only, 0,
+											  112, 8);
+		}
+		if(connect_back) {
+			count += render_iron_bars_plane_z(d, this, vertex_light, count_only,
+											  144, BLK_LEN, 1);
+		}
+		}
+	}
+
+	if(connection_count == 0) {
+		if(!bars_above || !bars_below)
+			count += render_iron_bars_center_cap(d, this, vertex_light, count_only);
+		} else {
+			if(!bars_above) {
+				if(x_axis_active)
+					count += render_iron_bars_horizontal_cap(
+						d, this, vertex_light, count_only, cap_x0, cap_x1, 112, 144,
+						254);
+				if(z_axis_active)
+					count += render_iron_bars_horizontal_cap(
+						d, this, vertex_light, count_only, 112, 144, cap_z0, cap_z1,
+						254);
+			}
+			if(!bars_below) {
+				if(x_axis_active)
+					count += render_iron_bars_horizontal_cap(
+						d, this, vertex_light, count_only, cap_x0, cap_x1, 112, 144,
+						2);
+				if(z_axis_active)
+					count += render_iron_bars_horizontal_cap(
+						d, this, vertex_light, count_only, 112, 144, cap_z0, cap_z1,
+						2);
+			}
+		}
+
+		if(!corner) {
+			if(x_axis_active) {
+				if(!connect_left)
+					count += render_iron_bars_side_cap_x(
+						d, this, vertex_light, count_only, end_x ? 111 : x0 - 1, 112,
+						144,
+						SIDE_LEFT);
+				if(!connect_right)
+					count += render_iron_bars_side_cap_x(
+						d, this, vertex_light, count_only, end_x ? 144 : x1 - 1, 112,
+						144,
+						SIDE_RIGHT);
+			}
+			if(z_axis_active) {
+				if(!connect_front)
+					count += render_iron_bars_side_cap_z(
+						d, this, vertex_light, count_only, 112, 144,
+						end_z ? 111 : z0 - 1,
+						SIDE_FRONT);
+				if(!connect_back)
+					count += render_iron_bars_side_cap_z(
+						d, this, vertex_light, count_only, 112, 144,
+						end_z ? 144 : z1 - 1,
+						SIDE_BACK);
+			}
+		}
+
+	return count;
 }
 
 static void repeater_orient_box(uint8_t dir, int16_t* x0, int16_t* z0,
@@ -2348,6 +3278,129 @@ size_t render_block_crops(struct displaylist* d, struct block_info* this,
 			blocks[this->block->type]->luminance, false, 64, false, 0, side,
 			vertex_light);
 	return 1;
+}
+
+size_t render_block_melon_stem(struct displaylist* d, struct block_info* this,
+							   enum side side, struct block_info* it,
+							   uint8_t* vertex_light, bool count_only) {
+	const uint8_t tex = blocks[this->block->type]->getTextureIndex(this, side);
+	const uint8_t attached_tex = tex_atlas_lookup(TEXAT_MELON_STEM_ATTACHED);
+	const enum side attached_side =
+		this->block->metadata == 8 ? SIDE_LEFT :
+		this->block->metadata == 9 ? SIDE_RIGHT :
+		this->block->metadata == 10 ? SIDE_FRONT :
+		this->block->metadata == 11 ? SIDE_BACK :
+		SIDE_MAX;
+	const bool attached = attached_side != SIDE_MAX;
+	const int16_t height = attached ? 256 : (int16_t)((this->block->metadata + 1) * 32);
+	const int16_t stage4_height = 5 * 32;
+	const int16_t bx = W2C_COORD(this->x) * BLK_LEN;
+	const int16_t by = W2C_COORD(this->y) * BLK_LEN;
+	const int16_t bz = W2C_COORD(this->z) * BLK_LEN;
+	const bool render_unattached = !attached && (side == SIDE_LEFT || side == SIDE_FRONT);
+	const bool render_attached = attached && side == attached_side;
+	size_t count = render_unattached ? 1 : (render_attached ? 2 : 0);
+
+	if(side == SIDE_TOP || side == SIDE_BOTTOM)
+		return 0;
+
+	if(!count_only) {
+		if(render_unattached) {
+			switch(side) {
+				case SIDE_LEFT:
+					if(!attached) {
+						render_block_side_adv(
+							d, bx + 128, by, bz, BLK_LEN, height,
+							TEX_OFFSET(TEXTURE_X(tex)),
+							TEX_OFFSET(TEXTURE_Y(tex)),
+							false, 0,
+							false, side, vertex_light,
+							blocks[this->block->type]->luminance);
+					}
+					break;
+				case SIDE_FRONT:
+					render_block_side_adv(
+						d, bx, by, bz + 128, BLK_LEN, height,
+						TEX_OFFSET(TEXTURE_X(tex)),
+						TEX_OFFSET(TEXTURE_Y(tex)),
+						false, 0,
+						false, side, vertex_light,
+						blocks[this->block->type]->luminance);
+					break;
+				default: break;
+			}
+		} else if(render_attached) {
+			switch(attached_side) {
+				case SIDE_LEFT:
+					render_block_side_adv(
+						d, bx, by, bz + 128, BLK_LEN, height,
+						TEX_OFFSET(TEXTURE_X(attached_tex)),
+						TEX_OFFSET(TEXTURE_Y(attached_tex)),
+						false, 0,
+						false, SIDE_BACK, vertex_light,
+						blocks[this->block->type]->luminance);
+					render_block_side_adv(
+						d, bx + 128, by, bz, BLK_LEN, stage4_height,
+						TEX_OFFSET(TEXTURE_X(tex)),
+						TEX_OFFSET(TEXTURE_Y(tex)),
+						false, 0,
+						false, SIDE_LEFT, vertex_light,
+						blocks[this->block->type]->luminance);
+					break;
+				case SIDE_RIGHT:
+					render_block_side_adv(
+						d, bx, by, bz + 128, BLK_LEN, height,
+						TEX_OFFSET(TEXTURE_X(attached_tex)),
+						TEX_OFFSET(TEXTURE_Y(attached_tex)),
+						false, 0,
+						false, SIDE_FRONT, vertex_light,
+						blocks[this->block->type]->luminance);
+					render_block_side_adv(
+						d, bx + 128, by, bz, BLK_LEN, stage4_height,
+						TEX_OFFSET(TEXTURE_X(tex)),
+						TEX_OFFSET(TEXTURE_Y(tex)),
+						false, 0,
+						false, SIDE_RIGHT, vertex_light,
+						blocks[this->block->type]->luminance);
+					break;
+				case SIDE_FRONT:
+					render_block_side_adv(
+						d, bx + 128, by, bz, BLK_LEN, height,
+						TEX_OFFSET(TEXTURE_X(attached_tex)),
+						TEX_OFFSET(TEXTURE_Y(attached_tex)),
+						false, 0,
+						false, SIDE_LEFT, vertex_light,
+						blocks[this->block->type]->luminance);
+					render_block_side_adv(
+						d, bx, by, bz + 128, BLK_LEN, stage4_height,
+						TEX_OFFSET(TEXTURE_X(tex)),
+						TEX_OFFSET(TEXTURE_Y(tex)),
+						false, 0,
+						false, SIDE_FRONT, vertex_light,
+						blocks[this->block->type]->luminance);
+					break;
+				case SIDE_BACK:
+					render_block_side_adv(
+						d, bx + 128, by, bz, BLK_LEN, height,
+						TEX_OFFSET(TEXTURE_X(attached_tex)),
+						TEX_OFFSET(TEXTURE_Y(attached_tex)),
+						false, 0,
+						false, SIDE_RIGHT, vertex_light,
+						blocks[this->block->type]->luminance);
+					render_block_side_adv(
+						d, bx, by, bz + 128, BLK_LEN, stage4_height,
+						TEX_OFFSET(TEXTURE_X(tex)),
+						TEX_OFFSET(TEXTURE_Y(tex)),
+						false, 0,
+						false, SIDE_BACK, vertex_light,
+						blocks[this->block->type]->luminance);
+					break;
+				default: break;
+			}
+		}
+	}
+
+	return count;
 }
 
 size_t render_block_cake(struct displaylist* d, struct block_info* this,

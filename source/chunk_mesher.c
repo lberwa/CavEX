@@ -539,10 +539,12 @@ void chunk_mesher_init() {
 	thread_create(&t, chunk_mesher_local_thread, NULL, 4);
 }
 
-void chunk_mesher_receive() {
+void chunk_mesher_receive_limit(size_t max_results) {
 	struct chunk_mesher_rpc* result;
+	size_t received = 0;
 
-	while(tchannel_receive(&mesher_results, (void**)&result, false)) {
+	while(received < max_results
+		  && tchannel_receive(&mesher_results, (void**)&result, false)) {
 		for(int k = 0; k < 13; k++) {
 			if(result->chunk->has_displist[k])
 				displaylist_destroy(result->chunk->mesh + k);
@@ -557,7 +559,12 @@ void chunk_mesher_receive() {
 		chunk_unref(result->chunk);
 
 		tchannel_send(&mesher_empty_msg, result, true);
+		received++;
 	}
+}
+
+void chunk_mesher_receive() {
+	chunk_mesher_receive_limit((size_t)-1);
 }
 
 bool chunk_mesher_send(struct chunk* c) {

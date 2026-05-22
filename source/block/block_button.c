@@ -67,6 +67,7 @@ static bool button_support_pos(struct block_info* this, w_coord_t* sx,
 		case 3: (*sz)--; return true;
 		case 4: (*sz)++; return true;
 		case 5: (*sy)--; return true;
+		case 6: (*sy)++; return true;
 		default: return false;
 	}
 }
@@ -106,6 +107,10 @@ static size_t getBoundingBox(struct block_info* this, bool entity,
 				aabb_setsize_centered_offset(x, half_w * 2.0F, half_h * 2.0F, depth,
 											 0.5F, 0.5F, 1.0F - depth * 0.5F);
 				break;
+			case 5:
+				aabb_setsize_centered_offset(x, half_w * 2.0F, depth, half_w * 2.0F,
+											 0.5F, depth * 0.5F, 0.5F);
+				break;
 			default:
 				aabb_setsize_centered_offset(x, half_w * 2.0F, depth, half_w * 2.0F,
 											 0.5F, 1.0F - depth * 0.5F, 0.5F);
@@ -137,8 +142,7 @@ static bool onItemPlace(struct server_local* s, struct item_data* it,
 	struct block_data blk;
 	struct block_info blk_info = *where;
 
-	if(on_side == SIDE_BOTTOM || !blocks[on->block->type]
-	   || blocks[on->block->type]->can_see_through)
+	if(!blocks[on->block->type] || blocks[on->block->type]->can_see_through)
 		return false;
 
 	switch(on_side) {
@@ -147,6 +151,7 @@ static bool onItemPlace(struct server_local* s, struct item_data* it,
 		case SIDE_BACK: facing = 3; break;
 		case SIDE_FRONT: facing = 4; break;
 		case SIDE_TOP: facing = 5; break;
+		case SIDE_BOTTOM: facing = 6; break;
 		default: return false;
 	}
 

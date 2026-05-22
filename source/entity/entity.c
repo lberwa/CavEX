@@ -193,14 +193,24 @@ bool entity_intersection(struct entity* e, struct AABB* a,
 			for(w_coord_t y = min_y; y < max_y; y++) {
 				struct block_data blk;
 
-				if(entity_get_block(e, x, y, z, &blk) && blocks[blk.type]
-				   && test(a,
-						   &(struct block_info) {.block = &blk,
-												 .neighbours = NULL,
-												 .x = x,
-												 .y = y,
-												 .z = z}))
+				if(entity_get_block(e, x, y, z, &blk) && blocks[blk.type]) {
+					struct block_data neighbours[SIDE_MAX];
+
+					for(int k = 0; k < SIDE_MAX; k++) {
+						int ox, oy, oz;
+						blocks_side_offset((enum side)k, &ox, &oy, &oz);
+						entity_get_block(e, x + ox, y + oy, z + oz,
+										 neighbours + k);
+					}
+
+					if(test(a,
+							&(struct block_info) {.block = &blk,
+												  .neighbours = neighbours,
+												  .x = x,
+												  .y = y,
+												  .z = z}))
 					return true;
+				}
 			}
 		}
 	}

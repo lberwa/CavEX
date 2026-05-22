@@ -13,13 +13,13 @@ stone_button         ✅
 unpowered_repeater   ✅
 powered_repeater     ✅
 stonebrick           ✅
-brown_mushroom_block
-red_mushroom_block
-iron_bars
-glass_pane
-melon_block
-pumpkin_stem
-melon_stem
+brown_mushroom_block ✅
+red_mushroom_block   ✅
+iron_bars            ✅
+glass_pane           
+melon_block          ✅
+pumpkin_stem         
+melon_stem           ✅
 vine
 fence_gate
 brick_stairs

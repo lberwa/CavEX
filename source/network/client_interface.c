@@ -29,11 +29,40 @@
 #include "server_local.h"
 
 #define RPC_INBOX_SIZE 16
+#define CLIN_CHUNK_BLOCK_BUDGET_SPLITSCREEN 2048
+#define CLIN_CHUNK_BLOCK_BUDGET_SINGLEPLAYER 4096
+#define CLIN_CHUNK_BLOCK_BUDGET_LOADSCREEN 131072
 static struct client_rpc rpc_msg[RPC_INBOX_SIZE];
 static struct thread_channel clin_inbox;
 static struct thread_channel clin_empty_msg;
 
 static ptime_t last_pos_update;
+#ifdef SPLITSCREEN
+struct clin_pending_chunk {
+	w_coord_t x, y, z;
+	w_coord_t sx, sy, sz;
+	uint8_t* ids;
+	uint8_t* metadata;
+	uint8_t* lighting_sky;
+	uint8_t* lighting_torch;
+	size_t progress;
+	struct clin_pending_chunk* next;
+};
+#else
+struct clin_pending_chunk {
+	w_coord_t x, y, z;
+	w_coord_t sx, sy, sz;
+	uint8_t* ids;
+	uint8_t* metadata;
+	uint8_t* lighting_sky;
+	uint8_t* lighting_torch;
+	size_t progress;
+	struct clin_pending_chunk* next;
+};
+#endif
+static struct clin_pending_chunk* clin_pending_chunk_head;
+static struct clin_pending_chunk* clin_pending_chunk_tail;
+static size_t clin_pending_chunk_len;
 #ifdef SPLITSCREEN
 static bool splitscreen_p2_spawned = false;
 #endif
@@ -108,6 +137,132 @@ void clin_chunk(w_coord_t x, w_coord_t y, w_coord_t z, w_coord_t sx,
 	free(metadata);
 	free(lighting_sky);
 	free(lighting_torch);
+}
+
+static void clin_pending_chunk_reset(struct clin_pending_chunk* chunk) {
+	if(!chunk)
+		return;
+	chunk->x = chunk->y = chunk->z = 0;
+	chunk->sx = chunk->sy = chunk->sz = 0;
+	chunk->ids = NULL;
+	chunk->metadata = NULL;
+	chunk->lighting_sky = NULL;
+	chunk->lighting_torch = NULL;
+	chunk->progress = 0;
+	chunk->next = NULL;
+}
+
+static void clin_pending_chunk_free(struct clin_pending_chunk* chunk) {
+	if(!chunk)
+		return;
+	free(chunk->ids);
+	free(chunk->metadata);
+	free(chunk->lighting_sky);
+	free(chunk->lighting_torch);
+	free(chunk);
+}
+
+static bool clin_pending_chunk_push(const struct client_rpc* call) {
+	if(!call)
+		return false;
+
+	struct clin_pending_chunk* chunk = malloc(sizeof(*chunk));
+	if(!chunk)
+		return false;
+
+	clin_pending_chunk_reset(chunk);
+	chunk->x = call->payload.chunk.x;
+	chunk->y = call->payload.chunk.y;
+	chunk->z = call->payload.chunk.z;
+	chunk->sx = call->payload.chunk.sx;
+	chunk->sy = call->payload.chunk.sy;
+	chunk->sz = call->payload.chunk.sz;
+	chunk->ids = call->payload.chunk.ids;
+	chunk->metadata = call->payload.chunk.metadata;
+	chunk->lighting_sky = call->payload.chunk.lighting_sky;
+	chunk->lighting_torch = call->payload.chunk.lighting_torch;
+	chunk->progress = 0;
+	chunk->next = NULL;
+
+	if(clin_pending_chunk_tail)
+		clin_pending_chunk_tail->next = chunk;
+	else
+		clin_pending_chunk_head = chunk;
+	clin_pending_chunk_tail = chunk;
+	clin_pending_chunk_len++;
+	return true;
+}
+
+static struct clin_pending_chunk* clin_pending_chunk_peek(void) {
+	return clin_pending_chunk_head;
+}
+
+static void clin_pending_chunk_pop(void) {
+	if(!clin_pending_chunk_head)
+		return;
+
+	struct clin_pending_chunk* chunk = clin_pending_chunk_head;
+	clin_pending_chunk_head = chunk->next;
+	if(!clin_pending_chunk_head)
+		clin_pending_chunk_tail = NULL;
+	clin_pending_chunk_len--;
+	clin_pending_chunk_free(chunk);
+}
+
+static void clin_pending_chunk_clear(void) {
+	while(clin_pending_chunk_len > 0)
+		clin_pending_chunk_pop();
+}
+
+static bool clin_pending_chunk_import_step(struct clin_pending_chunk* chunk,
+										   size_t budget_blocks) {
+	assert(chunk);
+	assert(chunk->sx > 0 && chunk->sz > 0 && chunk->y >= 0
+		   && chunk->y + chunk->sy <= WORLD_HEIGHT);
+	assert(chunk->ids && chunk->metadata && chunk->lighting_sky
+		   && chunk->lighting_torch);
+
+	size_t total_blocks
+		= (size_t)chunk->sx * (size_t)chunk->sy * (size_t)chunk->sz;
+	size_t end = chunk->progress + budget_blocks;
+	if(end > total_blocks)
+		end = total_blocks;
+
+	for(size_t idx = chunk->progress; idx < end; idx++) {
+		size_t local = idx;
+		w_coord_t lx = (w_coord_t)(
+			local / ((size_t)chunk->sz * (size_t)chunk->sy));
+		local %= (size_t)chunk->sz * (size_t)chunk->sy;
+		w_coord_t lz = (w_coord_t)(local / (size_t)chunk->sy);
+		w_coord_t ly = (w_coord_t)(local % (size_t)chunk->sy);
+
+		uint8_t md = (chunk->metadata[idx / 2] >> ((idx & 1u) * 4)) & 0xF;
+		uint8_t sky
+			= (chunk->lighting_sky[idx / 2] >> ((idx & 1u) * 4)) & 0xF;
+		uint8_t torch
+			= (chunk->lighting_torch[idx / 2] >> ((idx & 1u) * 4)) & 0xF;
+
+		world_set_block(&gstate.world, chunk->x + lx, chunk->y + ly,
+						chunk->z + lz,
+						(struct block_data) {
+							.type = chunk->ids[idx],
+							.metadata = md,
+							.sky_light = sky,
+							.torch_light = torch,
+						},
+						false);
+	}
+
+	chunk->progress = end;
+	return end >= total_blocks;
+}
+
+static size_t clin_chunk_block_budget(void) {
+	if(gstate.current_screen == &screen_load_world)
+		return CLIN_CHUNK_BLOCK_BUDGET_LOADSCREEN;
+
+	return splitscreen_enabled() ? CLIN_CHUNK_BLOCK_BUDGET_SPLITSCREEN :
+								   CLIN_CHUNK_BLOCK_BUDGET_SINGLEPLAYER;
 }
 
 void clin_process(struct client_rpc* call) {
@@ -199,6 +354,7 @@ void clin_process(struct client_rpc* call) {
 		}
 			break;
 		case CRPC_WORLD_RESET:
+			clin_pending_chunk_clear();
 			world_unload_all(&gstate.world);
 
 		{
@@ -477,6 +633,9 @@ void clin_init() {
 		tchannel_send(&clin_empty_msg, rpc_msg + k, true);
 
 	last_pos_update = time_get();
+	clin_pending_chunk_head = NULL;
+	clin_pending_chunk_tail = NULL;
+	clin_pending_chunk_len = 0;
 #ifdef SPLITSCREEN
 	splitscreen_p2_spawned = false;
 #endif
@@ -485,8 +644,35 @@ void clin_init() {
 void clin_update() {
 	void* call;
 	while(tchannel_receive(&clin_inbox, &call, false)) {
-		clin_process(call);
-		tchannel_send(&clin_empty_msg, call, true);
+		struct client_rpc* rpc = call;
+		if(rpc->type == CRPC_CHUNK && clin_pending_chunk_push(rpc)) {
+			rpc->payload.chunk.ids = NULL;
+			rpc->payload.chunk.metadata = NULL;
+			rpc->payload.chunk.lighting_sky = NULL;
+			rpc->payload.chunk.lighting_torch = NULL;
+			tchannel_send(&clin_empty_msg, rpc, true);
+			continue;
+		}
+
+		clin_process(rpc);
+		tchannel_send(&clin_empty_msg, rpc, true);
+	}
+
+	size_t block_budget = clin_chunk_block_budget();
+	while(block_budget > 0) {
+		struct clin_pending_chunk* pending = clin_pending_chunk_peek();
+		if(!pending)
+			break;
+
+		size_t before = pending->progress;
+		bool done = clin_pending_chunk_import_step(pending, block_budget);
+		size_t consumed = pending->progress - before;
+		if(consumed == 0)
+			break;
+		block_budget = (consumed >= block_budget) ? 0 : block_budget - consumed;
+
+		if(done)
+			clin_pending_chunk_pop();
 	}
 
 	if(gstate.world_loaded && time_diff_ms(last_pos_update, time_get()) >= 50) {
@@ -535,4 +721,8 @@ void clin_rpc_send(struct client_rpc* call) {
 	tchannel_receive(&clin_empty_msg, (void**)&empty, true);
 	*empty = *call;
 	tchannel_send(&clin_inbox, empty, true);
+}
+
+size_t clin_pending_chunk_count(void) {
+	return clin_pending_chunk_len;
 }

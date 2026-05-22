@@ -49,8 +49,8 @@ CFLAGS += -DPLATFORM_WII
 CPPFLAGS += -DPLATFORM_WII
 
 CXXFLAGS	+=	$(CFLAGS)
-CPPFLAGS	+=	-O3 -DSPLITSCREEN=2 -g
-CFLAGS		+=	-O3 -g -std=c99 -pedantic -Wextra -Wno-unused-parameter -flto=auto -Wall \
+CPPFLAGS	+=	-Ofast -DSPLITSCREEN=2 -g
+CFLAGS		+=	-Ofast -g -std=c99 -pedantic -Wextra -Wno-unused-parameter -flto=auto -Wall \
 				-DSPLITSCREEN=2 -DNDEBUG -DPLATFORM_WII \
 				$(MACHDEP) $(INCLUDE)
 

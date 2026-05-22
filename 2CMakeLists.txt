@@ -24,6 +24,7 @@ add_executable(cavex
 				source/block/block_button.c
 				source/block/block_bricks.c
 				source/block/block_brown_mushroom.c
+				source/block/block_brown_mushroom_block.c
 				source/block/block_cactus.c
 				source/block/block_cake.c
 				source/block/block_cast_block.c
@@ -44,10 +45,12 @@ add_executable(cavex
 				source/block/block_flower.c
 				source/block/block_furnace.c
 				source/block/block_glass.c
+				source/block/block_glass_pane.c
 				source/block/block_glowstone.c
 				source/block/block_grass.c
 				source/block/block_gravel.c
 				source/block/block_ice.c
+				source/block/block_iron_bars.c
 				source/block/block_iron_chest.c
 				source/block/block_jukebox.c
 				source/block/block_ladder.c
@@ -55,6 +58,8 @@ add_executable(cavex
 				source/block/block_leaves.c
 				source/block/block_lever.c
 				source/block/block_log.c
+				source/block/block_melon.c
+				source/block/block_melon_stem.c
 				source/block/block_minecart.c
 				source/block/block_netherrack.c
 				source/block/block_noteblock.c
@@ -67,6 +72,7 @@ add_executable(cavex
 				source/block/block_pumpkin.c
 				source/block/block_rail.c
 				source/block/block_red_mushroom.c
+				source/block/block_red_mushroom_block.c
 				source/block/block_redstone_wire.c
 				source/block/block_repeater.c
 				source/block/block_reed.c
@@ -145,6 +151,8 @@ add_executable(cavex
 				source/item/items/item_egg_pig.c
 				source/item/items/item_egg_sheep.c
 				source/item/items/item_flint_steel.c
+				source/item/items/item_melon.c
+				source/item/items/item_melon_seeds.c
 				source/item/items/item_seeds.c
 				source/item/items/item_bed.c
 				source/item/items/item_bucket_lava.c

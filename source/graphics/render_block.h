@@ -61,6 +61,32 @@ size_t render_block_fence_always(struct displaylist* d, struct block_info* this,
 								 enum side side, struct block_info* it,
 								 uint8_t* vertex_light, bool count_only);
 
+size_t render_block_pane(struct displaylist* d, struct block_info* this,
+						 enum side side, struct block_info* it,
+						 uint8_t* vertex_light, bool count_only);
+
+size_t render_block_pane_always(struct displaylist* d, struct block_info* this,
+								enum side side, struct block_info* it,
+								uint8_t* vertex_light, bool count_only);
+
+size_t render_block_glass_pane(struct displaylist* d, struct block_info* this,
+							   enum side side, struct block_info* it,
+							   uint8_t* vertex_light, bool count_only);
+
+size_t render_block_glass_pane_always(struct displaylist* d,
+									  struct block_info* this, enum side side,
+									  struct block_info* it,
+									  uint8_t* vertex_light, bool count_only);
+
+size_t render_block_iron_bars(struct displaylist* d, struct block_info* this,
+							  enum side side, struct block_info* it,
+							  uint8_t* vertex_light, bool count_only);
+
+size_t render_block_iron_bars_always(struct displaylist* d,
+									 struct block_info* this, enum side side,
+									 struct block_info* it,
+									 uint8_t* vertex_light, bool count_only);
+
 size_t render_block_stairs(struct displaylist* d, struct block_info* this,
 						   enum side side, struct block_info* it,
 						   uint8_t* vertex_light, bool count_only);
@@ -113,6 +139,10 @@ size_t render_block_farmland(struct displaylist* d, struct block_info* this,
 size_t render_block_crops(struct displaylist* d, struct block_info* this,
 						  enum side side, struct block_info* it,
 						  uint8_t* vertex_light, bool count_only);
+
+size_t render_block_melon_stem(struct displaylist* d, struct block_info* this,
+							   enum side side, struct block_info* it,
+							   uint8_t* vertex_light, bool count_only);
 
 size_t render_block_torch(struct displaylist* d, struct block_info* this,
 						  enum side side, struct block_info* it,
