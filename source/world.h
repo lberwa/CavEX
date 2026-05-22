@@ -60,6 +60,7 @@ struct world {
 	ilist_chunks_t render;
 	ilist_chunks2_t gpu_busy_chunks;
 	ptime_t anim_timer;
+	uint32_t visit_token;
 	struct stack lighting_updates;
 	enum world_dim dimension;
 };
@@ -82,6 +83,12 @@ struct block_data world_get_block(struct world* w, w_coord_t x, w_coord_t y,
 								  w_coord_t z);
 void world_set_block(struct world* w, w_coord_t x, w_coord_t y, w_coord_t z,
 					 struct block_data blk, bool light_update);
+bool world_import_chunk_column(struct world* w, w_coord_t x, w_coord_t y,
+							   w_coord_t z, w_coord_t sx, w_coord_t sy,
+							   w_coord_t sz, const uint8_t* ids,
+							   const uint8_t* metadata,
+							   const uint8_t* lighting_sky,
+							   const uint8_t* lighting_torch);
 void world_update_lighting(struct world* w);
 void world_preload(struct world* w,
 				   void (*progress)(struct world* w, float percent));

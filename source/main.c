@@ -140,108 +140,7 @@ static void splitscreen_viewport_rect(int player_index, int player_count,
 	*out_h = vp_h;
 	*out_y = (player_count - 1 - player_index) * vp_h;
 }
-
-static void update_runtime_performance_profile(void) {
-	gstate.config.render_distance = 192.0F;
-	gstate.config.fog_distance = 5 * 16.0F;
-
-	int player_count = splitscreen_player_count();
-	if(player_count >= 4) {
-		gstate.config.render_distance = 96.0F;
-		gstate.config.fog_distance = 3 * 16.0F;
-	} else if(player_count == 3) {
-		gstate.config.render_distance = 112.0F;
-		gstate.config.fog_distance = 4 * 16.0F;
-	} else if(player_count == 2) {
-		gstate.config.render_distance = 128.0F;
-		gstate.config.fog_distance = 4 * 16.0F;
-	}
-}
-
-static size_t runtime_chunk_build_budget(void) {
-	int player_count = splitscreen_player_count();
-	if(player_count >= 4)
-		return 1;
-	if(player_count >= 2)
-		return 2;
-	return CHUNK_MESHER_QLENGTH;
-}
-
-static size_t runtime_chunk_receive_budget(void) {
-	int player_count = splitscreen_player_count();
-	if(player_count >= 4)
-		return 1;
-	if(player_count >= 2)
-		return 2;
-	return (size_t)-1;
-}
-
-static bool runtime_render_clouds(void) {
-	return !splitscreen_enabled();
-}
-#else
-static void update_runtime_performance_profile(void) {
-	gstate.config.render_distance = 192.0F;
-	gstate.config.fog_distance = 5 * 16.0F;
-}
-
-static size_t runtime_chunk_build_budget(void) {
-	return CHUNK_MESHER_QLENGTH;
-}
-
-static size_t runtime_chunk_receive_budget(void) {
-	return (size_t)-1;
-}
-
-static bool runtime_render_clouds(void) {
-	return true;
-}
 #endif
-
-static void profile_spike_store(float frame_ms, float clin_ms, float world_ms,
-								float build_ms, float flip_ms,
-								float mesher_ms, float render_ms,
-								float finish_ms) {
-	float max_ms = clin_ms;
-	const char* max_label = "clin";
-
-	if(world_ms > max_ms) {
-		max_ms = world_ms;
-		max_label = "world";
-	}
-	if(build_ms > max_ms) {
-		max_ms = build_ms;
-		max_label = "build";
-	}
-	if(flip_ms > max_ms) {
-		max_ms = flip_ms;
-		max_label = "flip";
-	}
-	if(mesher_ms > max_ms) {
-		max_ms = mesher_ms;
-		max_label = "mesher";
-	}
-	if(render_ms > max_ms) {
-		max_ms = render_ms;
-		max_label = "render";
-	}
-	if(finish_ms > max_ms) {
-		max_ms = finish_ms;
-		max_label = "finish";
-	}
-
-	gstate.stats.spike_frame_ms = frame_ms;
-	gstate.stats.spike_clin_ms = clin_ms;
-	gstate.stats.spike_world_ms = world_ms;
-	gstate.stats.spike_build_ms = build_ms;
-	gstate.stats.spike_flip_ms = flip_ms;
-	gstate.stats.spike_mesher_ms = mesher_ms;
-	gstate.stats.spike_render_ms = render_ms;
-	gstate.stats.spike_finish_ms = finish_ms;
-	gstate.stats.spike_max_ms = max_ms;
-	gstate.stats.spike_max_label = max_label;
-	gstate.stats.spike_age = 45;
-}
 
 #ifdef PLATFORM_PC // find out which path it is
 #include <stdio.h>
@@ -461,14 +360,6 @@ int main(void) {
 		gstate.stats.dt = time_diff_s(last_frame, this_frame);
 		gstate.stats.fps = 1.0F / gstate.stats.dt;
 		last_frame = this_frame;
-		ptime_t prof_frame_start = this_frame;
-		float prof_clin_ms = 0.0F;
-		float prof_world_ms = 0.0F;
-		float prof_build_ms = 0.0F;
-		float prof_flip_ms = 0.0F;
-		float prof_mesher_ms = 0.0F;
-		float prof_render_ms = 0.0F;
-		float prof_finish_ms = 0.0F;
 
 		if(!gstate.paused) daytime
 			= (float)((gstate.world_time
@@ -477,9 +368,7 @@ int main(void) {
 						% DAY_LENGTH_TICKS)
 			/ (float)DAY_LENGTH_TICKS;
 
-			ptime_t prof_clin_start = time_get();
 			clin_update();
-			prof_clin_ms = (float)time_diff_ms(prof_clin_start, time_get());
 
 #ifdef TEST_MULTIPLAYER_INPUT
 #ifdef PLATFORM_PC
@@ -517,8 +406,6 @@ int main(void) {
 
 		render_world
 			= gstate.current_screen->render_world && gstate.world_loaded;
-		update_runtime_performance_profile();
-		ptime_t prof_world_start = time_get();
 
 #ifdef SPLITSCREEN
 		if(splitscreen_enabled() && render_world) {
@@ -686,34 +573,25 @@ int main(void) {
 #ifdef SPLITSCREEN
 		}
 #endif
-		prof_world_ms = (float)time_diff_ms(prof_world_start, time_get());
 
-		ptime_t prof_build_start = time_get();
 		world_update_lighting(&gstate.world);
-		world_build_chunks(&gstate.world, runtime_chunk_build_budget());
+		world_build_chunks(&gstate.world, CHUNK_MESHER_QLENGTH);
 
 		if(gstate.current_screen->update)
 			gstate.current_screen->update(gstate.current_screen,
 											gstate.stats.dt);
-		prof_build_ms = (float)time_diff_ms(prof_build_start, time_get());
 
 		render_world
 			= gstate.current_screen->render_world && gstate.world_loaded;
 
-		ptime_t prof_flip_start = time_get();
 		gfx_flip_buffers(&gstate.stats.dt_gpu, &gstate.stats.dt_vsync);
-		prof_flip_ms = (float)time_diff_ms(prof_flip_start, time_get());
 
 		bool rendered_2d = false;
 		if(!gstate.paused) {
-			ptime_t prof_mesher_start = time_get();
 			// must not modify displaylists while still rendering!
-			chunk_mesher_receive_limit(runtime_chunk_receive_budget());
+			chunk_mesher_receive();
 			world_render_completed(&gstate.world, render_world);
-			prof_mesher_ms
-				= (float)time_diff_ms(prof_mesher_start, time_get());
 
-			ptime_t prof_render_start = time_get();
 			vec3 top_plane_color, bottom_plane_color, atmosphere_color;
 			daytime_sky_colors(daytime, top_plane_color, bottom_plane_color,
 								 atmosphere_color);
@@ -761,8 +639,7 @@ int main(void) {
 						gfx_update_light(daytime_brightness(daytime),
 										 world_dimension_light(&gstate.world));
 
-						if(runtime_render_clouds()
-						   && gstate.world.dimension == WORLD_DIM_OVERWORLD)
+						if(gstate.world.dimension == WORLD_DIM_OVERWORLD)
 							gutil_sky_box(gstate.camera.view,
 											daytime_celestial_angle(daytime),
 											top_plane_color, bottom_plane_color);
@@ -799,8 +676,7 @@ int main(void) {
 						#endif
 
 						#ifdef GFX_CLOUDS
-						if(runtime_render_clouds()
-						   && gstate.world.dimension == WORLD_DIM_OVERWORLD)
+						if(gstate.world.dimension == WORLD_DIM_OVERWORLD)
 							gutil_clouds(gstate.camera.view,
 							daytime_brightness(daytime));
 						#endif
@@ -850,8 +726,7 @@ int main(void) {
 					gfx_update_light(daytime_brightness(daytime),
 									 world_dimension_light(&gstate.world));
 
-					if(runtime_render_clouds()
-					   && gstate.world.dimension == WORLD_DIM_OVERWORLD)
+					if(gstate.world.dimension == WORLD_DIM_OVERWORLD)
 						gutil_sky_box(gstate.camera.view,
 										daytime_celestial_angle(daytime),
 										top_plane_color, bottom_plane_color);
@@ -887,8 +762,7 @@ int main(void) {
 					#endif
 
 					#ifdef GFX_CLOUDS
-					if(runtime_render_clouds()
-					   && gstate.world.dimension == WORLD_DIM_OVERWORLD)
+					if(gstate.world.dimension == WORLD_DIM_OVERWORLD)
 						gutil_clouds(gstate.camera.view,
 						daytime_brightness(daytime));
 					#endif
@@ -909,7 +783,6 @@ int main(void) {
 			gfx_viewport_reset();
 			gfx_scissor(false, 0, 0, 0, 0);
 #endif // SPLITSCREEN
-			prof_render_ms = (float)time_diff_ms(prof_render_start, time_get());
 		}
 
 		if(!rendered_2d) {
@@ -947,20 +820,9 @@ int main(void) {
 			}
 		}
 
-		ptime_t prof_finish_start = time_get();
 		sound_update();
 		input_poll();
 		gfx_finish(true);
-		prof_finish_ms = (float)time_diff_ms(prof_finish_start, time_get());
-		if(gstate.stats.spike_age > 0)
-			gstate.stats.spike_age--;
-		float prof_frame_ms
-			= (float)time_diff_ms(prof_frame_start, time_get());
-		if(prof_frame_ms >= 25.0F) {
-			profile_spike_store(prof_frame_ms, prof_clin_ms, prof_world_ms,
-								prof_build_ms, prof_flip_ms, prof_mesher_ms,
-								prof_render_ms, prof_finish_ms);
-		}
 
 //--------------------------------------------------------------------
 	#ifdef DEBUGSEND

@@ -50,8 +50,13 @@ void chunk_init(struct chunk* c, struct world* world, w_coord_t x, w_coord_t y,
 	for(int k = 0; k < 13; k++)
 		c->has_displist[k] = false;
 	c->rebuild_displist = false;
+	c->has_spawner = false;
 	c->world = world;
 	c->reference_count = 0;
+	c->tmp_data.visit_stamp = 0;
+	c->tmp_data.from = SIDE_MAX;
+	c->tmp_data.used_exit_sides = 0;
+	c->tmp_data.steps = 0;
 
 	ilist_chunks_init_field(c);
 	ilist_chunks2_init_field(c);
@@ -168,6 +173,16 @@ void chunk_set_block(struct chunk* c, c_coord_t x, c_coord_t y, c_coord_t z,
 					 struct block_data blk) {
 	assert(c && x < CHUNK_SIZE && y < CHUNK_SIZE && z < CHUNK_SIZE);
 
+	chunk_set_block_raw(c, x, y, z, blk);
+	c->rebuild_displist = true;
+
+	chunk_trigger_neighbour_update(c, x, y, z);
+}
+
+void chunk_set_block_raw(struct chunk* c, c_coord_t x, c_coord_t y,
+						 c_coord_t z, struct block_data blk) {
+	assert(c && x < CHUNK_SIZE && y < CHUNK_SIZE && z < CHUNK_SIZE);
+
 	size_t idx = CHUNK_INDEX(x, y, z) / 2 * 5;
 	size_t off = CHUNK_INDEX(x, y, z) % 2;
 
@@ -175,9 +190,8 @@ void chunk_set_block(struct chunk* c, c_coord_t x, c_coord_t y, c_coord_t z,
 	c->blocks[idx + off + 2] = (blk.torch_light << 4) | blk.sky_light;
 	c->blocks[idx + 4] = (c->blocks[idx + 4] & ~(0x0F << (off * 4)))
 		| (blk.metadata << (off * 4));
-	c->rebuild_displist = true;
-
-	chunk_trigger_neighbour_update(c, x, y, z);
+	if(blk.type == BLOCK_SPAWNER)
+		c->has_spawner = true;
 }
 
 bool chunk_check_built(struct chunk* c) {

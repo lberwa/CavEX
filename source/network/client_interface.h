@@ -141,6 +141,5 @@ struct client_rpc {
 void clin_init(void);
 void clin_update(void);
 void clin_rpc_send(struct client_rpc* call);
-size_t clin_pending_chunk_count(void);
 
 #endif
