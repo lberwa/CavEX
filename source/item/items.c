@@ -145,6 +145,8 @@ void items_init() {
 	items[357] = &item_cookie;
 	// map
 	items[359] = &item_shears;
+	items[360] = &item_melon;
+	items[362] = &item_melon_seeds;
 
 	items[423] = &item_egg_creeper;
 	items[424] = &item_egg_pig;

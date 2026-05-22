@@ -279,6 +279,7 @@ void* tex_atlas_block(const char* filename, size_t* width, size_t* height) {
 	tex_atlas_reg(atlas, TEXAT_DOOR_IRON_TOP, 2, 5);
 	tex_atlas_reg(atlas, TEXAT_LADDER, 3, 5);
 	tex_atlas_reg(atlas, TEXAT_TRAPDOOR, 4, 5);
+	tex_atlas_reg(atlas, TEXAT_IRON_BARS, 5, 5);
 	tex_atlas_reg(atlas, TEXAT_FARMLAND_WET, 6, 5);
 	tex_atlas_reg(atlas, TEXAT_FARMLAND_DRY, 7, 5);
 	tex_atlas_reg(atlas, TEXAT_CROPS_0, 8, 5);
@@ -291,6 +292,8 @@ void* tex_atlas_block(const char* filename, size_t* width, size_t* height) {
 	tex_atlas_reg(atlas, TEXAT_CROPS_7, 15, 5);
 
 	tex_atlas_reg(atlas, TEXAT_LEVER, 0, 6);
+	tex_atlas_reg(atlas, TEXAT_BROWN_MUSHROOM_BLOCK, 4, 6);
+	tex_atlas_reg(atlas, TEXAT_RED_MUSHROOM_BLOCK, 5, 6);
 	tex_atlas_reg(atlas, TEXAT_DOOR_WOOD_BOTTOM, 1, 6);
 	tex_atlas_reg(atlas, TEXAT_DOOR_IRON_BOTTOM, 2, 6);
 	tex_atlas_reg(atlas, TEXAT_REDSTONE_TORCH_LIT, 3, 6);
@@ -323,11 +326,36 @@ void* tex_atlas_block(const char* filename, size_t* width, size_t* height) {
 	tex_atlas_reg(atlas, TEXAT_BED_TOP_2, 7, 8);
 
 	tex_atlas_reg(atlas, TEXAT_CAST_BLOCK_LAPIS, 0, 9);
+	tex_atlas_reg(atlas, TEXAT_GLASS_PANE_EDGE, 4, 9);
 	// tex_atlas_reg(atlas, "repeater_on", 3, 9);
 	tex_atlas_reg(atlas, TEXAT_BED_BACK, 5, 9);
 	tex_atlas_reg(atlas, TEXAT_BED_SIDE_1, 6, 9);
 	tex_atlas_reg(atlas, TEXAT_BED_SIDE_2, 7, 9);
 	tex_atlas_reg(atlas, TEXAT_BED_FRONT, 8, 9);
+	tex_atlas_reg(atlas, TEXAT_MELON_SIDE, 8, 8);
+	tex_atlas_reg(atlas, TEXAT_MELON_TOP, 9, 8);
+
+	#define TEXAT_MELON_STEM_R 146 
+	#define TEXAT_MELON_STEM_G 127
+	#define TEXAT_MELON_STEM_B  8
+	tex_atlas_reg_col(atlas, TEXAT_MELON_STEM_0, 11, 8, 
+					TEXAT_MELON_STEM_R, TEXAT_MELON_STEM_G, TEXAT_MELON_STEM_B);
+	tex_atlas_reg_col(atlas, TEXAT_MELON_STEM_1, 11, 8, 
+					TEXAT_MELON_STEM_R, TEXAT_MELON_STEM_G, TEXAT_MELON_STEM_B);
+	tex_atlas_reg_col(atlas, TEXAT_MELON_STEM_2, 11, 8, 
+					TEXAT_MELON_STEM_R, TEXAT_MELON_STEM_G, TEXAT_MELON_STEM_B);
+	tex_atlas_reg_col(atlas, TEXAT_MELON_STEM_3, 11, 8, 
+					TEXAT_MELON_STEM_R, TEXAT_MELON_STEM_G, TEXAT_MELON_STEM_B);
+	tex_atlas_reg_col(atlas, TEXAT_MELON_STEM_4, 11, 8, 
+					TEXAT_MELON_STEM_R, TEXAT_MELON_STEM_G, TEXAT_MELON_STEM_B);
+	tex_atlas_reg_col(atlas, TEXAT_MELON_STEM_5, 11, 8, 
+					TEXAT_MELON_STEM_R, TEXAT_MELON_STEM_G, TEXAT_MELON_STEM_B);
+	tex_atlas_reg_col(atlas, TEXAT_MELON_STEM_6, 11, 8, 
+					TEXAT_MELON_STEM_R, TEXAT_MELON_STEM_G, TEXAT_MELON_STEM_B);
+	tex_atlas_reg_col(atlas, TEXAT_MELON_STEM_7, 11, 8, 
+					TEXAT_MELON_STEM_R, TEXAT_MELON_STEM_G, TEXAT_MELON_STEM_B);
+	tex_atlas_reg_col(atlas, TEXAT_MELON_STEM_ATTACHED, 10, 8, 
+					TEXAT_MELON_STEM_R, TEXAT_MELON_STEM_G, TEXAT_MELON_STEM_B);
 
 	tex_atlas_reg(atlas, TEXAT_ORE_LAPIS, 0, 10);
 	tex_atlas_reg(atlas, TEXAT_RAIL_POWERED_OFF, 3, 10);

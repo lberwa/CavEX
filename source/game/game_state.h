@@ -56,6 +56,17 @@ struct game_state {
 		float dt, fps;
 		float dt_gpu, dt_vsync;
 		size_t chunks_rendered;
+		float spike_frame_ms;
+		float spike_clin_ms;
+		float spike_world_ms;
+		float spike_build_ms;
+		float spike_flip_ms;
+		float spike_mesher_ms;
+		float spike_render_ms;
+		float spike_finish_ms;
+		float spike_max_ms;
+		const char* spike_max_label;
+		int spike_age;
 	} stats;
 	struct {
 		float fov;

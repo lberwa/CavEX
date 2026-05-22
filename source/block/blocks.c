@@ -187,6 +187,12 @@ void blocks_init() {
 	blocks[92] = &block_cake;
 	blocks[93] = &block_repeater_off;
 	blocks[94] = &block_repeater_on;
+	blocks[99] = &block_brown_mushroom_block;
+	blocks[100] = &block_red_mushroom_block;
+	blocks[101] = &block_iron_bars;
+	blocks[102] = &block_glass_pane;
+	blocks[103] = &block_melon;
+	blocks[105] = &block_melon_stem;
 	blocks[253] = &block_iron_chest;
 	blocks[96] = &block_trapdoor;
 	blocks[98] = &block_stonebrick;

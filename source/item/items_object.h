@@ -1217,6 +1217,7 @@ static struct item item_cake = {
 
 
 extern struct item item_bed;
+extern struct item item_melon;
 
 static struct item item_shears = {
 	.name = "Shears",
@@ -1332,8 +1333,8 @@ static struct item item_saddle = {
 };
 
 extern struct item item_sugarcane;
+extern struct item item_melon_seeds;
 extern struct item item_egg_creeper;
 extern struct item item_egg_pig;
 extern struct item item_egg_sheep;
 extern struct item item_minecart;
-

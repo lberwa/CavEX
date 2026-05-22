@@ -417,8 +417,18 @@ bool world_block_intersection(struct world* w, struct ray* r, w_coord_t x,
 	struct block_data blk = world_get_block(w, x, y, z);
 
 	if(blocks[blk.type]) {
+		struct block_data neighbours[SIDE_MAX];
+
+		for(int k = 0; k < SIDE_MAX; k++) {
+			int ox, oy, oz;
+			blocks_side_offset((enum side)k, &ox, &oy, &oz);
+
+			neighbours[k] = world_get_block(w, x + ox, y + oy, z + oz);
+		}
+
 		struct block_info blk_info = (struct block_info) {
 			.block = &blk,
+			.neighbours = neighbours,
 			.x = x,
 			.y = y,
 			.z = z,
