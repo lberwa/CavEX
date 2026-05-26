@@ -1456,6 +1456,20 @@ void server_local_create(struct server_local* s) {
 	memset(s->buttons, -1, sizeof(s->buttons));
 	memset(s->repeaters, -1, sizeof(s->repeaters));
 	memset(s->sign_pos, -1, MAX_SIGNS * 3 * sizeof(int));
+	memset(s->brewing_stands, 0, sizeof(s->brewing_stands));
+	memset(s->enchanting_tables, 0, sizeof(s->enchanting_tables));
+	for(int i = 0; i < MAX_BREWING_STANDS; i++) {
+		s->brewing_stands[i].pos.x = -1;
+		s->brewing_stands[i].pos.y = -1;
+		s->brewing_stands[i].pos.z = -1;
+		s->brewing_stands[i].brew_time = 0;
+		s->brewing_stands[i].brew_total = 0;
+	}
+	for(int i = 0; i < MAX_ENCHANTING_TABLES; i++) {
+		s->enchanting_tables[i].pos.x = -1;
+		s->enchanting_tables[i].pos.y = -1;
+		s->enchanting_tables[i].pos.z = -1;
+	}
 
 #ifdef SPLITSCREEN
 	for(int i = 0; i < MAX_SERVER_PLAYERS; i++) {

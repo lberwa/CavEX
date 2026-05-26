@@ -46,10 +46,12 @@ extern struct screen screen_server;
 extern struct screen screen_inventory;
 extern struct screen screen_crafting;
 extern struct screen screen_furnace;
+extern struct screen screen_brewing_stand;
 extern struct screen screen_chest;
 extern struct screen screen_iron_chest;
 extern struct screen screen_sign;
 extern struct screen screen_pause;
+extern struct screen screen_enchanting_table;
 
 void screen_set(struct screen* s);
 void menu_screen_set(struct screen* s);
@@ -70,5 +72,10 @@ void screen_furnace_set_state(int player, uint16_t burn_time,
 void screen_chest_set_windowc(int player, uint8_t container);
 void screen_iron_chest_set_windowc(int player, uint8_t container);
 void screen_sign_set_windowc(int player, uint8_t container);
+
+void screen_brewing_stand_set_windowc(int player, uint8_t container);
+void screen_brewing_stand_set_state(int player, uint16_t brew_time,
+									uint16_t brew_total);
+void screen_enchanting_table_set_windowc(int player, uint8_t container);
 
 #endif

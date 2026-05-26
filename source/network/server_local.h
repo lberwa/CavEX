@@ -39,6 +39,8 @@
 #define MAX_CHESTS 256
 #define MAX_CHEST_SLOTS 54
 #define MAX_FURNACES 256
+#define MAX_BREWING_STANDS 256
+#define MAX_ENCHANTING_TABLES 256
 #define MAX_SIGNS 256
 #define MAX_BUTTONS 256
 #define MAX_REPEATERS 256
@@ -57,6 +59,18 @@ struct furnace_data {
 	uint16_t burn_total;
 	uint16_t cook_time;
 	uint16_t cook_total;
+};
+
+struct brewing_stand_data {
+	struct complex_block_pos pos;
+	struct item_data items[BREWING_STAND_SIZE_STORAGE];
+	uint16_t brew_time;
+	uint16_t brew_total;
+};
+
+struct enchanting_table_data {
+	struct complex_block_pos pos;
+	struct item_data items[ENCHANTING_TABLE_SIZE_STORAGE];
 };
 
 struct button_state {
@@ -98,6 +112,8 @@ struct server_local {
 	struct complex_block_pos chest_pos[MAX_CHESTS];
 	struct item_data chest_items[MAX_CHESTS][MAX_CHEST_SLOTS];
 	struct furnace_data furnaces[MAX_FURNACES];
+	struct brewing_stand_data brewing_stands[MAX_BREWING_STANDS];
+	struct enchanting_table_data enchanting_tables[MAX_ENCHANTING_TABLES];
 	struct button_state buttons[MAX_BUTTONS];
 	struct repeater_state repeaters[MAX_REPEATERS];
 	struct complex_block_pos sign_pos[MAX_SIGNS];

@@ -18,6 +18,7 @@
 */
 
 #include <assert.h>
+#include <stdio.h>
 
 #include "../block/blocks.h"
 #include "../graphics/render_item.h"
@@ -146,11 +147,13 @@ void items_init() {
 	// map
 	items[359] = &item_shears;
 	items[360] = &item_melon;
+	items[361] = &item_pumpkin_seeds;
 	items[362] = &item_melon_seeds;
 
 	items[423] = &item_egg_creeper;
 	items[424] = &item_egg_pig;
 	items[425] = &item_egg_sheep;
+	items[426] = &item_lapis_lazuli;
 	// golden record
 	// green record
 }
@@ -167,6 +170,32 @@ const char* item_get_name(struct item_data* item) {
 
 	if(item->id == ITEM_COAL && item->durability == 1)
 		return "Charcoal";
+
+	// Enchanting table (simplified): encode a single enchantment in `durability`.
+	// High nibble = enchant id, low nibble = level (1..15).
+	uint8_t ench_id = (uint8_t)(item->durability >> 4);
+	uint8_t ench_lvl = (uint8_t)(item->durability & 0x0F);
+	if(ench_id != 0 && ench_lvl != 0) {
+		const char* ench_name = NULL;
+		switch(ench_id) {
+			case 1: ench_name = "Sharpness"; break;
+			case 2: ench_name = "Efficiency"; break;
+			case 3: ench_name = "Protection"; break;
+			default: ench_name = NULL; break;
+		}
+
+		if(ench_name) {
+			static char name_buf[96];
+			const char* roman[] = {"", "I", "II", "III", "IV", "V",
+			                       "VI", "VII", "VIII", "IX", "X"};
+			const char* lvl = (ench_lvl < (sizeof(roman) / sizeof(*roman)))
+				                  ? roman[ench_lvl]
+				                  : "X";
+			snprintf(name_buf, sizeof(name_buf), "%s %s %s", it->name, ench_name,
+			         lvl);
+			return name_buf;
+		}
+	}
 
 	return it->name;
 }

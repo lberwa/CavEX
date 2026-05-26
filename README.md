@@ -43,7 +43,7 @@
 
 * Particles already spark fire before the torch is showing, after placing a torch
 
-* If you jump into water, you take damage
+* If you jump into water or climb down the ladder, you take damage
 
 * Redstone doesn't really work
 

@@ -337,6 +337,10 @@ void clin_process(struct client_rpc* call) {
 						screen_furnace_set_windowc(pid, window);
 						screen_set_player(pid, &screen_furnace);
 						break;
+					case WINDOW_TYPE_BREWING_STAND:
+						screen_brewing_stand_set_windowc(pid, window);
+						screen_set_player(pid, &screen_brewing_stand);
+						break;
 					case WINDOW_TYPE_CHEST:
 						screen_chest_set_windowc(pid, window);
 						screen_set_player(pid, &screen_chest);
@@ -344,6 +348,10 @@ void clin_process(struct client_rpc* call) {
 					case WINDOW_TYPE_IRON_CHEST:
 						screen_iron_chest_set_windowc(pid, window);
 						screen_set_player(pid, &screen_iron_chest);
+						break;
+					case WINDOW_TYPE_ENCHANTING_TABLE:
+						screen_enchanting_table_set_windowc(pid, window);
+						screen_set_player(pid, &screen_enchanting_table);
 						break;
 					case WINDOW_TYPE_SIGN:
 						screen_sign_set_windowc(pid, window);

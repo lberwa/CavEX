@@ -729,6 +729,428 @@ static void world_render_spawners(struct world* w, struct camera* c) {
 	}
 }
 
+static void world_render_enchanting_books(struct world* w, struct camera* c) {
+	assert(w && c);
+
+	// Book texture region in particles.png (assets/particles.png is 128x128).
+	// Cover stays in the "book strip", but pages use the dedicated page UVs
+	// requested by the user:
+	// - page 1: x 2..13,  y 112..128
+	// - page 2: x 13..14, y 112..128
+	const float inv = 1.0f / 128.0f;
+	const float cover_u0 = 0.0f * inv;
+	const float cover_u1 = 68.0f * inv;
+	const float cover_um = 34.0f * inv;
+	const float v_cover0 = 90.0f * inv;
+	const float v_cover1 = 110.0f * inv;
+	const float pages_u10 = 2.0f * inv;
+	const float pages_u11 = 13.0f * inv;
+	const float pages_u20 = 13.0f * inv;
+	const float pages_u21 = 14.0f * inv;
+	const float v_pages0 = 112.0f * inv;
+	const float v_pages1 = 128.0f * inv;
+
+	gfx_matrix_modelview(c->view);
+	// Use the raw particles.png. The normal particle system uses an atlased
+	// texture, which does not preserve original pixel coordinates.
+	gfx_bind_texture(&texture_particles_raw);
+	gfx_alpha_test(true);
+	gfx_lighting(false);
+	gfx_cull_func(MODE_NONE);
+
+	const int32_t ms = time_diff_ms(w->anim_timer, time_get());
+	const float open_base_anim = (0.55f + 0.15f * sinf((float)ms * 0.0013f));
+	//bool debug_printed_this_frame = false;
+
+	// Flip state machine:
+	// 1) target angle is calculated
+	// 2) angle is increased every update by speed
+	// 3) when target is reached, move to next page, total 3 pages
+	static bool flip_active = false;
+	static int32_t flip_last_ms = -1;
+	static int32_t flip_last_burst_ms = -10000;
+	static int flip_page_index = 0; // 0..2
+	static float flip_angle = 0.0f;
+	static float flip_start_angle = 0.0f;
+	static float flip_target = 0.0f;
+	const float flip_page_speed = 0.0042f; // radians per millisecond (turning page only)
+	const int32_t flip_burst_pause_ms = 10000;
+
+	if(flip_last_ms < 0)
+		flip_last_ms = ms;
+
+	int32_t dt_ms = ms - flip_last_ms;
+	if(dt_ms < 0)
+		dt_ms = 0;
+	if(dt_ms > 200)
+		dt_ms = 200;
+	flip_last_ms = ms;
+
+	if(!flip_active && (ms - flip_last_burst_ms) >= flip_burst_pause_ms) {
+		flip_active = true;
+		flip_page_index = 0;
+		flip_start_angle = -open_base_anim;
+		flip_target = +open_base_anim;
+		flip_angle = flip_start_angle;
+	}
+
+	if(flip_active) {
+		const float dir = (flip_target >= flip_start_angle) ? 1.0f : -1.0f;
+		const float step = fabsf(flip_page_speed) * (float)dt_ms;
+		flip_angle += dir * step;
+
+		const bool reached
+			= (dir > 0.0f && flip_angle >= flip_target)
+			  || (dir < 0.0f && flip_angle <= flip_target);
+		if(reached) {
+			flip_angle = flip_target;
+			flip_page_index++;
+			if(flip_page_index >= 3) {
+				flip_active = false;
+				flip_last_burst_ms = ms;
+			} else {
+				// New page starts exactly at left wing pose, then rotates to right wing pose.
+				flip_start_angle = -open_base_anim;
+				flip_target = +open_base_anim;
+				flip_angle = flip_start_angle;
+			}
+		}
+	}
+
+	ilist_chunks_it_t it;
+	ilist_chunks_it(it, w->render);
+
+	while(!ilist_chunks_end_p(it)) {
+		struct chunk* chunk = ilist_chunks_ref(it);
+		if(!chunk->has_enchanting_table) {
+			ilist_chunks_next(it);
+			continue;
+		}
+
+		const float open_base = (open_base_anim);
+		const float lift = 0.015f;   // outer edge lift
+		const float bend = 0.010f;   // inner edge lift
+
+		for(c_coord_t cy = 0; cy < CHUNK_SIZE; cy++) {
+			for(c_coord_t cz = 0; cz < CHUNK_SIZE; cz++) {
+				for(c_coord_t cx = 0; cx < CHUNK_SIZE; cx++) {
+					struct block_data blk = chunk_get_block(chunk, cx, cy, cz);
+					if(blk.type != BLOCK_ENCHANTING_TABLE)
+						continue;
+
+					const float x = (float)(chunk->x + cx);
+					const float y = (float)(chunk->y + cy);
+					const float z = (float)(chunk->z + cz);
+
+					// Render an "opened book" (two pages + one flipping page).
+					const float cx0 = x + 0.5f;
+					const float cz0 = z + 0.5f;
+					const float y_base = y + 0.77f;
+					const float y_top = y + 0.90f;
+					const float page_len = 0.26f; // along X
+					const float page_w = 0.18f;   // along Z
+
+					// A slight overall tilt so it sits like in Minecraft.
+					const float tilt = -0.22f; // radians (down towards player)
+
+					// NOTE: We render with lighting disabled (like other overlays),
+					// so use dimmed vertex colors to avoid a "glowing white" look.
+					const uint8_t color_pages[16] = {
+						0xD8, 0xD8, 0xD8, 0xFF,
+						0xD8, 0xD8, 0xD8, 0xFF,
+						0xD8, 0xD8, 0xD8, 0xFF,
+						0xD8, 0xD8, 0xD8, 0xFF,
+					};
+						const uint8_t color_cover[16] = {
+							0xB8, 0xB8, 0xB8, 0xFF,
+						0xB8, 0xB8, 0xB8, 0xFF,
+						0xB8, 0xB8, 0xB8, 0xFF,
+							0xB8, 0xB8, 0xB8, 0xFF,
+						};
+
+					// Helper: transform local (lx,lz) with a Y rotation and an overall tilt
+					// into world coordinates, and give us a "page-like" varying Y.
+					#define BOOK_PT3D(outx, outy, outz, lx, ly, lz, yaw, fold, base_lift) do { \
+						const float ca = cosf((yaw)), sa = sinf((yaw)); \
+						float tx = (lx) * ca - (lz) * sa; \
+						float tz = (lx) * sa + (lz) * ca; \
+						/* tilt around X axis */ \
+						const float ct = cosf(tilt), st = sinf(tilt); \
+						float ty0 = (ly); \
+						float tz2 = tz * ct - ty0 * st; \
+						float ty2 = tz * st + ty0 * ct; \
+						float wx = cx0 + tx; \
+						float wy = (y_base + (y_top - y_base)) + ty2 + (base_lift); \
+						float wz = cz0 + tz2; \
+						/* fold around spine at lx=0 (rotate in X-Y plane around world point at same (ly,lz) but lx=0) */ \
+						{ \
+							float hx, hy, hz; \
+							/* hinge point */ \
+							const float txh = (0.0f) * ca - (lz) * sa; \
+							const float tzh = (0.0f) * sa + (lz) * ca; \
+							const float tzh2 = tzh * ct - ty0 * st; \
+							const float tyh2 = tzh * st + ty0 * ct; \
+							hx = cx0 + txh; \
+							hy = (y_base + (y_top - y_base)) + tyh2 + (base_lift); \
+							hz = cz0 + tzh2; \
+							const float cu = cosf((fold)); \
+							const float su = sinf((fold)); \
+							const float dx = wx - hx; \
+							const float dy = wy - hy; \
+							wx = hx + dx * cu - dy * su; \
+							wy = hy + dx * su + dy * cu; \
+							wz = wz; \
+						} \
+						(outx) = wx; \
+						(outy) = wy; \
+						(outz) = wz; \
+					} while(0)
+
+					// User-provided UV rectangles (particles.png, pixel coords).
+					// - top:    2,112 .. 12,128
+					// - bottom: 14,122 .. 24,128
+					// - left:   0,112 .. 2,128
+					// - right:  12,112 .. 14,128
+					// - other:  2,110 .. 12,112
+					const float uv_top_u0 = 2.0f * inv,  uv_top_u1 = 12.0f * inv;
+					const float uv_top_v0 = 112.0f * inv, uv_top_v1 = 128.0f * inv;
+					const float uv_bot_u0 = 14.0f * inv, uv_bot_u1 = 24.0f * inv;
+					const float uv_bot_v0 = 122.0f * inv, uv_bot_v1 = 128.0f * inv;
+					const float uv_l_u0 = 0.0f * inv,   uv_l_u1 = 2.0f * inv;
+					const float uv_l_v0 = 112.0f * inv, uv_l_v1 = 128.0f * inv;
+					const float uv_r_u0 = 12.0f * inv,  uv_r_u1 = 14.0f * inv;
+					const float uv_r_v0 = 112.0f * inv, uv_r_v1 = 128.0f * inv;
+					const float uv_o_u0 = 2.0f * inv,   uv_o_u1 = 12.0f * inv;
+					const float uv_o_v0 = 110.0f * inv, uv_o_v1 = 112.0f * inv;
+
+					// "Leather" underlay under the book (particles.png, pixel coords).
+					// Requested:
+					// - top:    0,90  .. 13,110
+					// - bottom: 13,90 .. 23,110
+					// - left:   43,90 .. 44,110
+					// - other:  55,90 .. 56,110
+					const float uv_le_top_u0 = 0.0f * inv,   uv_le_top_u1 = 13.0f * inv;
+					const float uv_le_top_v0 = 90.0f * inv,  uv_le_top_v1 = 110.0f * inv;
+					const float uv_le_bot_u0 = 13.0f * inv,  uv_le_bot_u1 = 23.0f * inv;
+					const float uv_le_bot_v0 = 90.0f * inv,  uv_le_bot_v1 = 110.0f * inv;
+					const float uv_le_l_u0 = 43.0f * inv,    uv_le_l_u1 = 44.0f * inv;
+					const float uv_le_l_v0 = 90.0f * inv,    uv_le_l_v1 = 110.0f * inv;
+					const float uv_le_o_u0 = 55.0f * inv,    uv_le_o_u1 = 56.0f * inv;
+					const float uv_le_o_v0 = 90.0f * inv,    uv_le_o_v1 = 110.0f * inv;
+
+					const uint8_t color_leather[16] = {
+						0xB0, 0xA0, 0x78, 0xFF,
+						0xB0, 0xA0, 0x78, 0xFF,
+						0xB0, 0xA0, 0x78, 0xFF,
+						0xB0, 0xA0, 0x78, 0xFF,
+					};
+
+					#define DRAW_QUAD4(x0,y0,z0, x1,y1,z1, x2,y2,z2, x3,y3,z3, uu0,vv0, uu1,vv1, col) do { \
+						const float verts[12] = { \
+							(x0),(y0),(z0), \
+							(x1),(y1),(z1), \
+							(x2),(y2),(z2), \
+							(x3),(y3),(z3), \
+						}; \
+						const float uvs[8] = { (uu0),(vv0), (uu0),(vv1), (uu1),(vv1), (uu1),(vv0) }; \
+						gfx_draw_quads_flt(4, verts, (col), uvs); \
+					} while(0)
+					#define DRAW_QUAD4_ROT90(x0,y0,z0, x1,y1,z1, x2,y2,z2, x3,y3,z3, uu0,vv0, uu1,vv1, col) do { \
+						const float verts[12] = { \
+							(x0),(y0),(z0), \
+							(x1),(y1),(z1), \
+							(x2),(y2),(z2), \
+							(x3),(y3),(z3), \
+						}; \
+						/* Rotate UVs by 90 degrees (clockwise) */ \
+						const float uvs[8] = { (uu0),(vv1), (uu1),(vv1), (uu1),(vv0), (uu0),(vv0) }; \
+						gfx_draw_quads_flt(4, verts, (col), uvs); \
+					} while(0)
+
+					// Draw one "wing" as a thin cuboid hinged at lx=0.
+					#define DRAW_WING(lx0, lx1, fold, col) do { \
+						const float lz0 = -page_w; \
+						const float lz1 = page_w; \
+						const float thick = 0.060f; \
+						const float ly0 = -thick; \
+						const float ly1 = 0.0f; \
+						const float yaw = 0.0f; \
+						const float lift0 = 0.010f; \
+						float a0x,a0y,a0z, a1x,a1y,a1z, a2x,a2y,a2z, a3x,a3y,a3z; \
+						float b0x,b0y,b0z, b1x,b1y,b1z, b2x,b2y,b2z, b3x,b3y,b3z; \
+						/* top face (ly1) */ \
+						BOOK_PT3D(a0x,a0y,a0z, (lx0), ly1, lz0, yaw, (fold), lift0); \
+						BOOK_PT3D(a1x,a1y,a1z, (lx1), ly1, lz0, yaw, (fold), lift0); \
+						BOOK_PT3D(a2x,a2y,a2z, (lx1), ly1, lz1, yaw, (fold), lift0); \
+						BOOK_PT3D(a3x,a3y,a3z, (lx0), ly1, lz1, yaw, (fold), lift0); \
+						DRAW_QUAD4_ROT90(a0x,a0y,a0z, a1x,a1y,a1z, a2x,a2y,a2z, a3x,a3y,a3z, uv_top_u0,uv_top_v0, uv_top_u1,uv_top_v1, (col)); \
+						/* bottom face (ly0) */ \
+						BOOK_PT3D(b0x,b0y,b0z, (lx0), ly0, lz1, yaw, (fold), lift0); \
+						BOOK_PT3D(b1x,b1y,b1z, (lx1), ly0, lz1, yaw, (fold), lift0); \
+						BOOK_PT3D(b2x,b2y,b2z, (lx1), ly0, lz0, yaw, (fold), lift0); \
+						BOOK_PT3D(b3x,b3y,b3z, (lx0), ly0, lz0, yaw, (fold), lift0); \
+						DRAW_QUAD4_ROT90(b0x,b0y,b0z, b1x,b1y,b1z, b2x,b2y,b2z, b3x,b3y,b3z, uv_bot_u0,uv_bot_v0, uv_bot_u1,uv_bot_v1, (col)); \
+						/* left edge (lx0) */ \
+						DRAW_QUAD4_ROT90(a0x,a0y,a0z, a3x,a3y,a3z, b0x,b0y,b0z, b3x,b3y,b3z, uv_l_u0,uv_l_v0, uv_l_u1,uv_l_v1, (col)); \
+						/* right edge (lx1) */ \
+						DRAW_QUAD4(a2x,a2y,a2z, a1x,a1y,a1z, b2x,b2y,b2z, b1x,b1y,b1z, uv_r_u0,uv_r_v0, uv_r_u1,uv_r_v1, (col)); \
+						/* front/back edges (lz0/lz1) */ \
+						DRAW_QUAD4(a1x,a1y,a1z, a0x,a0y,a0z, b3x,b3y,b3z, b2x,b2y,b2z, uv_o_u0,uv_o_v0, uv_o_u1,uv_o_v1, (col)); \
+								DRAW_QUAD4_ROT90(a3x,a3y,a3z, a2x,a2y,a2z, b1x,b1y,b1z, b0x,b0y,b0z, uv_o_u0,uv_o_v0, uv_o_u1,uv_o_v1, (col)); \
+					} while(0)
+
+						// Swing-page variant: dedicated macro so edits here do not affect
+						// any static/non-moving page rendering.
+							#define DRAW_PAGE_RANGE_SWING(lx0, lx1, fold, extra_lift, col) do { \
+						const float lz0 = -page_w + 0.010f; \
+						const float lz1 = page_w - 0.010f; \
+						const float thick = 0.006f; \
+						const float ly0 = 0.001f; \
+						const float ly1 = ly0 + thick; \
+						const float yaw = 0.0f; \
+						const float base_lift = 0.012f + (extra_lift); \
+						float a0x,a0y,a0z, a1x,a1y,a1z, a2x,a2y,a2z, a3x,a3y,a3z; \
+						float b0x,b0y,b0z, b1x,b1y,b1z, b2x,b2y,b2z, b3x,b3y,b3z; \
+						/* top face */ \
+						BOOK_PT3D(a0x,a0y,a0z, (lx1), ly1, lz0, yaw, (fold), base_lift); \
+						BOOK_PT3D(a1x,a1y,a1z, (lx0), ly1, lz0, yaw, (fold), base_lift); \
+						BOOK_PT3D(a2x,a2y,a2z, (lx0), ly1, lz1, yaw, (fold), base_lift); \
+						BOOK_PT3D(a3x,a3y,a3z, (lx1), ly1, lz1, yaw, (fold), base_lift); \
+						DRAW_QUAD4_ROT90(a0x,a0y,a0z, a1x,a1y,a1z, a2x,a2y,a2z, a3x,a3y,a3z, uv_top_u0,uv_top_v0, uv_top_u1,uv_top_v1, (col)); \
+						/* bottom face */ \
+						BOOK_PT3D(b0x,b0y,b0z, (lx1), ly0, lz1, yaw, (fold), base_lift); \
+						BOOK_PT3D(b1x,b1y,b1z, (lx0), ly0, lz1, yaw, (fold), base_lift); \
+						BOOK_PT3D(b2x,b2y,b2z, (lx0), ly0, lz0, yaw, (fold), base_lift); \
+						BOOK_PT3D(b3x,b3y,b3z, (lx1), ly0, lz0, yaw, (fold), base_lift); \
+						DRAW_QUAD4_ROT90(b0x,b0y,b0z, b1x,b1y,b1z, b2x,b2y,b2z, b3x,b3y,b3z, uv_bot_u1,uv_bot_v0, uv_bot_u0,uv_bot_v1, (col)); \
+						/* thin edges */ \
+						DRAW_QUAD4(a0x,a0y,a0z, a3x,a3y,a3z, b0x,b0y,b0z, b3x,b3y,b3z, uv_l_u0,uv_l_v0, uv_l_u1,uv_l_v1, (col)); \
+						DRAW_QUAD4_ROT90(a2x,a2y,a2z, a1x,a1y,a1z, b2x,b2y,b2z, b1x,b1y,b1z, uv_r_u0,uv_r_v0, uv_r_u1,uv_r_v1, (col)); \
+						DRAW_QUAD4_ROT90(a1x,a1y,a1z, a0x,a0y,a0z, b3x,b3y,b3z, b2x,b2y,b2z, uv_o_u0,uv_o_v0, uv_o_u1,uv_o_v1, (col)); \
+							DRAW_QUAD4(a3x,a3y,a3z, a2x,a2y,a2z, b1x,b1y,b1z, b0x,b0y,b0z, uv_o_u0,uv_o_v0, uv_o_u1,uv_o_v1, (col)); \
+							} while(0)
+
+						// Static-page variant (kept stable): all faces rotated 90deg.
+						#define DRAW_PAGE_RANGE_STATIC(lx0, lx1, fold, extra_lift, col) do { \
+							const float lz0 = -page_w + 0.010f; \
+							const float lz1 = page_w - 0.010f; \
+							const float thick = 0.006f; \
+							const float ly0 = 0.001f; \
+							const float ly1 = ly0 + thick; \
+							const float yaw = 0.0f; \
+							const float base_lift = 0.012f + (extra_lift); \
+							float a0x,a0y,a0z, a1x,a1y,a1z, a2x,a2y,a2z, a3x,a3y,a3z; \
+							float b0x,b0y,b0z, b1x,b1y,b1z, b2x,b2y,b2z, b3x,b3y,b3z; \
+							BOOK_PT3D(a0x,a0y,a0z, (lx1), ly1, lz0, yaw, (fold), base_lift); \
+							BOOK_PT3D(a1x,a1y,a1z, (lx0), ly1, lz0, yaw, (fold), base_lift); \
+							BOOK_PT3D(a2x,a2y,a2z, (lx0), ly1, lz1, yaw, (fold), base_lift); \
+							BOOK_PT3D(a3x,a3y,a3z, (lx1), ly1, lz1, yaw, (fold), base_lift); \
+							DRAW_QUAD4_ROT90(a0x,a0y,a0z, a1x,a1y,a1z, a2x,a2y,a2z, a3x,a3y,a3z, uv_top_u0,uv_top_v0, uv_top_u1,uv_top_v1, (col)); \
+							BOOK_PT3D(b0x,b0y,b0z, (lx1), ly0, lz1, yaw, (fold), base_lift); \
+							BOOK_PT3D(b1x,b1y,b1z, (lx0), ly0, lz1, yaw, (fold), base_lift); \
+							BOOK_PT3D(b2x,b2y,b2z, (lx0), ly0, lz0, yaw, (fold), base_lift); \
+							BOOK_PT3D(b3x,b3y,b3z, (lx1), ly0, lz0, yaw, (fold), base_lift); \
+							DRAW_QUAD4_ROT90(b0x,b0y,b0z, b1x,b1y,b1z, b2x,b2y,b2z, b3x,b3y,b3z, uv_bot_u1,uv_bot_v0, uv_bot_u0,uv_bot_v1, (col)); \
+							DRAW_QUAD4_ROT90(a0x,a0y,a0z, a3x,a3y,a3z, b0x,b0y,b0z, b3x,b3y,b3z, uv_l_u0,uv_l_v0, uv_l_u1,uv_l_v1, (col)); \
+							DRAW_QUAD4_ROT90(a2x,a2y,a2z, a1x,a1y,a1z, b2x,b2y,b2z, b1x,b1y,b1z, uv_r_u0,uv_r_v0, uv_r_u1,uv_r_v1, (col)); \
+							DRAW_QUAD4_ROT90(a1x,a1y,a1z, a0x,a0y,a0z, b3x,b3y,b3z, b2x,b2y,b2z, uv_o_u0,uv_o_v0, uv_o_u1,uv_o_v1, (col)); \
+							DRAW_QUAD4_ROT90(a3x,a3y,a3z, a2x,a2y,a2z, b1x,b1y,b1z, b0x,b0y,b0z, uv_o_u0,uv_o_v0, uv_o_u1,uv_o_v1, (col)); \
+						} while(0)
+
+					// Draw a leather underlay attached to the wing, slightly larger and swinging.
+					#define DRAW_LEATHER(lx0, lx1, fold) do { \
+						const float lz0 = -page_w - 0.015f; \
+						const float lz1 = page_w + 0.015f; \
+						const float thick = 0.018f; \
+						const float ly0 = -0.060f - thick; \
+						const float ly1 = -0.060f; \
+						const float yaw = 0.0f; \
+						const float base_lift = 0.006f; \
+						/* Keep leather perfectly parallel to the wing (same fold angle). */ \
+						const float lf = (fold); \
+						float a0x,a0y,a0z, a1x,a1y,a1z, a2x,a2y,a2z, a3x,a3y,a3z; \
+						float b0x,b0y,b0z, b1x,b1y,b1z, b2x,b2y,b2z, b3x,b3y,b3z; \
+						/* top face */ \
+						BOOK_PT3D(a0x,a0y,a0z, (lx0), ly1, lz0, yaw, (lf), base_lift); \
+						BOOK_PT3D(a1x,a1y,a1z, (lx1), ly1, lz0, yaw, (lf), base_lift); \
+						BOOK_PT3D(a2x,a2y,a2z, (lx1), ly1, lz1, yaw, (lf), base_lift); \
+						BOOK_PT3D(a3x,a3y,a3z, (lx0), ly1, lz1, yaw, (lf), base_lift); \
+						DRAW_QUAD4(a0x,a0y,a0z, a1x,a1y,a1z, a2x,a2y,a2z, a3x,a3y,a3z, uv_le_top_u0,uv_le_top_v0, uv_le_top_u1,uv_le_top_v1, color_leather); \
+						/* bottom face */ \
+						BOOK_PT3D(b0x,b0y,b0z, (lx0), ly0, lz1, yaw, (lf), base_lift); \
+						BOOK_PT3D(b1x,b1y,b1z, (lx1), ly0, lz1, yaw, (lf), base_lift); \
+						BOOK_PT3D(b2x,b2y,b2z, (lx1), ly0, lz0, yaw, (lf), base_lift); \
+						BOOK_PT3D(b3x,b3y,b3z, (lx0), ly0, lz0, yaw, (lf), base_lift); \
+						DRAW_QUAD4(b0x,b0y,b0z, b1x,b1y,b1z, b2x,b2y,b2z, b3x,b3y,b3z, uv_le_bot_u0,uv_le_bot_v0, uv_le_bot_u1,uv_le_bot_v1, color_leather); \
+						/* left edge */ \
+						DRAW_QUAD4(a0x,a0y,a0z, a3x,a3y,a3z, b0x,b0y,b0z, b3x,b3y,b3z, uv_le_l_u0,uv_le_l_v0, uv_le_l_u1,uv_le_l_v1, color_leather); \
+						/* remaining sides */ \
+						DRAW_QUAD4(a2x,a2y,a2z, a1x,a1y,a1z, b2x,b2y,b2z, b1x,b1y,b1z, uv_le_o_u0,uv_le_o_v0, uv_le_o_u1,uv_le_o_v1, color_leather); \
+						DRAW_QUAD4(a1x,a1y,a1z, a0x,a0y,a0z, b3x,b3y,b3z, b2x,b2y,b2z, uv_le_o_u0,uv_le_o_v0, uv_le_o_u1,uv_le_o_v1, color_leather); \
+						DRAW_QUAD4(a3x,a3y,a3z, a2x,a2y,a2z, b1x,b1y,b1z, b0x,b0y,b0z, uv_le_o_u0,uv_le_o_v0, uv_le_o_u1,uv_le_o_v1, color_leather); \
+					} while(0)
+
+					// ===== STATIC BOOK GEOMETRY ENDS HERE =====
+					// Two 3D "wings" that open/close around the spine.
+					DRAW_WING(-page_len, 0.0f, -open_base, color_pages);
+					DRAW_WING(0.0f, page_len, +open_base, color_pages);
+
+						// ===== TURNING PAGE RENDER STARTS HERE =====
+							{
+								// Burst swing: every 10s, perform 3 swings at 2x speed.
+								const int32_t swing_period_ms = 10000;
+								const int32_t swing_ms = 450; // was 900, now 2x speed
+								const int32_t swing_count = 3;
+								const int32_t burst_ms = swing_ms * swing_count;
+								const int32_t t_cycle = ms % swing_period_ms;
+								if(t_cycle < burst_ms) {
+									const float p
+										= (float)(t_cycle % swing_ms) / (float)swing_ms;
+									const float swing_target = -2.59f;
+									const float swing_fold
+										= (-open_base) + p * (swing_target - (-open_base));
+									DRAW_PAGE_RANGE_SWING(0.0f, -page_len, swing_fold, 0.004f, color_pages);
+
+									/*if(!debug_printed_this_frame) {
+										printf(
+											"[BOOK DBG] frame_ms=%d pos=(%.3f,%.3f,%.3f) "
+											"page1{angle=%.6f,lx0=%.3f,lx1=%.3f} "
+											"page2{angle=%.6f,lx0=%.3f,lx1=%.3f} "
+											"page3{angle=%.6f,lx0=%.3f,lx1=%.3f,p=%.3f}\n",
+											ms,
+											cx0, y_base, cz0,
+											-open_base, -page_len, 0.0f,
+											-open_base, -page_len, 0.0f,
+											swing_fold, 0.0f, -page_len, p
+										);
+										debug_printed_this_frame = true;
+									}*/
+								}
+							}
+
+					// Leather underlay: slightly protrudes and swings; right side is mirrored.
+					const float le_out = 0.060f;
+					DRAW_LEATHER(-page_len - le_out, 0.0f, -open_base);
+					DRAW_LEATHER(0.0f, page_len + le_out, +open_base);
+
+						#undef DRAW_PAGE_RANGE_STATIC
+						#undef DRAW_PAGE_RANGE_SWING
+					#undef DRAW_WING
+					#undef DRAW_LEATHER
+					#undef DRAW_QUAD4_ROT90
+					#undef DRAW_QUAD4
+					#undef BOOK_PT3D
+				}
+			}
+		}
+
+		ilist_chunks_next(it);
+	}
+
+	gfx_cull_func(MODE_BACK);
+	gfx_lighting(true);
+}
+
 size_t world_render(struct world* w, struct camera* c, bool pass) {
 	assert(w && c);
 
@@ -752,6 +1174,7 @@ size_t world_render(struct world* w, struct camera* c, bool pass) {
 		}
 
 		world_render_spawners(w, c);
+		world_render_enchanting_books(w, c);
 	} else {
 		gfx_alpha_test(false);
 		gfx_blending(MODE_BLEND);

@@ -59,6 +59,25 @@
 #define FURNACE_SLOT_MAIN 3
 #define FURNACE_SLOT_HOTBAR 30
 
+// brewing stand (MC 1.7.x style: 3 bottles + 1 ingredient, no fuel slot)
+#define BREWING_STAND_SIZE 40
+#define BREWING_STAND_SIZE_STORAGE 4
+
+#define BREWING_STAND_SLOT_BOTTLE 0
+#define BREWING_STAND_SLOT_INGREDIENT 3
+#define BREWING_STAND_SLOT_MAIN 4
+#define BREWING_STAND_SLOT_HOTBAR 31
+
+// enchanting table (MC 1.7.x style: 1 item slot + 3 option "slots" (no items),
+// no lapis slot)
+#define ENCHANTING_TABLE_SIZE 40
+#define ENCHANTING_TABLE_SIZE_STORAGE 4
+
+#define ENCHANTING_TABLE_SLOT_ITEM 0
+#define ENCHANTING_TABLE_SLOT_OPTION 1
+#define ENCHANTING_TABLE_SLOT_MAIN 4
+#define ENCHANTING_TABLE_SLOT_HOTBAR 31
+
 // chest
 #define CHEST_SIZE 63
 #define CHEST_SIZE_STORAGE 27

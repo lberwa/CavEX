@@ -298,6 +298,7 @@ void* tex_atlas_block(const char* filename, size_t* width, size_t* height) {
 	tex_atlas_reg(atlas, TEXAT_DOOR_IRON_BOTTOM, 2, 6);
 	tex_atlas_reg(atlas, TEXAT_REDSTONE_TORCH_LIT, 3, 6);
 	tex_atlas_reg(atlas, TEXAT_PUMPKIN_TOP, 6, 6);
+	tex_atlas_reg_col(atlas, TEXAT_VINE, 15, 6, 90, 200, 40);
 	tex_atlas_reg(atlas, TEXAT_NETHERRACK, 7, 6);
 	tex_atlas_reg(atlas, TEXAT_SOULSAND, 8, 6);
 	tex_atlas_reg(atlas, TEXAT_GLOWSTONE, 9, 6);
@@ -374,7 +375,7 @@ void* tex_atlas_block(const char* filename, size_t* width, size_t* height) {
 		tex_atlas_reg(atlas, TEXAT_RAIL_DETECTOR, 3, 12);
 
 		tex_atlas_reg(atlas, TEXAT_SANDSTONE_BOTTOM, 0, 13);
-		tex_atlas_reg(atlas, TEXAT_STONEBRICK, 5, 0);
+		tex_atlas_reg(atlas, TEXAT_STONEBRICK, 6, 3);
 		tex_atlas_reg(atlas, TEXAT_PISTON_PLATE, 11, 6);
 		tex_atlas_reg(atlas, TEXAT_PISTON_SIDE, 12, 6);
 		tex_atlas_reg(atlas, TEXAT_PISTON_BACK, 13, 6);
@@ -401,6 +402,18 @@ void* tex_atlas_block(const char* filename, size_t* width, size_t* height) {
 	// (redstone variants moved to runtime brightness)
 	tex_atlas_reg_col(atlas, TEXAT_GRASS_TOP, 0, 0, 110, 198, 63);
 	tex_atlas_reg_grass(atlas, TEXAT_GRASS_SIDE, 6, 2, 110, 198, 63, 3, 0);
+	tex_atlas_reg(atlas, TEXAT_MYCELIUM_TOP, 14, 7);
+	tex_atlas_reg(atlas, TEXAT_MYCELIUM_SIDE, 13, 7);
+	tex_atlas_reg_col(atlas, TEXAT_WATERLILY, 15, 7, 97, 146, 53);
+	tex_atlas_reg(atlas, TEXAT_NETHER_BRICK, 9, 9);
+	tex_atlas_reg(atlas, TEXAT_NETHER_WART_0, 10, 9);
+	tex_atlas_reg(atlas, TEXAT_NETHER_WART_1, 11, 9);
+	tex_atlas_reg(atlas, TEXAT_NETHER_WART_2, 12, 9);
+	tex_atlas_reg(atlas, TEXAT_ENCHANTING_TOP, 13, 8);
+	tex_atlas_reg(atlas, TEXAT_ENCHANTING_SIDE, 14, 8);
+	tex_atlas_reg(atlas, TEXAT_ENCHANTING_BOTTOM, 15, 8);
+	tex_atlas_reg(atlas, TEXAT_BREWING_STAND, 14, 10);
+	tex_atlas_reg(atlas, TEXAT_BREWING_STAND_BASE, 15, 10);
 	tex_atlas_reg_col(atlas, TEXAT_TALLGRASS, 7, 2, 110, 198, 63);
 	tex_atlas_reg_col(atlas, TEXAT_LEAVES_OAK, 4, 3, 75, 182, 15);
 	tex_atlas_reg_col(atlas, TEXAT_FERN, 8, 3, 110, 198, 63);

@@ -482,7 +482,14 @@ int main(void) {
 										gstate.camera.z
 											+ cosf(gstate.camera.rx)
 											  * sinf(gstate.camera.ry) * 4.5F,
-										&gstate.camera_hit);
+										&gstate.camera_hit,
+										({
+											struct item_data held;
+											inventory_get_hotbar_item(
+												windowc_get_latest(gstate_windows()[WINDOWC_INVENTORY]),
+												&held)
+												&& held.id == BLOCK_WATERLILY;
+										}));
 					}
 				}
 
@@ -561,7 +568,14 @@ int main(void) {
 										gstate.camera.x + sinf(gstate.camera.rx) * sinf(gstate.camera.ry) * 4.5F,
 										gstate.camera.y +            cosf(gstate.camera.ry) * 4.5F,
 										gstate.camera.z + cosf(gstate.camera.rx) * sinf(gstate.camera.ry) * 4.5F,
-										&gstate.camera_hit);
+										&gstate.camera_hit,
+										({
+											struct item_data held;
+											inventory_get_hotbar_item(
+												windowc_get_latest(gstate_windows()[WINDOWC_INVENTORY]),
+												&held)
+												&& held.id == BLOCK_WATERLILY;
+										}));
 					}
 				}
 			} else {

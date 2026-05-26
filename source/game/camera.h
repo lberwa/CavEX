@@ -46,7 +46,7 @@ struct camera_ray_result {
 
 void camera_ray_pick(struct world* w, float gx0, float gy0, float gz0,
 					 float gx1, float gy1, float gz1,
-					 struct camera_ray_result* res);
+					 struct camera_ray_result* res, bool allow_water_target);
 void camera_physics(struct camera* c, float dt);
 void camera_update(struct camera* c, bool in_water);
 void camera_update_viewport(struct camera* c, bool in_water, float aspect);

@@ -30,6 +30,8 @@ extern struct inventory_logic inventory_logic_furnace;
 extern struct inventory_logic inventory_logic_chest;
 extern struct inventory_logic inventory_logic_iron_chest;
 extern struct inventory_logic inventory_logic_sign;
+extern struct inventory_logic inventory_logic_brewing_stand;
+extern struct inventory_logic inventory_logic_enchanting_table;
 
 struct furnace_data* furnace_data_get(struct server_local* s, w_coord_t x,
 									  w_coord_t y, w_coord_t z, bool create);

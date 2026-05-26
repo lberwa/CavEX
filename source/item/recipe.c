@@ -409,6 +409,21 @@ void recipe_init() {
 			   (struct item_data) {.id = BLOCK_COBBLESTONE}, false);
 	recipe_add(recipes_crafting,
 			   (struct item_data) {
+				   .id = BLOCK_BRICK_STAIRS, .durability = 0, .count = 4},
+			   3, 3, (uint8_t[]) {1, 0, 0, 1, 1, 0, 1, 1, 1},
+			   (struct item_data) {.id = BLOCK_BRICKS}, false);
+	recipe_add(recipes_crafting,
+			   (struct item_data) {
+				   .id = BLOCK_STONE_BRICK_STAIRS, .durability = 0, .count = 4},
+			   3, 3, (uint8_t[]) {1, 0, 0, 1, 1, 0, 1, 1, 1},
+			   (struct item_data) {.id = BLOCK_STONE_BRICKS}, false);
+	recipe_add(recipes_crafting,
+			   (struct item_data) {
+				   .id = BLOCK_NETHER_BRICK_STAIRS, .durability = 0, .count = 4},
+			   3, 3, (uint8_t[]) {1, 0, 0, 1, 1, 0, 1, 1, 1},
+			   (struct item_data) {.id = BLOCK_NETHER_BRICK}, false);
+	recipe_add(recipes_crafting,
+			   (struct item_data) {
 				   .id = ITEM_APPLE_GOLDEN, .durability = 0, .count = 1},
 			   3, 3, (uint8_t[]) {1, 1, 1, 1, 2, 1, 1, 1, 1},
 			   (struct item_data) {.id = BLOCK_GOLD_CAST}, false,
@@ -433,6 +448,11 @@ void recipe_init() {
 		(struct item_data) {.id = BLOCK_FENCE, .durability = 0, .count = 2}, 3,
 		2, (uint8_t[]) {1, 1, 1, 1, 1, 1},
 		(struct item_data) {.id = ITEM_STICK}, false);
+	recipe_add(
+		recipes_crafting,
+		(struct item_data) {.id = BLOCK_NETHER_BRICK_FENCE, .durability = 0, .count = 2},
+		3, 2, (uint8_t[]) {1, 1, 1, 1, 1, 1},
+		(struct item_data) {.id = BLOCK_NETHER_BRICK}, false);
 	recipe_add(
 		recipes_crafting,
 		(struct item_data) {.id = ITEM_DOOR_WOOD, .durability = 0, .count = 1},
