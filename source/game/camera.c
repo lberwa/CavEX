@@ -44,7 +44,7 @@ static float plane_distance(vec3 n, vec3 p0, vec3 l0, vec3 l) {
 
 void camera_ray_pick(struct world* w, float gx0, float gy0, float gz0,
 					 float gx1, float gy1, float gz1,
-					 struct camera_ray_result* res) {
+					 struct camera_ray_result* res, bool allow_water_target) {
 	assert(w && res);
 	int sx = gx1 > gx0 ? 1 : -1;
 	int sy = gy1 > gy0 ? 1 : -1;
@@ -60,6 +60,11 @@ void camera_ray_pick(struct world* w, float gx0, float gy0, float gz0,
 
 	vec3 dir = {gx1 - gx0, gy1 - gy0, gz1 - gz0};
 	glm_vec3_normalize(dir);
+
+	// DDA entry side for the current cell; when we step into a new cell we can
+	// mark which face was crossed. Useful for targetable "non-solid" blocks
+	// like water surface interactions.
+	enum side entered_side = SIDE_MAX;
 
 	while(1) {
 		enum side s;
@@ -80,6 +85,21 @@ void camera_ray_pick(struct world* w, float gx0, float gy0, float gz0,
 			return;
 		}
 
+		if(allow_water_target) {
+			struct block_data blk = world_get_block(w, gx, gy, gz);
+			if(blk.type == BLOCK_WATER_FLOW || blk.type == BLOCK_WATER_STILL) {
+				// Only allow targeting the surface of the water.
+				if(entered_side == SIDE_TOP) {
+					res->x = gx;
+					res->y = gy;
+					res->z = gz;
+					res->hit = true;
+					res->side = SIDE_TOP;
+					return;
+				}
+			}
+		}
+
 		if(gx == x1 && gy == y1 && gz == z1) {
 			res->hit = false;
 			return;
@@ -96,10 +116,13 @@ void camera_ray_pick(struct world* w, float gx0, float gy0, float gz0,
 								  (vec3) {gx0, gy0, gz0}, dir);
 
 		if(t1 <= t2 && t1 <= t3) {
+			entered_side = (sx > 0) ? SIDE_LEFT : SIDE_RIGHT;
 			gx += sx;
 		} else if(t2 <= t1 && t2 <= t3) {
+			entered_side = (sy > 0) ? SIDE_BOTTOM : SIDE_TOP;
 			gy += sy;
 		} else if(t3 <= t1 && t3 <= t2) {
+			entered_side = (sz > 0) ? SIDE_FRONT : SIDE_BACK;
 			gz += sz;
 		}
 	}

@@ -52,6 +52,7 @@ struct chunk {
 	bool has_displist[13];
 	bool rebuild_displist;
 	bool has_spawner;
+	bool has_enchanting_table;
 	struct world* world;
 	uint8_t reachable[6];
 	size_t reference_count;

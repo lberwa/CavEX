@@ -51,6 +51,7 @@ void chunk_init(struct chunk* c, struct world* world, w_coord_t x, w_coord_t y,
 		c->has_displist[k] = false;
 	c->rebuild_displist = false;
 	c->has_spawner = false;
+	c->has_enchanting_table = false;
 	c->world = world;
 	c->reference_count = 0;
 	c->tmp_data.visit_stamp = 0;
@@ -192,6 +193,8 @@ void chunk_set_block_raw(struct chunk* c, c_coord_t x, c_coord_t y,
 		| (blk.metadata << (off * 4));
 	if(blk.type == BLOCK_SPAWNER)
 		c->has_spawner = true;
+	if(blk.type == BLOCK_ENCHANTING_TABLE)
+		c->has_enchanting_table = true;
 }
 
 bool chunk_check_built(struct chunk* c) {

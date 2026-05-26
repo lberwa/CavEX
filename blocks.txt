@@ -16,22 +16,22 @@ stonebrick           ✅
 brown_mushroom_block ✅
 red_mushroom_block   ✅
 iron_bars            ✅
-glass_pane           
+glass_pane           ✅
 melon_block          ✅
-pumpkin_stem         
+pumpkin_stem         ✅
 melon_stem           ✅
-vine
-fence_gate
-brick_stairs
-stone_brick_stairs
-mycelium
-waterlily
-nether_brick
-nether_brick_fence
-nether_brick_stairs
-nether_wart
-enchanting_table
-brewing_stand
+vine                 ✅
+fence_gate           ✅
+brick_stairs         ✅
+stone_brick_stairs   ✅
+mycelium             ✅
+waterlily            ✅
+nether_brick         ✅
+nether_brick_fence   ✅
+nether_brick_stairs  ✅
+nether_wart          ✅
+enchanting_table     ✅
+brewing_stand        ✅
 cauldron
 end_portal
 end_portal_frame

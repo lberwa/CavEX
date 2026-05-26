@@ -48,6 +48,8 @@ add_executable(cavex
 				source/block/block_glass_pane.c
 				source/block/block_glowstone.c
 				source/block/block_grass.c
+				source/block/block_mycelium.c
+				source/block/block_waterlily.c
 				source/block/block_gravel.c
 				source/block/block_ice.c
 				source/block/block_iron_bars.c
@@ -60,8 +62,17 @@ add_executable(cavex
 				source/block/block_log.c
 				source/block/block_melon.c
 				source/block/block_melon_stem.c
+				source/block/block_pumpkin_stem.c
+				source/block/block_vine.c
+				source/block/block_fence_gate.c
 				source/block/block_minecart.c
 				source/block/block_netherrack.c
+				source/block/block_nether_brick.c
+				source/block/block_nether_brick_fence.c
+				source/block/block_nether_brick_stairs.c
+				source/block/block_nether_wart.c
+				source/block/block_enchanting_table.c
+				source/block/block_brewing_stand.c
 				source/block/block_noteblock.c
 				source/block/block_obsidian.c
 				source/block/block_ore.c
@@ -88,6 +99,8 @@ add_executable(cavex
 				source/block/block_sponge.c
 				source/block/block_stonebrick.c
 				source/block/block_stairs.c
+				source/block/block_brick_stairs.c
+				source/block/block_stone_brick_stairs.c
 				source/block/block_stone.c
 				source/block/block_tallgrass.c
 				source/block/block_tnt.c
@@ -120,7 +133,9 @@ add_executable(cavex
 				source/game/gui/screen_iron_chest.c
 				source/game/gui/screen_crafting.c
 				source/game/gui/screen_furnace.c
+				source/game/gui/screen_brewing_stand.c
 				source/game/gui/screen_chest.c
+				source/game/gui/screen_enchanting_table.c
 				source/game/gui/screen_sign.c
 				source/game/gui/screen_pause.c
 				source/game/gui/screen_mainmenu.c
@@ -153,6 +168,7 @@ add_executable(cavex
 				source/item/items/item_flint_steel.c
 				source/item/items/item_melon.c
 				source/item/items/item_melon_seeds.c
+				source/item/items/item_pumpkin_seeds.c
 				source/item/items/item_seeds.c
 				source/item/items/item_bed.c
 				source/item/items/item_bucket_lava.c
@@ -160,6 +176,7 @@ add_executable(cavex
 				source/item/items/item_bucket.c
 				source/item/items/item_minecart.c
 				source/item/items/item_redstone.c
+				source/item/items/item_lapis_lazuli.c
 
 				source/network/client_interface.c
 				source/network/complex_block_archive.c
@@ -172,9 +189,11 @@ add_executable(cavex
 				source/network/inventory_player.c
 				source/network/inventory_crafting.c
 				source/network/inventory_furnace.c
+				source/network/inventory_brewing_stand.c
 				source/network/inventory_chest.c
 				source/network/inventory_iron_chest.c
 				source/network/inventory_sign.c
+				source/network/inventory_enchanting_table.c
 				source/network/server_comunication.c
 
 				source/graphics/gfx_util.c

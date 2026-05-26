@@ -61,6 +61,10 @@ size_t render_block_fence_always(struct displaylist* d, struct block_info* this,
 								 enum side side, struct block_info* it,
 								 uint8_t* vertex_light, bool count_only);
 
+size_t render_block_fence_gate(struct displaylist* d, struct block_info* this,
+							   enum side side, struct block_info* it,
+							   uint8_t* vertex_light, bool count_only);
+
 size_t render_block_pane(struct displaylist* d, struct block_info* this,
 						 enum side side, struct block_info* it,
 						 uint8_t* vertex_light, bool count_only);
@@ -164,6 +168,10 @@ size_t render_block_redstone_wire(struct displaylist* d, struct block_info* this
 						 enum side side, struct block_info* it,
 						 uint8_t* vertex_light, bool count_only);
 
+size_t render_block_vine(struct displaylist* d, struct block_info* this,
+						 enum side side, struct block_info* it,
+						 uint8_t* vertex_light, bool count_only);
+
 size_t render_block_ladder(struct displaylist* d, struct block_info* this,
 						   enum side side, struct block_info* it,
 						   uint8_t* vertex_light, bool count_only);
@@ -195,5 +203,21 @@ size_t render_block_button(struct displaylist* d, struct block_info* this,
 size_t render_block_repeater(struct displaylist* d, struct block_info* this,
 							 enum side side, struct block_info* it,
 							 uint8_t* vertex_light, bool count_only);
+
+size_t render_block_waterlily(struct displaylist* d, struct block_info* this,
+							  enum side side, struct block_info* it,
+							  uint8_t* vertex_light, bool count_only);
+
+size_t render_block_nether_wart(struct displaylist* d, struct block_info* this,
+								enum side side, struct block_info* it,
+								uint8_t* vertex_light, bool count_only);
+
+size_t render_block_brewing_stand(struct displaylist* d, struct block_info* this,
+								  enum side side, struct block_info* it,
+								  uint8_t* vertex_light, bool count_only);
+
+size_t render_block_enchanting_table(struct displaylist* d, struct block_info* this,
+									 enum side side, struct block_info* it,
+									 uint8_t* vertex_light, bool count_only);
 
 #endif

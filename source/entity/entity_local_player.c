@@ -390,7 +390,7 @@ static bool entity_tick(struct entity* e) {
 
 		struct block_data blk;
 		if(entity_get_block(e, floorf(e->pos[0]), floorf(e->pos[1] - EYE_HEIGHT), floorf(e->pos[2]), &blk)
-		   && blk.type == BLOCK_LADDER) {
+		   && (blk.type == BLOCK_LADDER || blk.type == BLOCK_VINE)) {
 			if(collision_xz) e->vel[1] = 0.12F;
 			e->vel[0] = fmaxf(fminf(e->vel[0], 0.15F), -0.15F);
 			e->vel[1] = fmaxf(e->vel[1], -0.15F);

@@ -27,13 +27,14 @@
 #include "../lodepng/lodepng.h"
 #include "texture.h"
 
-struct tex_gfx texture_fog;
-struct tex_gfx texture_terrain;
-struct tex_gfx texture_terrain2;
-struct tex_gfx texture_particles;
-struct tex_gfx texture_items;
-struct tex_gfx texture_mobs;
-struct tex_gfx texture_minecart;
+	struct tex_gfx texture_fog;
+	struct tex_gfx texture_terrain;
+	struct tex_gfx texture_terrain2;
+	struct tex_gfx texture_particles;
+	struct tex_gfx texture_particles_raw;
+	struct tex_gfx texture_items;
+	struct tex_gfx texture_mobs;
+	struct tex_gfx texture_minecart;
 
 struct tex_gfx texture_creeper;
 struct tex_gfx texture_pig;
@@ -46,8 +47,10 @@ struct tex_gfx texture_anim;
 struct tex_gfx texture_gui_inventory;
 struct tex_gfx texture_gui_crafting;
 struct tex_gfx texture_gui_furnace;
+struct tex_gfx texture_gui_brewing_stand;
 struct tex_gfx texture_gui_chest;
 struct tex_gfx texture_gui_iron_chest;
+struct tex_gfx texture_gui_enchanting_table;
 struct tex_gfx texture_gui2;
 struct tex_gfx texture_controls;
 struct tex_gfx texture_pointer;
@@ -119,12 +122,14 @@ void tex_init() {
 #ifdef PARTICLES_PNG_DEBUG
 	printf("\n?\n\n");
 #endif
-    if(pout) {
-#ifdef PARTICLES_PNG_DEBUG
-		printf("pout is not NULL \n");
-#endif
-        tex_gfx_load(&texture_particles, pout, pw, ph, TEX_FMT_RGBA16, false);
-    }
+	    if(pout) {
+	#ifdef PARTICLES_PNG_DEBUG
+			printf("pout is not NULL \n");
+	#endif
+	        tex_gfx_load(&texture_particles, pout, pw, ph, TEX_FMT_RGBA16, false);
+	    }
+		// Keep a raw copy as well for code that needs pixel-precise UVs.
+		tex_gfx_load_file(&texture_particles_raw, "particles.png", TEX_FMT_RGBA16, false);
 
 
 	tex_gfx_load_file(&texture_gui_inventory, "gui/inventory.png",
@@ -133,10 +138,14 @@ void tex_init() {
 					  false);
 	tex_gfx_load_file(&texture_gui_furnace, "gui/furnace.png", TEX_FMT_RGBA16,
 					  false);
+	tex_gfx_load_file(&texture_gui_brewing_stand, "gui/brewing_stand.png",
+					  TEX_FMT_RGBA16, false);
 	tex_gfx_load_file(&texture_gui_chest, "gui/chest.png", TEX_FMT_RGBA16,
 					  false);
 	tex_gfx_load_file(&texture_gui_iron_chest, "gui/iron_chest.png", TEX_FMT_RGBA16,
 					  false);
+	tex_gfx_load_file(&texture_gui_enchanting_table, "gui/enchanting_table.png",
+					  TEX_FMT_RGBA16, false);
 	tex_gfx_load_file(&texture_gui2, "gui_2.png", TEX_FMT_RGBA16, false);
 	tex_gfx_load_file(&texture_items, "items.png", TEX_FMT_RGBA16, false);
 	tex_gfx_load_file(&texture_mobs, "mobs.png", TEX_FMT_RGBA16, false);
