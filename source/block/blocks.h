@@ -182,6 +182,7 @@ extern struct block block_nether_brick_stairs;
 extern struct block block_nether_wart;
 extern struct block block_enchanting_table;
 extern struct block block_brewing_stand;
+extern struct block block_cauldron;
 extern struct block block_trapdoor;
 extern struct block block_wooden_door;
 extern struct block block_iron_door;

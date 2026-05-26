@@ -651,6 +651,13 @@ void recipe_init() {
 								   .count = 16},
 			   3, 2, (uint8_t[]) {1, 1, 1, 1, 1, 1},
 			   (struct item_data) {.id = ITEM_IRON}, false);
+	// Cauldron: 7 iron ingots in a "U" shape
+	recipe_add(recipes_crafting,
+			   (struct item_data) {.id = BLOCK_CAULDRON,
+								   .durability = 0,
+								   .count = 1},
+			   3, 3, (uint8_t[]) {1, 0, 1, 1, 0, 1, 1, 1, 1},
+			   (struct item_data) {.id = ITEM_IRON}, false);
 	recipe_add(
 		recipes_crafting,
 		(struct item_data) {.id = ITEM_GOLD, .durability = 0, .count = 9}, 1, 1,
