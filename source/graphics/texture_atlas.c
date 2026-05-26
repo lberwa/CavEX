@@ -414,6 +414,9 @@ void* tex_atlas_block(const char* filename, size_t* width, size_t* height) {
 	tex_atlas_reg(atlas, TEXAT_ENCHANTING_BOTTOM, 15, 8);
 	tex_atlas_reg(atlas, TEXAT_BREWING_STAND, 14, 10);
 	tex_atlas_reg(atlas, TEXAT_BREWING_STAND_BASE, 15, 10);
+	tex_atlas_reg(atlas, TEXAT_CAULDRON_BOTTOM, 6, 10);
+	tex_atlas_reg(atlas, TEXAT_CAULDRON_TOP, 7, 10);
+	tex_atlas_reg(atlas, TEXAT_CAULDRON_SIDE, 8, 10);
 	tex_atlas_reg_col(atlas, TEXAT_TALLGRASS, 7, 2, 110, 198, 63);
 	tex_atlas_reg_col(atlas, TEXAT_LEAVES_OAK, 4, 3, 75, 182, 15);
 	tex_atlas_reg_col(atlas, TEXAT_FERN, 8, 3, 110, 198, 63);

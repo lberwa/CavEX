@@ -5064,6 +5064,148 @@ size_t render_block_brewing_stand(struct displaylist* d, struct block_info* this
 	return count;
 }
 
+size_t render_block_cauldron(struct displaylist* d, struct block_info* this,
+							 enum side side, struct block_info* it,
+							 uint8_t* vertex_light, bool count_only) {
+	(void)it;
+
+	const uint8_t tex_side = tex_atlas_lookup(TEXAT_CAULDRON_SIDE);
+	const uint8_t tex_top = tex_atlas_lookup(TEXAT_CAULDRON_TOP);
+	const uint8_t tex_bottom = tex_atlas_lookup(TEXAT_CAULDRON_BOTTOM);
+
+	// Match the AABB shape in block_cauldron.c
+	const int16_t o0 = 16;  // 1/16 inset
+	const int16_t o1 = 240; // 15/16 inset
+	const int16_t t = 32;   // 2/16 wall thickness
+	const int16_t b = 32;   // 2/16 bottom thickness
+
+	const int16_t i0 = o0 + t;
+	const int16_t i1 = o1 - t;
+
+	size_t count = 0;
+
+	// Walls stop at the rim start (so we can render the rim top separately).
+	const int16_t wall_y1 = 256 - t;
+
+	if(count_only) {
+		switch(side) {
+			case SIDE_BOTTOM: return 1; // bottom slab
+			case SIDE_TOP: return 10;   // bottom slab top + 4 rim tops + 5 inner
+			case SIDE_LEFT:
+			case SIDE_RIGHT:
+			case SIDE_FRONT:
+			case SIDE_BACK:
+				// bottom slab side + wall side + 3 rim side pieces
+				return 5;
+			default: return 0;
+		}
+	}
+
+	// Always draw the requested side only (no internal/overlapping faces).
+	// Bottom slab
+	count += render_cuboid_side(d, this, side, vertex_light, count_only, o0, 0,
+								o0, o1, b, o1, tex_bottom, 0);
+
+	// Walls (vertical)
+	switch(side) {
+		case SIDE_LEFT:
+			count += render_cuboid_side(d, this, SIDE_LEFT, vertex_light,
+										count_only, o0, 0, o0, o0 + t, wall_y1,
+										o1, tex_side, 0);
+			// Rim side pieces (north/west/south)
+			count += render_cuboid_side(d, this, SIDE_LEFT, vertex_light,
+										count_only, o0, wall_y1, o0, o0 + t, 256,
+										o0 + t, tex_side, 0);
+			count += render_cuboid_side(d, this, SIDE_LEFT, vertex_light,
+										count_only, o0, wall_y1, o0 + t, o0 + t,
+										256, o1 - t, tex_side, 0);
+			count += render_cuboid_side(d, this, SIDE_LEFT, vertex_light,
+										count_only, o0, wall_y1, o1 - t, o0 + t,
+										256, o1, tex_side, 0);
+			break;
+		case SIDE_RIGHT:
+			count += render_cuboid_side(d, this, SIDE_RIGHT, vertex_light,
+										count_only, o1 - t, 0, o0, o1, wall_y1,
+										o1, tex_side, 0);
+			count += render_cuboid_side(d, this, SIDE_RIGHT, vertex_light,
+										count_only, o1 - t, wall_y1, o0, o1, 256,
+										o0 + t, tex_side, 0);
+			count += render_cuboid_side(d, this, SIDE_RIGHT, vertex_light,
+										count_only, o1 - t, wall_y1, o0 + t, o1,
+										256, o1 - t, tex_side, 0);
+			count += render_cuboid_side(d, this, SIDE_RIGHT, vertex_light,
+										count_only, o1 - t, wall_y1, o1 - t, o1,
+										256, o1, tex_side, 0);
+			break;
+		case SIDE_FRONT:
+			count += render_cuboid_side(d, this, SIDE_FRONT, vertex_light,
+										count_only, o0, 0, o0, o1, wall_y1,
+										o0 + t, tex_side, 0);
+			count += render_cuboid_side(d, this, SIDE_FRONT, vertex_light,
+										count_only, o0, wall_y1, o0, o0 + t, 256,
+										o0 + t, tex_side, 0);
+			count += render_cuboid_side(d, this, SIDE_FRONT, vertex_light,
+										count_only, o0 + t, wall_y1, o0, o1 - t,
+										256, o0 + t, tex_side, 0);
+			count += render_cuboid_side(d, this, SIDE_FRONT, vertex_light,
+										count_only, o1 - t, wall_y1, o0, o1, 256,
+										o0 + t, tex_side, 0);
+			break;
+		case SIDE_BACK:
+			count += render_cuboid_side(d, this, SIDE_BACK, vertex_light,
+										count_only, o0, 0, o1 - t, o1, wall_y1,
+										o1, tex_side, 0);
+			count += render_cuboid_side(d, this, SIDE_BACK, vertex_light,
+										count_only, o0, wall_y1, o1 - t, o0 + t,
+										256, o1, tex_side, 0);
+			count += render_cuboid_side(d, this, SIDE_BACK, vertex_light,
+										count_only, o0 + t, wall_y1, o1 - t, o1 - t,
+										256, o1, tex_side, 0);
+			count += render_cuboid_side(d, this, SIDE_BACK, vertex_light,
+										count_only, o1 - t, wall_y1, o1 - t, o1,
+										256, o1, tex_side, 0);
+			break;
+		default: break;
+	}
+
+	if(side == SIDE_TOP) {
+		// Rim top surface: ring around the opening.
+		count += render_cuboid_side(d, this, SIDE_TOP, vertex_light, count_only,
+									o0, wall_y1, o0, o1, 256, o0 + t, tex_top, 0);
+		count += render_cuboid_side(d, this, SIDE_TOP, vertex_light, count_only,
+									o0, wall_y1, o1 - t, o1, 256, o1, tex_top, 0);
+		count += render_cuboid_side(d, this, SIDE_TOP, vertex_light, count_only,
+									o0, wall_y1, o0 + t, o0 + t, 256, o1 - t,
+									tex_top, 0);
+		count += render_cuboid_side(d, this, SIDE_TOP, vertex_light, count_only,
+									o1 - t, wall_y1, o0 + t, o1, 256, o1 - t,
+									tex_top, 0);
+	}
+
+	// Inner faces: emit them when the top is visible (so you can see the hollow).
+	if(side == SIDE_TOP) {
+		// bottom inside (thin cuboid so render_cuboid_side can emit the top face)
+		count += render_cuboid_side(d, this, SIDE_TOP, vertex_light, count_only,
+									i0, b - 1, i0, i1, b, i1, tex_bottom, 0);
+		// inner west wall face (at x = o0 + t)
+		count += render_cuboid_side(d, this, SIDE_RIGHT, vertex_light,
+									count_only, o0, b, o0, o0 + t, 256 - t, o1,
+									tex_side, 0);
+		// inner east wall face (at x = o1 - t)
+		count += render_cuboid_side(d, this, SIDE_LEFT, vertex_light, count_only,
+									o1 - t, b, o0, o1, 256 - t, o1, tex_side, 0);
+		// inner north wall face (at z = o0 + t)
+		count += render_cuboid_side(d, this, SIDE_BACK, vertex_light, count_only,
+									o0, b, o0, o1, 256 - t, o0 + t, tex_side, 0);
+		// inner south wall face (at z = o1 - t)
+		count += render_cuboid_side(d, this, SIDE_FRONT, vertex_light,
+									count_only, o0, b, o1 - t, o1, 256 - t, o1,
+									tex_side, 0);
+	}
+
+	return count;
+}
+
 size_t render_block_enchanting_table(struct displaylist* d, struct block_info* this,
 									 enum side side, struct block_info* it,
 									 uint8_t* vertex_light, bool count_only) {

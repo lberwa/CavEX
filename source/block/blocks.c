@@ -206,6 +206,7 @@ void blocks_init() {
 	blocks[115] = &block_nether_wart;
 	blocks[116] = &block_enchanting_table;
 	blocks[117] = &block_brewing_stand;
+	blocks[118] = &block_cauldron;
 	blocks[253] = &block_iron_chest;
 	blocks[96] = &block_trapdoor;
 	blocks[98] = &block_stonebrick;
