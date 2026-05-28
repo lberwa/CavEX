@@ -24,6 +24,8 @@
 #define SPLITSCREEN 2
 #endif
 
+#define FAST_MOVING
+
 #include <signal.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -43,6 +45,9 @@
 #define VERSION_FORK  3
 
 struct game_state {
+#ifdef FAST_MOVING
+	bool fast_moving;
+#endif
 	bool network;
 	int gerenderte_splitscreen_anzahl; 
 	int height2_icon;

@@ -112,6 +112,7 @@ add_executable(cavex
 				source/block/block_workbench.c
 				source/block/block_tree2d.c
 				source/block/face_occlusion.c
+				source/block/block_cauldron.c
 
 				source/entity/entity.c
 				source/entity/entity_local_player.c
@@ -124,6 +125,15 @@ add_executable(cavex
 				source/cNBT/nbt_parsing.c
 				source/cNBT/nbt_treeops.c
 				source/cNBT/nbt_util.c
+
+				source/cubiomes/biomenoise.c
+				source/cubiomes/biomes.c
+				source/cubiomes/finders.c
+				source/cubiomes/generator.c
+				source/cubiomes/layers.c
+				source/cubiomes/noise.c
+				source/cubiomes/quadbase.c
+				source/cubiomes/cubiomes_util.c
 
 				source/game/gui/screen_ingame.c
 				source/game/gui/screen_game_menu.c
@@ -246,6 +256,8 @@ add_executable(cavex
 			)
 
 target_compile_definitions(cavex PRIVATE PLATFORM_PC CGLM_ALL_UNALIGNED)
+target_include_directories(cavex PRIVATE source/cubiomes)
+target_compile_options(cavex PRIVATE -fwrapv)
 
 set_target_properties(
 	cavex PROPERTIES

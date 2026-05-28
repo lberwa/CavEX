@@ -37,7 +37,7 @@ CAVEX_DIR   :=  $(PC_BUILD)/$(CAVEX)
 nropt       ?=  $(shell nproc)
 SOURCES		:=	source source/block source/entity source/graphics source/network \
 				source/game source/game/gui source/platform source/item source/item/items \
-				source/cNBT source/parson #source/lodepng
+				source/cNBT source/parson source/cubiomes #source/lodepng
 DATA		:=  
 TEXTURES	:=	textures
 INCLUDES	:=
