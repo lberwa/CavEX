@@ -238,18 +238,18 @@ void screen_ingame_render3D(struct screen* s, mat4 view) {
 				if(e && e->type == ENTITY_ITEM) {
 					// fall through
 				} else if(e) {
-		        if (e->onRightClick) {
+				if (e->onRightClick) {
 					struct item_data held;
 					struct item_data *held_ptr = NULL;
-					bool TRue;
+					bool has_held_item = false;
 
 				if (inventory_get_hotbar_item(
 				        windowc_get_latest(gstate_windows()[WINDOWC_INVENTORY]), &held)) {
 					held_ptr = &held;
-					TRue = true;
+					has_held_item = true;
 				}
 	            e->onRightClick(e, held_ptr);
-	            if (TRue) {
+	            if (has_held_item) {
 	                gstate.held_item_animation.punch.start = time_get();
 	                gstate.held_item_animation.punch.place = false;
 	            }
@@ -415,6 +415,9 @@ void screen_ingame_render3D(struct screen* s, mat4 view) {
 	}
 
 	if(input_pressed(IB_SCROLL_RIGHT, gstate_active_player())) {
+#ifdef FAST_MOVING
+		gstate.fast_moving = gstate.fast_moving ? false : true;
+#endif
 		size_t next_slot = (slot == INVENTORY_SIZE_HOTBAR - 1) ? 0 : slot + 1;
 		inventory_set_hotbar(
 			windowc_get_latest(gstate_windows()[WINDOWC_INVENTORY]), next_slot);

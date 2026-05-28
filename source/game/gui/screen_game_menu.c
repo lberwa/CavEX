@@ -70,7 +70,7 @@ static void screen_gmenu_reset(struct screen* s, int width, int height) {
 	gstate_set_capture_input_player(player, false);
 	gui_selection[player] = 0;
 
-	sound_init();
+	//sound_init();
 	sound_play_bg(bg_playlist);
 }
 

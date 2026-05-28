@@ -51,6 +51,15 @@
 #define MONSTER_MAX_TORCH_LIGHT 0
 #define MONSTER_MAX_DAY_SKY_LIGHT 0
 
+static int64_t server_local_hash_seed_from_name(const char* name) {
+	uint64_t hash = 1469598103934665603ULL;
+	for(const unsigned char* p = (const unsigned char*)name; p && *p; p++) {
+		hash ^= *p;
+		hash *= 1099511628211ULL;
+	}
+	return (int64_t)hash;
+}
+
 static const int server_local_spawn_animals[] = {
 	ANIMAIL_PIG,
 	ANIMAIL_SHEEP,
@@ -87,6 +96,14 @@ static bool server_local_is_daytime(const struct server_local* s) {
 
 	float time = fmodf((float)s->world_time, (float)DAY_LENGTH_TICKS);
 	return time >= 0.0f && time < 1300.0f;
+}
+
+static bool server_local_damage_enabled(void) {
+#if defined(FAST_MOVE) || defined(FAST_MOVING)
+	return !gstate.fast_moving;
+#else
+	return true;
+#endif
 }
 
 static size_t server_local_count_nearby_animals(struct server_local* s, float px,
@@ -827,6 +844,16 @@ static void server_local_process(struct server_rpc* call, void* user) {
 				level_archive_read_player(&s->level, base_pos, base_rot, NULL, &dim);
 
 				server_world_create(&s->world, s->level_name, dim);
+				{
+					int64_t world_seed = 0;
+					if(!level_archive_read(&s->level, LEVEL_RANDOM_SEED, &world_seed, 0)
+					   || world_seed == 0) {
+						world_seed = server_local_hash_seed_from_name(
+							string_get_cstr(s->level_name));
+						level_archive_write(&s->level, LEVEL_RANDOM_SEED, &world_seed);
+					}
+					server_world_set_seed(&s->world, world_seed);
+				}
 				s->world_initialized = true;
 
 				level_archive_read(&s->level, LEVEL_TIME, &s->world_time, 0);
@@ -1169,8 +1196,7 @@ unload_done:
 			if(d > MAX_VIEW_DISTANCE * MAX_VIEW_DISTANCE)
 				continue;
 			if(!server_world_is_chunk_loaded(&s->world, x, z)
-			   && (d < c_nearest_dist2 || !c_nearest)
-			   && server_world_disk_has_chunk(&s->world, x, z)) {
+			   && (d < c_nearest_dist2 || !c_nearest)) {
 				c_nearest_dist2 = d;
 				c_nearest_x = x;
 				c_nearest_z = z;
@@ -1192,8 +1218,18 @@ unload_done:
 #else
 	int load_per_tick = s->player.finished_loading ? 1 : 8;
 #endif
+#ifdef PLATFORM_WII
+	load_per_tick = 1;
+	const int chunk_budget_ms = 8;
+#else
+	const int chunk_budget_ms = 16;
+#endif
 	int loaded_this_tick = 0;
+	ptime_t chunk_load_start = time_get();
 	for(int load_i = 0; load_i < load_per_tick; load_i++) {
+		if(time_diff_ms(chunk_load_start, time_get()) >= chunk_budget_ms)
+			break;
+
 		/* recompute nearest disk candidate each iteration */
 		bool c_found = false;
 		w_coord_t cand_x = 0, cand_z = 0;
@@ -1213,8 +1249,7 @@ unload_done:
 				if(d > MAX_VIEW_DISTANCE * MAX_VIEW_DISTANCE)
 					continue;
 				if(!server_world_is_chunk_loaded(&s->world, x, z)
-				   && (d < cand_dist2 || !c_found)
-				   && server_world_disk_has_chunk(&s->world, x, z)) {
+				   && (d < cand_dist2 || !c_found)) {
 					cand_dist2 = d;
 					cand_x = x;
 					cand_z = z;
@@ -1367,7 +1402,7 @@ for (int i = 0; i < 4; i++) {
 		}
 		if(player->old_vel_y < -0.079f && player->vel_y >= -0.079f) {
 			int fall_distance = player->fall_y - player->y;
-			if(fall_distance >= 4) {
+			if(fall_distance >= 4 && server_local_damage_enabled()) {
 				server_local_set_player_health(s, i, player->health-HEALTH_PER_HEART*(fall_distance-3));
 			}
 			player->fall_y = player->y;
@@ -1375,13 +1410,14 @@ for (int i = 0; i < 4; i++) {
 
 		if(in_lava) {
 			// damage player in lava every 8 ticks
-			if((player->oxygen & 7) == 0) {
+			if((player->oxygen & 7) == 0 && server_local_damage_enabled()) {
 				server_local_set_player_health(s, i, player->health-HEALTH_PER_HEART*2);
 			}
 			player->oxygen--;
 		} else if(in_water) {
 			// damage drowning player every 32 ticks
-			if(player->oxygen <= OXYGEN_THRESHOLD && (player->oxygen&31) == 0) {
+			if(player->oxygen <= OXYGEN_THRESHOLD && (player->oxygen&31) == 0
+			   && server_local_damage_enabled()) {
 				server_local_set_player_health(s, i, player->health-HEALTH_PER_HEART);
 			}
 			player->oxygen--;
@@ -1406,7 +1442,7 @@ for (int i = 0; i < 4; i++) {
 	}
 	if(s->player.old_vel_y < -0.079f && s->player.vel_y >= -0.079f) {
 		int fall_distance = s->player.fall_y - s->player.y;
-		if(fall_distance >= 4) {
+		if(fall_distance >= 4 && server_local_damage_enabled()) {
 			server_local_set_player_health(s, 0, s->player.health-HEALTH_PER_HEART*(fall_distance-3));
 		}
 		s->player.fall_y = s->player.y;
@@ -1414,13 +1450,14 @@ for (int i = 0; i < 4; i++) {
 
 	if(in_lava) {
 		// damage player in lava every 8 ticks
-		if((s->player.oxygen & 7) == 0) {
+		if((s->player.oxygen & 7) == 0 && server_local_damage_enabled()) {
 			server_local_set_player_health(s, 0, s->player.health-HEALTH_PER_HEART*2);
 		}
 		s->player.oxygen--;
 	} else if(in_water) {
 		// damage drowning player every 32 ticks
-		if(s->player.oxygen <= OXYGEN_THRESHOLD && (s->player.oxygen&31) == 0) {
+		if(s->player.oxygen <= OXYGEN_THRESHOLD && (s->player.oxygen&31) == 0
+		   && server_local_damage_enabled()) {
 			server_local_set_player_health(s, 0, s->player.health-HEALTH_PER_HEART);
 		}
 		s->player.oxygen--;

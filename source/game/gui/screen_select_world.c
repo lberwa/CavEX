@@ -151,7 +151,7 @@ static void screen_sworld_reset(struct screen* s, int width, int height) {
 	bottom_visible = height - 32 * GFX_GUI_SCALE;
 	height_visible = bottom_visible - height * 0.133F;
 
-	sound_init();
+	//sound_init();
 	sound_play_bg(bg_playlist);
 }
 

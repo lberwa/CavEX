@@ -292,6 +292,7 @@ static bool entity_tick(struct entity* e) {
 	}
 
 #ifdef PLATFORM_PC
+#ifdef MOVE_DEBUG
 	static ptime_t last_move_dbg[4];
 	ptime_t move_dbg_now = time_get();
 	if(player_index >= 0 && player_index < 4
@@ -303,6 +304,7 @@ static bool entity_tick(struct entity* e) {
 		last_move_dbg[player_index] = move_dbg_now;
 	}
 #endif
+#endif
 
 	e->data.local_player.body_yaw_old = e->data.local_player.body_yaw;
 
@@ -311,9 +313,18 @@ static bool entity_tick(struct entity* e) {
 		float distf = fmaxf(sqrtf(dist), 1.0F);
 		float dx = (forward * sinf(e->orient[0]) - strafe * cosf(e->orient[0])) / distf;
 		float dy = (strafe  * sinf(e->orient[0]) + forward * cosf(e->orient[0])) / distf;
+#ifdef FAST_MOVING
+		if (gstate.fast_moving) {
+			e->vel[0] += 0.5F * powf(0.6F / slipperiness, 3.0F) * dx;
+			e->vel[2] += 0.5F * powf(0.6F / slipperiness, 3.0F) * dy;
+		} else {
+#endif
+			e->vel[0] += 0.1F * powf(0.6F / slipperiness, 3.0F) * dx;
+			e->vel[2] += 0.1F * powf(0.6F / slipperiness, 3.0F) * dy;
+#ifdef FAST_MOVING
+		}
+#endif
 
-		e->vel[0] += 0.1F * powf(0.6F / slipperiness, 3.0F) * dx;
-		e->vel[2] += 0.1F * powf(0.6F / slipperiness, 3.0F) * dy;
 	}
 
 	if(e->data.local_player.jump_ticks > 0)

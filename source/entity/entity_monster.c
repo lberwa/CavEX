@@ -297,10 +297,15 @@ static bool server_tick_pig(struct entity* e, struct server_local* s) {
 // SHEEP
 //-------------------------
 static bool onRightClick_sheep(struct entity* e, struct item_data *held) {
+    if (!e || !held)
+        return false;
+
     if (held->id == 359 && !e->data.monster.shared) {
         e->data.monster.shared = 
                 e->data.monster.shared_now = true;
+        return true;
     }
+    return false;
 }
 
 static bool client_tick_sheep(struct entity* e) {
