@@ -274,6 +274,9 @@ static void server_local_try_spawn_nearby_animal(struct server_local* s, float p
 												 float py, float pz) {
 	assert(s);
 
+	if(!s->world.generator.finisher_animals)
+		return;
+
 	if(!server_local_is_daytime(s))
 		return;
 

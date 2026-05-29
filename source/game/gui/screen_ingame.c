@@ -263,7 +263,7 @@ void screen_ingame_render3D(struct screen* s, mat4 view) {
 	// block place
 	if(gstate.camera_hit.hit && input_pressed(IB_ACTION2, gstate_active_player())
 	   && !gstate.digging.active) {
-		svin_rpc_send(&(struct server_rpc) {
+		svin_rpc_try_send(&(struct server_rpc) {
 			RPC_PLAYER_ID(gstate_active_player())
 			.type = SRPC_BLOCK_PLACE,
 			.payload.block_place.x = gstate.camera_hit.x,
@@ -299,7 +299,7 @@ void screen_ingame_render3D(struct screen* s, mat4 view) {
 			gstate.digging.y = gstate.camera_hit.y;
 			gstate.digging.z = gstate.camera_hit.z;
 
-			svin_rpc_send(&(struct server_rpc) {
+			svin_rpc_try_send(&(struct server_rpc) {
 				RPC_PLAYER_ID(gstate_active_player())
 				.type = SRPC_BLOCK_DIG,
 				.payload.block_dig.x = gstate.digging.x,
@@ -312,7 +312,7 @@ void screen_ingame_render3D(struct screen* s, mat4 view) {
 
 		if(delay > 0
 		   && time_diff_ms(gstate.digging.start, time_get()) >= delay) {
-			svin_rpc_send(&(struct server_rpc) {
+			svin_rpc_try_send(&(struct server_rpc) {
 				RPC_PLAYER_ID(gstate_active_player())
 				.type = SRPC_BLOCK_DIG,
 				.payload.block_dig.x = gstate.digging.x,
@@ -341,7 +341,7 @@ void screen_ingame_render3D(struct screen* s, mat4 view) {
 				gstate.digging.y = gstate.camera_hit.y;
 				gstate.digging.z = gstate.camera_hit.z;
 
-			svin_rpc_send(&(struct server_rpc) {
+			svin_rpc_try_send(&(struct server_rpc) {
 				RPC_PLAYER_ID(gstate_active_player())
 				.type = SRPC_BLOCK_DIG,
 				.payload.block_dig.x = gstate.digging.x,
@@ -407,7 +407,7 @@ void screen_ingame_render3D(struct screen* s, mat4 view) {
 		if(gstate.digging.active)
 			gstate.digging.start = time_get();
 
-		svin_rpc_send(&(struct server_rpc) {
+		svin_rpc_try_send(&(struct server_rpc) {
 			RPC_PLAYER_ID(gstate_active_player())
 			.type = SRPC_HOTBAR_SLOT,
 			.payload.hotbar_slot.slot = next_slot,
@@ -434,7 +434,7 @@ void screen_ingame_render3D(struct screen* s, mat4 view) {
 		if(gstate.digging.active)
 			gstate.digging.start = time_get();
 
-		svin_rpc_send(&(struct server_rpc) {
+		svin_rpc_try_send(&(struct server_rpc) {
 			RPC_PLAYER_ID(gstate_active_player())
 			.type = SRPC_HOTBAR_SLOT,
 			.payload.hotbar_slot.slot = next_slot,

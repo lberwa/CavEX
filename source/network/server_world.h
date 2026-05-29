@@ -44,10 +44,123 @@ struct server_chunk {
 DICT_DEF2(dict_server_chunks, int64_t, M_BASIC_OPLIST, struct server_chunk,
 		  M_POD_OPLIST)
 
+enum server_world_cuberite_biome_gen {
+	SERVER_WORLD_CUBERITE_BIOME_GEN_CONSTANT,
+	SERVER_WORLD_CUBERITE_BIOME_GEN_CHECKERBOARD,
+	SERVER_WORLD_CUBERITE_BIOME_GEN_VORONOI,
+	SERVER_WORLD_CUBERITE_BIOME_GEN_DISTORTED_VORONOI,
+	SERVER_WORLD_CUBERITE_BIOME_GEN_TWO_LEVEL,
+	SERVER_WORLD_CUBERITE_BIOME_GEN_MULTI_STEP_MAP,
+	SERVER_WORLD_CUBERITE_BIOME_GEN_GROWN,
+};
+
+enum server_world_cuberite_shape_gen {
+	SERVER_WORLD_CUBERITE_SHAPE_GEN_BIOMAL_NOISE_3D,
+	SERVER_WORLD_CUBERITE_SHAPE_GEN_DISTORTED_HEIGHTMAP,
+	SERVER_WORLD_CUBERITE_SHAPE_GEN_HEIGHTMAP,
+	SERVER_WORLD_CUBERITE_SHAPE_GEN_NOISE_3D,
+	SERVER_WORLD_CUBERITE_SHAPE_GEN_END,
+};
+
+enum server_world_cuberite_composition_gen {
+	SERVER_WORLD_CUBERITE_COMPOSITION_GEN_BIOMAL,
+	SERVER_WORLD_CUBERITE_COMPOSITION_GEN_BIOMAL_NOISE_3D,
+	SERVER_WORLD_CUBERITE_COMPOSITION_GEN_CLASSIC,
+	SERVER_WORLD_CUBERITE_COMPOSITION_GEN_DEBUG_BIOMES,
+	SERVER_WORLD_CUBERITE_COMPOSITION_GEN_DISTORTED_HEIGHTMAP,
+	SERVER_WORLD_CUBERITE_COMPOSITION_GEN_END,
+	SERVER_WORLD_CUBERITE_COMPOSITION_GEN_NETHER,
+	SERVER_WORLD_CUBERITE_COMPOSITION_GEN_NOISE_3D,
+	SERVER_WORLD_CUBERITE_COMPOSITION_GEN_SAME_BLOCK,
+};
+
+struct server_world_cuberite_config {
+	enum server_world_cuberite_biome_gen biome_gen;
+	enum server_world_cuberite_shape_gen shape_gen;
+	enum server_world_cuberite_composition_gen composition_gen;
+
+	int biome_gen_cache_size;
+	int biome_gen_multi_cache_length;
+	int sea_level;
+	float biomal_noise3d_frequency_x;
+	float biomal_noise3d_frequency_y;
+	float biomal_noise3d_frequency_z;
+	float biomal_noise3d_base_frequency_x;
+	float biomal_noise3d_base_frequency_z;
+	float biomal_noise3d_choice_frequency_x;
+	float biomal_noise3d_choice_frequency_y;
+	float biomal_noise3d_choice_frequency_z;
+	float biomal_noise3d_air_threshold;
+	int biomal_noise3d_num_choice_octaves;
+	int biomal_noise3d_num_density_octaves;
+	int biomal_noise3d_num_base_octaves;
+	float biomal_noise3d_base_amplitude;
+	int composition_gen_cache_size;
+
+	bool finisher_rough_ravines;
+	int rough_ravines_grid_size;
+	int rough_ravines_max_offset;
+	int rough_ravines_max_size;
+	int rough_ravines_min_size;
+	float rough_ravines_max_center_width;
+	float rough_ravines_min_center_width;
+	float rough_ravines_max_roughness;
+	float rough_ravines_min_roughness;
+	float rough_ravines_max_floor_height_edge;
+	float rough_ravines_min_floor_height_edge;
+	float rough_ravines_max_floor_height_center;
+	float rough_ravines_min_floor_height_center;
+	float rough_ravines_max_ceiling_height_edge;
+	float rough_ravines_min_ceiling_height_edge;
+	float rough_ravines_max_ceiling_height_center;
+	float rough_ravines_min_ceiling_height_center;
+
+	bool finisher_worm_nest_caves;
+	int worm_nest_caves_size;
+	int worm_nest_caves_grid;
+	int worm_nest_max_offset;
+
+	bool finisher_water_lakes;
+	int water_lakes_probability;
+	bool finisher_water_springs;
+	bool finisher_lava_lakes;
+	int lava_lakes_probability;
+	bool finisher_lava_springs;
+	bool finisher_ore_nests;
+
+	bool finisher_mineshafts;
+	int mineshafts_grid_size;
+	int mineshafts_max_offset;
+	int mineshafts_max_system_size;
+	int mineshafts_chance_corridor;
+	int mineshafts_chance_crossing;
+	int mineshafts_chance_staircase;
+
+	bool finisher_trees;
+	bool finisher_villages;
+	bool finisher_single_piece_structures;
+	bool finisher_tall_grass;
+	bool finisher_sprinkle_foliage;
+	bool finisher_ice;
+	bool finisher_snow;
+	bool finisher_lilypads;
+	bool finisher_bottom_lava;
+	int bottom_lava_level;
+	bool finisher_dead_bushes;
+	bool finisher_natural_patches;
+	bool finisher_pre_simulator;
+	bool pre_simulator_falling_blocks;
+	bool pre_simulator_water;
+	bool pre_simulator_lava;
+	bool finisher_animals;
+	bool finisher_overworld_clump_flowers;
+};
+
 struct server_world {
 	dict_server_chunks_t chunks;
 	enum world_dim dimension;
 	int64_t world_seed;
+	struct server_world_cuberite_config generator;
 	string_t level_name;
 	struct region_archive loaded_regions[MAX_REGIONS];
 	ilist_regions_t loaded_regions_lru;
@@ -57,6 +170,7 @@ struct server_world {
 
 void server_world_create(struct server_world* w, string_t level_name,
 						 enum world_dim dimension);
+void server_world_set_cuberite_defaults(struct server_world* w);
 void server_world_set_seed(struct server_world* w, int64_t seed);
 void server_world_destroy(struct server_world* w);
 

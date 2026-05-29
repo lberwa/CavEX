@@ -22,7 +22,7 @@
 #include "../platform/thread.h"
 #include "server_interface.h"
 
-#define RPC_INBOX_SIZE 16
+#define RPC_INBOX_SIZE 256
 static struct server_rpc rpc_msg[RPC_INBOX_SIZE];
 static struct thread_channel svin_inbox;
 static struct thread_channel svin_empty_msg;
@@ -44,6 +44,21 @@ void svin_process_messages(void (*process)(struct server_rpc*, void*),
 		process(call, user);
 		tchannel_send(&svin_empty_msg, call, true);
 	}
+}
+
+bool svin_rpc_try_send(struct server_rpc* call) {
+	assert(call);
+
+	struct server_rpc* empty;
+	if(!tchannel_receive(&svin_empty_msg, (void**)&empty, false))
+		return false;
+
+	*empty = *call;
+	if(!tchannel_send(&svin_inbox, empty, false)) {
+		tchannel_send(&svin_empty_msg, empty, true);
+		return false;
+	}
+	return true;
 }
 
 void svin_rpc_send(struct server_rpc* call) {

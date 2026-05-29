@@ -28,7 +28,7 @@
 #include "server_interface.h"
 #include "server_local.h"
 
-#define RPC_INBOX_SIZE 16
+#define RPC_INBOX_SIZE 256
 static struct client_rpc rpc_msg[RPC_INBOX_SIZE];
 static struct thread_channel clin_inbox;
 static struct thread_channel clin_empty_msg;
@@ -513,7 +513,7 @@ void clin_update() {
 				struct camera* cam = &gstate.cameras[i];
 				struct entity* player = gstate.local_players[i];
 				if(player) {
-					svin_rpc_send(&(struct server_rpc) {
+					svin_rpc_try_send(&(struct server_rpc) {
 						RPC_PLAYER_ID(i)
 						.type = SRPC_PLAYER_POS,
 						.payload.player_pos.x = player->pos[0],
@@ -531,7 +531,7 @@ void clin_update() {
 			struct camera* cam = &gstate.camera;
 			struct entity* player = gstate.local_player;
 			if(player) {
-				svin_rpc_send(&(struct server_rpc) {
+				svin_rpc_try_send(&(struct server_rpc) {
 					RPC_PLAYER_ID(0)
 					.type = SRPC_PLAYER_POS,
 					.payload.player_pos.x = player->pos[0],
