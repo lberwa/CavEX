@@ -184,7 +184,7 @@ static void entity_render(struct entity* e, mat4 view, float td) {
 static bool onLeftClick(struct entity* e) {
 	assert(e);
 #ifdef SPLITSCREEN
-	svin_rpc_send(&(struct server_rpc) {
+	svin_rpc_try_send(&(struct server_rpc) {
 		RPC_PLAYER_ID(gstate_active_player())
 		.type = SRPC_PLAYER_ATTACK,
 		.payload.player_attack.target_player_id

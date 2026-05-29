@@ -95,6 +95,7 @@ struct server_rpc {
 void svin_init(void);
 void svin_process_messages(void (*process)(struct server_rpc*, void*),
 						   void* user, bool block);
+bool svin_rpc_try_send(struct server_rpc* call);
 void svin_rpc_send(struct server_rpc* call);
 
 #endif
