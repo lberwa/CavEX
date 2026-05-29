@@ -18,9 +18,12 @@
 
 * Added a controller menu like in Mario Kart Wii
 
+* Added a random block generator
+
 ---
 
 **Planned features** *(in no particular order, not complete)*
+
 * Sounds in the game
 * Server multiplayer
 * Block gravity: sand and gravel drop down when there's nothing underneath them to support
@@ -49,7 +52,7 @@
 
 * Probably more
 
-  
+* If you jump into a block, you will get stuck and won't be able to move.
 
 ## License
 

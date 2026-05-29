@@ -1237,6 +1237,10 @@ unload_done:
 		bool c_found = false;
 		w_coord_t cand_x = 0, cand_z = 0;
 		w_coord_t cand_dist2 = 0;
+		if(server_world_pending_chunk(&s->world, &cand_x, &cand_z)) {
+			c_found = true;
+		}
+		if(!c_found) {
 		for(w_coord_t z = min_pz - MAX_VIEW_DISTANCE;
 			z <= max_pz + MAX_VIEW_DISTANCE; z++) {
 			for(w_coord_t x = min_px - MAX_VIEW_DISTANCE;
@@ -1259,6 +1263,7 @@ unload_done:
 					c_found = true;
 				}
 			}
+		}
 		}
 
 		if(!c_found)

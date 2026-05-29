@@ -35,6 +35,24 @@ struct server_chunk {
 	bool modified;
 };
 
+enum server_world_pending_phase {
+	SERVER_WORLD_PENDING_NONE = 0,
+	SERVER_WORLD_PENDING_TERRAIN,
+	SERVER_WORLD_PENDING_FEATURES,
+	SERVER_WORLD_PENDING_DECO,
+	SERVER_WORLD_PENDING_FINALIZE,
+};
+
+struct server_world_pending_chunk {
+	bool active;
+	w_coord_t x;
+	w_coord_t z;
+	enum server_world_pending_phase phase;
+	int next_column;
+	int surface_map[CHUNK_SIZE * CHUNK_SIZE];
+	struct server_chunk chunk;
+};
+
 #define MAX_REGIONS 4
 #define S_CHUNK_ID(x, z) (((int64_t)(z) << 32) | (((int64_t)(x) & 0xFFFFFFFF)))
 #define S_CHUNK_X(id) ((int32_t)((id) & 0xFFFFFFFF))
@@ -165,6 +183,7 @@ struct server_world {
 	struct region_archive loaded_regions[MAX_REGIONS];
 	ilist_regions_t loaded_regions_lru;
 	size_t loaded_regions_length;
+	struct server_world_pending_chunk pending_chunk;
 	bool initialized;
 };
 
@@ -184,6 +203,8 @@ bool server_world_furthest_chunk(struct server_world* w, w_coord_t dist,
 
 bool server_world_is_chunk_loaded(struct server_world* w, w_coord_t x,
 								  w_coord_t z);
+bool server_world_pending_chunk(struct server_world* w, w_coord_t* x,
+								w_coord_t* z);
 bool server_world_load_chunk(struct server_world* w, w_coord_t x, w_coord_t z,
 							 struct server_chunk** sc);
 void server_world_save_chunk(struct server_world* w, bool erase, w_coord_t x,
