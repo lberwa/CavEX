@@ -201,7 +201,6 @@ void* tex_atlas_block(const char* filename, size_t* width, size_t* height) {
 	dict_atlas_src_init(atlas);
 
 	tex_atlas_reg(atlas, TEXAT_STONE, 1, 0);
-	tex_atlas_reg(atlas, TEXAT_STONE_BUTTON, 1, 0);
 	tex_atlas_reg(atlas, TEXAT_DIRT, 2, 0);
 	tex_atlas_reg(atlas, TEXAT_PLANKS, 4, 0);
 	tex_atlas_reg(atlas, TEXAT_SLAB_STONE_SIDE, 5, 0);
@@ -260,8 +259,6 @@ void* tex_atlas_block(const char* filename, size_t* width, size_t* height) {
 
 	tex_atlas_reg(atlas, TEXAT_SPAWNER, 1, 4);
 	tex_atlas_reg(atlas, TEXAT_SNOW, 2, 4);
-	tex_atlas_reg(atlas, TEXAT_REPEATER_TORCH_ON, 3, 6);
-	tex_atlas_reg(atlas, TEXAT_REPEATER_TORCH_OFF, 3, 7);
 	tex_atlas_reg(atlas, TEXAT_REPEATER_OFF, 3, 8);
 	tex_atlas_reg(atlas, TEXAT_REPEATER_ON, 3, 9);
 	tex_atlas_reg(atlas, TEXAT_GRASS_SIDE_SNOW, 4, 4);
@@ -357,7 +354,6 @@ void* tex_atlas_block(const char* filename, size_t* width, size_t* height) {
 					TEXAT_MELON_STEM_R, TEXAT_MELON_STEM_G, TEXAT_MELON_STEM_B);
 	tex_atlas_reg_col(atlas, TEXAT_MELON_STEM_ATTACHED, 10, 8, 
 					TEXAT_MELON_STEM_R, TEXAT_MELON_STEM_G, TEXAT_MELON_STEM_B);
-
 	tex_atlas_reg(atlas, TEXAT_ORE_LAPIS, 0, 10);
 	tex_atlas_reg(atlas, TEXAT_RAIL_POWERED_OFF, 3, 10);
 	
@@ -370,12 +366,15 @@ void* tex_atlas_block(const char* filename, size_t* width, size_t* height) {
 
 	tex_atlas_reg(atlas, TEXAT_SANDSTONE_TOP, 0, 11);
 	tex_atlas_reg(atlas, TEXAT_RAIL_POWERED_ON, 3, 11);
+	tex_atlas_reg(atlas, TEXAT_REDSTONE_LAMP, 6, 11);
+	tex_atlas_reg(atlas, TEXAT_LIT_REDSTONE_LAMP, 7, 11);
 
 		tex_atlas_reg(atlas, TEXAT_SANDSTONE_SIDE, 0, 12);
 		tex_atlas_reg(atlas, TEXAT_RAIL_DETECTOR, 3, 12);
 
 		tex_atlas_reg(atlas, TEXAT_SANDSTONE_BOTTOM, 0, 13);
 		tex_atlas_reg(atlas, TEXAT_STONEBRICK, 6, 3);
+		tex_atlas_reg(atlas, TEXAT_ORE_EMERALD, 10, 10);
 		tex_atlas_reg(atlas, TEXAT_PISTON_PLATE, 11, 6);
 		tex_atlas_reg(atlas, TEXAT_PISTON_SIDE, 12, 6);
 		tex_atlas_reg(atlas, TEXAT_PISTON_BACK, 13, 6);
@@ -417,12 +416,19 @@ void* tex_atlas_block(const char* filename, size_t* width, size_t* height) {
 	tex_atlas_reg(atlas, TEXAT_CAULDRON_BOTTOM, 6, 10);
 	tex_atlas_reg(atlas, TEXAT_CAULDRON_TOP, 7, 10);
 	tex_atlas_reg(atlas, TEXAT_CAULDRON_SIDE, 8, 10);
+	tex_atlas_reg(atlas, TEXAT_CAULDRON_INSIDE, 9, 10);
 	tex_atlas_reg_col(atlas, TEXAT_TALLGRASS, 7, 2, 110, 198, 63);
 	tex_atlas_reg_col(atlas, TEXAT_LEAVES_OAK, 4, 3, 75, 182, 15);
 	tex_atlas_reg_col(atlas, TEXAT_FERN, 8, 3, 110, 198, 63);
 
 	for(int k = 0; k < 10; k++)
 		tex_atlas_reg(atlas, TEXAT_BREAK_0 + k, k, 15);
+
+	// Append new block textures at the very end so all existing atlas indices
+	// stay exactly where old worlds/rendering expect them.
+	tex_atlas_reg(atlas, TEXAT_ENDER_CHEST_TOP, 4, 12);
+	tex_atlas_reg(atlas, TEXAT_ENDER_CHEST_SIDE, 5, 12);
+	tex_atlas_reg(atlas, TEXAT_ENDER_CHEST_FRONT, 6, 12);
 
 	memset(global_block_atlas, 0, sizeof(global_block_atlas));
 
@@ -494,13 +500,13 @@ void* tex_atlas_particles(const char* filename, size_t* width, size_t* height) {
 // you can register other rows here…
 
   memset(global_particle_atlas, 0, sizeof(global_particle_atlas));
-	uint8_t* image = tex_read(filename, width, height);
-	void* output = tex_atlas_compute(atlas,
+  uint8_t* image = tex_read(filename, width, height);
+  void* output = tex_atlas_compute(atlas,
 									 global_particle_atlas,
 									 image,
 									 *width, *height);
-	dict_atlas_src_clear(atlas);
-	free(image);
+  dict_atlas_src_clear(atlas);
+  free(image);
 	return output;
 
 }

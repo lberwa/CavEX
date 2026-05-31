@@ -92,6 +92,7 @@ struct server_player {
 	bool finished_loading;
 	struct inventory inventory;
 	struct inventory* active_inventory;
+	struct item_data ender_chest_items[CHEST_SIZE_STORAGE];
 	short health;
 	int oxygen;
 	int spawn_x, spawn_y, spawn_z;

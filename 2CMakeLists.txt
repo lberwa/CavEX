@@ -32,6 +32,7 @@ add_executable(cavex
 				source/block/block_clay.c
 				source/block/block_cobblestone.c
 				source/block/block_cobweb.c
+				source/block/block_ender_chest.c
 				source/block/block_gobweb.c
 				source/block/block_crops.c
 				source/block/block_dead_bush.c
@@ -39,6 +40,7 @@ add_executable(cavex
 				source/block/block_dispenser.c
 				source/block/block_door.c
 				source/block/block_double_slab.c
+				source/block/block_double_wooden_slab.c
 				source/block/block_farmland.c
 				source/block/block_fence.c
 				source/block/block_fire.c
@@ -59,6 +61,7 @@ add_executable(cavex
 				source/block/block_lava.c
 				source/block/block_leaves.c
 				source/block/block_lever.c
+				source/block/block_lit_redstone_lamp.c
 				source/block/block_log.c
 				source/block/block_melon.c
 				source/block/block_melon_stem.c
@@ -84,12 +87,14 @@ add_executable(cavex
 				source/block/block_rail.c
 				source/block/block_red_mushroom.c
 				source/block/block_red_mushroom_block.c
+				source/block/block_redstone_lamp.c
 				source/block/block_redstone_wire.c
 				source/block/block_repeater.c
 				source/block/block_reed.c
 				source/block/block_rose.c
 				source/block/block_sand.c
 				source/block/block_sandstone.c
+				source/block/block_sandstone_stairs.c
 				source/block/block_sapling.c
 				source/block/blocks.c
 				source/block/block_sign.c
@@ -100,14 +105,18 @@ add_executable(cavex
 				source/block/block_stonebrick.c
 				source/block/block_stairs.c
 				source/block/block_brick_stairs.c
+				source/block/block_emerald_ore.c
 				source/block/block_stone_brick_stairs.c
 				source/block/block_stone.c
 				source/block/block_tallgrass.c
 				source/block/block_tnt.c
 				source/block/block_torch.c
 				source/block/block_trapdoor.c
+				source/block/block_tripwire.c
+				source/block/block_tripwire_hook.c
 				source/block/block_tree2d.c
 				source/block/block_water.c
+				source/block/block_wooden_slab.c
 				source/block/block_wool.c
 				source/block/block_workbench.c
 				source/block/block_tree2d.c
@@ -186,7 +195,9 @@ add_executable(cavex
 				source/item/items/item_bucket.c
 				source/item/items/item_minecart.c
 				source/item/items/item_redstone.c
+				source/item/items/item_emerald.c
 				source/item/items/item_lapis_lazuli.c
+				source/item/items/item_cocoa.c
 
 				source/network/client_interface.c
 				source/network/complex_block_archive.c
@@ -201,6 +212,7 @@ add_executable(cavex
 				source/network/inventory_furnace.c
 				source/network/inventory_brewing_stand.c
 				source/network/inventory_chest.c
+				source/network/inventory_ender_chest.c
 				source/network/inventory_iron_chest.c
 				source/network/inventory_sign.c
 				source/network/inventory_enchanting_table.c

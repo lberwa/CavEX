@@ -26,22 +26,28 @@ static enum block_material getMaterial(struct block_info* this) {
 
 static size_t getBoundingBox(struct block_info* this, bool entity,
 							 struct AABB* x) {
-	if(x)
+	if(x) {
 		aabb_setsize(x, 1.0F, 0.5F, 1.0F);
+		if(this->block->metadata & 0x08)
+			aabb_translate(x, 0.0F, 0.5F, 0.0F);
+	}
 	return 1;
 }
 
 static struct face_occlusion*
 getSideMask(struct block_info* this, enum side side, struct block_info* it) {
+	const bool top_half = (this->block->metadata & 0x08) != 0;
+
 	switch(side) {
-		case SIDE_TOP: return face_occlusion_empty();
-		case SIDE_BOTTOM: return face_occlusion_full();
+		case SIDE_TOP: return top_half ? face_occlusion_full() : face_occlusion_empty();
+		case SIDE_BOTTOM:
+			return top_half ? face_occlusion_empty() : face_occlusion_full();
 		default: return face_occlusion_rect(8);
 	}
 }
 
 static uint8_t getTextureIndex(struct block_info* this, enum side side) {
-	switch(this->block->metadata) {
+	switch(this->block->metadata & 0x07) {
 		default:
 		case 0:
 			return (side == SIDE_TOP || side == SIDE_BOTTOM) ?
@@ -58,34 +64,50 @@ static uint8_t getTextureIndex(struct block_info* this, enum side side) {
 	}
 }
 
+static bool place_double_slab(struct server_local* s, struct block_info* pos,
+							  uint8_t variant) {
+	struct block_data blk = (struct block_data) {
+		.type = BLOCK_DOUBLE_SLAB,
+		.metadata = variant,
+		.sky_light = 0,
+		.torch_light = 0,
+	};
+	struct block_info blk_info = *pos;
+
+	blk_info.block = &blk;
+	if(entity_local_player_block_collide(
+		   (vec3) {s->players[s->active_player_id].x,
+				   s->players[s->active_player_id].y,
+				   s->players[s->active_player_id].z},
+		   &blk_info))
+		return false;
+
+	server_world_set_block(s, pos->x, pos->y, pos->z, blk);
+	return true;
+}
+
 static bool onItemPlace(struct server_local* s, struct item_data* it,
 						struct block_info* where, struct block_info* on,
 						enum side on_side) {
-	if(on_side == SIDE_TOP && on->block->type == it->id
-	   && on->block->metadata == it->durability) {
-		struct block_data blk = (struct block_data) {
-			.type = BLOCK_DOUBLE_SLAB,
-			.metadata = it->durability,
-			.sky_light = 0,
-			.torch_light = 0,
-		};
+	const uint8_t variant = it->durability & 0x07;
 
-		struct block_info blk_info = *on;
-		blk_info.block = &blk;
+	if(on->block->type == BLOCK_SLAB && (on->block->metadata & 0x07) == variant) {
+		const bool on_top_half = (on->block->metadata & 0x08) != 0;
 
-                        if(entity_local_player_block_collide(
-                            (vec3) {s->players[s->active_player_id].x,
-									s->players[s->active_player_id].y,
-									s->players[s->active_player_id].z},
-							&blk_info))
-                            return false;
+		if((on_side == SIDE_TOP && !on_top_half)
+		   || (on_side == SIDE_BOTTOM && on_top_half))
+			return place_double_slab(s, on, variant);
+	}
 
-		server_world_set_block(s, on->x, on->y, on->z, blk);
-		return true;
-	} else if(where->block->type == BLOCK_AIR) {
+	if(where->block->type == BLOCK_AIR) {
+		uint8_t metadata = variant;
+
+		if(on_side == SIDE_BOTTOM)
+			metadata |= 0x08;
+
 		struct block_data blk = (struct block_data) {
 			.type = it->id,
-			.metadata = it->durability,
+			.metadata = metadata,
 			.sky_light = 0,
 			.torch_light = 0,
 		};
@@ -111,7 +133,7 @@ static size_t getDroppedItem(struct block_info* this, struct item_data* it,
 							 struct random_gen* g, struct server_local* s) {
 	if(it) {
 		it->id = this->block->type;
-		it->durability = this->block->metadata;
+		it->durability = this->block->metadata & 0x07;
 		it->count = 1;
 	}
 

@@ -200,6 +200,14 @@ size_t render_block_button(struct displaylist* d, struct block_info* this,
 						   enum side side, struct block_info* it,
 						   uint8_t* vertex_light, bool count_only);
 
+size_t render_block_tripwire_hook(struct displaylist* d, struct block_info* this,
+								  enum side side, struct block_info* it,
+								  uint8_t* vertex_light, bool count_only);
+
+size_t render_block_tripwire(struct displaylist* d, struct block_info* this,
+							 enum side side, struct block_info* it,
+							 uint8_t* vertex_light, bool count_only);
+
 size_t render_block_repeater(struct displaylist* d, struct block_info* this,
 							 enum side side, struct block_info* it,
 							 uint8_t* vertex_light, bool count_only);
@@ -216,9 +224,13 @@ size_t render_block_brewing_stand(struct displaylist* d, struct block_info* this
 								  enum side side, struct block_info* it,
 								  uint8_t* vertex_light, bool count_only);
 
-size_t render_block_cauldron(struct displaylist* d, struct block_info* this,
-							 enum side side, struct block_info* it,
-							 uint8_t* vertex_light, bool count_only);
+size_t render_block_cauldron_always(struct displaylist* d, struct block_info* this,
+									enum side side, struct block_info* it,
+									uint8_t* vertex_light, bool count_only);
+
+size_t render_block_cauldron_water(struct displaylist* d, struct block_info* this,
+								   enum side side, struct block_info* it,
+								   uint8_t* vertex_light, bool count_only);
 
 size_t render_block_enchanting_table(struct displaylist* d, struct block_info* this,
 									 enum side side, struct block_info* it,

@@ -2,7 +2,32 @@
 	Copyright (c) 2026
 */
 
+#include "../network/client_interface.h"
+#include "../network/server_local.h"
 #include "blocks.h"
+
+static void swap_held_item(struct server_local* s, struct item_data* held,
+						   uint16_t new_id) {
+	const uint8_t pid = s->active_player_id;
+	struct inventory* inv = &s->players[pid].inventory;
+	const size_t hotbar_rel = inventory_get_hotbar(inv);           // 0..8
+	const size_t slot_abs = INVENTORY_SLOT_HOTBAR + hotbar_rel;    // 36..44
+
+	const struct item_data new_it = {
+		.id = new_id,
+		.count = 1,
+		.durability = 0,
+	};
+	inventory_set_slot(inv, slot_abs, new_it);
+
+	set_inv_slot_t changes;
+	set_inv_slot_init(changes);
+	set_inv_slot_push(changes, slot_abs);
+	server_local_send_inv_changes(pid, changes, inv, WINDOWC_INVENTORY);
+	set_inv_slot_clear(changes);
+
+	*held = new_it;
+}
 
 static enum block_material getMaterial(struct block_info* this) {
 	(void)this;
@@ -14,31 +39,10 @@ static size_t getBoundingBox(struct block_info* this, bool entity,
 	(void)this;
 	(void)entity;
 
-	// Shape: inset outer walls + bottom slab, leaving a hollow interior.
-	// Dimensions (in blocks):
-	// - outer inset: 1/16
-	// - wall thickness: 2/16
-	// - bottom thickness: 2/16
-	const float o0 = 1.0F / 16.0F;
-	const float o1 = 15.0F / 16.0F;
-	const float t = 2.0F / 16.0F;
-	const float b = 2.0F / 16.0F;
-
-	if(!out)
-		return 5;
-
-	// bottom slab
-	out[0] = (struct AABB) {o0, 0.0F, o0, o1, b, o1};
-	// west wall
-	out[1] = (struct AABB) {o0, 0.0F, o0, o0 + t, 1.0F, o1};
-	// east wall
-	out[2] = (struct AABB) {o1 - t, 0.0F, o0, o1, 1.0F, o1};
-	// north wall (front)
-	out[3] = (struct AABB) {o0, 0.0F, o0, o1, 1.0F, o0 + t};
-	// south wall (back)
-	out[4] = (struct AABB) {o0, 0.0F, o1 - t, o1, 1.0F, o1};
-
-	return 5;
+	// Normal full-block selection + collision box.
+	if(out)
+		aabb_setsize(out, 1.0F, 1.0F, 1.0F);
+	return 1;
 }
 
 static struct face_occlusion*
@@ -46,8 +50,9 @@ getSideMask(struct block_info* this, enum side side, struct block_info* it) {
 	(void)this;
 	(void)side;
 	(void)it;
-	// Do not occlude neighbor faces (so blocks behind are still rendered).
-	return face_occlusion_empty();
+	// Behave like a normal solid block for face culling to avoid z-fighting with
+	// neighbouring blocks (especially when rendering double-sided).
+	return face_occlusion_full();
 }
 
 static uint8_t getTextureIndex(struct block_info* this, enum side side) {
@@ -59,6 +64,41 @@ static uint8_t getTextureIndex(struct block_info* this, enum side side) {
 	}
 }
 
+static void onRightClick(struct server_local* s, struct item_data* it,
+						 struct block_info* where, struct block_info* on,
+						 enum side on_side) {
+	(void)where;
+	(void)on_side;
+
+	if(!s || !it || !on || !on->block)
+		return;
+
+	// Use metadata as water level: 0..3
+	uint8_t level = (uint8_t)(on->block->metadata & 0x03);
+
+	// Water bucket -> fill to 3 and give empty bucket
+	if(it->id == ITEM_BUCKET_WATER) {
+		if(level < 3) {
+			struct block_data nb = *on->block;
+			nb.metadata = (uint8_t)((nb.metadata & 0x0C) | 3);
+			server_world_set_block(s, on->x, on->y, on->z, nb);
+			swap_held_item(s, it, ITEM_BUCKET);
+		}
+		return;
+	}
+
+	// Empty bucket -> only take water if full (level 3)
+	if(it->id == ITEM_BUCKET) {
+		if(level == 3) {
+			struct block_data nb = *on->block;
+			nb.metadata = (uint8_t)(nb.metadata & 0x0C);
+			server_world_set_block(s, on->x, on->y, on->z, nb);
+			swap_held_item(s, it, ITEM_BUCKET_WATER);
+		}
+		return;
+	}
+}
+
 struct block block_cauldron = {
 	.name = "Cauldron",
 	.getSideMask = getSideMask,
@@ -67,16 +107,17 @@ struct block block_cauldron = {
 	.getTextureIndex = getTextureIndex,
 	.getDroppedItem = block_drop_default,
 	.onRandomTick = NULL,
-	.onRightClick = NULL,
+	.onRightClick = onRightClick,
 	.onWorldTick = NULL,
 	.onNeighbourBlockChange = NULL,
 	.onDay = NULL,
 	.onNight = NULL,
 	.transparent = false,
-	.renderBlock = render_block_cauldron,
-	.renderBlockAlways = NULL,
+	.renderBlock = render_block_full,
+	.renderBlockAlways = render_block_cauldron_always,
+	.renderBlockAlwaysTransparent = render_block_cauldron_water,
 	.luminance = 0,
-	.double_sided = false,
+	.double_sided = true,
 	.can_see_through = true,
 	.opacity = 0,
 	.ignore_lighting = false,
@@ -97,4 +138,3 @@ struct block block_cauldron = {
 		.tool.type = TOOL_TYPE_ANY,
 	},
 };
-

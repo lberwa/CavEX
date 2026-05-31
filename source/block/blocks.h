@@ -43,6 +43,11 @@ struct block {
 						  struct block_info*, uint8_t*, bool);
 	size_t (*renderBlockAlways)(struct displaylist*, struct block_info*,
 								enum side, struct block_info*, uint8_t*, bool);
+	// Optional additional geometry that must be rendered in the transparent pass
+	// (indices 6..11), even if the block itself is opaque.
+	size_t (*renderBlockAlwaysTransparent)(struct displaylist*, struct block_info*,
+										   enum side, struct block_info*,
+										   uint8_t*, bool);
 	size_t (*getDroppedItem)(struct block_info*, struct item_data*,
 							 struct random_gen*, struct server_local*);
 	void (*onRandomTick)(struct server_local*, struct block_info*);
@@ -183,6 +188,15 @@ extern struct block block_nether_wart;
 extern struct block block_enchanting_table;
 extern struct block block_brewing_stand;
 extern struct block block_cauldron;
+extern struct block block_redstone_lamp;
+extern struct block block_lit_redstone_lamp;
+extern struct block block_double_wooden_slab;
+extern struct block block_wooden_slab;
+extern struct block block_sandstone_stairs;
+extern struct block block_emerald_ore;
+extern struct block block_ender_chest;
+extern struct block block_tripwire_hook;
+extern struct block block_tripwire;
 extern struct block block_trapdoor;
 extern struct block block_wooden_door;
 extern struct block block_iron_door;

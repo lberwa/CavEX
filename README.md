@@ -42,7 +42,7 @@
 * Texture orientation for blocks that have a specific "direction"
 	- Bed placement isn't correct yet
 	
-* Random crashes, once in a while.. Maybe I'll implement an optional auto-save, to prevent some headaches and tears
+* Random crashes, once in a while. Maybe I'll implement an optional auto-save, to prevent some headaches and tears
 
 * Particles already spark fire before the torch is showing, after placing a torch
 
@@ -53,6 +53,8 @@
 * Probably more
 
 * If you jump into a block, you will get stuck and won't be able to move.
+
+* All bugs from [bugs.md](./bugs.md)
 
 ## License
 

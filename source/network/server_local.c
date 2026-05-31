@@ -1535,6 +1535,8 @@ void server_local_create(struct server_local* s) {
 		s->players[i].spawn_x = 0;
 		s->players[i].spawn_y = 80;
 		s->players[i].spawn_z = 0;
+		memset(s->players[i].ender_chest_items, 0,
+			   sizeof(s->players[i].ender_chest_items));
 
 		inventory_create(&s->players[i].inventory, &inventory_logic_player, s,
 						 INVENTORY_SIZE, 0, 0, 0);
