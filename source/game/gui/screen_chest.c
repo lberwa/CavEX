@@ -46,9 +46,14 @@ static size_t slots_index;
 static size_t selected_slot[4];
 static uint8_t chest_container[4];
 static int gui_scale[4];
+static bool chest_is_ender[4];
 
 void screen_chest_set_windowc(int player, uint8_t container) {
 	chest_container[player] = container;
+}
+
+void screen_chest_set_ender(int player, bool is_ender) {
+	chest_is_ender[player] = is_ender;
 }
 
 static void screen_chest_reset(struct screen* s, int width, int height) {
@@ -234,7 +239,9 @@ static void screen_chest_render2D(struct screen* s, int width, int height) {
 	gfx_bind_texture(&texture_gui_chest);
 	gutil_texquad(off_x, off_y, 0, 0, GUI_WIDTH, GUI_HEIGHT, GUI_WIDTH * scale,
 				  GUI_HEIGHT * scale);
-	gutil_text(off_x + 28 * scale, off_y + 6 * scale, "\2478Chest", 8 * scale, false);
+	gutil_text(off_x + 8 * scale, off_y + 6 * scale,
+			   chest_is_ender[player] ? "\2478Ender Chest" : "\2478Chest",
+			   8 * scale, false);
 
 	struct inv_slot* selection = slots + selected_slot[player];
 

@@ -1339,4 +1339,6 @@ extern struct item item_egg_creeper;
 extern struct item item_egg_pig;
 extern struct item item_egg_sheep;
 extern struct item item_minecart;
+extern struct item item_emerald;
 extern struct item item_lapis_lazuli;
+extern struct item item_cocoa;

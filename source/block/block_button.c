@@ -132,7 +132,7 @@ getSideMask(struct block_info* this, enum side side, struct block_info* it) {
 static uint8_t getTextureIndex(struct block_info* this, enum side side) {
 	(void)this;
 	(void)side;
-	return tex_atlas_lookup(TEXAT_STONE_BUTTON);
+	return tex_atlas_lookup(TEXAT_STONE);
 }
 
 static bool onItemPlace(struct server_local* s, struct item_data* it,

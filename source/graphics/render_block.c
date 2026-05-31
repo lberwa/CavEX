@@ -28,6 +28,7 @@
 #include "../platform/time.h"
 #include "../util.h"
 #include "render_block.h"
+#include "../graphics/gfx_settings.h"
 
 #define BLK_LEN 256
 
@@ -1185,7 +1186,7 @@ static size_t render_button_box(struct displaylist* d, struct block_info* this,
 								bool count_only, int16_t x0, int16_t y0,
 								int16_t z0, int16_t x1, int16_t y1,
 								int16_t z1) {
-	uint8_t tex = tex_atlas_lookup(TEXAT_STONE_BUTTON);
+	uint8_t tex = tex_atlas_lookup(TEXAT_STONE);
 	return render_cuboid_side(d, this, side, vertex_light, count_only, x0, y0,
 							  z0, x1, y1, z1, tex, 0);
 }
@@ -2204,8 +2205,8 @@ size_t render_block_repeater(struct displaylist* d, struct block_info* this,
 	uint8_t delay = (this->block->metadata >> 2) & 0x03;
 	uint8_t top_tex = blocks[this->block->type]->getTextureIndex(this, side);
 	uint8_t lamp_tex = tex_atlas_lookup(this->block->type == BLOCK_REPEATER_ON ?
-											TEXAT_REPEATER_TORCH_ON :
-											TEXAT_REPEATER_TORCH_OFF);
+											TEXAT_REDSTONE_TORCH_LIT :
+											TEXAT_REDSTONE_TORCH);
 	size_t count = 0;
 	int tex_rotate = dir & 0x03;
 	int16_t x0, z0, x1, z1;
@@ -4754,6 +4755,128 @@ size_t render_block_door(struct displaylist* d,
     );
 }
 
+static enum side tripwire_hook_front_side(const struct block_data* blk) {
+	switch(blk->metadata & 0x03) {
+		case 0: return SIDE_FRONT;
+		case 1: return SIDE_RIGHT;
+		case 2: return SIDE_BACK;
+		default: return SIDE_LEFT;
+	}
+}
+
+static bool tripwire_connects(const struct block_data* blk, enum side toward) {
+	if(blk->type == BLOCK_TRIPWIRE)
+		return true;
+	if(blk->type != BLOCK_TRIPWIRE_HOOK)
+		return false;
+	return tripwire_hook_front_side(blk) == blocks_side_opposite(toward);
+}
+
+size_t render_block_tripwire_hook(struct displaylist* d, struct block_info* this,
+								  enum side side, struct block_info* it,
+								  uint8_t* vertex_light, bool count_only) {
+	(void)it;
+
+	const enum side front = tripwire_hook_front_side(this->block);
+	size_t count = 0;
+
+	switch(front) {
+		case SIDE_FRONT:
+			count += render_cuboid_side(d, this, side, vertex_light, count_only,
+										64, 80, 0, 192, 176, 16, 0, 0);
+			count += render_cuboid_side(d, this, side, vertex_light, count_only,
+										112, 104, 16, 144, 152, 112, 0, 0);
+			count += render_cuboid_side(d, this, side, vertex_light, count_only,
+										120, 120, 112, 136, 136, 176, 0, 0);
+			break;
+		case SIDE_BACK:
+			count += render_cuboid_side(d, this, side, vertex_light, count_only,
+										64, 80, 240, 192, 176, 256, 0, 0);
+			count += render_cuboid_side(d, this, side, vertex_light, count_only,
+										112, 104, 144, 144, 152, 240, 0, 0);
+			count += render_cuboid_side(d, this, side, vertex_light, count_only,
+										120, 120, 80, 136, 136, 144, 0, 0);
+			break;
+		case SIDE_LEFT:
+			count += render_cuboid_side(d, this, side, vertex_light, count_only,
+										0, 80, 64, 16, 176, 192, 0, 0);
+			count += render_cuboid_side(d, this, side, vertex_light, count_only,
+										16, 104, 112, 112, 152, 144, 0, 0);
+			count += render_cuboid_side(d, this, side, vertex_light, count_only,
+										112, 120, 120, 176, 136, 136, 0, 0);
+			break;
+		case SIDE_RIGHT:
+		default:
+			count += render_cuboid_side(d, this, side, vertex_light, count_only,
+										240, 80, 64, 256, 176, 192, 0, 0);
+			count += render_cuboid_side(d, this, side, vertex_light, count_only,
+										144, 104, 112, 240, 152, 144, 0, 0);
+			count += render_cuboid_side(d, this, side, vertex_light, count_only,
+										80, 120, 120, 144, 136, 136, 0, 0);
+			break;
+	}
+
+	return count;
+}
+
+size_t render_block_tripwire(struct displaylist* d, struct block_info* this,
+							 enum side side, struct block_info* it,
+							 uint8_t* vertex_light, bool count_only) {
+	(void)it;
+
+	const int16_t bx = W2C_COORD(this->x) * BLK_LEN;
+	const int16_t bz = W2C_COORD(this->z) * BLK_LEN;
+	const int16_t y = W2C_COORD(this->y) * BLK_LEN
+					  + ((this->block->metadata & 0x04) ? 16 : 0);
+	const uint8_t ring = tex_atlas_lookup(TEXAT_STONE);
+	const uint8_t rest = tex_atlas_lookup(TEXAT_PLANKS);
+	const uint8_t ring_x = TEX_OFFSET(TEXTURE_X(ring));
+	const uint8_t ring_y = TEX_OFFSET(TEXTURE_Y(ring));
+	const uint8_t rest_x = TEX_OFFSET(TEXTURE_X(rest));
+	const uint8_t rest_y = TEX_OFFSET(TEXTURE_Y(rest));
+	const bool connect_left = this->neighbours
+							  && tripwire_connects(&this->neighbours[SIDE_LEFT],
+												   SIDE_LEFT);
+	const bool connect_right = this->neighbours
+							   && tripwire_connects(&this->neighbours[SIDE_RIGHT],
+													SIDE_RIGHT);
+	const bool connect_front = this->neighbours
+							   && tripwire_connects(&this->neighbours[SIDE_FRONT],
+													SIDE_FRONT);
+	const bool connect_back = this->neighbours
+							  && tripwire_connects(&this->neighbours[SIDE_BACK],
+												   SIDE_BACK);
+
+	if(side != SIDE_TOP && side != SIDE_BOTTOM)
+		return 0;
+
+	if(count_only)
+		return 1 + connect_left + connect_right + connect_front + connect_back;
+
+	render_block_side_adv_fulltex(d, bx + 112, y, bz + 112, 32, 32, ring_x,
+								  ring_y, ring_x + 16, ring_y + 16, false, 0,
+								  false, SIDE_TOP, vertex_light, 0);
+
+	if(connect_left)
+		render_block_side_adv_fulltex(d, bx, y, bz + 120, 112, 16, rest_x,
+									  rest_y, rest_x + 16, rest_y + 16, false, 0,
+									  false, SIDE_TOP, vertex_light, 0);
+	if(connect_right)
+		render_block_side_adv_fulltex(d, bx + 144, y, bz + 120, 112, 16, rest_x,
+									  rest_y, rest_x + 16, rest_y + 16, false, 0,
+									  false, SIDE_TOP, vertex_light, 0);
+	if(connect_front)
+		render_block_side_adv_fulltex(d, bx + 120, y, bz, 16, 112, rest_x,
+									  rest_y, rest_x + 16, rest_y + 16, false, 0,
+									  false, SIDE_TOP, vertex_light, 0);
+	if(connect_back)
+		render_block_side_adv_fulltex(d, bx + 120, y, bz + 144, 16, 112, rest_x,
+									  rest_y, rest_x + 16, rest_y + 16, false, 0,
+									  false, SIDE_TOP, vertex_light, 0);
+
+	return 1 + connect_left + connect_right + connect_front + connect_back;
+}
+
 
 size_t render_block_layer(struct displaylist* d, struct block_info* this,
 						  enum side side, struct block_info* it,
@@ -4771,9 +4894,11 @@ size_t render_block_layer(struct displaylist* d, struct block_info* this,
 size_t render_block_slab(struct displaylist* d, struct block_info* this,
 						 enum side side, struct block_info* it,
 						 uint8_t* vertex_light, bool count_only) {
+	const int16_t yoffset = (this->block->metadata & 0x08) ? 128 : 0;
+
 	if(!count_only)
 		render_block_side(
-			d, W2C_COORD(this->x), W2C_COORD(this->y), W2C_COORD(this->z), 0,
+			d, W2C_COORD(this->x), W2C_COORD(this->y), W2C_COORD(this->z), yoffset,
 			128, blocks[this->block->type]->getTextureIndex(this, side),
 			blocks[this->block->type]->luminance, true, 0, false, 0, side,
 			vertex_light);
@@ -5064,146 +5189,147 @@ size_t render_block_brewing_stand(struct displaylist* d, struct block_info* this
 	return count;
 }
 
-size_t render_block_cauldron(struct displaylist* d, struct block_info* this,
-							 enum side side, struct block_info* it,
-							 uint8_t* vertex_light, bool count_only) {
+size_t render_block_cauldron_always(struct displaylist* d, struct block_info* this,
+									enum side side, struct block_info* it,
+									uint8_t* vertex_light, bool count_only) {
 	(void)it;
 
-	const uint8_t tex_side = tex_atlas_lookup(TEXAT_CAULDRON_SIDE);
-	const uint8_t tex_top = tex_atlas_lookup(TEXAT_CAULDRON_TOP);
-	const uint8_t tex_bottom = tex_atlas_lookup(TEXAT_CAULDRON_BOTTOM);
+	// Render an inner "box" inset by 3px (3/16) on x/z and bottom,
+	// connected to the top (y=1) and without a top face.
+	// Texture uses full tile at atlas coords (9,10) but is scaled to the face size.
+	const uint8_t tex = tex_atlas_lookup(TEXAT_CAULDRON_INSIDE);
+	const uint8_t tex_x = TEX_OFFSET(TEXTURE_X(tex));
+	const uint8_t tex_y = TEX_OFFSET(TEXTURE_Y(tex));
+	const uint8_t luminance = blocks[this->block->type]->luminance;
 
-	// Match the AABB shape in block_cauldron.c
-	const int16_t o0 = 16;  // 1/16 inset
-	const int16_t o1 = 240; // 15/16 inset
-	const int16_t t = 32;   // 2/16 wall thickness
-	const int16_t b = 32;   // 2/16 bottom thickness
+	// Inner box dimensions in 1/256 block units.
+	const int16_t inset = 48; // 3/16
+	const int16_t x0 = inset;
+	const int16_t x1 = BLK_LEN - inset;
+	const int16_t z0 = inset;
+	const int16_t z1 = BLK_LEN - inset;
+	const int16_t y0 = inset; // bottom inset
+	const int16_t y1 = BLK_LEN; // attached to top
 
-	const int16_t i0 = o0 + t;
-	const int16_t i1 = o1 - t;
+	const int16_t bx = W2C_COORD(this->x) * BLK_LEN;
+	const int16_t by = W2C_COORD(this->y) * BLK_LEN;
+	const int16_t bz = W2C_COORD(this->z) * BLK_LEN;
 
-	size_t count = 0;
-
-	// Walls stop at the rim start (so we can render the rim top separately).
-	const int16_t wall_y1 = 256 - t;
+	const uint8_t u0 = tex_x;
+	const uint8_t v0 = tex_y;
+	const uint8_t u1 = (uint8_t)(tex_x + 16);
+	const uint8_t v1 = (uint8_t)(tex_y + 16);
 
 	if(count_only) {
-		switch(side) {
-			case SIDE_BOTTOM: return 1; // bottom slab
-			case SIDE_TOP: return 10;   // bottom slab top + 4 rim tops + 5 inner
-			case SIDE_LEFT:
-			case SIDE_RIGHT:
-			case SIDE_FRONT:
-			case SIDE_BACK:
-				// bottom slab side + wall side + 3 rim side pieces
-				return 5;
-			default: return 0;
-		}
+		// We render only the face that matches `side` (no top face).
+		return (side == SIDE_TOP) ? 0 : 1;
 	}
 
-	// Always draw the requested side only (no internal/overlapping faces).
-	// Bottom slab
-	count += render_cuboid_side(d, this, side, vertex_light, count_only, o0, 0,
-								o0, o1, b, o1, tex_bottom, 0);
+	const uint16_t inner_w = (uint16_t)(x1 - x0);
+	const uint16_t inner_h = (uint16_t)(y1 - y0);
+	const uint16_t inner_d = (uint16_t)(z1 - z0);
 
-	// Walls (vertical)
 	switch(side) {
 		case SIDE_LEFT:
-			count += render_cuboid_side(d, this, SIDE_LEFT, vertex_light,
-										count_only, o0, 0, o0, o0 + t, wall_y1,
-										o1, tex_side, 0);
-			// Rim side pieces (north/west/south)
-			count += render_cuboid_side(d, this, SIDE_LEFT, vertex_light,
-										count_only, o0, wall_y1, o0, o0 + t, 256,
-										o0 + t, tex_side, 0);
-			count += render_cuboid_side(d, this, SIDE_LEFT, vertex_light,
-										count_only, o0, wall_y1, o0 + t, o0 + t,
-										256, o1 - t, tex_side, 0);
-			count += render_cuboid_side(d, this, SIDE_LEFT, vertex_light,
-										count_only, o0, wall_y1, o1 - t, o0 + t,
-										256, o1, tex_side, 0);
-			break;
+			// Inner west wall at x = x0.
+			render_block_side_adv_fulltex(d, bx + x0, by + y0, bz + z0, inner_d,
+										  inner_h, u0, v0, u1, v1, false, 0,
+										  true, SIDE_LEFT, vertex_light,
+										  luminance);
+			return 1;
 		case SIDE_RIGHT:
-			count += render_cuboid_side(d, this, SIDE_RIGHT, vertex_light,
-										count_only, o1 - t, 0, o0, o1, wall_y1,
-										o1, tex_side, 0);
-			count += render_cuboid_side(d, this, SIDE_RIGHT, vertex_light,
-										count_only, o1 - t, wall_y1, o0, o1, 256,
-										o0 + t, tex_side, 0);
-			count += render_cuboid_side(d, this, SIDE_RIGHT, vertex_light,
-										count_only, o1 - t, wall_y1, o0 + t, o1,
-										256, o1 - t, tex_side, 0);
-			count += render_cuboid_side(d, this, SIDE_RIGHT, vertex_light,
-										count_only, o1 - t, wall_y1, o1 - t, o1,
-										256, o1, tex_side, 0);
-			break;
+			// Inner east wall at x = x1.
+			render_block_side_adv_fulltex(d, bx + x1, by + y0, bz + z0, inner_d,
+										  inner_h, u0, v0, u1, v1, false, 0,
+										  true, SIDE_RIGHT, vertex_light,
+										  luminance);
+			return 1;
 		case SIDE_FRONT:
-			count += render_cuboid_side(d, this, SIDE_FRONT, vertex_light,
-										count_only, o0, 0, o0, o1, wall_y1,
-										o0 + t, tex_side, 0);
-			count += render_cuboid_side(d, this, SIDE_FRONT, vertex_light,
-										count_only, o0, wall_y1, o0, o0 + t, 256,
-										o0 + t, tex_side, 0);
-			count += render_cuboid_side(d, this, SIDE_FRONT, vertex_light,
-										count_only, o0 + t, wall_y1, o0, o1 - t,
-										256, o0 + t, tex_side, 0);
-			count += render_cuboid_side(d, this, SIDE_FRONT, vertex_light,
-										count_only, o1 - t, wall_y1, o0, o1, 256,
-										o0 + t, tex_side, 0);
-			break;
+			// Inner north wall at z = z0.
+			render_block_side_adv_fulltex(d, bx + x0, by + y0, bz + z0, inner_w,
+										  inner_h, u0, v0, u1, v1, false, 0,
+										  true, SIDE_FRONT, vertex_light,
+										  luminance);
+			return 1;
 		case SIDE_BACK:
-			count += render_cuboid_side(d, this, SIDE_BACK, vertex_light,
-										count_only, o0, 0, o1 - t, o1, wall_y1,
-										o1, tex_side, 0);
-			count += render_cuboid_side(d, this, SIDE_BACK, vertex_light,
-										count_only, o0, wall_y1, o1 - t, o0 + t,
-										256, o1, tex_side, 0);
-			count += render_cuboid_side(d, this, SIDE_BACK, vertex_light,
-										count_only, o0 + t, wall_y1, o1 - t, o1 - t,
-										256, o1, tex_side, 0);
-			count += render_cuboid_side(d, this, SIDE_BACK, vertex_light,
-										count_only, o1 - t, wall_y1, o1 - t, o1,
-										256, o1, tex_side, 0);
-			break;
-		default: break;
+			// Inner south wall at z = z1.
+			render_block_side_adv_fulltex(d, bx + x0, by + y0, bz + z1, inner_w,
+										  inner_h, u0, v0, u1, v1, false, 0,
+										  true, SIDE_BACK, vertex_light,
+										  luminance);
+			return 1;
+		case SIDE_BOTTOM:
+			// Inner bottom at y = y0 (no top face for the inner box, but we do
+			// render the bottom surface visible from inside).
+			render_block_side_adv_fulltex(d, bx + x0, by + y0, bz + z0, inner_w,
+										  inner_d, u0, v0, u1, v1, false, 0,
+										  true, SIDE_TOP, vertex_light,
+										  luminance);
+			return 1;
+		default: return 0;
 	}
+}
 
-	if(side == SIDE_TOP) {
-		// Rim top surface: ring around the opening.
-		count += render_cuboid_side(d, this, SIDE_TOP, vertex_light, count_only,
-									o0, wall_y1, o0, o1, 256, o0 + t, tex_top, 0);
-		count += render_cuboid_side(d, this, SIDE_TOP, vertex_light, count_only,
-									o0, wall_y1, o1 - t, o1, 256, o1, tex_top, 0);
-		count += render_cuboid_side(d, this, SIDE_TOP, vertex_light, count_only,
-									o0, wall_y1, o0 + t, o0 + t, 256, o1 - t,
-									tex_top, 0);
-		count += render_cuboid_side(d, this, SIDE_TOP, vertex_light, count_only,
-									o1 - t, wall_y1, o0 + t, o1, 256, o1 - t,
-									tex_top, 0);
-	}
+size_t render_block_cauldron_water(struct displaylist* d, struct block_info* this,
+								   enum side side, struct block_info* it,
+								   uint8_t* vertex_light, bool count_only) {
+	(void)it;
 
-	// Inner faces: emit them when the top is visible (so you can see the hollow).
-	if(side == SIDE_TOP) {
-		// bottom inside (thin cuboid so render_cuboid_side can emit the top face)
-		count += render_cuboid_side(d, this, SIDE_TOP, vertex_light, count_only,
-									i0, b - 1, i0, i1, b, i1, tex_bottom, 0);
-		// inner west wall face (at x = o0 + t)
-		count += render_cuboid_side(d, this, SIDE_RIGHT, vertex_light,
-									count_only, o0, b, o0, o0 + t, 256 - t, o1,
-									tex_side, 0);
-		// inner east wall face (at x = o1 - t)
-		count += render_cuboid_side(d, this, SIDE_LEFT, vertex_light, count_only,
-									o1 - t, b, o0, o1, 256 - t, o1, tex_side, 0);
-		// inner north wall face (at z = o0 + t)
-		count += render_cuboid_side(d, this, SIDE_BACK, vertex_light, count_only,
-									o0, b, o0, o1, 256 - t, o0 + t, tex_side, 0);
-		// inner south wall face (at z = o1 - t)
-		count += render_cuboid_side(d, this, SIDE_FRONT, vertex_light,
-									count_only, o0, b, o1 - t, o1, 256 - t, o1,
-									tex_side, 0);
-	}
+	// Only top side draws the water surface.
+	if(side != SIDE_TOP)
+		return 0;
 
-	return count;
+	const uint8_t level = (uint8_t)(this->block->metadata & 0x03);
+	if(level == 0)
+		return 0;
+
+	if(count_only)
+		return 1;
+
+	// Same inner box dimensions as render_block_cauldron_always().
+	const int16_t inset = 48; // 3/16
+	const int16_t x0 = inset;
+	const int16_t x1 = BLK_LEN - inset;
+	const int16_t z0 = inset;
+	const int16_t z1 = BLK_LEN - inset;
+	const int16_t y0 = inset;
+	const int16_t y1 = BLK_LEN;
+
+	const uint16_t inner_w = (uint16_t)(x1 - x0);
+	const uint16_t inner_d = (uint16_t)(z1 - z0);
+	const uint16_t inner_h = (uint16_t)(y1 - y0);
+
+	const int16_t bx = W2C_COORD(this->x) * BLK_LEN;
+	const int16_t by = W2C_COORD(this->y) * BLK_LEN;
+	const int16_t bz = W2C_COORD(this->z) * BLK_LEN;
+
+	// IMPORTANT: Transparent pass binds `texture_anim` (anim.png), not terrain.
+	// Use the same UV tile as the fancy liquid renderer.
+	#ifdef GFX_FANCY_LIQUIDS
+	const uint8_t water_tex = TEXTURE_INDEX(1, 0);
+	#else
+	// Force the animated water tile even if fancy liquids are off, otherwise the
+	// alpha channel from terrain.png would be ignored.
+	const uint8_t water_tex = TEXTURE_INDEX(1, 0);
+	#endif
+	const uint8_t water_x = TEX_OFFSET(TEXTURE_X(water_tex));
+	const uint8_t water_y = TEX_OFFSET(TEXTURE_Y(water_tex));
+
+	// Full tile UVs (16x16), scaled to face size.
+	const uint8_t wu0 = water_x;
+	const uint8_t wv0 = water_y;
+	const uint8_t wu1 = (uint8_t)(water_x + 16);
+	const uint8_t wv1 = (uint8_t)(water_y + 16);
+
+	// Cauldron levels: 1/4, 1/2, 3/4 of the inner height above the bottom inset.
+	const int16_t water_h = (int16_t)((inner_h * level) / 4);
+	const int16_t wy = by + y0 + water_h;
+
+	// Shade like other top faces; blending is handled by the transparent pass.
+	render_block_side_adv_fulltex(d, bx + x0, wy, bz + z0, inner_w, inner_d, wu0,
+								  wv0, wu1, wv1, false, 0, false, SIDE_TOP,
+								  vertex_light, 0);
+	return 1;
 }
 
 size_t render_block_enchanting_table(struct displaylist* d, struct block_info* this,

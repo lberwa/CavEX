@@ -27,6 +27,15 @@
 
 struct item* items[ITEMS_MAX];
 
+static bool item_place_tripwire(struct server_local* s, struct item_data* it,
+								  struct block_info* where, struct block_info* on,
+								  enum side on_side) {
+	struct item_data place = *it;
+	place.id = BLOCK_TRIPWIRE;
+	return blocks[BLOCK_TRIPWIRE]->block_item.onItemPlace(s, &place, where, on,
+														   on_side);
+}
+
 void items_init() {
 	for(int k = 0; k < ITEMS_MAX; k++)
 		items[k] = NULL;
@@ -74,6 +83,7 @@ void items_init() {
 	items[285] = &item_gold_pickaxe;
 	items[286] = &item_gold_axe;
 	items[287] = &item_string;
+	items[287]->onItemPlace = item_place_tripwire;
 	items[288] = &item_feather;
 	items[289] = &item_gunpowder;
 	items[290] = &item_wood_hoe;
@@ -134,6 +144,7 @@ void items_init() {
 	// compass
 	// fishing rod
 	// clock
+	items[388] = &item_emerald;
 	items[348] = &item_glowstone_dust;
 	items[349] = &item_fish;
 	items[350] = &item_fish_cooked;
@@ -154,6 +165,7 @@ void items_init() {
 	items[424] = &item_egg_pig;
 	items[425] = &item_egg_sheep;
 	items[426] = &item_lapis_lazuli;
+	items[427] = &item_cocoa;
 	// golden record
 	// green record
 }

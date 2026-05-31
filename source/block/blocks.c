@@ -207,6 +207,15 @@ void blocks_init() {
 	blocks[116] = &block_enchanting_table;
 	blocks[117] = &block_brewing_stand;
 	blocks[118] = &block_cauldron;
+	blocks[123] = &block_redstone_lamp;
+	blocks[124] = &block_lit_redstone_lamp;
+	blocks[125] = &block_double_wooden_slab;
+	blocks[126] = &block_wooden_slab;
+	blocks[128] = &block_sandstone_stairs;
+	blocks[129] = &block_emerald_ore;
+	blocks[130] = &block_ender_chest;
+	blocks[131] = &block_tripwire_hook;
+	blocks[132] = &block_tripwire;
 	blocks[253] = &block_iron_chest;
 	blocks[96] = &block_trapdoor;
 	blocks[98] = &block_stonebrick;

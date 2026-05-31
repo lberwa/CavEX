@@ -482,6 +482,16 @@ static void chunk_mesher_rebuild(struct block_data* bd, w_coord_t cx,
 									   neighbours_info + k, vertex_light,
 									   count_only)
 								* 4;
+
+						if(blocks[local.type]->renderBlockAlwaysTransparent) {
+							const int dp_trans = k + 6;
+							vertices[dp_trans]
+								+= blocks[local.type]->renderBlockAlwaysTransparent(
+									   d + dp_trans, &local_info, s,
+									   neighbours_info + k, vertex_light,
+									   count_only)
+								* 4;
+						}
 					}
 				}
 			}

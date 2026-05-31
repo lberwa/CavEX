@@ -102,6 +102,7 @@ static void onWorldTick(struct server_local* s, struct block_info* info) {
                 nb.type == BLOCK_REDSTONE_TORCH_LIT ||
                 (nb.type == BLOCK_LEVER && (m & 0x08)) ||
                 (nb.type == BLOCK_STONE_BUTTON && (m & 0x04)) ||
+                (nb.type == BLOCK_TRIPWIRE_HOOK && (m & 0x08)) ||
                 nb.type == BLOCK_REPEATER_ON ||
                 ((nb.type == BLOCK_STONE_PRESSURE_PLATE ||
                   nb.type == BLOCK_WOOD_PRESSURE_PLATE) &&

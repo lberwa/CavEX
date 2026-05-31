@@ -92,6 +92,7 @@ static bool repeater_input_powered(struct block_data blk) {
 		   || blk.type == BLOCK_REDSTONE_TORCH_LIT
 		   || (blk.type == BLOCK_LEVER && (meta & 0x08))
 		   || (blk.type == BLOCK_STONE_BUTTON && (meta & 0x04))
+		   || (blk.type == BLOCK_TRIPWIRE_HOOK && (meta & 0x08))
 		   || blk.type == BLOCK_REPEATER_ON
 		   || ((blk.type == BLOCK_STONE_PRESSURE_PLATE
 				|| blk.type == BLOCK_WOOD_PRESSURE_PLATE)

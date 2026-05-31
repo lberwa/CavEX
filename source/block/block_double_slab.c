@@ -36,7 +36,7 @@ getSideMask(struct block_info* this, enum side side, struct block_info* it) {
 }
 
 static uint8_t getTextureIndex(struct block_info* this, enum side side) {
-	switch(this->block->metadata) {
+	switch(this->block->metadata & 0x07) {
 		default:
 		case 0:
 			return (side == SIDE_TOP || side == SIDE_BOTTOM) ?
