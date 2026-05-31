@@ -1225,7 +1225,8 @@ unload_done:
 	load_per_tick = 1;
 	const int chunk_budget_ms = 8;
 #else
-	const int chunk_budget_ms = 16;
+	load_per_tick = (load_per_tick <= 1) ? 2 : 12;
+	const int chunk_budget_ms = 48;
 #endif
 	int loaded_this_tick = 0;
 	ptime_t chunk_load_start = time_get();
