@@ -35,6 +35,8 @@
 #define EXPLOSION_STEP     0.5f
 #define HARDNESS_SCALE     0.0005f
 
+// #define ALL_FALSE_FINISHER
+
 #ifndef M_PI
 #define M_PI 3.14159265358979323846f
 #endif
@@ -154,8 +156,8 @@ static struct gen_cuberite_runtime_args gen_runtime_args(const struct server_wor
 			cfg->rough_ravines_min_floor_height_center,
 		.rough_ravines_max_ceiling_height_center =
 			cfg->rough_ravines_max_ceiling_height_center,
-		.tree_threshold_forest = 0.96f,
-		.tree_threshold_dense = 0.975f,
+		.tree_threshold_forest = 0.55f,
+		.tree_threshold_dense = 0.62f,
 		.grass_threshold = 0.94f,
 		.flower_threshold = 0.90f,
 		.dead_bush_threshold = 0.955f,
@@ -205,6 +207,35 @@ static float gen_lerp(float a, float b, float t) {
 
 static int gen_chunk_surface_height(const struct server_chunk* sc, int lx, int lz);
 static int gen_chunk_actual_surface_height(const struct server_chunk* sc, int lx, int lz);
+static bool gen_is_dry_sandy_biome(int biome_id);
+static bool gen_is_water(const struct server_chunk* sc, int x, int y, int z);
+
+/* Terrain debug switches: turn pieces of the base generator on/off individually. */
+static const bool GEN_FORCE_LEGACY_WII_SURFACE = 				true;
+static const bool GEN_ENABLE_LEGACY_RARE_OCEANS = 				true;
+#ifdef ALL_FALSE_FINISHER
+static const bool GEN_ENABLE_RIVER_LOWERING = 					false;
+static const bool GEN_ENABLE_NEIGHBOR_EDGE_BLEND = 				false;
+static const bool GEN_ENABLE_OCEAN_ISLAND_MASK = 				false;
+static const bool GEN_ENABLE_DRY_SANDY_SEA_CLAMP = 				false;
+static const bool GEN_ENABLE_LOWLAND_NEIGHBOR_SMOOTHING = 		false;
+static const bool GEN_ENABLE_LEGACY_LOWLAND_FLOOR = 			false;
+static const bool GEN_ENABLE_BEACH_SURFACE_REPLACEMENT = 		false;
+static const bool GEN_ENABLE_SUBMERGED_SEAFLOOR_REPLACEMENT = 	false;
+static const bool GEN_ENABLE_WATER_FILL_TO_SEA_LEVEL = 			false;
+static const bool GEN_ENABLE_SNOW_SURFACE_LAYER = 				false;
+#else
+static const bool GEN_ENABLE_RIVER_LOWERING = 					true;
+static const bool GEN_ENABLE_NEIGHBOR_EDGE_BLEND = 				true;
+static const bool GEN_ENABLE_OCEAN_ISLAND_MASK = 				true;
+static const bool GEN_ENABLE_DRY_SANDY_SEA_CLAMP = 				true;
+static const bool GEN_ENABLE_LOWLAND_NEIGHBOR_SMOOTHING = 		true;
+static const bool GEN_ENABLE_LEGACY_LOWLAND_FLOOR = 			true;
+static const bool GEN_ENABLE_BEACH_SURFACE_REPLACEMENT = 		true;
+static const bool GEN_ENABLE_SUBMERGED_SEAFLOOR_REPLACEMENT = 	true;
+static const bool GEN_ENABLE_WATER_FILL_TO_SEA_LEVEL = 			true;
+static const bool GEN_ENABLE_SNOW_SURFACE_LAYER = 				true;
+#endif
 
 static float gen_value_noise2d(float x, float z, uint32_t seed) {
 	int32_t xi = (int32_t)floorf(x);
@@ -413,6 +444,85 @@ static int gen_biome_at_safe(Generator* biome_gen, int wx, int wz) {
 	return (biome_id < 0) ? plains : biome_id;
 }
 
+static int gen_reduce_extreme_biomes(int biome_id, int wx, int wz) {
+	float major_mask = gen_fbm2d((float)wx * 0.0055f, (float)wz * 0.0055f,
+								 0x5EA0001U, 3, 2.0f, 0.5f);
+	float variant = gen_fbm2d((float)wx * 0.013f, (float)wz * 0.013f,
+							  0x5EA0002U, 2, 2.0f, 0.5f);
+
+	if(isOceanic(biome_id) && major_mask > 0.0f) {
+		if(variant > 0.35f)
+			return forest;
+		if(variant < -0.35f)
+			return plains;
+		return wooded_hills;
+	}
+
+	switch(biome_id) {
+	case desert:
+	case desert_hills:
+	case desert_lakes:
+	case beach:
+	case snowy_beach:
+	case badlands:
+	case badlands_plateau:
+	case wooded_badlands_plateau:
+	case eroded_badlands:
+	case modified_badlands_plateau:
+	case modified_wooded_badlands_plateau:
+		if(major_mask > 0.0f) {
+			if(variant > 0.30f)
+				return savanna;
+			if(variant < -0.30f)
+				return forest;
+			return plains;
+		}
+		break;
+	default:
+		break;
+	}
+
+	return biome_id;
+}
+
+static int gen_apply_forest_biome_variation(int biome_id, int wx, int wz) {
+	float forest_mask = gen_fbm2d((float)wx * 0.0075f, (float)wz * 0.0075f,
+								  0xF07E571U, 3, 2.0f, 0.5f);
+	float forest_type = gen_fbm2d((float)wx * 0.018f, (float)wz * 0.018f,
+								  0xB17C4F5U, 2, 2.0f, 0.5f);
+
+	switch(biome_id) {
+	case plains:
+		if(forest_mask > -0.08f) {
+			if(forest_type > 0.52f)
+				return dark_forest;
+			if(forest_type > 0.18f)
+				return birch_forest;
+			if(forest_type < -0.42f)
+				return flower_forest;
+			return forest;
+		}
+		break;
+	case wooded_hills:
+		if(forest_mask > -0.05f) {
+			if(forest_type > 0.25f)
+				return birch_forest_hills;
+			return forest;
+		}
+		break;
+	case forest:
+		if(forest_type > 0.60f)
+			return dark_forest;
+		if(forest_type < -0.48f)
+			return flower_forest;
+		break;
+	default:
+		break;
+	}
+
+	return biome_id;
+}
+
 static struct gen_biome_profile gen_blended_profile(Generator* biome_gen, int wx,
 													int wz, int* center_biome) {
 	static const int offs[5][2] = {
@@ -433,14 +543,19 @@ static struct gen_biome_profile gen_blended_profile(Generator* biome_gen, int wx
 	int snowy_votes = 0;
 	int river_votes = 0;
 
-	int first = gen_biome_at_safe(biome_gen, wx, wz);
+	int first = gen_apply_forest_biome_variation(
+		gen_reduce_extreme_biomes(gen_biome_at_safe(biome_gen, wx, wz), wx, wz), wx, wz);
 	if(center_biome)
 		*center_biome = first;
 
 	for(int i = 0; i < 5; i++) {
 		int biome_id = (i == 0) ? first :
-								gen_biome_at_safe(biome_gen, wx + offs[i][0],
-												  wz + offs[i][1]);
+								gen_apply_forest_biome_variation(
+									gen_reduce_extreme_biomes(
+										gen_biome_at_safe(biome_gen, wx + offs[i][0],
+														  wz + offs[i][1]),
+										wx + offs[i][0], wz + offs[i][1]),
+									wx + offs[i][0], wz + offs[i][1]);
 		struct gen_biome_profile p = gen_profile_for_biome(biome_id);
 		float w = weights[i];
 		base += p.base_height * w;
@@ -490,6 +605,142 @@ static struct gen_biome_profile gen_blended_profile(Generator* biome_gen, int wx
 	return out;
 }
 
+static int gen_compute_surface_height_base(const struct gen_biome_profile* profile,
+										   int biome_id,
+										   const struct gen_cuberite_runtime_args* gen_args,
+										   uint32_t seed, int choice_octaves,
+										   int32_t wx, int32_t wz) {
+	float continental = gen_fbm2d(wx * gen_args->land_frequency_x,
+		wz * gen_args->land_frequency_z, seed ^ 0x13579BDFU,
+		gen_args->land_octaves, 2.0f, 0.5f);
+	float mountain = gen_fbm2d(wx * gen_args->mountain_frequency_x,
+		wz * gen_args->mountain_frequency_z, seed ^ 0x4AFEB19DU,
+		choice_octaves, 2.0f, 0.5f);
+	float micro = gen_fbm2d(wx * gen_args->detail_frequency_x,
+		wz * gen_args->detail_frequency_z, seed ^ 0xA53C9E3DU,
+		gen_args->detail_octaves, 2.0f, 0.5f);
+
+	float mountain_lift = fmaxf(0.0f, mountain);
+	float mountain_factor = gen_args->mountain_gain;
+	float micro_factor = 2.0f;
+	if(profile->top_block == BLOCK_SAND) {
+		mountain_factor = 0.35f;
+		micro_factor = 0.8f;
+	} else if(profile->top_block == BLOCK_STONE && !profile->oceanic) {
+		mountain_factor = 0.95f;
+		micro_factor = 1.6f;
+	}
+
+	int surface = (int)(profile->base_height
+		+ continental * profile->amplitude
+		+ mountain_lift * (profile->amplitude * mountain_factor)
+		+ micro * micro_factor);
+
+	if(GEN_ENABLE_RIVER_LOWERING && profile->riverine) {
+		int river_floor = gen_args->sea_level - 1 + (int)(micro * 0.75f);
+		if(river_floor < gen_args->sea_level - 1)
+			river_floor = gen_args->sea_level - 1;
+		if(river_floor > gen_args->sea_level)
+			river_floor = gen_args->sea_level;
+		surface = (surface + river_floor * 3) / 4;
+		if(surface < gen_args->sea_level - 2)
+			surface = gen_args->sea_level - 2;
+		if(surface > gen_args->sea_level + 1)
+			surface = gen_args->sea_level + 1;
+	}
+
+	if(GEN_ENABLE_OCEAN_ISLAND_MASK && profile->oceanic) {
+		float island_mask = gen_fbm2d(wx * gen_args->island_mask_frequency_x,
+			wz * gen_args->island_mask_frequency_z, seed ^ 0x6A1D51E1U,
+			choice_octaves, 2.0f, 0.5f);
+		if(island_mask < gen_args->island_mask_threshold) {
+			surface = fminf(surface, gen_args->sea_level - 2);
+		} else {
+			float t = (island_mask - gen_args->island_mask_threshold)
+				/ gen_args->island_mask_scale;
+			if(t < 0.0f)
+				t = 0.0f;
+			if(t > 1.0f)
+				t = 1.0f;
+			float lift = t * t * (3.0f - 2.0f * t);
+			int target = (int)(gen_args->sea_level - 1
+						   + lift * gen_args->island_max_lift);
+			if(target > surface)
+				surface = target;
+			if(lift < gen_args->island_flatten_threshold
+			   && surface > gen_args->sea_level + 2) {
+				surface = gen_args->sea_level + 2;
+			}
+		}
+	}
+
+	if(surface < 6)
+		surface = 6;
+	if(surface > WORLD_HEIGHT - 2)
+		surface = WORLD_HEIGHT - 2;
+	if(profile->oceanic && surface > gen_args->sea_level - 2)
+		surface = gen_args->sea_level - 2;
+	if(surface < gen_args->sea_level - 20)
+		surface = gen_args->sea_level - 20;
+
+	if(GEN_ENABLE_DRY_SANDY_SEA_CLAMP
+	   && gen_is_dry_sandy_biome(biome_id) && !profile->oceanic
+	   && biome_id != beach && biome_id != river) {
+		if(surface < gen_args->sea_level + 1)
+			surface = gen_args->sea_level + 1;
+		if(surface <= gen_args->sea_level + 4)
+			surface = gen_args->sea_level + 2;
+	}
+
+	return surface;
+}
+
+static int gen_compute_legacy_wii_surface(
+	const struct gen_cuberite_runtime_args* gen_args, uint32_t seed,
+	int32_t wx, int32_t wz) {
+	float h1 = gen_fbm2d(wx * gen_args->land_frequency_x,
+		wz * gen_args->land_frequency_z, seed ^ 0x11AABBCCU, 2, 2.0f, 0.5f);
+	float h2 = gen_fbm2d(wx * gen_args->detail_frequency_x,
+		wz * gen_args->detail_frequency_z, seed ^ 0x77CC22AAU, 1, 2.0f, 0.5f);
+	float m = gen_fbm2d(wx * gen_args->mountain_frequency_x,
+		wz * gen_args->mountain_frequency_z, seed ^ 0x55DD33AAU, 2, 2.0f, 0.5f);
+	int surface = (int)(63.0f + h1 * 11.0f + h2 * 2.0f + fmaxf(0.0f, m) * 8.0f);
+	if(surface < 6)
+		surface = 6;
+	if(surface > WORLD_HEIGHT - 2)
+		surface = WORLD_HEIGHT - 2;
+	return surface;
+}
+
+static int gen_apply_legacy_rare_oceans(
+	const struct gen_cuberite_runtime_args* gen_args, uint32_t seed,
+	int32_t wx, int32_t wz, int surface, int biome_id) {
+	if(!GEN_ENABLE_LEGACY_RARE_OCEANS)
+		return surface;
+	if(biome_id == river || biome_id == frozen_river)
+		return surface;
+
+	float ocean_macro = gen_fbm2d(wx * 0.0032f, wz * 0.0032f,
+		seed ^ 0x2F6E2B1DU, 3, 2.0f, 0.5f);
+	if(ocean_macro > -0.42f)
+		return surface;
+
+	float t = (-0.42f - ocean_macro) / 0.28f;
+	if(t < 0.0f)
+		t = 0.0f;
+	if(t > 1.0f)
+		t = 1.0f;
+	t = t * t * (3.0f - 2.0f * t);
+
+	int ocean_surface = gen_args->sea_level - 2;
+	int blended = (int)((1.0f - t) * (float)surface + t * (float)ocean_surface);
+	if(blended > surface)
+		blended = surface;
+	if(blended < gen_args->sea_level - 4)
+		blended = gen_args->sea_level - 4;
+	return blended;
+}
+
 static float gen_cave_threshold_for_biome(int biome_id) {
 	if(isOceanic(biome_id) || biome_id == river || biome_id == frozen_river)
 		return 0.70f;
@@ -515,6 +766,25 @@ static bool gen_is_dry_sandy_biome(int biome_id) {
 		   || biome_id == modified_wooded_badlands_plateau;
 }
 
+static bool gen_is_mountainous_biome(int biome_id) {
+	switch(biome_id) {
+	case mountains:
+	case wooded_mountains:
+	case mountain_edge:
+	case gravelly_mountains:
+	case modified_gravelly_mountains:
+	case taiga_hills:
+	case giant_tree_taiga_hills:
+	case giant_spruce_taiga_hills:
+	case jungle_hills:
+	case wooded_hills:
+	case birch_forest_hills:
+		return true;
+	default:
+		return false;
+	}
+}
+
 static bool gen_inside_chunk(int x, int y, int z);
 static uint8_t gen_get_block(const struct server_chunk* sc, int x, int y, int z);
 static void gen_set_block(struct server_chunk* sc, int x, int y, int z,
@@ -530,7 +800,11 @@ enum {
 	GEN_CAVE_MAX_POINTS = 512,
 	GEN_CAVE_MAX_RECURSION = 5,
 	GEN_CAVE_MAX_TUNNELS_PER_CHUNK = 18,
+#ifdef PLATFORM_WII
 	GEN_CHUNK_COLUMNS_PER_STEP = 10,
+#else
+	GEN_CHUNK_COLUMNS_PER_STEP = 64,
+#endif
 	GEN_FEATURE_STEP_COUNT = 13,
 	GEN_FINALIZE_STEP_COUNT = 3,
 };
@@ -564,6 +838,20 @@ struct gen_chunk_cave_connector {
 	int y;
 	int z;
 	int radius;
+	uint32_t seed;
+};
+
+struct gen_chunk_cave_trunk_info {
+	bool valid;
+	int anchor_x;
+	int anchor_z;
+	bool horizontal;
+	int start_chunk_x;
+	int end_chunk_x;
+	int start_chunk_z;
+	int end_chunk_z;
+	int y;
+	int offset;
 	uint32_t seed;
 };
 
@@ -614,7 +902,7 @@ static int gen_clamp_int(int value, int minv, int maxv) {
 }
 
 static uint32_t gen_chunk_cave_border_hash(uint32_t seed, int chunk_x, int chunk_z,
-											 enum gen_chunk_cave_side side, int salt) {
+										   enum gen_chunk_cave_side side, int salt) {
 	int key_x = chunk_x;
 	int key_z = chunk_z;
 	int axis = 0;
@@ -640,14 +928,90 @@ static uint32_t gen_chunk_cave_border_hash(uint32_t seed, int chunk_x, int chunk
 	return gen_hash3i(key_x, axis * 8191 + salt, key_z, seed ^ 0x5CA1AB1EU);
 }
 
-static int gen_chunk_cave_border_count(uint32_t seed, int chunk_x, int chunk_z,
-										 enum gen_chunk_cave_side side) {
+static int gen_chunk_cave_base_border_count(uint32_t seed, int chunk_x, int chunk_z,
+											enum gen_chunk_cave_side side) {
 	uint32_t h = gen_chunk_cave_border_hash(seed, chunk_x, chunk_z, side, 0);
 	int roll = (int)(h % 100U);
-	if(roll < 55)
+	if(roll < 62)
 		return 1;
-	if(roll < 78)
+	if(roll < 97)
 		return 2;
+	if(roll < 100)
+		return 3;
+	return 0;
+}
+
+static int gen_chunk_cave_total_base_connectors(uint32_t seed, int chunk_x, int chunk_z) {
+	int total = 0;
+	for(int side = GEN_CHUNK_CAVE_WEST; side <= GEN_CHUNK_CAVE_SOUTH; side++)
+		total += gen_chunk_cave_base_border_count(seed, chunk_x, chunk_z,
+												  (enum gen_chunk_cave_side)side);
+	return total;
+}
+
+static enum gen_chunk_cave_side gen_chunk_cave_forced_side(uint32_t seed, int chunk_x, int chunk_z) {
+	return (enum gen_chunk_cave_side)(gen_hash3i(chunk_x, 521, chunk_z, seed) % 4U);
+}
+
+static enum gen_chunk_cave_side gen_chunk_cave_opposite_side(enum gen_chunk_cave_side side) {
+	switch(side) {
+	case GEN_CHUNK_CAVE_WEST:
+		return GEN_CHUNK_CAVE_EAST;
+	case GEN_CHUNK_CAVE_EAST:
+		return GEN_CHUNK_CAVE_WEST;
+	case GEN_CHUNK_CAVE_NORTH:
+		return GEN_CHUNK_CAVE_SOUTH;
+	case GEN_CHUNK_CAVE_SOUTH:
+	default:
+		return GEN_CHUNK_CAVE_NORTH;
+	}
+}
+
+static void gen_chunk_cave_neighbor_for_side(int chunk_x, int chunk_z,
+											 enum gen_chunk_cave_side side,
+											 int* out_chunk_x, int* out_chunk_z) {
+	if(out_chunk_x == NULL || out_chunk_z == NULL)
+		return;
+	*out_chunk_x = chunk_x;
+	*out_chunk_z = chunk_z;
+	switch(side) {
+	case GEN_CHUNK_CAVE_WEST:
+		(*out_chunk_x)--;
+		break;
+	case GEN_CHUNK_CAVE_EAST:
+		(*out_chunk_x)++;
+		break;
+	case GEN_CHUNK_CAVE_NORTH:
+		(*out_chunk_z)--;
+		break;
+	case GEN_CHUNK_CAVE_SOUTH:
+	default:
+		(*out_chunk_z)++;
+		break;
+	}
+}
+
+static bool gen_chunk_cave_border_is_forced(uint32_t seed, int chunk_x, int chunk_z,
+											enum gen_chunk_cave_side side) {
+	if(gen_chunk_cave_total_base_connectors(seed, chunk_x, chunk_z) == 0
+	   && gen_chunk_cave_forced_side(seed, chunk_x, chunk_z) == side)
+		return true;
+
+	int neigh_x = chunk_x;
+	int neigh_z = chunk_z;
+	gen_chunk_cave_neighbor_for_side(chunk_x, chunk_z, side, &neigh_x, &neigh_z);
+	return gen_chunk_cave_total_base_connectors(seed, neigh_x, neigh_z) == 0
+		&& gen_chunk_cave_forced_side(seed, neigh_x, neigh_z)
+			== gen_chunk_cave_opposite_side(side);
+}
+
+static int gen_chunk_cave_border_count(uint32_t seed, int chunk_x, int chunk_z,
+									   enum gen_chunk_cave_side side) {
+	int count = gen_chunk_cave_base_border_count(seed, chunk_x, chunk_z, side);
+	if(count > 0)
+		return count;
+	if(gen_chunk_cave_border_is_forced(seed, chunk_x, chunk_z, side))
+		return 1;
 	return 0;
 }
 
@@ -666,8 +1030,8 @@ static bool gen_chunk_cave_make_connector(struct gen_chunk_cave_connector* out,
 	int edge_offset = 2 + (int)(pos_h % (unsigned int)(CHUNK_SIZE - 4));
 
 	out->seed = gen_chunk_cave_border_hash(seed, chunk_x, chunk_z, side, 101 + index * 19);
-	out->y = 18 + (int)(y_h % 34U);
-	out->radius = GEN_CAVE_MIN_RADIUS + 2 + (int)(r_h % 3U);
+	out->y = 36 + (int)(y_h % 14U);
+	out->radius = 1 + (int)(r_h % 2U);
 	switch(side) {
 	case GEN_CHUNK_CAVE_WEST:
 		out->x = base_x;
@@ -690,54 +1054,332 @@ static bool gen_chunk_cave_make_connector(struct gen_chunk_cave_connector* out,
 	return true;
 }
 
-static void gen_carve_chunk_linked_caves(struct server_chunk* sc, uint32_t seed,
-											 int chunk_x, int chunk_z) {
-	struct gen_chunk_cave_connector connectors[8];
-	int connector_count = 0;
+static void gen_chunk_cave_find_trunk(struct gen_chunk_cave_trunk_info* out,
+									  uint32_t seed, int chunk_x, int chunk_z) {
+	if(out == NULL)
+		return;
+	*out = (struct gen_chunk_cave_trunk_info) {0};
+
+	for(int axis = 0; axis < 2; axis++) {
+		for(int back = 0; back < 6; back++) {
+			int anchor_x = chunk_x - (axis == 0 ? back : 0);
+			int anchor_z = chunk_z - (axis == 1 ? back : 0);
+			uint32_t h = gen_hash3i(anchor_x, 1301 + axis * 97, anchor_z, seed);
+			if((h % 100U) >= 18U)
+				continue;
+
+			bool horizontal = ((h >> 8) & 1U) == 0U;
+			if(horizontal && axis != 0)
+				continue;
+			if(!horizontal && axis != 1)
+				continue;
+
+			int length = 5 + (int)((h >> 16) % 2U);
+			if(horizontal) {
+				if(chunk_z != anchor_z)
+					continue;
+				if(chunk_x < anchor_x || chunk_x > anchor_x + length)
+					continue;
+			} else {
+				if(chunk_x != anchor_x)
+					continue;
+				if(chunk_z < anchor_z || chunk_z > anchor_z + length)
+					continue;
+			}
+
+			out->valid = true;
+			out->anchor_x = anchor_x;
+			out->anchor_z = anchor_z;
+			out->horizontal = horizontal;
+			out->start_chunk_x = anchor_x;
+			out->end_chunk_x = horizontal ? (anchor_x + length) : anchor_x;
+			out->start_chunk_z = anchor_z;
+			out->end_chunk_z = horizontal ? anchor_z : (anchor_z + length);
+			out->y = 38 + (int)((h >> 24) % 12U);
+			out->offset = 3 + (int)((h >> 12) % (unsigned int)(CHUNK_SIZE - 6));
+			out->seed = h ^ 0x5EEDC0DEU;
+			return;
+		}
+	}
+}
+
+static bool gen_chunk_cave_trunk_make_connector(struct gen_chunk_cave_connector* out,
+												const struct gen_chunk_cave_trunk_info* trunk,
+												int chunk_x, int chunk_z,
+												enum gen_chunk_cave_side side) {
+	if(out == NULL || trunk == NULL || !trunk->valid)
+		return false;
+
 	int base_x = chunk_x * CHUNK_SIZE;
 	int base_z = chunk_z * CHUNK_SIZE;
-	int hub_x = base_x + 4 + (int)(gen_hash3i(chunk_x, 211, chunk_z, seed) % 8U);
-	int hub_z = base_z + 4 + (int)(gen_hash3i(chunk_x, 307, chunk_z, seed) % 8U);
-	int hub_y = 18 + (int)(gen_hash3i(chunk_x, 401, chunk_z, seed) % 36U);
+	if(trunk->horizontal) {
+		if((side == GEN_CHUNK_CAVE_WEST) && (chunk_x > trunk->start_chunk_x)) {
+			out->x = base_x;
+			out->z = base_z + trunk->offset;
+		} else if((side == GEN_CHUNK_CAVE_EAST) && (chunk_x < trunk->end_chunk_x)) {
+			out->x = base_x + CHUNK_SIZE - 1;
+			out->z = base_z + trunk->offset;
+		} else {
+			return false;
+		}
+	} else {
+		if((side == GEN_CHUNK_CAVE_NORTH) && (chunk_z > trunk->start_chunk_z)) {
+			out->x = base_x + trunk->offset;
+			out->z = base_z;
+		} else if((side == GEN_CHUNK_CAVE_SOUTH) && (chunk_z < trunk->end_chunk_z)) {
+			out->x = base_x + trunk->offset;
+			out->z = base_z + CHUNK_SIZE - 1;
+		} else {
+			return false;
+		}
+	}
+	out->y = trunk->y;
+	out->radius = 1;
+	out->seed = trunk->seed ^ (uint32_t)(side * 131U + chunk_x * 17U + chunk_z * 31U);
+	return true;
+}
 
+static int gen_chunk_cave_collect_connectors(struct gen_chunk_cave_connector* connectors,
+											 int max_connectors,
+											 uint32_t seed, int chunk_x, int chunk_z) {
+	if(connectors == NULL || max_connectors <= 0)
+		return 0;
+	int connector_count = 0;
 	for(int side = GEN_CHUNK_CAVE_WEST; side <= GEN_CHUNK_CAVE_SOUTH; side++) {
-		int count = gen_chunk_cave_border_count(seed, chunk_x, chunk_z, (enum gen_chunk_cave_side)side);
-		for(int i = 0; i < count && connector_count < (int)(sizeof(connectors) / sizeof(connectors[0])); i++) {
+		int count = gen_chunk_cave_border_count(seed, chunk_x, chunk_z,
+												 (enum gen_chunk_cave_side)side);
+		for(int i = 0; i < count && connector_count < max_connectors; i++) {
 			if(gen_chunk_cave_make_connector(&connectors[connector_count], seed, chunk_x, chunk_z,
 											 (enum gen_chunk_cave_side)side, i)) {
 				connector_count++;
 			}
 		}
 	}
+	struct gen_chunk_cave_trunk_info trunk;
+	gen_chunk_cave_find_trunk(&trunk, seed, chunk_x, chunk_z);
+	if(trunk.valid) {
+		for(int side = GEN_CHUNK_CAVE_WEST;
+			side <= GEN_CHUNK_CAVE_SOUTH && connector_count < max_connectors;
+			side++) {
+			if(gen_chunk_cave_trunk_make_connector(&connectors[connector_count], &trunk,
+												 chunk_x, chunk_z, (enum gen_chunk_cave_side)side)) {
+				connector_count++;
+			}
+		}
+	}
+	return connector_count;
+}
+
+static void gen_chunk_cave_compute_hub(uint32_t seed, int chunk_x, int chunk_z,
+									   int* out_hub_x, int* out_hub_y, int* out_hub_z,
+									   int* out_connector_count) {
+	int base_x = chunk_x * CHUNK_SIZE;
+	int base_z = chunk_z * CHUNK_SIZE;
+	int hub_x = base_x + 4 + (int)(gen_hash3i(chunk_x, 211, chunk_z, seed) % 8U);
+	int hub_z = base_z + 4 + (int)(gen_hash3i(chunk_x, 307, chunk_z, seed) % 8U);
+	int hub_y = 26 + (int)(gen_hash3i(chunk_x, 401, chunk_z, seed) % 22U);
+	struct gen_chunk_cave_connector connectors[16];
+	int connector_count = gen_chunk_cave_collect_connectors(
+		connectors, (int)(sizeof(connectors) / sizeof(connectors[0])), seed, chunk_x, chunk_z);
+
+	if(connector_count > 0) {
+		int avg_y = 0;
+		for(int i = 0; i < connector_count; i++)
+			avg_y += connectors[i].y;
+		hub_y = gen_clamp_int((hub_y + avg_y / connector_count) / 2, 12, WORLD_HEIGHT - 12);
+	}
+
+	if(out_hub_x != NULL)
+		*out_hub_x = hub_x;
+	if(out_hub_y != NULL)
+		*out_hub_y = hub_y;
+	if(out_hub_z != NULL)
+		*out_hub_z = hub_z;
+	if(out_connector_count != NULL)
+		*out_connector_count = connector_count;
+}
+
+static void gen_carve_chunk_cave_worm_branch(struct server_chunk* sc, uint32_t seed,
+											 int chunk_x, int chunk_z,
+											 int start_x, int start_y, int start_z,
+											 int start_dir, int segments,
+											 int split_depth) {
+	if(sc == NULL || segments <= 0)
+		return;
+	int cur_x = start_x;
+	int cur_y = start_y;
+	int cur_z = start_z;
+	int dir = start_dir & 3;
+
+	for(int seg = 0; seg < segments; seg++) {
+		int len = 5 + (int)(gen_hash3i(chunk_x, 1501 + seg * 41, chunk_z, seed) % 5U);
+		int dy = (int)(gen_hash3i(chunk_x, 1543 + seg * 43, chunk_z, seed) % 3U) - 1;
+		int end_x = cur_x;
+		int end_z = cur_z;
+		int end_y = gen_clamp_int(cur_y + dy, 10, WORLD_HEIGHT - 10);
+		switch(dir) {
+		case 0:
+			end_x += len;
+			break;
+		case 1:
+			end_x -= len;
+			break;
+		case 2:
+			end_z += len;
+			break;
+		default:
+			end_z -= len;
+			break;
+		}
+
+		struct gen_cave_tunnel tunnel;
+		gen_cave_init_tunnel(&tunnel,
+							 cur_x, cur_y, cur_z, 1,
+							 end_x, end_y, end_z, 1,
+							 seed ^ (uint32_t)(0xD00D100U + seg * 59U));
+		gen_cave_process_chunk(&tunnel, sc, chunk_x, chunk_z);
+
+		if(split_depth > 0 && seg >= 1
+		   && (int)(gen_hash3i(chunk_x, 1589 + seg * 47, chunk_z, seed) % 100U) < 72) {
+			int side_dir = (dir + 1 + ((int)(gen_hash3i(chunk_x, 1627 + seg * 53, chunk_z, seed) & 1U) * 2)) % 4;
+			gen_carve_chunk_cave_worm_branch(
+				sc, seed ^ (uint32_t)(0xD00D900U + seg * 61U), chunk_x, chunk_z,
+				end_x, end_y, end_z, side_dir, segments - seg + 1, split_depth - 1);
+		}
+
+		int turn = (int)(gen_hash3i(chunk_x, 1667 + seg * 67, chunk_z, seed) % 3U);
+		if(turn == 0)
+			dir = (dir + 1) % 4;
+		else if(turn == 1)
+			dir = (dir + 3) % 4;
+
+		cur_x = end_x;
+		cur_y = end_y;
+		cur_z = end_z;
+	}
+}
+
+static void gen_carve_chunk_cave_local_network(struct server_chunk* sc, uint32_t seed,
+											   int chunk_x, int chunk_z,
+											   int hub_x, int hub_y, int hub_z,
+											   int max_branches) {
+	struct gen_cave_network_node {
+		int x;
+		int y;
+		int z;
+		int r;
+	};
+	if(sc == NULL || max_branches <= 0)
+		return;
+	struct gen_cave_network_node nodes[18];
+	int node_count = 7 + (int)(gen_hash3i(chunk_x, 887, chunk_z, seed) % 4U);
+	if(node_count > 10)
+		node_count = 10;
+	if(node_count < 7)
+		node_count = 7;
+
+	nodes[0].x = hub_x;
+	nodes[0].y = hub_y;
+	nodes[0].z = hub_z;
+	nodes[0].r = 1;
+
+	for(int i = 1; i < node_count; i++) {
+		int parent = (i == 1) ? 0 : (int)(gen_hash3i(chunk_x, 911 + i * 13, chunk_z, seed) % (unsigned int)i);
+		int dir = (int)(gen_hash3i(chunk_x, 947 + i * 17, chunk_z, seed) % 4U);
+		int len = 4 + (int)(gen_hash3i(chunk_x, 983 + i * 19, chunk_z, seed) % 4U);
+		int dy = (int)(gen_hash3i(chunk_x, 1019 + i * 23, chunk_z, seed) % 3U) - 1;
+		int x = nodes[parent].x;
+		int z = nodes[parent].z;
+		int y = gen_clamp_int(nodes[parent].y + dy, 10, WORLD_HEIGHT - 10);
+		int r = 1;
+
+		switch(dir) {
+		case 0:
+			x += len;
+			break;
+		case 1:
+			x -= len;
+			break;
+		case 2:
+			z += len;
+			break;
+		default:
+			z -= len;
+			break;
+		}
+
+		nodes[i].x = x;
+		nodes[i].y = y;
+		nodes[i].z = z;
+		nodes[i].r = r;
+
+		struct gen_cave_tunnel trunk;
+		gen_cave_init_tunnel(&trunk,
+							 nodes[parent].x, nodes[parent].y, nodes[parent].z, nodes[parent].r,
+							 nodes[i].x, nodes[i].y, nodes[i].z, nodes[i].r,
+							 seed ^ (uint32_t)(0xCA7E100U + i * 97U));
+		gen_cave_process_chunk(&trunk, sc, chunk_x, chunk_z);
+	}
+
+	for(int i = 1; i + 2 < node_count; i++) {
+		if((int)(gen_hash3i(chunk_x, 1097 + i * 31, chunk_z, seed) % 100U) >= 35U)
+			continue;
+		int j = i + 1 + (int)(gen_hash3i(chunk_x, 1129 + i * 37, chunk_z, seed)
+							  % (unsigned int)(node_count - i - 1));
+		if(j >= node_count)
+			j = node_count - 1;
+		struct gen_cave_tunnel cross;
+		gen_cave_init_tunnel(&cross,
+							 nodes[i].x, nodes[i].y, nodes[i].z, 1,
+							 nodes[j].x, nodes[j].y, nodes[j].z, 1,
+							 seed ^ (uint32_t)(0xCA7E500U + i * 53U + j * 17U));
+		gen_cave_process_chunk(&cross, sc, chunk_x, chunk_z);
+	}
+
+	for(int i = 1; i < node_count; i++) {
+		int branch_count = 2 + (int)(gen_hash3i(chunk_x, 1163 + i * 41, chunk_z, seed) % 2U);
+		for(int b = 0; b < branch_count; b++) {
+			int dir = (int)(gen_hash3i(chunk_x, 1201 + i * 43 + b * 11, chunk_z, seed) % 4U);
+			int segs = 4 + (int)(gen_hash3i(chunk_x, 1237 + i * 47 + b * 13, chunk_z, seed) % 4U);
+			gen_carve_chunk_cave_worm_branch(
+				sc, seed ^ (uint32_t)(0xCA7E900U + i * 61U + b * 17U), chunk_x, chunk_z,
+				nodes[i].x, nodes[i].y, nodes[i].z, dir, segs, 2);
+		}
+	}
+}
+
+static void gen_carve_chunk_linked_caves(struct server_chunk* sc, uint32_t seed,
+											 int chunk_x, int chunk_z) {
+	struct gen_chunk_cave_connector connectors[16];
+	int connector_count = 0;
+	int hub_x = 0;
+	int hub_y = 0;
+	int hub_z = 0;
+
+	gen_chunk_cave_compute_hub(seed, chunk_x, chunk_z, &hub_x, &hub_y, &hub_z, &connector_count);
+	connector_count = gen_chunk_cave_collect_connectors(
+		connectors, (int)(sizeof(connectors) / sizeof(connectors[0])), seed, chunk_x, chunk_z);
 
 	if(connector_count == 0) {
 		uint32_t h = gen_hash3i(chunk_x, 509, chunk_z, seed);
 		if((h % 100U) >= 22U)
 			return;
 		hub_y = 18 + (int)(gen_hash3i(chunk_x, 557, chunk_z, seed) % 30U);
-		struct gen_cave_tunnel room;
-		int room_r = 6 + (int)(h % 4U);
-		gen_cave_init_tunnel(&room, hub_x - room_r, hub_y, hub_z, room_r,
-							 hub_x + room_r, hub_y, hub_z, room_r, seed ^ 0x4410U);
-		gen_cave_process_chunk(&room, sc, chunk_x, chunk_z);
+		gen_carve_chunk_cave_local_network(sc, seed ^ 0x4410U, chunk_x, chunk_z,
+										   hub_x, hub_y, hub_z, 3);
 		return;
 	}
-
-	int avg_y = 0;
-	for(int i = 0; i < connector_count; i++)
-		avg_y += connectors[i].y;
-	hub_y = gen_clamp_int((hub_y + avg_y / connector_count) / 2, 12, WORLD_HEIGHT - 12);
 
 	int tunnel_budget = 8;
 	for(int i = 0; i < connector_count && tunnel_budget > 0; i++) {
 		struct gen_cave_tunnel tunnel;
 		int end_x = hub_x + (int)(gen_hash3i(chunk_x, 601 + i, chunk_z, connectors[i].seed) % 7U) - 3;
 		int end_z = hub_z + (int)(gen_hash3i(chunk_x, 677 + i, chunk_z, connectors[i].seed) % 7U) - 3;
-		int end_y = gen_clamp_int(hub_y + (int)(gen_hash3i(chunk_x, 733 + i, chunk_z, connectors[i].seed) % 7U) - 3,
+		int end_y = gen_clamp_int(hub_y + (int)(gen_hash3i(chunk_x, 733 + i, chunk_z, connectors[i].seed) % 3U) - 1,
 								  10, WORLD_HEIGHT - 10);
-		int end_r = connectors[i].radius + 1 + (int)(connectors[i].seed % 2U);
+		int end_r = 1;
 		gen_cave_init_tunnel(&tunnel, connectors[i].x, connectors[i].y, connectors[i].z,
-							 connectors[i].radius, end_x, end_y, end_z, end_r,
+							 1, end_x, end_y, end_z, end_r,
 							 connectors[i].seed);
 		gen_cave_process_chunk(&tunnel, sc, chunk_x, chunk_z);
 		tunnel_budget--;
@@ -755,37 +1397,63 @@ static void gen_carve_chunk_linked_caves(struct server_chunk* sc, uint32_t seed,
 		}
 	}
 
-	if(tunnel_budget > 0) {
-		struct gen_cave_tunnel room;
-		int room_r = 6 + (int)(gen_hash3i(chunk_x, 809, chunk_z, seed) % 4U);
-		gen_cave_init_tunnel(&room, hub_x - room_r, hub_y, hub_z, room_r,
-							 hub_x + room_r, hub_y, hub_z, room_r,
-							 seed ^ 0xA11CEU);
-		gen_cave_process_chunk(&room, sc, chunk_x, chunk_z);
-	}
+	gen_carve_chunk_cave_local_network(sc, seed ^ 0xA11CEU, chunk_x, chunk_z,
+									   hub_x, hub_y, hub_z, tunnel_budget);
 }
 
 static void gen_carve_chunk_cave_entrance(struct server_chunk* sc, uint32_t seed,
 										  int chunk_x, int chunk_z,
-										  const int* surface_map) {
+										  const int* surface_map,
+										  Generator* biome_gen,
+										  const struct gen_cuberite_runtime_args* gen_args) {
 	if((sc == NULL) || (surface_map == NULL))
-		return;
-	if((gen_hash3i(chunk_x, 941, chunk_z, seed) % 20U) != 0U)
 		return;
 
 	int base_x = chunk_x * CHUNK_SIZE;
 	int base_z = chunk_z * CHUNK_SIZE;
-	int hub_x = base_x + 4 + (int)(gen_hash3i(chunk_x, 211, chunk_z, seed) % 8U);
-	int hub_z = base_z + 4 + (int)(gen_hash3i(chunk_x, 307, chunk_z, seed) % 8U);
-	int hub_y = 18 + (int)(gen_hash3i(chunk_x, 401, chunk_z, seed) % 36U);
+	int center_biome = plains;
+	if(biome_gen != NULL) {
+		center_biome = gen_biome_at_safe(
+			biome_gen, base_x + CHUNK_SIZE / 2, base_z + CHUNK_SIZE / 2);
+	}
+	int min_surface = WORLD_HEIGHT;
+	int max_surface = 0;
+	for(int i = 0; i < CHUNK_SIZE * CHUNK_SIZE; i++) {
+		int s = surface_map[i];
+		if(s < min_surface)
+			min_surface = s;
+		if(s > max_surface)
+			max_surface = s;
+	}
+	bool mountainous_chunk = gen_is_mountainous_biome(center_biome)
+		|| ((max_surface - min_surface) >= 14);
+	unsigned int entrance_chance = mountainous_chunk ? 80U : 20U;
+	if((gen_hash3i(chunk_x, 941, chunk_z, seed) % 100U) >= entrance_chance)
+		return;
+
+	int hub_x = 0;
+	int hub_y = 0;
+	int hub_z = 0;
+	gen_chunk_cave_compute_hub(seed, chunk_x, chunk_z, &hub_x, &hub_y, &hub_z, NULL);
+	struct gen_chunk_cave_trunk_info trunk;
+	gen_chunk_cave_find_trunk(&trunk, seed, chunk_x, chunk_z);
+	if(!trunk.valid)
+		return;
+	struct gen_chunk_cave_connector connectors[16];
+	int connector_count = gen_chunk_cave_collect_connectors(
+		connectors, (int)(sizeof(connectors) / sizeof(connectors[0])), seed, chunk_x, chunk_z);
+	if(connector_count <= 0)
+		return;
 	int entrance_lx = -1;
 	int entrance_lz = -1;
 	int best_score = -999999;
-	for(int attempt = 0; attempt < 12; attempt++) {
-		int lx = 2 + (int)(gen_hash3i(chunk_x, 953 + attempt * 17, chunk_z, seed) % (unsigned int)(CHUNK_SIZE - 4));
-		int lz = 2 + (int)(gen_hash3i(chunk_x, 967 + attempt * 19, chunk_z, seed) % (unsigned int)(CHUNK_SIZE - 4));
+	int required_surface = mountainous_chunk ? 62 : 58;
+	int required_slope = mountainous_chunk ? 2 : 1;
+	for(int attempt = 0; attempt < 32; attempt++) {
+		int lx = 4 + (int)(gen_hash3i(chunk_x, 953 + attempt * 17, chunk_z, seed) % (unsigned int)(CHUNK_SIZE - 8));
+		int lz = 4 + (int)(gen_hash3i(chunk_x, 967 + attempt * 19, chunk_z, seed) % (unsigned int)(CHUNK_SIZE - 8));
 		int surface = surface_map[lx + lz * CHUNK_SIZE];
-		if(surface < 68)
+		if(surface < required_surface)
 			continue;
 		int min_neigh = surface;
 		int max_neigh = surface;
@@ -799,13 +1467,30 @@ static void gen_carve_chunk_cave_entrance(struct server_chunk* sc, uint32_t seed
 				max_neigh = nh;
 		}
 		int slope = max_neigh - min_neigh;
-		if(slope < 3)
+		if(slope < required_slope)
 			continue;
 		int score = surface * 2 + slope * 6 - abs(lx - CHUNK_SIZE / 2) - abs(lz - CHUNK_SIZE / 2);
 		if(score > best_score) {
 			best_score = score;
 			entrance_lx = lx;
 			entrance_lz = lz;
+		}
+	}
+	if(entrance_lx < 0 || entrance_lz < 0) {
+		for(int attempt = 0; attempt < 16; attempt++) {
+			int lx = 4 + (int)(gen_hash3i(chunk_x, 1153 + attempt * 23, chunk_z, seed)
+							   % (unsigned int)(CHUNK_SIZE - 8));
+			int lz = 4 + (int)(gen_hash3i(chunk_x, 1181 + attempt * 29, chunk_z, seed)
+							   % (unsigned int)(CHUNK_SIZE - 8));
+			int surface = surface_map[lx + lz * CHUNK_SIZE];
+			if(surface < 54)
+				continue;
+			int score = surface - abs(lx - CHUNK_SIZE / 2) - abs(lz - CHUNK_SIZE / 2);
+			if(score > best_score) {
+				best_score = score;
+				entrance_lx = lx;
+				entrance_lz = lz;
+			}
 		}
 	}
 	if(entrance_lx < 0 || entrance_lz < 0)
@@ -815,84 +1500,140 @@ static void gen_carve_chunk_cave_entrance(struct server_chunk* sc, uint32_t seed
 		surface = hub_y + 6;
 	if(surface > WORLD_HEIGHT - 4)
 		surface = WORLD_HEIGHT - 4;
+	int entrance_min_neigh = surface;
+	int entrance_max_neigh = surface;
+	const int enx[4] = {1, -1, 0, 0};
+	const int enz[4] = {0, 0, 1, -1};
+	for(int i = 0; i < 4; i++) {
+		int nh = surface_map[(entrance_lx + enx[i]) + (entrance_lz + enz[i]) * CHUNK_SIZE];
+		if(nh < entrance_min_neigh)
+			entrance_min_neigh = nh;
+		if(nh > entrance_max_neigh)
+			entrance_max_neigh = nh;
+	}
+	int entrance_slope = entrance_max_neigh - entrance_min_neigh;
+	bool underwater_entrance = false;
+	if(gen_args != NULL) {
+		underwater_entrance = (surface <= gen_args->sea_level)
+			|| gen_is_water(sc, entrance_lx, gen_clamp_int(surface + 1, 1, WORLD_HEIGHT - 1), entrance_lz);
+	}
+	bool flat_entrance = !underwater_entrance && (entrance_slope <= 1);
 
 	int entrance_x = base_x + entrance_lx;
 	int entrance_z = base_z + entrance_lz;
-	int mouth_y = surface;
-	int step1_x = entrance_x + (hub_x - entrance_x) / 4;
-	int step1_z = entrance_z + (hub_z - entrance_z) / 4;
-	int step1_y = gen_clamp_int(surface - 2 - (int)(gen_hash3i(chunk_x, 971, chunk_z, seed) % 2U),
-								hub_y + 8, surface - 1);
-	int step2_x = entrance_x + (hub_x - entrance_x) / 2;
-	int step2_z = entrance_z + (hub_z - entrance_z) / 2;
-	int step2_y = gen_clamp_int(step1_y - 2 - (int)(gen_hash3i(chunk_x, 983, chunk_z, seed) % 2U),
-								hub_y + 4, step1_y - 1);
-	int step3_x = entrance_x + (3 * (hub_x - entrance_x)) / 4;
-	int step3_z = entrance_z + (3 * (hub_z - entrance_z)) / 4;
-	int step3_y = gen_clamp_int(step2_y - 2,
-								hub_y + 2, step2_y);
+	struct gen_chunk_cave_connector target_connector;
+	bool have_target = false;
+	int target_score = 0x7fffffff;
+	for(int side = GEN_CHUNK_CAVE_WEST; side <= GEN_CHUNK_CAVE_SOUTH; side++) {
+		struct gen_chunk_cave_connector cand;
+		if(!gen_chunk_cave_trunk_make_connector(&cand, &trunk, chunk_x, chunk_z,
+												 (enum gen_chunk_cave_side)side))
+			continue;
+		int dx = abs(cand.x - entrance_x);
+		int dz = abs(cand.z - entrance_z);
+		int dy = abs(cand.y - hub_y);
+		int score = dx + dz + dy * 2;
+		if(score < target_score) {
+			target_score = score;
+			target_connector = cand;
+			have_target = true;
+		}
+	}
+	if(!have_target) {
+		for(int i = 0; i < connector_count; i++) {
+			int dx = abs(connectors[i].x - entrance_x);
+			int dz = abs(connectors[i].z - entrance_z);
+			int dy = abs(connectors[i].y - hub_y);
+			int score = dx + dz + dy * 2;
+			if(score < target_score) {
+				target_score = score;
+				target_connector = connectors[i];
+				have_target = true;
+			}
+		}
+	}
+	if(!have_target)
+		return;
+	const struct gen_chunk_cave_connector* target = &target_connector;
+	int mouth_y = underwater_entrance ? gen_clamp_int(surface + 1, 1, WORLD_HEIGHT - 3) : surface;
+	int step1_x = entrance_x + (target->x - entrance_x) / 4;
+	int step1_z = entrance_z + (target->z - entrance_z) / 4;
+	int step1_y = 0;
+	int step2_x = entrance_x + ((target->x - entrance_x) * 2) / 4;
+	int step2_z = entrance_z + ((target->z - entrance_z) * 2) / 4;
+	int step2_y = 0;
+	int step3_x = entrance_x + ((target->x - entrance_x) * 3) / 4;
+	int step3_z = entrance_z + ((target->z - entrance_z) * 3) / 4;
+	int step3_y = 0;
+	int target_y = gen_clamp_int(target->y, 10, WORLD_HEIGHT - 10);
+	int approach_y = target_y;
+	if(approach_y < surface - 10)
+		approach_y = surface - 10;
+	approach_y = gen_clamp_int(approach_y, 12, WORLD_HEIGHT - 10);
+
+	if(underwater_entrance) {
+		step1_y = gen_clamp_int(surface, approach_y + 6, surface);
+		step2_y = gen_clamp_int(step1_y - 1, approach_y + 4, step1_y);
+		step3_y = gen_clamp_int(step2_y - 1, approach_y + 2, step2_y);
+	} else if(flat_entrance) {
+		int pit_floor = gen_clamp_int(surface, approach_y + 6, surface);
+		step1_y = pit_floor;
+		step2_y = gen_clamp_int(step1_y - 1, approach_y + 4, step1_y);
+		step3_y = gen_clamp_int(step2_y - 1, approach_y + 2, step2_y);
+	} else {
+		step1_y = gen_clamp_int(surface, approach_y + 8, surface);
+		step2_y = gen_clamp_int(step1_y - 1, approach_y + 5, step1_y);
+		step3_y = gen_clamp_int(step2_y - 1, approach_y + 2, step2_y);
+	}
 
 	struct gen_cave_tunnel mouth;
 	gen_cave_init_tunnel(&mouth,
-						 entrance_x, mouth_y, entrance_z, 3,
-						 step1_x, step1_y, step1_z, 3,
+						 entrance_x, mouth_y, entrance_z, 1,
+						 step1_x, step1_y, step1_z, 1,
 						 seed ^ 0xE17A001U);
 	gen_cave_process_chunk(&mouth, sc, chunk_x, chunk_z);
 
-	struct gen_cave_tunnel pocket1;
-	gen_cave_init_tunnel(&pocket1,
-						 step1_x - 2, step1_y, step1_z, 3,
-						 step1_x + 2, step1_y, step1_z, 3,
-						 seed ^ 0xE17A011U);
-	gen_cave_process_chunk(&pocket1, sc, chunk_x, chunk_z);
-
 	struct gen_cave_tunnel link1;
 	gen_cave_init_tunnel(&link1,
-						 step1_x, step1_y, step1_z, 4,
-						 step2_x, step2_y, step2_z, 4,
+						 step1_x, step1_y, step1_z, 1,
+						 step2_x, step2_y, step2_z, 1,
 						 seed ^ 0xE17A021U);
 	gen_cave_process_chunk(&link1, sc, chunk_x, chunk_z);
 
-	struct gen_cave_tunnel pocket2;
-	gen_cave_init_tunnel(&pocket2,
-						 step2_x - 2, step2_y, step2_z, 3,
-						 step2_x + 2, step2_y, step2_z, 3,
-						 seed ^ 0xE17A031U);
-	gen_cave_process_chunk(&pocket2, sc, chunk_x, chunk_z);
-
 	struct gen_cave_tunnel link2;
 	gen_cave_init_tunnel(&link2,
-						 step2_x, step2_y, step2_z, 4,
-						 step3_x, step3_y, step3_z, 5,
+						 step2_x, step2_y, step2_z, 1,
+						 step3_x, step3_y, step3_z, 1,
 						 seed ^ 0xE17A041U);
 	gen_cave_process_chunk(&link2, sc, chunk_x, chunk_z);
 
-	struct gen_cave_tunnel pocket3;
-	gen_cave_init_tunnel(&pocket3,
-						 step3_x - 3, step3_y, step3_z, 4,
-						 step3_x + 3, step3_y, step3_z, 4,
-						 seed ^ 0xE17A051U);
-	gen_cave_process_chunk(&pocket3, sc, chunk_x, chunk_z);
-
 	struct gen_cave_tunnel final_link;
 	gen_cave_init_tunnel(&final_link,
-						 step3_x, step3_y, step3_z, 5,
-						 hub_x, hub_y, hub_z, 6,
+						 step3_x, step3_y, step3_z, 1,
+						 target->x, target_y, target->z, 1,
 						 seed ^ 0xE17A061U);
 	gen_cave_process_chunk(&final_link, sc, chunk_x, chunk_z);
 
-	for(int y = surface; y <= mouth_y + 1 && y < WORLD_HEIGHT; y++) {
-		for(int dz = -1; dz <= 1; dz++) {
-			for(int dx = -1; dx <= 1; dx++) {
-				int lx = entrance_lx + dx;
-				int lz = entrance_lz + dz;
-				if(lx < 0 || lx >= CHUNK_SIZE || lz < 0 || lz >= CHUNK_SIZE)
-					continue;
-				if((dx * dx + dz * dz) > 2)
-					continue;
-				uint8_t b = gen_get_block(sc, lx, y, lz);
-				if(b != BLOCK_BEDROCK)
-					gen_set_block(sc, lx, y, lz, BLOCK_AIR);
+	int open_top = flat_entrance ? surface : mouth_y + 1;
+	for(int y = surface; y <= open_top && y < WORLD_HEIGHT; y++) {
+		uint8_t b = gen_get_block(sc, entrance_lx, y, entrance_lz);
+		if(b != BLOCK_BEDROCK)
+			gen_set_block(sc, entrance_lx, y, entrance_lz, BLOCK_AIR);
+	}
+
+	if(underwater_entrance) {
+		int min_x = gen_clamp_int(entrance_lx - 3, 0, CHUNK_SIZE - 1);
+		int max_x = gen_clamp_int(entrance_lx + 3, 0, CHUNK_SIZE - 1);
+		int min_z = gen_clamp_int(entrance_lz - 3, 0, CHUNK_SIZE - 1);
+		int max_z = gen_clamp_int(entrance_lz + 3, 0, CHUNK_SIZE - 1);
+		int min_y = gen_clamp_int(hub_y - 1, 1, WORLD_HEIGHT - 1);
+		int max_y = gen_clamp_int(surface + 2, 1, WORLD_HEIGHT - 1);
+		for(int lx = min_x; lx <= max_x; lx++) {
+			for(int lz = min_z; lz <= max_z; lz++) {
+				for(int y = min_y; y <= max_y; y++) {
+					if(gen_get_block(sc, lx, y, lz) == BLOCK_AIR)
+						gen_set_block(sc, lx, y, lz, BLOCK_WATER_STILL);
+				}
 			}
 		}
 	}
@@ -1211,7 +1952,7 @@ static uint32_t gen_chunk_ravine_border_hash(uint32_t seed, int chunk_x, int chu
 static int gen_chunk_ravine_border_count(uint32_t seed, int chunk_x, int chunk_z,
 										 enum gen_chunk_cave_side side) {
 	uint32_t h = gen_chunk_ravine_border_hash(seed, chunk_x, chunk_z, side, 0);
-	return ((h % 100U) < 3U) ? 1 : 0;
+	return ((h % 100U) < 1U) ? 1 : 0;
 }
 
 static bool gen_chunk_ravine_make_connector(struct gen_chunk_ravine_connector* out,
@@ -1233,17 +1974,19 @@ static bool gen_chunk_ravine_make_connector(struct gen_chunk_ravine_connector* o
 
 	int min_width = (int)floorf(cfg->rough_ravines_min_center_width);
 	int max_width = (int)ceilf(cfg->rough_ravines_max_center_width);
-	if(min_width < 3)
-		min_width = 3;
+	if(min_width < 2)
+		min_width = 2;
 	if(max_width < min_width)
 		max_width = min_width;
+	if(max_width > 3)
+		max_width = 3;
 
 	out->seed = gen_chunk_ravine_border_hash(seed, chunk_x, chunk_z, side, 131 + index * 23);
 	out->width = min_width + (int)(width_h % (unsigned int)(max_width - min_width + 1));
-	out->top = 58 + (int)(top_h % 18U);
-	out->bottom = 10 + (int)(bottom_h % 18U);
-	if(out->top < out->bottom + 12)
-		out->top = out->bottom + 12;
+	out->top = 38 + (int)(top_h % 10U);
+	out->bottom = 18 + (int)(bottom_h % 8U);
+	if(out->top < out->bottom + 8)
+		out->top = out->bottom + 8;
 	if(out->top > WORLD_HEIGHT - 2)
 		out->top = WORLD_HEIGHT - 2;
 
@@ -1294,7 +2037,7 @@ static void gen_carve_ravine_segment(struct server_chunk* sc, int chunk_x, int c
 		cx += jitter_x;
 		cz += jitter_z;
 
-		float width = (float)width1 + ((float)(width2 - width1) * t) + 0.9f;
+		float width = (float)width1 + ((float)(width2 - width1) * t) + 0.15f;
 		int top = bottom1 + 1;
 		top = top1 + (int)((float)(top2 - top1) * t);
 		int bottom = bottom1 + (int)((float)(bottom2 - bottom1) * t);
@@ -1331,9 +2074,9 @@ static void gen_carve_ravine_segment(struct server_chunk* sc, int chunk_x, int c
 
 				for(int y = bottom; y <= top; y++) {
 					float rel = (float)(y - bottom) / (float)(top - bottom);
-					float level_width = width * (0.75f + 0.45f * rel);
-					if(level_width < 1.0f)
-						level_width = 1.0f;
+					float level_width = width * (0.75f - 0.40f * rel);
+					if(level_width < 0.85f)
+						level_width = 0.85f;
 					if(dist_sq > level_width * level_width)
 						continue;
 					uint8_t b = gen_get_block(sc, lx, y, lz);
@@ -1352,13 +2095,15 @@ static void gen_carve_ravine_pass(struct server_chunk* sc, uint32_t seed,
 								  int32_t world_x0, int32_t world_z0,
 								  const struct gen_cuberite_runtime_args* args,
 								  const struct server_world_cuberite_config* cfg) {
-	(void)args;
 	if(sc == NULL || cfg == NULL)
 		return;
 	int chunk_x = gen_floor_div(world_x0, CHUNK_SIZE);
 	int chunk_z = gen_floor_div(world_z0, CHUNK_SIZE);
 	int base_x = chunk_x * CHUNK_SIZE;
 	int base_z = chunk_z * CHUNK_SIZE;
+	int center_surface = gen_chunk_actual_surface_height(sc, CHUNK_SIZE / 2, CHUNK_SIZE / 2);
+	if((args != NULL) && (center_surface <= args->sea_level + 2))
+		return;
 	struct gen_chunk_ravine_connector connectors[4];
 	int connector_count = 0;
 
@@ -1374,34 +2119,51 @@ static void gen_carve_ravine_pass(struct server_chunk* sc, uint32_t seed,
 	if(connector_count == 0)
 		return;
 
-	int hub_x = base_x + 3 + (int)(gen_hash3i(chunk_x, 1501, chunk_z, seed) % 10U);
-	int hub_z = base_z + 3 + (int)(gen_hash3i(chunk_x, 1519, chunk_z, seed) % 10U);
-	int hub_top = 60 + (int)(gen_hash3i(chunk_x, 1531, chunk_z, seed) % 14U);
-	int hub_bottom = 12 + (int)(gen_hash3i(chunk_x, 1543, chunk_z, seed) % 14U);
-	int hub_width = 4 + (int)(gen_hash3i(chunk_x, 1559, chunk_z, seed) % 3U);
-	if(hub_top < hub_bottom + 14)
-		hub_top = hub_bottom + 14;
-
 	for(int i = 0; i < connector_count; i++) {
+		float end_x = (float)connectors[i].x;
+		float end_z = (float)connectors[i].z;
+		switch(gen_hash3i(connectors[i].x, 1703 + i, connectors[i].z, seed) % 4U) {
+		case GEN_CHUNK_CAVE_WEST:
+			end_x = (float)base_x;
+			end_z = (float)(base_z + 2
+					   + gen_mod_positive(connectors[i].z + i * 5, CHUNK_SIZE - 4));
+			break;
+		case GEN_CHUNK_CAVE_EAST:
+			end_x = (float)(base_x + CHUNK_SIZE - 1);
+			end_z = (float)(base_z + 2
+					   + gen_mod_positive(connectors[i].z + i * 5, CHUNK_SIZE - 4));
+			break;
+		case GEN_CHUNK_CAVE_NORTH:
+			end_x = (float)(base_x + 2
+					   + gen_mod_positive(connectors[i].x + i * 5, CHUNK_SIZE - 4));
+			end_z = (float)base_z;
+			break;
+		case GEN_CHUNK_CAVE_SOUTH:
+		default:
+			end_x = (float)(base_x + 2
+					   + gen_mod_positive(connectors[i].x + i * 5, CHUNK_SIZE - 4));
+			end_z = (float)(base_z + CHUNK_SIZE - 1);
+			break;
+		}
+
+		if(fabsf(end_x - (float)connectors[i].x) + fabsf(end_z - (float)connectors[i].z) < 10.0f) {
+			if(end_x < (float)(base_x + CHUNK_SIZE / 2))
+				end_x = (float)(base_x + CHUNK_SIZE - 1);
+			else
+				end_x = (float)base_x;
+		}
+
+		int end_top = connectors[i].top - 2 + (int)(gen_hash3i(i, 1759, connectors[i].x, seed) % 5U);
+		int end_bottom = connectors[i].bottom + (int)(gen_hash3i(i, 1783, connectors[i].z, seed) % 4U);
+		if(end_top < end_bottom + 6)
+			end_top = end_bottom + 6;
 		gen_carve_ravine_segment(sc, chunk_x, chunk_z,
 								 (float)connectors[i].x, (float)connectors[i].z,
-								 (float)hub_x, (float)hub_z,
-								 connectors[i].width, hub_width,
-								 connectors[i].bottom, hub_bottom,
-								 connectors[i].top, hub_top,
+								 end_x, end_z,
+								 connectors[i].width, connectors[i].width,
+								 connectors[i].bottom, end_bottom,
+								 connectors[i].top, end_top,
 								 connectors[i].seed);
-	}
-
-	if(connector_count >= 2) {
-		for(int i = 0; i + 1 < connector_count; i += 2) {
-			gen_carve_ravine_segment(sc, chunk_x, chunk_z,
-									 (float)connectors[i].x, (float)connectors[i].z,
-									 (float)connectors[i + 1].x, (float)connectors[i + 1].z,
-									 connectors[i].width, connectors[i + 1].width,
-									 connectors[i].bottom, connectors[i + 1].bottom,
-									 connectors[i].top, connectors[i + 1].top,
-									 seed ^ (uint32_t)(1601 + i * 37));
-		}
 	}
 }
 
@@ -1481,12 +2243,17 @@ static void gen_place_log(struct server_chunk* sc, int x, int y, int z, uint8_t 
 	gen_set_block_with_meta(sc, x, y, z, BLOCK_LOG, meta);
 }
 
+static bool gen_tree_can_replace(uint8_t b) {
+	return (b == BLOCK_AIR || b == BLOCK_LEAVES || b == BLOCK_VINE
+		|| b == BLOCK_WATER_STILL || b == BLOCK_WATER_FLOW);
+}
+
 static bool gen_tree_space_clear(const struct server_chunk* sc, int x, int y, int z, int radius, int height) {
 	for(int yy = y; yy <= y + height; yy++) {
 		for(int dz = -radius; dz <= radius; dz++) {
 			for(int dx = -radius; dx <= radius; dx++) {
 				uint8_t b = gen_get_block(sc, x + dx, yy, z + dz);
-				if(b != BLOCK_AIR && b != BLOCK_LEAVES)
+				if(!gen_tree_can_replace(b))
 					return false;
 			}
 		}
@@ -1494,27 +2261,73 @@ static bool gen_tree_space_clear(const struct server_chunk* sc, int x, int y, in
 	return true;
 }
 
-static void gen_place_small_apple_tree(struct server_chunk* sc, int x, int y, int z, uint32_t seed) {
+static void gen_place_leaf_square(struct server_chunk* sc, int cx, int y, int cz,
+								  int radius, uint8_t leaves_meta,
+								  uint32_t corner_mask) {
+	for(int dz = -radius; dz <= radius; dz++) {
+		for(int dx = -radius; dx <= radius; dx++) {
+			if((abs(dx) == radius) && (abs(dz) == radius)) {
+				uint32_t bit = (uint32_t)((dx + radius) * 4 + (dz + radius));
+				if(((corner_mask >> (bit & 31)) & 1U) == 0U)
+					continue;
+			}
+			if(gen_get_block(sc, cx + dx, y, cz + dz) == BLOCK_AIR)
+				gen_set_block_with_meta(sc, cx + dx, y, cz + dz, BLOCK_LEAVES, leaves_meta);
+		}
+	}
+}
+
+static void gen_place_hanging_vines(struct server_chunk* sc, int x, int y, int z,
+									uint32_t seed, int wx, int wz) {
+	static const int dirs[4][3] = {{-1, 0, 8}, {1, 0, 2}, {0, -1, 1}, {0, 1, 4}};
+	for(int i = 0; i < 4; i++) {
+		int vx = x + dirs[i][0];
+		int vz = z + dirs[i][1];
+		if(gen_get_block(sc, vx, y, vz) != BLOCK_AIR)
+			continue;
+		uint32_t h = gen_hash3i(wx + vx, y, wz + vz, seed ^ 0x71AE5000U);
+		if((h & 3U) != 0U)
+			continue;
+		int len = 1 + (int)((h >> 3) & 3U);
+		for(int k = 0; k < len && (y - k) > 1; k++) {
+			if(gen_get_block(sc, vx, y - k, vz) != BLOCK_AIR)
+				break;
+			gen_set_block_with_meta(sc, vx, y - k, vz, BLOCK_VINE, dirs[i][2]);
+		}
+	}
+}
+
+static void gen_place_small_oak_tree(struct server_chunk* sc, int x, int y, int z, uint32_t seed) {
 	int rnd = gen_noise_int3d(seed ^ 0xACCE5511U, x, y, z) >> 3;
-	static const int heights[] = {1, 2, 2, 3};
-	int trunk_h = 1 + heights[rnd & 3];
-	if(!gen_tree_space_clear(sc, x, y, z, 3, trunk_h + 5))
+	static const int heights[] = {4, 5, 5, 6};
+	int trunk_h = heights[rnd & 3];
+	if(!gen_tree_space_clear(sc, x, y, z, 3, trunk_h + 4))
 		return;
 	for(int i = 0; i < trunk_h; i++) gen_place_log(sc, x, y + i, z, 0);
 	int top = y + trunk_h;
-	for(int layer = 0; layer < 2; layer++) {
-		gen_place_leaf_pattern(sc, x, top + layer, z, GEN_BIG_O2, (int)(sizeof(GEN_BIG_O2) / sizeof(GEN_BIG_O2[0])), 0);
-		gen_place_log(sc, x, top + layer, z, 0);
-	}
-	gen_place_leaf_pattern(sc, x, top + 2, z, GEN_BIG_O1, (int)(sizeof(GEN_BIG_O1) / sizeof(GEN_BIG_O1[0])), 0);
-	gen_place_log(sc, x, top + 2, z, 0);
-	gen_place_leaf_pattern(sc, x, top + 3, z, GEN_BIG_O1, (int)(sizeof(GEN_BIG_O1) / sizeof(GEN_BIG_O1[0])), 0);
-	gen_set_block_with_meta(sc, x, top + 3, z, BLOCK_LEAVES, 0);
+	gen_place_leaf_square(sc, x, top - 2, z, 2, 0, 0x0f0f0f0fU);
+	gen_place_leaf_square(sc, x, top - 1, z, 2, 0, 0xffffffffU);
+	gen_place_leaf_square(sc, x, top, z, 1, 0, 0xffffffffU);
+	gen_set_block_with_meta(sc, x, top + 1, z, BLOCK_LEAVES, 0);
 }
 
-static void gen_place_birch_tree(struct server_chunk* sc, int x, int y, int z, uint32_t seed) {
-	int height = 5 + (gen_noise_int3d(seed ^ 0xB17C0021U, x, y, z) % 3);
-	if(!gen_tree_space_clear(sc, x, y, z, 3, height + 3))
+static void gen_place_fancy_oak_tree(struct server_chunk* sc, int x, int y, int z, uint32_t seed) {
+	int trunk_h = 5 + (abs(gen_noise_int3d(seed ^ 0x0A4F11U, x, y, z)) % 3);
+	if(!gen_tree_space_clear(sc, x, y, z, 4, trunk_h + 5))
+		return;
+	for(int i = 0; i < trunk_h; i++) gen_place_log(sc, x, y + i, z, 0);
+	int top = y + trunk_h;
+	gen_place_leaf_square(sc, x, top - 2, z, 2, 0, 0xffffffffU);
+	gen_place_leaf_square(sc, x, top - 1, z, 2, 0, 0x3c3c3c3cU);
+	gen_place_leaf_square(sc, x, top, z, 1, 0, 0xffffffffU);
+	gen_set_block_with_meta(sc, x, top + 1, z, BLOCK_LEAVES, 0);
+}
+
+static void gen_place_birch_tree(struct server_chunk* sc, int x, int y, int z, uint32_t seed, bool tall) {
+	int height = tall ? (8 + (abs(gen_noise_int3d(seed ^ 0xB17C0AA1U, x, y, z)) % 3))
+					  : (5 + (abs(gen_noise_int3d(seed ^ 0xB17C0021U, x, y, z)) % 3));
+	int radius = tall ? 3 : 2;
+	if(!gen_tree_space_clear(sc, x, y, z, radius, height + 4))
 		return;
 	for(int i = 0; i < height; i++) gen_place_log(sc, x, y + i, z, 2);
 	int h = y + height;
@@ -1522,35 +2335,107 @@ static void gen_place_birch_tree(struct server_chunk* sc, int x, int y, int z, u
 	gen_set_block_with_meta(sc, x, h, z, BLOCK_LEAVES, 2);
 	h--;
 	gen_place_leaf_pattern(sc, x, h, z, GEN_BIG_O1, (int)(sizeof(GEN_BIG_O1) / sizeof(GEN_BIG_O1[0])), 2);
+	if(tall) {
+		h--;
+		gen_place_leaf_square(sc, x, h, z, 2, 2, 0x3c3c3c3cU);
+	}
 	h--;
 	gen_place_leaf_pattern(sc, x, h, z, GEN_BIG_O2, (int)(sizeof(GEN_BIG_O2) / sizeof(GEN_BIG_O2[0])), 2);
 	h--;
 	gen_place_leaf_pattern(sc, x, h, z, GEN_BIG_O2, (int)(sizeof(GEN_BIG_O2) / sizeof(GEN_BIG_O2[0])), 2);
 }
 
-static void gen_place_small_spruce_tree(struct server_chunk* sc, int x, int y, int z, uint32_t seed) {
-	int my_random = gen_noise_int3d(seed ^ 0x5A71CE11U, x, y, z) / 8;
-	static const int clear_heights[] = {1, 2, 2, 3};
-	int clear_h = clear_heights[my_random & 3];
-	if(!gen_tree_space_clear(sc, x, y, z, 3, clear_h + 8))
+static void gen_place_conifer_tree(struct server_chunk* sc, int x, int y, int z, uint32_t seed, bool giant) {
+	int height = giant ? (9 + (abs(gen_noise_int3d(seed ^ 0x5A71CE77U, x, y, z)) % 4))
+					   : (7 + (abs(gen_noise_int3d(seed ^ 0x5A71CE11U, x, y, z)) % 3));
+	int clear_h = giant ? 3 : 2;
+	if(!gen_tree_space_clear(sc, x, y, z, giant ? 4 : 3, height + 3))
 		return;
-	for(int i = 0; i < clear_h; i++) gen_place_log(sc, x, y + i, z, 1);
-	int top = y + clear_h;
-	if((my_random & 1) == 0) {
-		gen_place_leaf_pattern(sc, x, top, z, GEN_BIG_O1, (int)(sizeof(GEN_BIG_O1) / sizeof(GEN_BIG_O1[0])), 1);
-		gen_place_log(sc, x, top, z, 1);
-		top++;
+	for(int i = 0; i < height; i++) gen_place_log(sc, x, y + i, z, 1);
+	int leaf_layers = height - clear_h;
+	for(int layer = 0; layer < leaf_layers; layer++) {
+		int yy = y + clear_h + layer;
+		int from_top = leaf_layers - 1 - layer;
+		int radius;
+		if(from_top <= 0) {
+			radius = 0;
+		} else if(from_top == 1) {
+			radius = 1;
+		} else if(from_top == 2) {
+			radius = 1;
+		} else if(from_top == 3) {
+			radius = 2;
+		} else {
+			radius = ((layer & 1) == 0) ? 2 : 1;
+			if(giant && from_top > 5 && (layer % 3 == 0))
+				radius = 3;
+		}
+		if(radius == 0) {
+			gen_set_block_with_meta(sc, x, yy, z, BLOCK_LEAVES, 1);
+			continue;
+		}
+		uint32_t mask = 0x3c3c3c3cU;
+		if(radius == 1)
+			mask = 0xffffffffU;
+		else if(radius >= 3)
+			mask = 0x0f0f0f0fU;
+		gen_place_leaf_square(sc, x, yy, z, radius, 1, mask);
 	}
-	gen_place_leaf_pattern(sc, x, top, z, GEN_BIG_O2, (int)(sizeof(GEN_BIG_O2) / sizeof(GEN_BIG_O2[0])), 1);
-	gen_place_log(sc, x, top, z, 1);
-	top++;
-	gen_place_leaf_pattern(sc, x, top, z, GEN_BIG_O1, (int)(sizeof(GEN_BIG_O1) / sizeof(GEN_BIG_O1[0])), 1);
-	gen_set_block_with_meta(sc, x, top, z, BLOCK_LEAVES, 1);
-	gen_set_block_with_meta(sc, x, top + 1, z, BLOCK_LEAVES, 1);
+	gen_set_block_with_meta(sc, x, y + height, z, BLOCK_LEAVES, 1);
+	gen_set_block_with_meta(sc, x, y + height + 1, z, BLOCK_LEAVES, 1);
+}
+
+static void gen_place_swamp_tree(struct server_chunk* sc, int x, int y, int z, uint32_t seed,
+								 int world_x, int world_z) {
+	int height = 4 + (abs(gen_noise_int3d(seed ^ 0x5AAA4411U, x, y, z)) % 3);
+	if(!gen_tree_space_clear(sc, x, y, z, 3, height + 4))
+		return;
+	for(int i = 0; i < height; i++) gen_place_log(sc, x, y + i, z, 0);
+	int top = y + height;
+	gen_place_leaf_square(sc, x, top - 2, z, 2, 0, 0xffffffffU);
+	gen_place_leaf_square(sc, x, top - 1, z, 2, 0, 0x3c3c3c3cU);
+	gen_place_leaf_square(sc, x, top, z, 1, 0, 0xffffffffU);
+	gen_set_block_with_meta(sc, x, top + 1, z, BLOCK_LEAVES, 0);
+	for(int yy = top; yy >= top - 2; yy--) {
+		gen_place_hanging_vines(sc, x - 2, yy, z, seed, world_x, world_z);
+		gen_place_hanging_vines(sc, x + 2, yy, z, seed ^ 0x100U, world_x, world_z);
+		gen_place_hanging_vines(sc, x, yy, z - 2, seed ^ 0x200U, world_x, world_z);
+		gen_place_hanging_vines(sc, x, yy, z + 2, seed ^ 0x300U, world_x, world_z);
+	}
+}
+
+static void gen_place_jungle_tree(struct server_chunk* sc, int x, int y, int z, uint32_t seed,
+								  int world_x, int world_z) {
+	int height = 8 + (abs(gen_noise_int3d(seed ^ 0x3A6A11E1U, x, y, z)) % 4);
+	if(!gen_tree_space_clear(sc, x, y, z, 4, height + 4))
+		return;
+	for(int i = 0; i < height; i++) gen_place_log(sc, x, y + i, z, 3);
+	int top = y + height;
+	gen_place_leaf_square(sc, x, top - 2, z, 2, 3, 0xffffffffU);
+	gen_place_leaf_square(sc, x, top - 1, z, 2, 3, 0x3c3c3c3cU);
+	gen_place_leaf_square(sc, x, top, z, 1, 3, 0xffffffffU);
+	gen_set_block_with_meta(sc, x, top + 1, z, BLOCK_LEAVES, 3);
+	for(int i = 0; i < 2; i++) {
+		int dir = (abs(gen_noise_int3d(seed ^ (0x3A6A1200U + i), x, y, z)) % 4);
+		static const int dirs[4][2] = {{1,0},{-1,0},{0,1},{0,-1}};
+		int dx = dirs[dir][0], dz = dirs[dir][1];
+		int bx = x, bz = z, by = top - 1 - i;
+		for(int k = 0; k < 2 + i; k++) {
+			bx += dx;
+			bz += dz;
+			gen_place_log(sc, bx, by, bz, 3);
+		}
+		gen_place_leaf_square(sc, bx, by, bz, 1, 3, 0xffffffffU);
+		gen_place_hanging_vines(sc, bx, by, bz, seed ^ (0x3A6A1300U + i), world_x, world_z);
+	}
+	gen_place_hanging_vines(sc, x - 2, top - 1, z, seed, world_x, world_z);
+	gen_place_hanging_vines(sc, x + 2, top - 1, z, seed ^ 0x101U, world_x, world_z);
+	gen_place_hanging_vines(sc, x, top - 1, z - 2, seed ^ 0x202U, world_x, world_z);
+	gen_place_hanging_vines(sc, x, top - 1, z + 2, seed ^ 0x303U, world_x, world_z);
 }
 
 static void gen_place_acacia_tree(struct server_chunk* sc, int x, int y, int z, uint32_t seed) {
-	int height = 2 + ((gen_noise_int3d(seed ^ 0xACAC1A11U, x, y, z) / 11) % 3);
+	int height = 4 + (abs(gen_noise_int3d(seed ^ 0xACAC1A11U, x, y, z)) % 3);
 	if(!gen_tree_space_clear(sc, x, y, z, 4, height + 5))
 		return;
 	for(int i = 0; i < height; i++) gen_place_log(sc, x, y + i, z, 0);
@@ -1563,9 +2448,35 @@ static void gen_place_acacia_tree(struct server_chunk* sc, int x, int y, int z, 
 		bx += dx; by += 1; bz += dz;
 		gen_place_log(sc, bx, by, bz, 0);
 	}
-	gen_place_leaf_pattern(sc, bx, by, bz, GEN_BIG_O3, (int)(sizeof(GEN_BIG_O3) / sizeof(GEN_BIG_O3[0])), 0);
-	gen_place_leaf_pattern(sc, bx, by + 1, bz, GEN_BIG_O1, (int)(sizeof(GEN_BIG_O1) / sizeof(GEN_BIG_O1[0])), 0);
+	gen_place_leaf_square(sc, bx, by, bz, 2, 0, 0x3c3c3c3cU);
+	gen_place_leaf_square(sc, bx, by + 1, bz, 1, 0, 0xffffffffU);
 	gen_set_block_with_meta(sc, bx, by + 1, bz, BLOCK_LEAVES, 0);
+	if((seed & 1U) == 0U) {
+		int dx2 = -dx;
+		int dz2 = -dz;
+		int bx2 = x, by2 = y + height - 2, bz2 = z;
+		for(int i = 0; i < branch_h - 1; i++) {
+			bx2 += dx2; by2 += 1; bz2 += dz2;
+			gen_place_log(sc, bx2, by2, bz2, 0);
+		}
+		gen_place_leaf_square(sc, bx2, by2, bz2, 1, 0, 0xffffffffU);
+	}
+}
+
+static void gen_place_dark_forest_tree(struct server_chunk* sc, int x, int y, int z, uint32_t seed) {
+	int height = 5 + (abs(gen_noise_int3d(seed ^ 0xDA4B0A11U, x, y, z)) % 3);
+	if(!gen_tree_space_clear(sc, x, y, z, 4, height + 4))
+		return;
+	for(int dz = 0; dz < 2; dz++) {
+		for(int dx = 0; dx < 2; dx++) {
+			for(int i = 0; i < height; i++)
+				gen_place_log(sc, x + dx, y + i, z + dz, 0);
+		}
+	}
+	int top = y + height;
+	for(int yy = top - 2; yy <= top; yy++)
+		gen_place_leaf_square(sc, x, yy, z, 3, 0, 0x3c3c3c3cU);
+	gen_place_leaf_square(sc, x + 1, top + 1, z + 1, 1, 0, 0xffffffffU);
 }
 
 static void gen_try_place_tree(struct server_chunk* sc, int lx, int lz, int y,
@@ -1574,19 +2485,31 @@ static void gen_try_place_tree(struct server_chunk* sc, int lx, int lz, int y,
 	uint8_t ground = gen_get_block(sc, lx, y - 1, lz);
 	if(ground != BLOCK_GRASS && ground != BLOCK_DIRT)
 		return;
-	if(biome_id == birch_forest || biome_id == birch_forest_hills) {
-		gen_place_birch_tree(sc, lx, y, lz, seed ^ 0xB17C0001U);
+	if(biome_id == dark_forest || biome_id == roofedForest) {
+		gen_place_dark_forest_tree(sc, lx, y, lz, seed ^ 0xDAA60A11U);
+	} else if(biome_id == jungle || biome_id == jungle_hills) {
+		gen_place_jungle_tree(sc, lx, y, lz, seed ^ 0x3A6A0001U, world_x, world_z);
+	} else if(biome_id == swamp) {
+		gen_place_swamp_tree(sc, lx, y, lz, seed ^ 0x5AAA0001U, world_x, world_z);
+	} else if(biome_id == birch_forest || biome_id == birch_forest_hills) {
+		bool tall = (biome_id == birch_forest_hills)
+			|| ((gen_hash3i(world_x, y, world_z, seed ^ 0xB17C0F11U) & 3U) == 0U);
+		gen_place_birch_tree(sc, lx, y, lz, seed ^ 0xB17C0001U, tall);
 	} else if(biome_id == taiga || biome_id == taiga_hills
 			  || biome_id == giant_tree_taiga || biome_id == giant_tree_taiga_hills
 			  || biome_id == snowy_taiga || biome_id == snowy_taiga_hills) {
-		gen_place_small_spruce_tree(sc, lx, y, lz, seed ^ 0x5A71CE01U);
+		bool giant = (biome_id == giant_tree_taiga || biome_id == giant_tree_taiga_hills);
+		gen_place_conifer_tree(sc, lx, y, lz, seed ^ 0x5A71CE01U, giant);
 	} else if(biome_id == savanna || biome_id == savanna_plateau) {
 		gen_place_acacia_tree(sc, lx, y, lz, seed ^ 0xACAC1A01U);
 	} else {
-		gen_place_small_apple_tree(sc, lx, y, lz, seed ^ 0xA991E001U);
+		bool fancy = ((gen_hash3i(world_x, y, world_z, seed ^ 0x0A4F0001U) & 3U) == 0U)
+			|| biome_id == flower_forest;
+		if(fancy)
+			gen_place_fancy_oak_tree(sc, lx, y, lz, seed ^ 0x0A4F0001U);
+		else
+			gen_place_small_oak_tree(sc, lx, y, lz, seed ^ 0xA991E001U);
 	}
-	(void)world_x;
-	(void)world_z;
 }
 
 static void gen_try_place_dungeon(struct server_chunk* sc, uint32_t seed,
@@ -2365,22 +3288,33 @@ static void gen_cleanup_floating_cave_blocks(struct server_chunk* sc) {
 					continue;
 
 				int open_neighbors = 0;
-				if(gen_is_air(sc, lx + 1, y, lz) || gen_is_water(sc, lx + 1, y, lz))
+				int horizontal_open = 0;
+				if(gen_is_air(sc, lx + 1, y, lz) || gen_is_water(sc, lx + 1, y, lz)) {
 					open_neighbors++;
-				if(gen_is_air(sc, lx - 1, y, lz) || gen_is_water(sc, lx - 1, y, lz))
+					horizontal_open++;
+				}
+				if(gen_is_air(sc, lx - 1, y, lz) || gen_is_water(sc, lx - 1, y, lz)) {
 					open_neighbors++;
+					horizontal_open++;
+				}
 				if(gen_is_air(sc, lx, y + 1, lz) || gen_is_water(sc, lx, y + 1, lz))
 					open_neighbors++;
 				if(gen_is_air(sc, lx, y - 1, lz) || gen_is_water(sc, lx, y - 1, lz))
 					open_neighbors++;
-				if(gen_is_air(sc, lx, y, lz + 1) || gen_is_water(sc, lx, y, lz + 1))
+				if(gen_is_air(sc, lx, y, lz + 1) || gen_is_water(sc, lx, y, lz + 1)) {
 					open_neighbors++;
-				if(gen_is_air(sc, lx, y, lz - 1) || gen_is_water(sc, lx, y, lz - 1))
+					horizontal_open++;
+				}
+				if(gen_is_air(sc, lx, y, lz - 1) || gen_is_water(sc, lx, y, lz - 1)) {
 					open_neighbors++;
+					horizontal_open++;
+				}
 
 				bool unsupported = gen_is_air(sc, lx, y - 1, lz) || gen_is_water(sc, lx, y - 1, lz);
 				bool top_open = gen_is_air(sc, lx, y + 1, lz) || gen_is_water(sc, lx, y + 1, lz);
-				if(open_neighbors >= 5 || (unsupported && top_open && open_neighbors >= 4))
+				if(open_neighbors >= 4
+				   || (unsupported && horizontal_open >= 2)
+				   || (unsupported && top_open && open_neighbors >= 3))
 					sc->ids[idx] = BLOCK_AIR;
 			}
 		}
@@ -2643,85 +3577,63 @@ static void gen_generate_terrain_columns(struct server_world* w,
 		int32_t wz = world_z0 + lz;
 		int biome_id = plains;
 		struct gen_biome_profile profile = gen_blended_profile(biome_gen, wx, wz, &biome_id);
+		int surface = gen_compute_surface_height_base(
+			&profile, biome_id, gen_args, seed, choice_octaves, wx, wz);
+		int legacy_surface = gen_compute_legacy_wii_surface(gen_args, seed, wx, wz);
 
-		float continental = gen_fbm2d(wx * gen_args->land_frequency_x,
-			wz * gen_args->land_frequency_z, seed ^ 0x13579BDFU,
-			gen_args->land_octaves, 2.0f, 0.5f);
-		float mountain = gen_fbm2d(wx * gen_args->mountain_frequency_x,
-			wz * gen_args->mountain_frequency_z, seed ^ 0x4AFEB19DU,
-			choice_octaves, 2.0f, 0.5f);
-		float micro = gen_fbm2d(wx * gen_args->detail_frequency_x,
-			wz * gen_args->detail_frequency_z, seed ^ 0xA53C9E3DU,
-			gen_args->detail_octaves, 2.0f, 0.5f);
-
-		float mountain_lift = fmaxf(0.0f, mountain);
-		float mountain_factor = gen_args->mountain_gain;
-		float micro_factor = 2.0f;
-		if(profile.top_block == BLOCK_SAND) {
-			mountain_factor = 0.35f;
-			micro_factor = 0.8f;
-		} else if(profile.top_block == BLOCK_STONE && !profile.oceanic) {
-			mountain_factor = 0.95f;
-			micro_factor = 1.6f;
+		if(GEN_FORCE_LEGACY_WII_SURFACE) {
+			surface = legacy_surface;
+			surface = gen_apply_legacy_rare_oceans(
+				gen_args, seed, wx, wz, surface, biome_id);
 		}
 
-		int surface = (int)(profile.base_height
-			+ continental * profile.amplitude
-			+ mountain_lift * (profile.amplitude * mountain_factor)
-			+ micro * micro_factor);
+		if(!GEN_FORCE_LEGACY_WII_SURFACE
+		   && GEN_ENABLE_LOWLAND_NEIGHBOR_SMOOTHING && !profile.oceanic) {
+			int avg = surface;
+			int count = 1;
+			static const int smooth_offs[4][2] = {
+				{1, 0}, {-1, 0}, {0, 1}, {0, -1},
+			};
+			for(int i = 0; i < 4; i++) {
+				int nbiome = plains;
+				struct gen_biome_profile np = gen_blended_profile(
+					biome_gen, wx + smooth_offs[i][0], wz + smooth_offs[i][1], &nbiome);
+				if(np.oceanic)
+					continue;
+				avg += gen_compute_surface_height_base(
+					&np, nbiome, gen_args, seed, choice_octaves,
+					wx + smooth_offs[i][0], wz + smooth_offs[i][1]);
+				count++;
+			}
+			avg /= count;
 
-		if(profile.riverine) {
-			int river_floor = gen_args->sea_level - 2 + (int)(micro * 1.2f);
-			if(river_floor < gen_args->sea_level - 3)
-				river_floor = gen_args->sea_level - 3;
-			if(river_floor > gen_args->sea_level - 1)
-				river_floor = gen_args->sea_level - 1;
-			surface = (surface + river_floor * 2) / 3;
-			if(surface < gen_args->sea_level - 4)
-				surface = gen_args->sea_level - 4;
-			if(surface > gen_args->sea_level)
-				surface = gen_args->sea_level;
-		}
+			bool near_water_level = surface <= gen_args->sea_level + 3;
+			bool sandy_or_river = profile.riverine
+				|| profile.top_block == BLOCK_SAND
+				|| biome_id == beach
+				|| biome_id == river
+				|| biome_id == frozen_river;
+			if(surface <= avg - 4 && (near_water_level || sandy_or_river)) {
+				surface = avg - 2;
+			}
+			if(surface <= avg - 6) {
+				surface = avg - 3;
+			}
+			if(sandy_or_river && surface < gen_args->sea_level - 1) {
+				surface = gen_args->sea_level - 1;
+			}
 
-		if(profile.oceanic) {
-			float island_mask = gen_fbm2d(wx * gen_args->island_mask_frequency_x,
-				wz * gen_args->island_mask_frequency_z, seed ^ 0x6A1D51E1U,
-				choice_octaves, 2.0f, 0.5f);
-			if(island_mask < gen_args->island_mask_threshold) {
-				surface = fminf(surface, gen_args->sea_level - 2);
-			} else {
-				float t = (island_mask - gen_args->island_mask_threshold)
-					/ gen_args->island_mask_scale;
-				if(t < 0.0f)
-					t = 0.0f;
-				if(t > 1.0f)
-					t = 1.0f;
-				float lift = t * t * (3.0f - 2.0f * t);
-				int target = (int)(gen_args->sea_level - 1 + lift * gen_args->island_max_lift);
-				if(target > surface)
-					surface = target;
-				if(lift < gen_args->island_flatten_threshold
-				   && surface > gen_args->sea_level + 2) {
-					surface = gen_args->sea_level + 2;
+			bool lowland = surface <= gen_args->sea_level + 6;
+			bool non_mountain = profile.top_block != BLOCK_STONE;
+			if(GEN_ENABLE_LEGACY_LOWLAND_FLOOR
+			   && (sandy_or_river || lowland) && non_mountain) {
+				int min_legacy = legacy_surface - 2;
+				if(surface < min_legacy)
+					surface = min_legacy;
+				if(surface < legacy_surface && lowland) {
+					surface = (surface * 2 + legacy_surface) / 3;
 				}
 			}
-		}
-
-		if(surface < 6)
-			surface = 6;
-		if(surface > WORLD_HEIGHT - 2)
-			surface = WORLD_HEIGHT - 2;
-		if(profile.oceanic && surface > gen_args->sea_level - 2)
-			surface = gen_args->sea_level - 2;
-		if(surface < gen_args->sea_level - 20)
-			surface = gen_args->sea_level - 20;
-
-		if(gen_is_dry_sandy_biome(biome_id) && !profile.oceanic
-		   && biome_id != beach && biome_id != river) {
-			if(surface < gen_args->sea_level + 1)
-				surface = gen_args->sea_level + 1;
-			if(surface <= gen_args->sea_level + 4)
-				surface = gen_args->sea_level + 2;
 		}
 
 		float neigh_h = 0.0f;
@@ -2747,7 +3659,7 @@ static void gen_generate_terrain_columns(struct server_world* w,
 			neigh_h += (float)sample_h * k;
 			neigh_w += k;
 		}
-		if(neigh_w > 0.0f) {
+		if(GEN_ENABLE_NEIGHBOR_EDGE_BLEND && neigh_w > 0.0f) {
 			surface = (int)((float)surface * gen_args->edge_blend_weight_self
 				+ (neigh_h / neigh_w) * gen_args->edge_blend_weight_neighbor);
 		}
@@ -2760,14 +3672,15 @@ static void gen_generate_terrain_columns(struct server_world* w,
 		bool submerged = surface <= gen_args->sea_level;
 		uint8_t top_block = profile.top_block;
 		uint8_t filler_block = profile.filler_block;
-		if(surface >= gen_args->sea_level + gen_args->beach_band_low
+		if(GEN_ENABLE_BEACH_SURFACE_REPLACEMENT
+		   && surface >= gen_args->sea_level + gen_args->beach_band_low
 		   && surface <= gen_args->sea_level + gen_args->beach_band_high
 		   && !profile.oceanic && profile.top_block != BLOCK_STONE) {
 			top_block = BLOCK_SAND;
 			filler_block = BLOCK_SAND;
 			dirt_depth = 4;
 		}
-		if(submerged) {
+		if(GEN_ENABLE_SUBMERGED_SEAFLOOR_REPLACEMENT && submerged) {
 			float sea_floor = gen_fbm2d(wx * gen_args->sea_floor_frequency_x,
 				wz * gen_args->sea_floor_frequency_z, seed ^ 0x51A17E2BU, 2, 2.0f, 0.5f);
 			bool gravel_floor = (profile.top_block == BLOCK_STONE)
@@ -2795,7 +3708,8 @@ static void gen_generate_terrain_columns(struct server_world* w,
 				} else {
 					block = BLOCK_STONE;
 				}
-			} else if(y <= gen_args->sea_level) {
+			} else if(GEN_ENABLE_WATER_FILL_TO_SEA_LEVEL
+					  && y <= gen_args->sea_level) {
 				block = BLOCK_WATER_STILL;
 			}
 			sc->ids[idx] = block;
@@ -2803,7 +3717,8 @@ static void gen_generate_terrain_columns(struct server_world* w,
 			gen_set_nibble(sc->lighting_torch, idx, 0);
 		}
 
-		if(w->generator.finisher_snow && surface > gen_args->sea_level + 1 && isSnowy(biome_id)) {
+		if(GEN_ENABLE_SNOW_SURFACE_LAYER && w->generator.finisher_snow
+		   && surface > gen_args->sea_level + 1 && isSnowy(biome_id)) {
 			size_t top_idx = S_CHUNK_IDX(lx, surface + 1, lz);
 			if(sc->ids[top_idx] == BLOCK_AIR)
 				sc->ids[top_idx] = BLOCK_SNOW;
@@ -2830,7 +3745,8 @@ static void gen_apply_feature_step(struct server_world* w, struct server_chunk* 
 	case 0:
 		if(w->generator.finisher_worm_nest_caves) {
 			gen_carve_worm_nest_caves(sc, seed, world_x0, world_z0, &w->generator);
-			gen_carve_chunk_cave_entrance(sc, seed, chunk_x, chunk_z, surface_map);
+			gen_carve_chunk_cave_entrance(sc, seed, chunk_x, chunk_z, surface_map,
+										  biome_gen, gen_args);
 		}
 		return;
 	case 1:
@@ -2873,6 +3789,7 @@ static void gen_apply_feature_step(struct server_world* w, struct server_chunk* 
 		}
 		return;
 	case 8:
+		gen_cleanup_floating_cave_blocks(sc);
 		gen_cleanup_floating_cave_blocks(sc);
 		gen_cleanup_coastal_spires_and_pits(sc, gen_args->sea_level);
 		gen_cleanup_sandy_water_channels(sc, gen_args->sea_level);
@@ -2935,19 +3852,34 @@ static void gen_generate_deco_columns(struct server_world* w, struct server_chun
 			continue;
 		int wx = world_x0 + lx;
 		int wz = world_z0 + lz;
-		int biome_id = gen_biome_at_safe(biome_gen, wx, wz);
+		int biome_id = gen_apply_forest_biome_variation(
+			gen_reduce_extreme_biomes(gen_biome_at_safe(biome_gen, wx, wz), wx, wz), wx, wz);
 		float deco = gen_rand01_from_hash(gen_hash3i(wx, y, wz, seed ^ 0xABCD1234U));
 		uint8_t top = sc->ids[S_CHUNK_IDX(lx, y, lz)];
+		float tree_threshold = gen_args->tree_threshold_dense;
+		if(biome_id == forest || biome_id == birch_forest
+		   || biome_id == birch_forest_hills || biome_id == wooded_hills
+		   || biome_id == flower_forest) {
+			tree_threshold = gen_args->tree_threshold_forest;
+		}
+		if(biome_id == dark_forest || biome_id == jungle || biome_id == jungle_hills
+		   || biome_id == giant_tree_taiga || biome_id == giant_tree_taiga_hills) {
+			tree_threshold = gen_args->tree_threshold_dense - 0.10f;
+			if(tree_threshold < 0.45f)
+				tree_threshold = 0.45f;
+		}
+
 		if(w->generator.finisher_trees
 		   && (biome_id == forest || biome_id == birch_forest
-		   || biome_id == flower_forest || biome_id == taiga
+		   || biome_id == flower_forest || biome_id == dark_forest
+		   || biome_id == birch_forest_hills || biome_id == wooded_hills
+		   || biome_id == taiga
 		   || biome_id == taiga_hills || biome_id == giant_tree_taiga
 		   || biome_id == giant_tree_taiga_hills || biome_id == swamp
 		   || biome_id == jungle || biome_id == jungle_hills)
 		   && top == BLOCK_GRASS
 		   && sc->ids[S_CHUNK_IDX(lx, y + 1, lz)] == BLOCK_AIR
-		   && deco > ((biome_id == forest || biome_id == birch_forest)
-			? gen_args->tree_threshold_forest : gen_args->tree_threshold_dense)) {
+		   && deco > tree_threshold) {
 			gen_try_place_tree(sc, lx, lz, y + 1, seed, wx, wz, biome_id);
 			continue;
 		}
@@ -3289,7 +4221,6 @@ void server_world_set_cuberite_defaults(struct server_world* w) {
 		.biomal_noise3d_num_base_octaves = 6,
 		.biomal_noise3d_base_amplitude = 1.0f,
 		.composition_gen_cache_size = 64,
-		.finisher_rough_ravines = true,
 		.rough_ravines_grid_size = 256,
 		.rough_ravines_max_offset = 128,
 		.rough_ravines_max_size = 128,
@@ -3306,42 +4237,71 @@ void server_world_set_cuberite_defaults(struct server_world* w) {
 		.rough_ravines_min_ceiling_height_edge = 38.0f,
 		.rough_ravines_max_ceiling_height_center = 58.0f,
 		.rough_ravines_min_ceiling_height_center = 36.0f,
-		.finisher_worm_nest_caves = true,
 		.worm_nest_caves_size = 40,
 		.worm_nest_caves_grid = 128,
 		.worm_nest_max_offset = 16,
-		.finisher_water_lakes = true,
 		.water_lakes_probability = 25,
-		.finisher_water_springs = true,
-		.finisher_lava_lakes = true,
 		.lava_lakes_probability = 10,
-		.finisher_lava_springs = true,
-		.finisher_ore_nests = true,
-		.finisher_mineshafts = true,
 		.mineshafts_grid_size = 512,
 		.mineshafts_max_offset = 256,
 		.mineshafts_max_system_size = 160,
 		.mineshafts_chance_corridor = 600,
 		.mineshafts_chance_crossing = 200,
 		.mineshafts_chance_staircase = 30,
-		.finisher_trees = true,
-		.finisher_villages = true,
-		.finisher_single_piece_structures = true,
-		.finisher_tall_grass = true,
-		.finisher_sprinkle_foliage = true,
-		.finisher_ice = true,
-		.finisher_snow = true,
-		.finisher_lilypads = true,
-		.finisher_bottom_lava = true,
 		.bottom_lava_level = 10,
-		.finisher_dead_bushes = true,
-		.finisher_natural_patches = true,
-		.finisher_pre_simulator = true,
-		.pre_simulator_falling_blocks = true,
-		.pre_simulator_water = true,
-		.pre_simulator_lava = true,
-		.finisher_animals = true,
+#ifdef ALL_FALSE_FINISHER
+		.finisher_rough_ravines = 			false,
+		.finisher_worm_nest_caves = 		false,
+		.finisher_water_lakes = 			false,
+		.finisher_water_springs = 			false,
+		.finisher_lava_lakes = 				false,
+		.finisher_lava_springs = 			false,
+		.finisher_ore_nests = 				false,
+		.finisher_mineshafts = 				false,
+		.finisher_trees = 					false,
+		.finisher_villages = 				false,
+		.finisher_single_piece_structures = false,
+		.finisher_tall_grass = 				false,
+		.finisher_sprinkle_foliage = 		false,
+		.finisher_ice = 					false,
+		.finisher_snow = 					false,
+		.finisher_lilypads = 				false,
+		.finisher_bottom_lava = 			false,
+		.finisher_dead_bushes = 			false,
+		.finisher_natural_patches = 		false,
+		.finisher_pre_simulator = 			false,
+		.pre_simulator_falling_blocks = 	false,
+		.pre_simulator_water = 				false,
+		.pre_simulator_lava = 				false,
+		.finisher_animals = 				false,
+		.finisher_overworld_clump_flowers = false,
+#else
+		.finisher_rough_ravines = 			false,
+		.finisher_worm_nest_caves = 		true,
+		.finisher_water_lakes = 			true,
+		.finisher_water_springs = 			true,
+		.finisher_lava_lakes = 				true,
+		.finisher_lava_springs = 			true,
+		.finisher_ore_nests = 				true,
+		.finisher_mineshafts = 				true,
+		.finisher_trees = 					true,
+		.finisher_villages = 				true,
+		.finisher_single_piece_structures = true,
+		.finisher_tall_grass = 				true,
+		.finisher_sprinkle_foliage = 		true,
+		.finisher_ice = 					true,
+		.finisher_snow = 					true,
+		.finisher_lilypads = 				true,
+		.finisher_bottom_lava = 			true,
+		.finisher_dead_bushes = 			true,
+		.finisher_natural_patches = 		true,
+		.finisher_pre_simulator = 			true,
+		.pre_simulator_falling_blocks = 	true,
+		.pre_simulator_water = 				true,
+		.pre_simulator_lava = 				true,
+		.finisher_animals = 				true,
 		.finisher_overworld_clump_flowers = true,
+#endif
 	};
 }
 
