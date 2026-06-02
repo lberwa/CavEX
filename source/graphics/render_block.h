@@ -29,7 +29,8 @@
 #include "../platform/displaylist.h"
 #include "../world.h"
 
-#define TEX_OFFSET(x) ((x)*18 + 3)
+#define TEX_OFFSET(x)                                                         \
+	((uint16_t)((x) * tex_atlas_stride() + tex_atlas_padding()))
 
 void render_block_init(void);
 void render_block_cracks(struct block_data* blk, mat4 view, w_coord_t x,

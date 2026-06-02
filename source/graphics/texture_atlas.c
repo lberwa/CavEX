@@ -25,9 +25,17 @@
 #include "../platform/texture.h"
 #include "texture_atlas.h"
 
-static uint8_t global_block_atlas[TEXAT_MAX];
-static uint8_t global_block_atlas2[TEXAT_MAX];
-static uint8_t global_particle_atlas[TEXAT_MAX];
+static uint16_t global_block_atlas[TEXAT_MAX];
+static uint16_t global_block_atlas2[TEXAT_MAX];
+static uint16_t global_particle_atlas[TEXAT_MAX];
+static uint16_t global_atlas_columns = 16;
+static uint16_t global_atlas_stride = 18;
+static uint16_t global_atlas_padding = 3;
+static uint16_t global_atlas_size = 256;
+static uint16_t last_atlas_columns = 16;
+static uint16_t last_atlas_stride = 18;
+static uint16_t last_atlas_padding = 3;
+static uint16_t last_atlas_size = 256;
 
 static int clamp_n(int x, int n) {
 	if(x < 0)
@@ -101,7 +109,21 @@ void tex_atlas_reg_grass(dict_atlas_src_t atlas, enum tex_atlas_entry name,
 							 });
 }
 
-void* tex_atlas_compute(dict_atlas_src_t atlas, uint8_t* atlas_dst,
+static uint16_t atlas_axis_capacity(uint16_t size, uint16_t tile_size,
+									uint16_t border_scale,
+									uint16_t padding) {
+	uint16_t axis = 0;
+
+	while((size_t)padding + (size_t)axis * (tile_size + 2 * border_scale)
+			  + tile_size + border_scale
+		  <= size) {
+		axis++;
+	}
+
+	return axis;
+}
+
+void* tex_atlas_compute(dict_atlas_src_t atlas, uint16_t* atlas_dst,
 						uint8_t* image, size_t width, size_t height) {
 #if 0
 	if (!image) {
@@ -120,15 +142,31 @@ void* tex_atlas_compute(dict_atlas_src_t atlas, uint8_t* atlas_dst,
 
 	assert(image && width >= 16 && width == height);
 
-	int tile_size = width / 16;
-	int border_scale = width / 256;
+	uint16_t tile_size = width / 16;
+	uint16_t border_scale = width / 256;
+	uint16_t padding = 3 * border_scale;
+	uint16_t output_size = width;
+	uint16_t atlas_count = (uint16_t)dict_atlas_src_size(atlas);
+	uint16_t atlas_axis = atlas_axis_capacity(output_size, tile_size,
+											  border_scale, padding);
 
-	uint8_t* output = malloc(width * height * 4);
+	while((size_t)atlas_axis * atlas_axis < atlas_count) {
+		output_size *= 2;
+		atlas_axis = atlas_axis_capacity(output_size, tile_size, border_scale,
+										 padding);
+	}
+
+	last_atlas_columns = atlas_axis;
+	last_atlas_stride = tile_size + 2 * border_scale;
+	last_atlas_padding = padding;
+	last_atlas_size = output_size;
+
+	uint8_t* output = malloc((size_t)output_size * output_size * 4);
 
 	if(!output)
 		return NULL;
 
-	memset(output, 255, width * height * 4);
+	memset(output, 255, (size_t)output_size * output_size * 4);
 
 	dict_atlas_src_it_t it;
 	dict_atlas_src_it(it, atlas);
@@ -138,10 +176,10 @@ void* tex_atlas_compute(dict_atlas_src_t atlas, uint8_t* atlas_dst,
 	while(!dict_atlas_src_end_p(it)) {
 		struct texture_entry* e = dict_atlas_src_ref(it);
 
-		size_t current_x = (current % 14) * (tile_size + 2 * border_scale)
-			+ 3 * border_scale;
-		size_t current_y = (current / 14) * (tile_size + 2 * border_scale)
-			+ 3 * border_scale;
+		size_t current_x = (current % atlas_axis) * last_atlas_stride
+			+ padding;
+		size_t current_y = (current / atlas_axis) * last_atlas_stride
+			+ padding;
 
 		// int64_t to prevent unreasonable gcc warning
 		for(int64_t y = -border_scale; y < tile_size + border_scale; y++) {
@@ -151,7 +189,8 @@ void* tex_atlas_compute(dict_atlas_src_t atlas, uint8_t* atlas_dst,
 					   + (clamp_n(y, tile_size) + e->y * tile_size) * width)
 						* 4;
 				uint8_t* dst_col
-					= output + ((current_x + x) + (current_y + y) * width) * 4;
+					= output
+					+ ((current_x + x) + (current_y + y) * output_size) * 4;
 
 				if(e->colorize.enable) {
 					dst_col[0] = src_col[0] * e->colorize.r / 255;
@@ -161,6 +200,14 @@ void* tex_atlas_compute(dict_atlas_src_t atlas, uint8_t* atlas_dst,
 				} else {
 					for(size_t k = 0; k < 4; k++)
 						dst_col[k] = src_col[k];
+				}
+
+				// Avoid colored fringes from transparent source pixels when the
+				// atlas is later alpha-blended (for example tripwire).
+				if(dst_col[3] < 255) {
+					dst_col[0] = dst_col[0] * dst_col[3] / 255;
+					dst_col[1] = dst_col[1] * dst_col[3] / 255;
+					dst_col[2] = dst_col[2] * dst_col[3] / 255;
 				}
 
 				if(e->bg.enable && dst_col[3] < 128) {
@@ -175,7 +222,9 @@ void* tex_atlas_compute(dict_atlas_src_t atlas, uint8_t* atlas_dst,
 			}
 		}
 
-		atlas_dst[e->name] = TEXTURE_INDEX(current % 14, current / 14);
+		atlas_dst[e->name]
+			= (uint16_t)((current / atlas_axis) * atlas_axis
+						 + (current % atlas_axis));
 
 		current++;
 		dict_atlas_src_next(it);
@@ -184,16 +233,32 @@ void* tex_atlas_compute(dict_atlas_src_t atlas, uint8_t* atlas_dst,
 	return output;
 }
 
-uint8_t tex_atlas_lookup(enum tex_atlas_entry name) {
+uint16_t tex_atlas_lookup(enum tex_atlas_entry name) {
 	return global_block_atlas[name];
 }
 
-uint8_t tex_atlas_lookup2(enum tex_atlas_entry name) {
+uint16_t tex_atlas_lookup2(enum tex_atlas_entry name) {
 	return global_block_atlas2[name];
 }
 
-uint8_t tex_atlas_lookup_particle(enum tex_atlas_entry name) {
+uint16_t tex_atlas_lookup_particle(enum tex_atlas_entry name) {
 	return global_particle_atlas[name];
+}
+
+uint16_t tex_atlas_columns(void) {
+	return global_atlas_columns;
+}
+
+uint16_t tex_atlas_stride(void) {
+	return global_atlas_stride;
+}
+
+uint16_t tex_atlas_padding(void) {
+	return global_atlas_padding;
+}
+
+uint16_t tex_atlas_size(void) {
+	return global_atlas_size;
 }
 
 void* tex_atlas_block(const char* filename, size_t* width, size_t* height) {
@@ -425,16 +490,29 @@ void* tex_atlas_block(const char* filename, size_t* width, size_t* height) {
 		tex_atlas_reg(atlas, TEXAT_BREAK_0 + k, k, 15);
 
 	// Append new block textures at the very end so all existing atlas indices
-	// stay exactly where old worlds/rendering expect them.
+	// stay together once the packed atlas is rebuilt for the final output.
 	tex_atlas_reg(atlas, TEXAT_ENDER_CHEST_TOP, 4, 12);
 	tex_atlas_reg(atlas, TEXAT_ENDER_CHEST_SIDE, 5, 12);
 	tex_atlas_reg(atlas, TEXAT_ENDER_CHEST_FRONT, 6, 12);
+	tex_atlas_reg(atlas, TEXAT_TRIPWIRE_STRAIGHT, 3, 13);
+	tex_atlas_reg(atlas, TEXAT_TRIPWIRE_CORNER, 4, 13);
+	tex_atlas_reg(atlas, TEXAT_TRIPWIRE_T, 5, 13);
+	tex_atlas_reg(atlas, TEXAT_TRIPWIRE_CROSS, 6, 13);
+	tex_atlas_reg(atlas, TEXAT_TRIPWIRE_RING, 1, 0);
+	tex_atlas_reg(atlas, TEXAT_TRIPWIRE_REST, 4, 0);
+	//tex_atlas_reg(atlas, TEXAT_ATLAS_TEST, 2, 0);
 
 	memset(global_block_atlas, 0, sizeof(global_block_atlas));
 
 	uint8_t* image = tex_read(filename, width, height);
 	void* output = tex_atlas_compute(atlas, global_block_atlas, image,
 									 *width, *height);
+	global_atlas_columns = last_atlas_columns;
+	global_atlas_stride = last_atlas_stride;
+	global_atlas_padding = last_atlas_padding;
+	global_atlas_size = last_atlas_size;
+	*width = global_atlas_size;
+	*height = global_atlas_size;
 	dict_atlas_src_clear(atlas);
 	free(image);
 
@@ -457,6 +535,8 @@ void* tex_atlas_block2(const char* filename, size_t* width, size_t* height) {
 									 global_block_atlas2,
 									 image,
 									 *width, *height);
+	*width = last_atlas_size;
+	*height = last_atlas_size;
 	dict_atlas_src_clear(atlas);
 	free(image);
 	return output;
@@ -505,6 +585,8 @@ void* tex_atlas_particles(const char* filename, size_t* width, size_t* height) {
 									 global_particle_atlas,
 									 image,
 									 *width, *height);
+  *width = last_atlas_size;
+  *height = last_atlas_size;
   dict_atlas_src_clear(atlas);
   free(image);
 	return output;

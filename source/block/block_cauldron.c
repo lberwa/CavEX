@@ -55,7 +55,7 @@ getSideMask(struct block_info* this, enum side side, struct block_info* it) {
 	return face_occlusion_full();
 }
 
-static uint8_t getTextureIndex(struct block_info* this, enum side side) {
+static uint16_t getTextureIndex(struct block_info* this, enum side side) {
 	(void)this;
 	switch(side) {
 		case SIDE_TOP: return tex_atlas_lookup(TEXAT_CAULDRON_TOP);
@@ -117,7 +117,7 @@ struct block block_cauldron = {
 	.renderBlockAlways = render_block_cauldron_always,
 	.renderBlockAlwaysTransparent = render_block_cauldron_water,
 	.luminance = 0,
-	.double_sided = true,
+	.double_sided = false,
 	.can_see_through = true,
 	.opacity = 0,
 	.ignore_lighting = false,

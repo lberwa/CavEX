@@ -39,7 +39,7 @@ getSideMask(struct block_info* this, enum side side, struct block_info* it) {
 	}
 }
 
-static uint8_t getTextureIndex(struct block_info* this, enum side side) {
+static uint16_t getTextureIndex(struct block_info* this, enum side side) {
 	switch(side) {
 		case SIDE_TOP:
 			return (this->block->metadata < 7) ?

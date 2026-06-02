@@ -11,7 +11,7 @@ size_t redstone_lamp_get_bounding_box(struct block_info* this, bool entity,
 struct face_occlusion* redstone_lamp_get_side_mask(struct block_info* this,
 												   enum side side,
 												   struct block_info* it);
-uint8_t redstone_lamp_get_texture_index(struct block_info* this, enum side side);
+uint16_t redstone_lamp_get_texture_index(struct block_info* this, enum side side);
 size_t redstone_lamp_get_dropped_item(struct block_info* this,
 									  struct item_data* it,
 									  struct random_gen* g,

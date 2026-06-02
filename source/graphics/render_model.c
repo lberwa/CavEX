@@ -169,7 +169,7 @@ void render_model_player(mat4 mv, float head_pitch, float head_yaw,
 	struct item* leggings_it = leggings ? item_get(leggings) : NULL;
 	struct item* boots_it = boots ? item_get(boots) : NULL;
 
-	gfx_bind_texture(&texture_mob_char);
+	gfx_bind_texture_virtual(&texture_mob_char);
 
 	// head
 	render_model_box(mv, (vec3) {0.0F, -4.0F, 0.0F}, (vec3) {4.0F, 0.0F, 4.0F},
@@ -245,7 +245,7 @@ void render_model_player(mat4 mv, float head_pitch, float head_yaw,
 			helmet_it->renderItem(helmet_it, helmet, mv_item, true,
 								  R_ITEM_ENV_ENTITY);
 		} else {
-			gfx_bind_texture(armor_texture[helmet_it->armor.tier][0]);
+			gfx_bind_texture_virtual(armor_texture[helmet_it->armor.tier][0]);
 
 			// head
 			render_model_box(
@@ -257,7 +257,7 @@ void render_model_player(mat4 mv, float head_pitch, float head_yaw,
 
 	if(chestplate_it && chestplate_it->armor.is_armor
 	   && chestplate_it->armor.type == ARMOR_TYPE_CHESTPLATE) {
-		gfx_bind_texture(armor_texture[chestplate_it->armor.tier][0]);
+		gfx_bind_texture_virtual(armor_texture[chestplate_it->armor.tier][0]);
 
 		// body
 		render_model_box(mv, (vec3) {0.0F, -4.0F, 0.0F},
@@ -278,7 +278,7 @@ void render_model_player(mat4 mv, float head_pitch, float head_yaw,
 
 	if(leggings_it && leggings_it->armor.is_armor
 	   && leggings_it->armor.type == ARMOR_TYPE_LEGGINGS) {
-		gfx_bind_texture(armor_texture[leggings_it->armor.tier][1]);
+		gfx_bind_texture_virtual(armor_texture[leggings_it->armor.tier][1]);
 		// body
 		render_model_box(mv, (vec3) {0.0F, -4.0F, 0.0F},
 						 (vec3) {4.0F, 12.0F, 2.0F}, (vec3) {0.0F, 0.0F, 0.0F},
@@ -298,7 +298,7 @@ void render_model_player(mat4 mv, float head_pitch, float head_yaw,
 
 	if(boots_it && boots_it->armor.is_armor
 	   && boots_it->armor.type == ARMOR_TYPE_BOOTS) {
-		gfx_bind_texture(armor_texture[boots_it->armor.tier][0]);
+		gfx_bind_texture_virtual(armor_texture[boots_it->armor.tier][0]);
 		// left leg
 		render_model_box(mv, (vec3) {2.0F, -16.0F, 0.0F},
 						 (vec3) {2.0F, 12.0F, 2.0F},

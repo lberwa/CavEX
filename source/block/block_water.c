@@ -53,7 +53,7 @@ getSideMask(struct block_info* this, enum side side, struct block_info* it) {
 	#endif
 }
 
-static uint8_t getTextureIndex1(struct block_info* this, enum side side) {
+static uint16_t getTextureIndex1(struct block_info* this, enum side side) {
 	#ifdef GFX_FANCY_LIQUIDS
 	return TEXTURE_INDEX(1, 0);
 	#else
@@ -61,7 +61,7 @@ static uint8_t getTextureIndex1(struct block_info* this, enum side side) {
 	#endif
 }
 
-static uint8_t getTextureIndex2(struct block_info* this, enum side side) {
+static uint16_t getTextureIndex2(struct block_info* this, enum side side) {
 	#ifdef GFX_FANCY_LIQUIDS
 	return TEXTURE_INDEX(5, 0);
 	#else

@@ -34,7 +34,7 @@ getSideMask(struct block_info* this, enum side side, struct block_info* it) {
 	return face_occlusion_empty();
 }
 
-static uint8_t getTextureIndex(struct block_info* this, enum side side) {
+static uint16_t getTextureIndex(struct block_info* this, enum side side) {
 	(void)side;
 	// Use 3 distinct stages as requested:
 	// stage 0 -> (10,9), stage 1 -> (11,9), stage 2+ -> (12,9)

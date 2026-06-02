@@ -127,7 +127,7 @@ getSideMask(struct block_info* this, enum side side, struct block_info* it) {
 	return face_occlusion_empty();
 }
 
-static uint8_t getTextureIndex(struct block_info* this, enum side side) {
+static uint16_t getTextureIndex(struct block_info* this, enum side side) {
 	(void)side;
 	return tex_atlas_lookup(repeater_is_powered(this->block) ?
 								TEXAT_REPEATER_ON :

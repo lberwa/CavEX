@@ -112,6 +112,15 @@ make clean IS_PC_BUILD=0
 
 __PC:__
 
+first install the libarys:
+
+```bash
+
+sudo apt install cmake zlib1g-dev libasound2-dev libglfw3-dev libglew-dev
+```
+
+
+
 ```bash
 make pc IS_PC_BUILD=1
 ```

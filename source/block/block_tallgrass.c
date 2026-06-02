@@ -36,7 +36,7 @@ getSideMask(struct block_info* this, enum side side, struct block_info* it) {
 	return face_occlusion_empty();
 }
 
-static uint8_t getTextureIndex1(struct block_info* this, enum side side) {
+static uint16_t getTextureIndex1(struct block_info* this, enum side side) {
 	switch(this->block->metadata) {
 		case 1: return tex_atlas_lookup(TEXAT_TALLGRASS); // tallgrass
 		case 2: return tex_atlas_lookup(TEXAT_FERN);	  // fern

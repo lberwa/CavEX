@@ -1161,7 +1161,7 @@ size_t world_render(struct world* w, struct camera* c, bool pass) {
 	gfx_lighting(true);
 
 	if(!pass) {
-		gfx_bind_texture(&texture_terrain);
+		gfx_bind_texture_pixels(&texture_terrain);
 		gfx_blending(MODE_OFF);
 		gfx_alpha_test(true);
 

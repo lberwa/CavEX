@@ -71,10 +71,10 @@ getSideMask(struct block_info* this, enum side side, struct block_info* it) {
 	return face_occlusion_empty();
 }
 
-static uint8_t getTextureIndex(struct block_info* this, enum side side) {
+static uint16_t getTextureIndex(struct block_info* this, enum side side) {
 	return side == hook_side(this->block) ?
-		tex_atlas_lookup(TEXAT_STONE) :
-		tex_atlas_lookup(TEXAT_PLANKS);
+		tex_atlas_lookup(TEXAT_TRIPWIRE_RING) :
+		tex_atlas_lookup(TEXAT_TRIPWIRE_REST);
 }
 
 static void hook_sync_line(struct server_local* s, struct block_info* info) {

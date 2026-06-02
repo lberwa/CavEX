@@ -47,7 +47,7 @@ static inline uint8_t DIM_LIGHT(uint8_t l, uint8_t* table) {
 }
 
 void render_item_init() {
-	displaylist_init(&dl, 320, 3 * 2 + 2 * 1 + 1);
+	displaylist_init(&dl, 320, 3 * 2 + 2 * 2 + 1);
 	memset(vertex_light, 0x0F, sizeof(vertex_light));
 	memset(vertex_light_inv, 0xFF, sizeof(vertex_light_inv));
 }
@@ -60,7 +60,7 @@ void render_item_flat(struct item* item, struct item_data* stack, mat4 view,
 					  bool fullbright, enum render_item_env env) {
 	assert(item && stack && view);
 
-	uint8_t s, t;
+	uint16_t s, t;
 
 	if(item_is_block(stack)) {
 		struct block* b = blocks[stack->id];
@@ -73,7 +73,7 @@ void render_item_flat(struct item* item, struct item_data* stack, mat4 view,
 			.torch_light = 15,
 		};
 
-		uint8_t tex = b->getTextureIndex(
+		uint16_t tex = b->getTextureIndex(
 			&(struct block_info) {
 				.block = &this_blk, .neighbours = NULL, .x = 0, .y = 0, .z = 0},
 			SIDE_TOP);
@@ -81,7 +81,10 @@ void render_item_flat(struct item* item, struct item_data* stack, mat4 view,
 		s = TEX_OFFSET(TEXTURE_X(tex));
 		t = TEX_OFFSET(TEXTURE_Y(tex));
 
-		gfx_bind_texture(b->transparent ? &texture_anim : &texture_terrain);
+		if(b->transparent)
+			gfx_bind_texture(&texture_anim);
+		else
+			gfx_bind_texture_pixels(&texture_terrain);
 	} else {
 		s = item->render_data.item.texture_x * 16;
 		t = item->render_data.item.texture_y * 16;

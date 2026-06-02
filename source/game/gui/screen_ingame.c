@@ -161,7 +161,7 @@ void screen_ingame_render3D(struct screen* s, mat4 view) {
 		glm_rotate_z(model, glm_rad(-sinHalfCircleWeird * 20.0F), model);
 
 		gfx_lighting(false);
-		gfx_bind_texture(&texture_mob_char);
+		gfx_bind_texture_virtual(&texture_mob_char);
 
 		glm_translate(model, (vec3) {-1.0F, 3.6F, 3.5F});
 		glm_rotate_z(model, glm_rad(120.0F), model);
@@ -310,7 +310,7 @@ void screen_ingame_render3D(struct screen* s, mat4 view) {
 			});
 		}
 
-		if(delay > 0
+		if(delay >= 0
 		   && time_diff_ms(gstate.digging.start, time_get()) >= delay) {
 			svin_rpc_try_send(&(struct server_rpc) {
 				RPC_PLAYER_ID(gstate_active_player())

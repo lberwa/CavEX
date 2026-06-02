@@ -5,7 +5,7 @@
 #include "blocks.h"
 
 enum block_material wooden_slab_get_material(struct block_info* this);
-uint8_t wooden_slab_get_texture_index(struct block_info* this, enum side side);
+uint16_t wooden_slab_get_texture_index(struct block_info* this, enum side side);
 bool wooden_slab_on_item_place(struct server_local* s, struct item_data* it,
 							   struct block_info* where, struct block_info* on,
 							   enum side on_side);

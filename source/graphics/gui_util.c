@@ -101,16 +101,16 @@ void gutil_texquad_rt_any(int x, int y, float angle, int tx, int ty, int sx,
 }
 
 void gutil_bg() {
-	gfx_bind_texture(&texture_terrain);
+	gfx_bind_texture_pixels(&texture_terrain);
 
 	int scale = 16 * 4;
 	int cx = (gfx_width() + scale - 1) / scale;
 	int cy = (gfx_height() + scale - 1) / scale;
 
-	uint8_t tex = tex_atlas_lookup(TEXAT_DIRT);
+	uint16_t tex = tex_atlas_lookup(TEXAT_DIRT);
 
-	uint8_t s = TEX_OFFSET(TEXTURE_X(tex));
-	uint8_t t = TEX_OFFSET(TEXTURE_Y(tex));
+	uint16_t s = TEX_OFFSET(TEXTURE_X(tex));
+	uint16_t t = TEX_OFFSET(TEXTURE_Y(tex));
 
 	for(int y = 0; y < cy; y++) {
 		for(int x = 0; x < cx; x++) {
@@ -199,7 +199,7 @@ int gutil_text_col(int col) {
 }
 
 void gutil_text(int x, int y, const char* str, int scale, bool shadow) {
-	gfx_bind_texture(&texture_font);
+	gfx_bind_texture_virtual(&texture_font);
 
 	int skip = 0;
 	int col = gutil_text_collor;//15
@@ -217,8 +217,8 @@ void gutil_text(int x, int y, const char* str, int scale, bool shadow) {
 			if(*str >= 'a' && *str <= 'f')
 				col = *str - 'a' + 10;
 		} else {
-			uint8_t tex_x = *str % 16 * 16;
-			uint8_t tex_y = *str / 16 * 16;
+			uint16_t tex_x = *str % 16 * 16;
+			uint16_t tex_y = *str / 16 * 16;
 			uint8_t width = (font_char_width[(int)*str] + 1) * scale / 8;
 
 			if(shadow) {

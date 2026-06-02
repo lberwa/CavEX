@@ -206,7 +206,7 @@ getHeadSideMask(struct block_info* this, enum side side, struct block_info* it) 
 	return face_occlusion_empty();
 }
 
-static uint8_t getTextureIndex(struct block_info* this, enum side side) {
+static uint16_t getTextureIndex(struct block_info* this, enum side side) {
 	enum side facing = piston_facing(this->block);
 
 	if(side == blocks_side_opposite(facing))

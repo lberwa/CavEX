@@ -41,16 +41,16 @@ redstone_lamp        ✅
 lit_redstone_lamp    ✅
 double_wooden_slab   ✅
 wooden_slab          ✅
-cocoa
-sandstone_stairs
-emerald_ore
-ender_chest
-tripwire_hook
-tripwire
+cocoa                ✅
+sandstone_stairs     ✅
+emerald_ore          ✅
+ender_chest          ✅
+tripwire_hook        ✅
+tripwire             ✅
 emerald_block
-spruce_stairs
-birch_stairs
-jungle_stairs
+spruce_stairs        ❌
+birch_stairs         ❌
+jungle_stairs        ❌
 command_block
 beacon
 cobblestone_wall

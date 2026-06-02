@@ -51,7 +51,7 @@ static bool furnace_side_is_front(struct block_info* this, enum side side) {
 	}
 }
 
-static uint8_t getTextureIndex1(struct block_info* this, enum side side) {
+static uint16_t getTextureIndex1(struct block_info* this, enum side side) {
 	switch(side) {
 		case SIDE_TOP:
 		case SIDE_BOTTOM:
@@ -63,7 +63,7 @@ static uint8_t getTextureIndex1(struct block_info* this, enum side side) {
 	}
 }
 
-static uint8_t getTextureIndex2(struct block_info* this, enum side side) {
+static uint16_t getTextureIndex2(struct block_info* this, enum side side) {
 	switch(side) {
 		case SIDE_TOP:
 		case SIDE_BOTTOM:

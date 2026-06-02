@@ -113,18 +113,18 @@ getSideMask(struct block_info* this, enum side side, struct block_info* it) {
 	return face_occlusion_empty();
 }
 
-static uint8_t getTextureIndex1(struct block_info* this, enum side side) {
+static uint16_t getTextureIndex1(struct block_info* this, enum side side) {
 	return (this->block->metadata < 6) ? tex_atlas_lookup(TEXAT_RAIL) :
 										 tex_atlas_lookup(TEXAT_RAIL_CURVED);
 }
 
-static uint8_t getTextureIndex2(struct block_info* this, enum side side) {
+static uint16_t getTextureIndex2(struct block_info* this, enum side side) {
 	return (this->block->metadata & 0x8) ?
 		tex_atlas_lookup(TEXAT_RAIL_POWERED_ON) :
 		tex_atlas_lookup(TEXAT_RAIL_POWERED_OFF);
 }
 
-static uint8_t getTextureIndex3(struct block_info* this, enum side side) {
+static uint16_t getTextureIndex3(struct block_info* this, enum side side) {
 	return tex_atlas_lookup(TEXAT_RAIL_DETECTOR);
 }
 

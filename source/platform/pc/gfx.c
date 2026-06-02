@@ -20,7 +20,7 @@
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <assert.h>
-#include <m-lib/m-string.h>
+#include "../../m-lib/m-string.h"
 #include <malloc.h>
 #include <math.h>
 #include <string.h>
@@ -119,6 +119,14 @@ static void scroll_callback(GLFWwindow* window, double xoffset,
 }
 
 static GLuint shader_prog;
+static float current_tex_scale_x = 1.0F / 256.0F;
+static float current_tex_scale_y = 1.0F / 256.0F;
+
+static void gfx_set_tex_scale(float sx, float sy) {
+	current_tex_scale_x = sx;
+	current_tex_scale_y = sy;
+	glUniform2f(glGetUniformLocation(shader_prog, "tex_scale"), sx, sy);
+}
 
 void gfx_setup() {
 	glfwInit();
@@ -218,6 +226,7 @@ void gfx_setup() {
 	gfx_bind_texture(&texture_terrain);
 
 	glUniform1i(glGetUniformLocation(shader_prog, "tex"), 0);
+	gfx_set_tex_scale(1.0F / 256.0F, 1.0F / 256.0F);
 }
 
 static float colors[256];
@@ -292,6 +301,17 @@ void gfx_flip_buffers(float* gpu_wait, float* vsync_wait) {
 
 void gfx_bind_texture(struct tex_gfx* tex) {
 	tex_gfx_bind(tex, 0);
+	gfx_set_tex_scale(1.0F / (float)(tex ? tex->width : 256),
+					  1.0F / (float)(tex ? tex->height : 256));
+}
+
+void gfx_bind_texture_virtual(struct tex_gfx* tex) {
+	tex_gfx_bind(tex, 0);
+	gfx_set_tex_scale(1.0F / 256.0F, 1.0F / 256.0F);
+}
+
+void gfx_bind_texture_pixels(struct tex_gfx* tex) {
+	gfx_bind_texture(tex);
 }
 
 void gfx_copy_framebuffer(uint8_t* dest, size_t* width, size_t* height) {
@@ -517,17 +537,13 @@ void gfx_draw_quads(size_t vertex_count, const int16_t* vertices,
 
 	assert(vertex_count < 256);
 
-	float tmp[vertex_count * 3];
-	for(size_t k = 0; k < vertex_count * 3; k++)
-		tmp[k] = texcoords[k] / 256.0F;
-
 	glEnableVertexAttribArray(0);
 	glEnableVertexAttribArray(1);
 	glEnableVertexAttribArray(2);
 
 	glVertexAttribPointer(0, 3, GL_SHORT, GL_FALSE, 0, vertices);
 	glVertexAttribPointer(1, 4, GL_UNSIGNED_BYTE, GL_TRUE, 0, colors);
-	glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 0, tmp);
+	glVertexAttribPointer(2, 2, GL_UNSIGNED_SHORT, GL_FALSE, 0, texcoords);
 
 	glDrawArrays(GL_QUADS, 0, vertex_count);
 
@@ -539,6 +555,10 @@ void gfx_draw_quads(size_t vertex_count, const int16_t* vertices,
 void gfx_draw_quads_flt(size_t vertex_count, const float* vertices,
 						const uint8_t* colors, const float* texcoords) {
 	assert(vertices && colors && texcoords);
+
+	const float prev_scale_x = current_tex_scale_x;
+	const float prev_scale_y = current_tex_scale_y;
+	gfx_set_tex_scale(1.0F, 1.0F);
 
 	glEnableVertexAttribArray(0);
 	glEnableVertexAttribArray(1);
@@ -553,4 +573,6 @@ void gfx_draw_quads_flt(size_t vertex_count, const float* vertices,
 	glDisableVertexAttribArray(0);
 	glDisableVertexAttribArray(1);
 	glDisableVertexAttribArray(2);
+
+	gfx_set_tex_scale(prev_scale_x, prev_scale_y);
 }

@@ -38,7 +38,7 @@ getSideMask(struct block_info* this, enum side side, struct block_info* it) {
 	return face_occlusion_full();
 }
 
-static uint8_t getTextureIndex(struct block_info* this, enum side side) {
+static uint16_t getTextureIndex(struct block_info* this, enum side side) {
 	uint8_t tex[SIDE_MAX] = {
 		[SIDE_TOP] = tex_atlas_lookup(TEXAT_CAST_BLOCK_IRON),
 		[SIDE_BOTTOM] = tex_atlas_lookup(TEXAT_CAST_BLOCK_IRON),

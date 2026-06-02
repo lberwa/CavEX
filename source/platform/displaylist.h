@@ -44,6 +44,6 @@ void displaylist_render_immediate(struct displaylist* l, uint16_t vtxcnt);
 
 void displaylist_pos(struct displaylist* l, int16_t x, int16_t y, int16_t z);
 void displaylist_color(struct displaylist* l, uint8_t index);
-void displaylist_texcoord(struct displaylist* l, uint8_t s, uint8_t t);
+void displaylist_texcoord(struct displaylist* l, uint16_t s, uint16_t t);
 
 #endif

@@ -40,7 +40,7 @@ struct particle {
     float            size;       // half‐quad size
     int              age;        // remaining life in ticks
     int              lifetime;   // initial life in ticks, for animating smoke
-    uint8_t          tex;        // base tile index
+    uint16_t         tex;        // base tile index
     bool             gravity;    // apply gravity?
     uint8_t     	 r, g, b;	 // rgb colorisation of a particle
     bool             ignore_light;    // apply gravity?
@@ -49,7 +49,7 @@ struct particle {
 
 void particle_add(vec3 pos,
                   vec3 vel,
-                  uint8_t tex,
+                  uint16_t tex,
                   float size,
                   float lifetime,
                   bool gravity,
