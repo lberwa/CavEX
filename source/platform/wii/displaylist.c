@@ -78,8 +78,8 @@ void displaylist_pos(struct displaylist* l, int16_t x, int16_t y, int16_t z) {
 		assert(l->data);
 	}
 
-	if(l->index + 9 > l->length) {
-		l->length = (l->length * 5 / 4 + 9 + DISPLAYLIST_CLL - 1)
+	if(l->index + 11 > l->length) {
+		l->length = (l->length * 5 / 4 + 11 + DISPLAYLIST_CLL - 1)
 			/ DISPLAYLIST_CLL * DISPLAYLIST_CLL;
 		l->data = realloc(l->data, l->length + DISPLAYLIST_CLL);
 		assert(l->data);
@@ -98,10 +98,12 @@ void displaylist_color(struct displaylist* l, uint8_t index) {
 	MEM_U8(l->data, l->index++) = index;
 }
 
-void displaylist_texcoord(struct displaylist* l, uint8_t s, uint8_t t) {
+void displaylist_texcoord(struct displaylist* l, uint16_t s, uint16_t t) {
 	assert(l && !l->finished && l->data);
-	MEM_U8(l->data, l->index++) = s;
-	MEM_U8(l->data, l->index++) = t;
+	MEM_U16(l->data, l->index) = s;
+	l->index += 2;
+	MEM_U16(l->data, l->index) = t;
+	l->index += 2;
 }
 
 void displaylist_render(struct displaylist* l) {
@@ -124,8 +126,8 @@ void displaylist_render_immediate(struct displaylist* l, uint16_t vtxcnt) {
 	for(uint16_t k = 0; k < vtxcnt; k++) {
 		GX_Position3s16(MEM_U16(base, 0), MEM_U16(base, 2), MEM_U16(base, 4));
 		GX_Color1x8(MEM_U8(base, 6));
-		GX_TexCoord2u8(MEM_U8(base, 7), MEM_U8(base, 8));
-		base += 9;
+		GX_TexCoord2u16(MEM_U16(base, 7), MEM_U16(base, 9));
+		base += 11;
 	}
 	GX_End();
 }

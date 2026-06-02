@@ -40,7 +40,7 @@ static uint8_t ender_chest_place_dir(struct server_local* s,
 	return dz >= 0.0 ? 2 : 0;
 }
 
-static uint8_t getTextureIndex(struct block_info* this, enum side side) {
+static uint16_t getTextureIndex(struct block_info* this, enum side side) {
 	uint8_t tex[SIDE_MAX] = {
 		[SIDE_TOP] = tex_atlas_lookup(TEXAT_ENDER_CHEST_TOP),
 		[SIDE_BOTTOM] = tex_atlas_lookup(TEXAT_ENDER_CHEST_TOP),

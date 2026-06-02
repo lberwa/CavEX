@@ -28,7 +28,7 @@ struct face_occlusion* redstone_lamp_get_side_mask(struct block_info* this,
 	return face_occlusion_full();
 }
 
-uint8_t redstone_lamp_get_texture_index(struct block_info* this, enum side side) {
+uint16_t redstone_lamp_get_texture_index(struct block_info* this, enum side side) {
 	(void)side;
 	return tex_atlas_lookup(this->block->type == BLOCK_LIT_REDSTONE_LAMP ?
 								TEXAT_LIT_REDSTONE_LAMP :

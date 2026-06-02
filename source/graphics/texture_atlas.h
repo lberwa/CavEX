@@ -191,6 +191,10 @@ enum tex_atlas_entry {
 	TEXAT_ENDER_CHEST_TOP,
 	TEXAT_ENDER_CHEST_SIDE,
 	TEXAT_ENDER_CHEST_FRONT,
+	TEXAT_TRIPWIRE_CROSS,
+	TEXAT_TRIPWIRE_T,
+	TEXAT_TRIPWIRE_STRAIGHT,
+	TEXAT_TRIPWIRE_CORNER,
 	TEXAT_TRIPWIRE_RING,
 	TEXAT_TRIPWIRE_REST,
 	//TEXAT_REDSTONE_ON,
@@ -294,6 +298,7 @@ enum tex_atlas_entry {
 	TEXAT_BREAK_7,
 	TEXAT_BREAK_8,
 	TEXAT_BREAK_9,
+	//TEXAT_ATLAS_TEST,
 
     TEXAT_PARTICLE_SMOKE_0,
     TEXAT_PARTICLE_SMOKE_1,
@@ -344,9 +349,10 @@ struct texture_entry {
 
 ARRAY_DEF(dict_atlas_src, struct texture_entry, M_POD_OPLIST)
 
-#define TEXTURE_INDEX(x, y) (((y)*16) + (x))
-#define TEXTURE_X(idx) ((idx) % 16)
-#define TEXTURE_Y(idx) ((idx) / 16)
+#define TEXTURE_INDEX(x, y)                                                    \
+	((uint16_t)((y) * tex_atlas_columns() + (x)))
+#define TEXTURE_X(idx) ((uint16_t)((idx) % tex_atlas_columns()))
+#define TEXTURE_Y(idx) ((uint16_t)((idx) / tex_atlas_columns()))
 
 // Terrain atlas size (terrain.png). Keep in sync with the actual PNG size.
 #define TERRAIN_PNG_HEIGHT 256
@@ -358,15 +364,19 @@ void tex_atlas_reg_col(dict_atlas_src_t atlas, enum tex_atlas_entry name,
 void tex_atlas_reg_grass(dict_atlas_src_t atlas, enum tex_atlas_entry name,
 						 uint8_t x, uint8_t y, uint8_t r, uint8_t g, uint8_t b,
 						 uint8_t bg_x, uint8_t bg_y);
-void* tex_atlas_compute(dict_atlas_src_t atlas, uint8_t* atlas_dst,
+void* tex_atlas_compute(dict_atlas_src_t atlas, uint16_t* atlas_dst,
 						uint8_t* image, size_t width, size_t height);
 void* tex_atlas_block(const char* filename, size_t* width, size_t* height);
 void* tex_atlas_block2(const char* filename, size_t* width, size_t* height);
 void* tex_atlas_particles(const char* filename, size_t* width, size_t* height);
 
-uint8_t tex_atlas_lookup(enum tex_atlas_entry name);
-uint8_t tex_atlas_lookup2(enum tex_atlas_entry name);
-uint8_t tex_atlas_lookup_particle(enum tex_atlas_entry name);
+uint16_t tex_atlas_lookup(enum tex_atlas_entry name);
+uint16_t tex_atlas_lookup2(enum tex_atlas_entry name);
+uint16_t tex_atlas_lookup_particle(enum tex_atlas_entry name);
+uint16_t tex_atlas_columns(void);
+uint16_t tex_atlas_stride(void);
+uint16_t tex_atlas_padding(void);
+uint16_t tex_atlas_size(void);
 
 
 #endif

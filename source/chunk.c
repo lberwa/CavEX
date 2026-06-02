@@ -266,9 +266,15 @@ void chunk_render(struct chunk* c, bool pass, float x, float y, float z) {
 	#ifdef GFX_DOUBLESIDED
 	if(!pass && c->has_displist[12]) {
 		check_matrix_set(c, &needs_matrix);
+		gfx_blending(MODE_BLEND);
+		gfx_fog(false);
+		gfx_write_buffers(true, false, true);
 		gfx_cull_func(MODE_NONE);
 		displaylist_render(c->mesh + 12);
 		gfx_cull_func(MODE_BACK);
+		gfx_write_buffers(true, true, true);
+		gfx_fog(c->has_fog);
+		gfx_blending(MODE_OFF);
 	}
 	#endif
 }

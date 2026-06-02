@@ -341,7 +341,7 @@ void render_entity_minecart(mat4 view) {
    // glm_rotate_y(mv, GLM_PI_2, mv);
     gfx_matrix_modelview(mv);
 
-    gfx_bind_texture(&texture_minecart);
+    gfx_bind_texture_virtual(&texture_minecart);
     displaylist_reset(&dl);
 
 
@@ -475,7 +475,7 @@ void render_entity_creeper(mat4 view, float headYawDeg, float bodyYawDeg, int fr
     glm_translate(model, (vec3){ -bodyPivot[0], -bodyPivot[1], -bodyPivot[2] });
     glm_mat4_mul(view, model, body_mv);
 
-    gfx_bind_texture(&texture_creeper);
+    gfx_bind_texture_virtual(&texture_creeper);
 
     // Head
     displaylist_reset(&dl);
@@ -605,7 +605,7 @@ void render_entity_pig(mat4 view, float headYawDeg, int frame) {
     glm_translate_make(model, (vec3){ -0.5f, 0.0f, -0.5f });
     glm_mat4_mul(view, model, body_mv);
 
-    gfx_bind_texture(&texture_pig);
+    gfx_bind_texture_virtual(&texture_pig);
 
     // 2) Head (8×8×8), y0 = 4
     // Position the head centered on the body (head width = 8)
@@ -768,7 +768,7 @@ void render_entity_sheep(mat4 view, float headYawDeg, int frame, bool shared) {
     glm_translate_make(model, (vec3){ -0.5f, 0.0f, -0.5f });
     glm_mat4_mul(view, model, body_mv);
 
-    gfx_bind_texture(&texture_sheep);
+    gfx_bind_texture_virtual(&texture_sheep);
 
     // 2) Head (8×8×8), y0 = 4 -----------------------------------
     // Position the head centered on the body (head width = 8)
@@ -819,7 +819,7 @@ void render_entity_sheep(mat4 view, float headYawDeg, int frame, bool shared) {
         const int head_wool_y = 14; // y start
         const int head_wool_z = -3;
 
-        gfx_bind_texture(&texture_sheep_fur);
+        gfx_bind_texture_virtual(&texture_sheep_fur);
         displaylist_reset(&dl);
         {
             // pivot at head center (in model-local, normalized to [0..1])
@@ -855,7 +855,7 @@ void render_entity_sheep(mat4 view, float headYawDeg, int frame, bool shared) {
         displaylist_render_immediate(&dl, 24);
     }
 
-    gfx_bind_texture(&texture_sheep); // reset
+    gfx_bind_texture_virtual(&texture_sheep); // reset
 
     // 3) Body (8×12×4), y0 = 0 -----------------------------------
     displaylist_reset(&dl);
@@ -876,7 +876,7 @@ void render_entity_sheep(mat4 view, float headYawDeg, int frame, bool shared) {
     displaylist_render_immediate(&dl, 24); // body
 
     if (!shared) {
-        gfx_bind_texture(&texture_sheep_fur);
+        gfx_bind_texture_virtual(&texture_sheep_fur);
         displaylist_reset(&dl);
         gfx_matrix_modelview(body_mv);
         static const UVRect bodyUV[6] = {
@@ -894,7 +894,7 @@ void render_entity_sheep(mat4 view, float headYawDeg, int frame, bool shared) {
                                   bodyUV, bodyDir);
         displaylist_render_immediate(&dl, 24); // body
     }
-    gfx_bind_texture(&texture_sheep); //reset
+    gfx_bind_texture_virtual(&texture_sheep); //reset
 
     // 4) Legs (4×6×4), y0 = 0 -----------------------------------
     // 4) Legs (464), y0 = 0 — animate using frame
@@ -961,7 +961,7 @@ void render_entity_sheep(mat4 view, float headYawDeg, int frame, bool shared) {
     }
 
     if (!shared) {
-        gfx_bind_texture(&texture_sheep_fur);
+        gfx_bind_texture_virtual(&texture_sheep_fur);
         static const UVRect legUV[6] = {
             { 8, 16, 4, 4}, // bottom
             { 4, 16, 4, 4}, // top
@@ -1017,7 +1017,7 @@ void render_entity_sheep(mat4 view, float headYawDeg, int frame, bool shared) {
             );
             displaylist_render_immediate(&dl, 24);
         }
-        gfx_bind_texture(&texture_sheep);
+        gfx_bind_texture_virtual(&texture_sheep);
     }
 
 

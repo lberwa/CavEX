@@ -69,13 +69,13 @@ getSideMask(struct block_info* this, enum side side, struct block_info* it) {
 	return face_occlusion_empty();
 }
 
-static uint8_t getTextureIndex1(struct block_info* this, enum side side) {
+static uint16_t getTextureIndex1(struct block_info* this, enum side side) {
 	return (this->block->metadata & 0x08) ?
 		tex_atlas_lookup(TEXAT_DOOR_WOOD_TOP) :
 		tex_atlas_lookup(TEXAT_DOOR_WOOD_BOTTOM);
 }
 
-static uint8_t getTextureIndex2(struct block_info* this, enum side side) {
+static uint16_t getTextureIndex2(struct block_info* this, enum side side) {
 	return (this->block->metadata & 0x08) ?
 		tex_atlas_lookup(TEXAT_DOOR_IRON_TOP) :
 		tex_atlas_lookup(TEXAT_DOOR_IRON_BOTTOM);

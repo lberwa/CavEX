@@ -43,7 +43,7 @@ getSideMask(struct block_info* this, enum side side, struct block_info* it) {
 	return face_occlusion_empty();
 }
 
-static uint8_t getTextureIndex(struct block_info* this, enum side side) {
+static uint16_t getTextureIndex(struct block_info* this, enum side side) {
 	uint8_t lvl = this->block->metadata & 0x0F;
 	if (lvl == 0) {
 		return tex_atlas_lookup(TEXAT_REDSTONE_WIRE_OFF);
@@ -193,7 +193,7 @@ struct block block_redstone_wire = {
 	.renderBlock = render_block_redstone_wire,
 	.renderBlockAlways = NULL,
 	.luminance = 0,
-	.double_sided = true,
+	.double_sided = false,
 	.can_see_through = true,
 	.opacity = 0,
 	.render_block_data.rail_curved_possible = true,

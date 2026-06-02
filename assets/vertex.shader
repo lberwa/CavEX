@@ -3,6 +3,7 @@
 uniform mat4 mv;
 uniform mat4 proj;
 uniform mat4 texm;
+uniform vec2 tex_scale;
 
 uniform bool enable_lighting;
 uniform float lighting[256];
@@ -24,6 +25,6 @@ void main() {
 	}
 
 	v_pos = a_pos;
-	v_texcoord = (texm * vec4(a_texcoord, 0.0, 1.0)).xy;
+	v_texcoord = (texm * vec4(a_texcoord * tex_scale, 0.0, 1.0)).xy;
 	gl_Position = proj * mv  * vec4(a_pos, 1.0);
 }

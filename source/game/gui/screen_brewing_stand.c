@@ -308,7 +308,7 @@ static void screen_brewing_stand_render2D(struct screen* s, int width, int heigh
 	}
 
 	if(pointer_available[player]) {
-		gfx_bind_texture(&texture_pointer);
+		gfx_bind_texture_virtual(&texture_pointer);
 		gutil_texquad_rt_any(pointer_x[player], pointer_y[player],
 		                     glm_rad(pointer_angle[player]), 0, 0, 256, 256,
 		                     48 * scale, 48 * scale);

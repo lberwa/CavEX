@@ -136,7 +136,7 @@ static void screen_sign_render2D(struct screen* s, int width, int height) {
 	int off_y = (height - GUI_HEIGHT * scale) / 2;
 
 	// draw sign texture
-	gfx_bind_texture(&texture_terrain);
+	gfx_bind_texture_pixels(&texture_terrain);
 	gutil_texquad(off_x, off_y, TEX_OFFSET(TEXTURE_X(tex_atlas_lookup(TEXAT_PLANKS))), TEX_OFFSET(TEXTURE_Y(tex_atlas_lookup(TEXAT_PLANKS))), 16, 16, GUI_WIDTH * scale, GUI_HEIGHT * scale);
 
 	// draw text
@@ -164,7 +164,7 @@ static void screen_sign_render2D(struct screen* s, int width, int height) {
 	icon_offset += gutil_control_icon(icon_offset, IB_INVENTORY, "Leave");
 
 	if(pointer_available[player]) {
-		gfx_bind_texture(&texture_pointer);
+		gfx_bind_texture_virtual(&texture_pointer);
 		gutil_texquad_rt_any(pointer_x[player], pointer_y[player],
 		                     glm_rad(pointer_angle[player]), 0, 0, 256, 256,
 		                     48 * scale, 48 * scale);

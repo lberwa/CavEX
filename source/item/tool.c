@@ -35,8 +35,10 @@ int tool_tier_divider(enum tool_tier tier) {
 int tool_dig_delay_ms(struct block* type, struct item* it) {
 	assert(type);
 
-	if(type->digging.hardness <= 0)
+	if(type->digging.hardness < 0)
 		return -1;
+	if(type->digging.hardness == 0)
+		return 0;
 
 	enum tool_type item_type = it ? it->tool.type : TOOL_TYPE_ANY;
 	enum tool_tier item_tier

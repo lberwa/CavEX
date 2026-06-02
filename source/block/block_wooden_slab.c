@@ -35,7 +35,7 @@ struct face_occlusion* wooden_slab_get_side_mask(struct block_info* this,
 	}
 }
 
-uint8_t wooden_slab_get_texture_index(struct block_info* this, enum side side) {
+uint16_t wooden_slab_get_texture_index(struct block_info* this, enum side side) {
 	(void)this;
 	(void)side;
 	return tex_atlas_lookup(TEXAT_PLANKS);

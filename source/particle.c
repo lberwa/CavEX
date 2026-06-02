@@ -78,7 +78,7 @@ static float rnd(void) {
 
 void particle_add(vec3 pos,
                   vec3 vel,
-                  uint8_t tex,
+                  uint16_t tex,
                   float size,
                   float lifetime,
                   bool gravity,
@@ -110,8 +110,10 @@ void particle_add(vec3 pos,
     p->atlas    = atlas;
 
     if (atlas == TEXTURE_ATLAS_TERRAIN) {
-        float fx = (TEX_OFFSET(TEXTURE_X(tex)) + rnd() * 12.0f) / (float)TERRAIN_PNG_HEIGHT;
-        float fy = (TEX_OFFSET(TEXTURE_Y(tex)) + rnd() * 12.0f) / (float)TERRAIN_PNG_HEIGHT;
+        float fx = (TEX_OFFSET(TEXTURE_X(tex)) + rnd() * 12.0f)
+                   / (float)tex_atlas_size();
+        float fy = (TEX_OFFSET(TEXTURE_Y(tex)) + rnd() * 12.0f)
+                   / (float)tex_atlas_size();
         p->tex_uv[0] = fx;
         p->tex_uv[1] = fy;
     } else {
@@ -132,7 +134,7 @@ void particle_generate_block(struct block_info* info) {
     float volume = (aabb->x2 - aabb->x1)
                  * (aabb->y2 - aabb->y1)
                  * (aabb->z2 - aabb->z1);
-    uint8_t tex = blocks[info->block->type]
+    uint16_t tex = blocks[info->block->type]
                   ->getTextureIndex(info, SIDE_FRONT);
 
     for (int k = 0; k < volume * PARTICLES_VOLUME; k++) {
@@ -188,7 +190,7 @@ void particle_generate_side(struct block_info* info, enum side s) {
             return;
     }
 
-    uint8_t tex = blocks[info->block->type]
+    uint16_t tex = blocks[info->block->type]
                   ->getTextureIndex(info, s);
     float offset = 0.0625F;
 
@@ -422,7 +424,7 @@ static void render_single(struct particle* p, vec3 camera, float delta) {
     glm_vec3_scale(axis_t, p->size, axis_t);
 
     // Determine the correct texture tile (for animated smoke)
-    uint8_t tile = p->tex;
+    uint16_t tile = p->tex;
     if (p->atlas == TEXTURE_ATLAS_PARTICLES
      && tile >= tex_atlas_lookup_particle(TEXAT_PARTICLE_SMOKE_0)
      && tile <= tex_atlas_lookup_particle(TEXAT_PARTICLE_SMOKE_7))
@@ -440,10 +442,10 @@ static void render_single(struct particle* p, vec3 camera, float delta) {
         u1 = u0 + (4.0f  / (float)TERRAIN_PNG_HEIGHT);
         v1 = v0 + (4.0f  / (float)TERRAIN_PNG_HEIGHT);
     } else {
-        u0 = (TEX_OFFSET(TEXTURE_X(tile))) / 256.0f;
-        v0 = (TEX_OFFSET(TEXTURE_Y(tile))) / 256.0f;
-        u1 = u0 + (16.0f / 256.0f);
-        v1 = v0 + (16.0f / 256.0f);
+        u0 = (float)TEX_OFFSET(TEXTURE_X(tile)) / (float)texture_particles.width;
+        v0 = (float)TEX_OFFSET(TEXTURE_Y(tile)) / (float)texture_particles.height;
+        u1 = u0 + (16.0f / (float)texture_particles.width);
+        v1 = v0 + (16.0f / (float)texture_particles.height);
     }
 
     // Lookup world light at the particle's block position
@@ -672,7 +674,7 @@ void particle_render(mat4 view, vec3 camera, float delta) {
     gfx_lighting(false);
 
     // Terrain/block particles
-    gfx_bind_texture(&texture_terrain);
+    gfx_bind_texture_pixels(&texture_terrain);
     array_particle_it_t it;
     array_particle_it(it, particles);
     while(!array_particle_end_p(it)) {

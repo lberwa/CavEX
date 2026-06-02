@@ -145,7 +145,7 @@ static struct face_occlusion* getSideMask(struct block_info* this, enum side sid
 	return face_occlusion_full();
 }
 
-static uint8_t getTextureIndex(struct block_info* this, enum side side) {
+static uint16_t getTextureIndex(struct block_info* this, enum side side) {
 	if (this->block->metadata > 0 && (this->block->metadata % 4 < 2)) {
 		return tex_atlas_lookup(TEXAT_SNOW); // flashing
 	}

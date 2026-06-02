@@ -49,15 +49,15 @@ getSideMask(struct block_info* this, enum side side, struct block_info* it) {
 	return face_occlusion_empty();
 }
 
-static uint8_t getTextureIndex1(struct block_info* this, enum side side) {
+static uint16_t getTextureIndex1(struct block_info* this, enum side side) {
 	return tex_atlas_lookup(TEXAT_TORCH);
 }
 
-static uint8_t getTextureIndex2(struct block_info* this, enum side side) {
+static uint16_t getTextureIndex2(struct block_info* this, enum side side) {
 	return tex_atlas_lookup(TEXAT_REDSTONE_TORCH);
 }
 
-static uint8_t getTextureIndex3(struct block_info* this, enum side side) {
+static uint16_t getTextureIndex3(struct block_info* this, enum side side) {
 	return tex_atlas_lookup(TEXAT_REDSTONE_TORCH_LIT);
 }
 
@@ -196,7 +196,7 @@ struct block block_redstone_torch = {
 	.renderBlock = render_block_torch,
 	.renderBlockAlways = NULL,
 	.luminance = 7,
-	.double_sided = true,
+	.double_sided = false,
 	.can_see_through = true,
 	.opacity = 0,
 	.ignore_lighting = false,
@@ -231,7 +231,7 @@ struct block block_redstone_torch_lit = {
 	.renderBlock = render_block_torch,
 	.renderBlockAlways = NULL,
 	.luminance = 7,
-	.double_sided = true,
+	.double_sided = false,
 	.can_see_through = true,
 	.opacity = 0,
 	.ignore_lighting = false,

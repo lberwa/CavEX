@@ -61,10 +61,10 @@ static inline uint8_t DIM_LIGHT(uint8_t l, uint8_t* table, bool shade_sides,
 
 static inline void render_block_side_adv_v2(
 	struct displaylist* d, int16_t x, int16_t y, int16_t z, uint16_t width,
-	uint16_t height, int16_t inset_bottom, int16_t inset_top, uint8_t tex_x,
-	uint8_t tex_y, bool tex_flip_h, int tex_rotate, bool shade_sides,
+	uint16_t height, int16_t inset_bottom, int16_t inset_top, uint16_t tex_x,
+	uint16_t tex_y, bool tex_flip_h, int tex_rotate, bool shade_sides,
 	enum side side, const uint8_t* vertex_light, uint8_t luminance) {
-	const uint8_t tex_coords[2][4][2] = {
+	const uint16_t tex_coords[2][4][2] = {
 		{
 			{tex_x, tex_y},
 			{tex_x + MIN_U8(16, width / 16), tex_y},
@@ -262,8 +262,8 @@ static inline void render_block_side_adv_v2(
 
 static inline void
 render_block_side_adv(struct displaylist* d, int16_t x, int16_t y, int16_t z,
-					  uint16_t width, uint16_t height, uint8_t tex_x,
-					  uint8_t tex_y, bool tex_flip_h, int tex_rotate,
+					  uint16_t width, uint16_t height, uint16_t tex_x,
+					  uint16_t tex_y, bool tex_flip_h, int tex_rotate,
 					  bool shade_sides, enum side side,
 					  const uint8_t* vertex_light, uint8_t luminance) {
 	render_block_side_adv_v2(d, x, y, z, width, height, 0, 0, tex_x, tex_y,
@@ -273,11 +273,11 @@ render_block_side_adv(struct displaylist* d, int16_t x, int16_t y, int16_t z,
 
 static inline void render_block_side_adv_fulltex(
 	struct displaylist* d, int16_t x, int16_t y, int16_t z, uint16_t width,
-	uint16_t height, uint8_t tex_u0, uint8_t tex_y, uint8_t tex_u1,
-	uint8_t tex_v1, bool tex_flip_h,
+	uint16_t height, uint16_t tex_u0, uint16_t tex_y, uint16_t tex_u1,
+	uint16_t tex_v1, bool tex_flip_h,
 	int tex_rotate, bool shade_sides, enum side side,
 	const uint8_t* vertex_light, uint8_t luminance) {
-	const uint8_t tex_coords[2][4][2] = {
+	const uint16_t tex_coords[2][4][2] = {
 		{
 			{tex_u0, tex_y},
 			{tex_u1, tex_y},
@@ -407,13 +407,13 @@ static inline void render_block_side_adv_fulltex(
 
 static inline void render_block_side(struct displaylist* d, int16_t x,
 									 int16_t y, int16_t z, int16_t yoffset,
-									 uint16_t height, uint8_t tex,
+									 uint16_t height, uint16_t tex,
 									 uint8_t luminance, bool shade_sides,
 									 uint16_t inset, bool tex_flip_h,
 									 int tex_rotate, enum side side,
 									 const uint8_t* vertex_light) {
-	uint8_t tex_x = TEX_OFFSET(TEXTURE_X(tex));
-	uint8_t tex_y = TEX_OFFSET(TEXTURE_Y(tex));
+	uint16_t tex_x = TEX_OFFSET(TEXTURE_X(tex));
+	uint16_t tex_y = TEX_OFFSET(TEXTURE_Y(tex));
 
 	switch(side) {
 		case SIDE_LEFT: // x minus
@@ -462,13 +462,13 @@ static size_t render_cuboid_side(struct displaylist* d, struct block_info* this,
 								 enum side side, uint8_t* vertex_light,
 								 bool count_only, int16_t x0, int16_t y0,
 								 int16_t z0, int16_t x1, int16_t y1,
-								 int16_t z1, uint8_t tex, int tex_rotate) {
+								 int16_t z1, uint16_t tex, int tex_rotate) {
 	if(x0 == x1 || y0 == y1 || z0 == z1)
 		return 0;
 
 	if(!count_only) {
-		uint8_t tex_x = TEX_OFFSET(TEXTURE_X(tex));
-		uint8_t tex_y = TEX_OFFSET(TEXTURE_Y(tex));
+		uint16_t tex_x = TEX_OFFSET(TEXTURE_X(tex));
+		uint16_t tex_y = TEX_OFFSET(TEXTURE_Y(tex));
 		int16_t bx = W2C_COORD(this->x) * BLK_LEN;
 		int16_t by = W2C_COORD(this->y) * BLK_LEN;
 		int16_t bz = W2C_COORD(this->z) * BLK_LEN;
@@ -540,14 +540,14 @@ static size_t render_cuboid_side_tex(struct displaylist* d,
 									 uint8_t* vertex_light, bool count_only,
 									 int16_t x0, int16_t y0, int16_t z0,
 									 int16_t x1, int16_t y1, int16_t z1,
-									 uint8_t tex, int tex_rotate,
+									 uint16_t tex, int tex_rotate,
 									 uint8_t tex_off_x, uint8_t tex_off_y) {
 	if(x0 == x1 || y0 == y1 || z0 == z1)
 		return 0;
 
 	if(!count_only) {
-		uint8_t tex_x = TEX_OFFSET(TEXTURE_X(tex)) + tex_off_x;
-		uint8_t tex_y = TEX_OFFSET(TEXTURE_Y(tex)) + tex_off_y;
+		uint16_t tex_x = TEX_OFFSET(TEXTURE_X(tex)) + tex_off_x;
+		uint16_t tex_y = TEX_OFFSET(TEXTURE_Y(tex)) + tex_off_y;
 		int16_t bx = W2C_COORD(this->x) * BLK_LEN;
 		int16_t by = W2C_COORD(this->y) * BLK_LEN;
 		int16_t bz = W2C_COORD(this->z) * BLK_LEN;
@@ -615,19 +615,19 @@ static size_t render_cuboid_side_texrect(struct displaylist* d,
 										 uint8_t* vertex_light, bool count_only,
 										 int16_t x0, int16_t y0, int16_t z0,
 										 int16_t x1, int16_t y1, int16_t z1,
-										 uint8_t tex, int tex_rotate,
+										 uint16_t tex, int tex_rotate,
 										 uint8_t tex_off_x, uint8_t tex_off_y,
 										 uint8_t tex_w, uint8_t tex_h) {
 	if(x0 == x1 || y0 == y1 || z0 == z1)
 		return 0;
 
 	if(!count_only) {
-		uint8_t tex_x = TEX_OFFSET(TEXTURE_X(tex)) + tex_off_x;
-		uint8_t tex_y = TEX_OFFSET(TEXTURE_Y(tex)) + tex_off_y;
+		uint16_t tex_x = TEX_OFFSET(TEXTURE_X(tex)) + tex_off_x;
+		uint16_t tex_y = TEX_OFFSET(TEXTURE_Y(tex)) + tex_off_y;
 		int16_t bx = W2C_COORD(this->x) * BLK_LEN;
 		int16_t by = W2C_COORD(this->y) * BLK_LEN;
 		int16_t bz = W2C_COORD(this->z) * BLK_LEN;
-		const uint8_t tex_coords[2][4][2] = {
+		const uint16_t tex_coords[2][4][2] = {
 			{
 				{tex_x, tex_y},
 				{tex_x + tex_w, tex_y},
@@ -845,10 +845,10 @@ size_t render_block_cross(struct displaylist* d, struct block_info* this,
 			z += (seed >> 16) % 129 - 64;
 		}
 
-		uint8_t tex
+		uint16_t tex
 			= blocks[this->block->type]->getTextureIndex(this, SIDE_TOP);
-		uint8_t tex_x = TEX_OFFSET(TEXTURE_X(tex));
-		uint8_t tex_y = TEX_OFFSET(TEXTURE_Y(tex));
+		uint16_t tex_x = TEX_OFFSET(TEXTURE_X(tex));
+		uint16_t tex_y = TEX_OFFSET(TEXTURE_Y(tex));
 		uint8_t light = (MAX_U8(this->block->torch_light,
 								blocks[this->block->type]->luminance)
 						 << 4)
@@ -903,10 +903,10 @@ size_t render_block_tree2d(struct displaylist* d, struct block_info* this,
 			z += (seed >> 16) % 129 - 64;
 		}
 
-		uint8_t tex
+		uint16_t tex
 			= blocks[this->block->type]->getTextureIndex(this, SIDE_TOP);
-		uint8_t tex_x = TEX_OFFSET(TEXTURE_X(tex));
-		uint8_t tex_y = TEX_OFFSET(TEXTURE_Y(tex));
+		uint16_t tex_x = TEX_OFFSET(TEXTURE_X(tex));
+		uint16_t tex_y = TEX_OFFSET(TEXTURE_Y(tex));
 		uint8_t light = (MAX_U8(this->block->torch_light,
 								blocks[this->block->type]->luminance)
 						 << 4)
@@ -1004,12 +1004,12 @@ size_t render_block_lever(struct displaylist* d, struct block_info* this,
 
 	uint8_t meta = this->block->metadata & 0x07;
 	bool on = (this->block->metadata & 0x08) != 0;
-	uint8_t base_tex = tex_atlas_lookup(TEXAT_COBBLESTONE);
+	uint16_t base_tex = tex_atlas_lookup(TEXAT_COBBLESTONE);
 	int16_t bx0 = 5 * 16, by0 = 0, bz0 = 5 * 16;
 	int16_t bx1 = 11 * 16, by1 = 2 * 16, bz1 = 11 * 16;
-	uint8_t tex = blocks[this->block->type]->getTextureIndex(this, side);
-	uint8_t tex_x = TEX_OFFSET(TEXTURE_X(tex));
-	uint8_t tex_y = TEX_OFFSET(TEXTURE_Y(tex));
+	uint16_t tex = blocks[this->block->type]->getTextureIndex(this, side);
+	uint16_t tex_x = TEX_OFFSET(TEXTURE_X(tex));
+	uint16_t tex_y = TEX_OFFSET(TEXTURE_Y(tex));
 	uint8_t light = (MAX_U8(this->block->torch_light,
 							blocks[this->block->type]->luminance)
 					 << 4)
@@ -1186,7 +1186,7 @@ static size_t render_button_box(struct displaylist* d, struct block_info* this,
 								bool count_only, int16_t x0, int16_t y0,
 								int16_t z0, int16_t x1, int16_t y1,
 								int16_t z1) {
-	uint8_t tex = tex_atlas_lookup(TEXAT_STONE);
+	uint16_t tex = tex_atlas_lookup(TEXAT_STONE);
 	return render_cuboid_side(d, this, side, vertex_light, count_only, x0, y0,
 							  z0, x1, y1, z1, tex, 0);
 }
@@ -1243,9 +1243,9 @@ static size_t render_pane_box_uv(struct displaylist* d, struct block_info* this,
 		return 0;
 
 	if(!count_only) {
-		uint8_t tex = blocks[this->block->type]->getTextureIndex(this, side);
-		uint8_t tex_x = TEX_OFFSET(TEXTURE_X(tex)) + tex_u_offset;
-		uint8_t tex_y = TEX_OFFSET(TEXTURE_Y(tex));
+		uint16_t tex = blocks[this->block->type]->getTextureIndex(this, side);
+		uint16_t tex_x = TEX_OFFSET(TEXTURE_X(tex)) + tex_u_offset;
+		uint16_t tex_y = TEX_OFFSET(TEXTURE_Y(tex));
 		int16_t bx = W2C_COORD(this->x) * BLK_LEN;
 		int16_t by = W2C_COORD(this->y) * BLK_LEN;
 		int16_t bz = W2C_COORD(this->z) * BLK_LEN;
@@ -1351,7 +1351,7 @@ static bool render_glass_pane_connects_to(struct block_info* this, enum side sid
 static size_t render_glass_pane_topbottom_texrect_side_light(
 	struct displaylist* d, struct block_info* this, enum side side,
 	uint8_t* vertex_light, bool count_only, int16_t x0, int16_t y, int16_t z0,
-	int16_t x1, int16_t z1, uint8_t tex, int tex_rotate, uint8_t tex_off_x,
+	int16_t x1, int16_t z1, uint16_t tex, int tex_rotate, uint8_t tex_off_x,
 	uint8_t tex_off_y, uint8_t tex_w, uint8_t tex_h);
 
 static size_t render_glass_pane_strip(struct displaylist* d,
@@ -1361,7 +1361,7 @@ static size_t render_glass_pane_strip(struct displaylist* d,
 									  int16_t x1, int16_t y1, int16_t z1,
 									  bool x_axis, bool connect_neg,
 									  bool connect_pos) {
-	const uint8_t face_tex = tex_atlas_lookup(TEXAT_GLASS);
+	const uint16_t face_tex = tex_atlas_lookup(TEXAT_GLASS);
 	const bool full_tex = connect_neg && connect_pos;
 	const uint8_t tex_off = (full_tex || connect_neg) ? 0 : 8;
 	const uint8_t tex_w = full_tex ? 16 : 8;
@@ -1415,7 +1415,7 @@ static size_t render_glass_pane_strip(struct displaylist* d,
 static size_t render_glass_pane_topbottom_texrect_side_light(
 	struct displaylist* d, struct block_info* this, enum side side,
 	uint8_t* vertex_light, bool count_only, int16_t x0, int16_t y, int16_t z0,
-	int16_t x1, int16_t z1, uint8_t tex, int tex_rotate, uint8_t tex_off_x,
+	int16_t x1, int16_t z1, uint16_t tex, int tex_rotate, uint8_t tex_off_x,
 	uint8_t tex_off_y, uint8_t tex_w, uint8_t tex_h) {
 	if(side != SIDE_TOP && side != SIDE_BOTTOM)
 		return 0;
@@ -1426,10 +1426,10 @@ static size_t render_glass_pane_topbottom_texrect_side_light(
 		int16_t bx = W2C_COORD(this->x) * BLK_LEN;
 		int16_t by = W2C_COORD(this->y) * BLK_LEN;
 		int16_t bz = W2C_COORD(this->z) * BLK_LEN;
-		uint8_t tx = TEX_OFFSET(TEXTURE_X(tex)) + tex_off_x;
-		uint8_t ty = TEX_OFFSET(TEXTURE_Y(tex)) + tex_off_y;
+		uint16_t tx = TEX_OFFSET(TEXTURE_X(tex)) + tex_off_x;
+		uint16_t ty = TEX_OFFSET(TEXTURE_Y(tex)) + tex_off_y;
 		uint8_t luminance = blocks[this->block->type]->luminance;
-		const uint8_t tex_coords[4][2] = {
+		const uint16_t tex_coords[4][2] = {
 			{tx, ty},
 			{tx + tex_w, ty},
 			{tx + tex_w, ty + tex_h},
@@ -1465,7 +1465,7 @@ static size_t render_glass_pane_post_cap(struct displaylist* d,
 										 struct block_info* this, enum side side,
 										 uint8_t* vertex_light, bool count_only,
 										 int16_t x0, int16_t y, int16_t z0,
-										 int16_t x1, int16_t z1, uint8_t tex,
+										 int16_t x1, int16_t z1, uint16_t tex,
 										 uint8_t tex_off_x, uint8_t tex_off_y,
 										 uint8_t tex_w, uint8_t tex_h) {
 	if(side != SIDE_TOP && side != SIDE_BOTTOM)
@@ -1475,8 +1475,8 @@ static size_t render_glass_pane_post_cap(struct displaylist* d,
 		int16_t bx = W2C_COORD(this->x) * BLK_LEN;
 		int16_t by = W2C_COORD(this->y) * BLK_LEN;
 		int16_t bz = W2C_COORD(this->z) * BLK_LEN;
-		uint8_t tex_x = TEX_OFFSET(TEXTURE_X(tex)) + tex_off_x;
-		uint8_t tex_y = TEX_OFFSET(TEXTURE_Y(tex)) + tex_off_y;
+		uint16_t tex_x = TEX_OFFSET(TEXTURE_X(tex)) + tex_off_x;
+		uint16_t tex_y = TEX_OFFSET(TEXTURE_Y(tex)) + tex_off_y;
 		uint8_t luminance = blocks[this->block->type]->luminance;
 
 		displaylist_pos(d, bx + x0, by + y, bz + z0);
@@ -1507,8 +1507,8 @@ static size_t render_glass_pane_post(struct displaylist* d,
 	const int16_t x1 = 144;
 	const int16_t z0 = 112;
 	const int16_t z1 = 144;
-	uint8_t glass_tex = tex_atlas_lookup(TEXAT_GLASS);
-	uint8_t snow_tex = tex_atlas_lookup(TEXAT_SNOW);
+	uint16_t glass_tex = tex_atlas_lookup(TEXAT_GLASS);
+	uint16_t snow_tex = tex_atlas_lookup(TEXAT_SNOW);
 
 	switch(side) {
 		case SIDE_TOP:
@@ -1668,13 +1668,13 @@ static void render_iron_bars_extent_z(bool connect_front, bool connect_back,
 static size_t render_iron_bars_plane_x(struct displaylist* d,
 										   struct block_info* this,
 										   uint8_t* vertex_light, bool count_only,
-										   int16_t x0, int16_t x1, uint8_t tex_u0) {
+										   int16_t x0, int16_t x1, uint16_t tex_u0) {
 	int16_t bx = W2C_COORD(this->x) * BLK_LEN;
 	int16_t by = W2C_COORD(this->y) * BLK_LEN;
 	int16_t bz = W2C_COORD(this->z) * BLK_LEN;
-	uint8_t tex = blocks[this->block->type]->getTextureIndex(this, SIDE_FRONT);
-	uint8_t tex_x = TEX_OFFSET(TEXTURE_X(tex)) + tex_u0;
-	uint8_t tex_y = TEX_OFFSET(TEXTURE_Y(tex));
+	uint16_t tex = blocks[this->block->type]->getTextureIndex(this, SIDE_FRONT);
+	uint16_t tex_x = TEX_OFFSET(TEXTURE_X(tex)) + tex_u0;
+	uint16_t tex_y = TEX_OFFSET(TEXTURE_Y(tex));
 	uint8_t luminance = blocks[this->block->type]->luminance;
 	const int16_t z0 = 127;
 	const int16_t z1 = 129;
@@ -1692,9 +1692,9 @@ static size_t render_iron_bars_plane_x_texrect(struct displaylist* d,
 												   struct block_info* this,
 												   uint8_t* vertex_light,
 												   bool count_only, int16_t x0,
-												   int16_t x1, uint8_t tex_u0,
+												   int16_t x1, uint16_t tex_u0,
 												   uint8_t tex_w) {
-	uint8_t tex = blocks[this->block->type]->getTextureIndex(this, SIDE_FRONT);
+	uint16_t tex = blocks[this->block->type]->getTextureIndex(this, SIDE_FRONT);
 	size_t count = 0;
 
 	return render_cuboid_side_texrect(d, this, SIDE_FRONT, vertex_light,
@@ -1705,13 +1705,13 @@ static size_t render_iron_bars_plane_x_texrect(struct displaylist* d,
 static size_t render_iron_bars_plane_z(struct displaylist* d,
 										   struct block_info* this,
 										   uint8_t* vertex_light, bool count_only,
-										   int16_t z0, int16_t z1, uint8_t tex_u0) {
+										   int16_t z0, int16_t z1, uint16_t tex_u0) {
 	int16_t bx = W2C_COORD(this->x) * BLK_LEN;
 	int16_t by = W2C_COORD(this->y) * BLK_LEN;
 	int16_t bz = W2C_COORD(this->z) * BLK_LEN;
-	uint8_t tex = blocks[this->block->type]->getTextureIndex(this, SIDE_LEFT);
-	uint8_t tex_x = TEX_OFFSET(TEXTURE_X(tex)) + tex_u0;
-	uint8_t tex_y = TEX_OFFSET(TEXTURE_Y(tex));
+	uint16_t tex = blocks[this->block->type]->getTextureIndex(this, SIDE_LEFT);
+	uint16_t tex_x = TEX_OFFSET(TEXTURE_X(tex)) + tex_u0;
+	uint16_t tex_y = TEX_OFFSET(TEXTURE_Y(tex));
 	uint8_t luminance = blocks[this->block->type]->luminance;
 	const int16_t x0 = 127;
 	const int16_t x1 = 129;
@@ -1729,9 +1729,9 @@ static size_t render_iron_bars_plane_z_texrect(struct displaylist* d,
 												   struct block_info* this,
 												   uint8_t* vertex_light,
 												   bool count_only, int16_t z0,
-												   int16_t z1, uint8_t tex_u0,
+												   int16_t z1, uint16_t tex_u0,
 												   uint8_t tex_w) {
-	uint8_t tex = blocks[this->block->type]->getTextureIndex(this, SIDE_LEFT);
+	uint16_t tex = blocks[this->block->type]->getTextureIndex(this, SIDE_LEFT);
 	size_t count = 0;
 
 	return render_cuboid_side_texrect(d, this, SIDE_LEFT, vertex_light,
@@ -1745,7 +1745,7 @@ static size_t render_iron_bars_arm_x(struct displaylist* d,
 									 bool right_side) {
 	int16_t x0 = right_side ? 128 : 112;
 	int16_t x1 = right_side ? 144 : 128;
-	uint8_t tex_u0 = right_side ? 3 : 2;
+	uint16_t tex_u0 = right_side ? 3 : 2;
 
 	return render_iron_bars_plane_x_texrect(d, this, vertex_light, count_only,
 											x0, x1, tex_u0, 1);
@@ -1757,7 +1757,7 @@ static size_t render_iron_bars_arm_z(struct displaylist* d,
 									 bool back_side) {
 	int16_t z0 = back_side ? 128 : 112;
 	int16_t z1 = back_side ? 144 : 128;
-	uint8_t tex_u0 = back_side ? 3 : 2;
+	uint16_t tex_u0 = back_side ? 3 : 2;
 
 	return render_iron_bars_plane_z_texrect(d, this, vertex_light, count_only,
 											z0, z1, tex_u0, 1);
@@ -1767,9 +1767,9 @@ static size_t render_iron_bars_center_cap(struct displaylist* d,
 											  struct block_info* this,
 											  uint8_t* vertex_light,
 											  bool count_only) {
-	uint8_t tex = blocks[this->block->type]->getTextureIndex(this, SIDE_TOP);
-	uint8_t tex_x = TEX_OFFSET(TEXTURE_X(tex)) + 2;
-	uint8_t tex_y = TEX_OFFSET(TEXTURE_Y(tex));
+	uint16_t tex = blocks[this->block->type]->getTextureIndex(this, SIDE_TOP);
+	uint16_t tex_x = TEX_OFFSET(TEXTURE_X(tex)) + 2;
+	uint16_t tex_y = TEX_OFFSET(TEXTURE_Y(tex));
 	uint8_t luminance = blocks[this->block->type]->luminance;
 	int16_t bx = W2C_COORD(this->x) * BLK_LEN;
 	int16_t by = W2C_COORD(this->y) * BLK_LEN;
@@ -1830,9 +1830,9 @@ static size_t render_iron_bars_horizontal_cap(struct displaylist* d,
 											  bool count_only, int16_t x0,
 											  int16_t x1, int16_t z0,
 											  int16_t z1, int16_t y) {
-	uint8_t tex = blocks[this->block->type]->getTextureIndex(this, SIDE_TOP);
-	uint8_t tex_x = TEX_OFFSET(TEXTURE_X(tex)) + 2;
-	uint8_t tex_y = TEX_OFFSET(TEXTURE_Y(tex));
+	uint16_t tex = blocks[this->block->type]->getTextureIndex(this, SIDE_TOP);
+	uint16_t tex_x = TEX_OFFSET(TEXTURE_X(tex)) + 2;
+	uint16_t tex_y = TEX_OFFSET(TEXTURE_Y(tex));
 	uint8_t luminance = blocks[this->block->type]->luminance;
 	int16_t bx = W2C_COORD(this->x) * BLK_LEN;
 	int16_t by = W2C_COORD(this->y) * BLK_LEN;
@@ -1895,7 +1895,7 @@ static size_t render_iron_bars_side_cap_x(struct displaylist* d,
 										  uint8_t* vertex_light, bool count_only,
 										  int16_t x0, int16_t z0, int16_t z1,
 										  enum side side) {
-	uint8_t tex = blocks[this->block->type]->getTextureIndex(this, side);
+	uint16_t tex = blocks[this->block->type]->getTextureIndex(this, side);
 	int16_t x1 = x0 + 2;
 
 	return render_cuboid_side_texrect(d, this, side, vertex_light, count_only,
@@ -1908,7 +1908,7 @@ static size_t render_iron_bars_side_cap_z(struct displaylist* d,
 										  uint8_t* vertex_light, bool count_only,
 										  int16_t x0, int16_t x1, int16_t z0,
 										  enum side side) {
-	uint8_t tex = blocks[this->block->type]->getTextureIndex(this, side);
+	uint16_t tex = blocks[this->block->type]->getTextureIndex(this, side);
 	int16_t z1 = z0 + 2;
 
 	return render_cuboid_side_texrect(d, this, side, vertex_light, count_only,
@@ -2193,7 +2193,7 @@ static size_t render_repeater_box(struct displaylist* d, struct block_info* this
 								  enum side side, uint8_t* vertex_light,
 								  bool count_only, int16_t x0, int16_t y0,
 								  int16_t z0, int16_t x1, int16_t y1,
-								  int16_t z1, uint8_t tex, int tex_rotate) {
+								  int16_t z1, uint16_t tex, int tex_rotate) {
 	return render_cuboid_side(d, this, side, vertex_light, count_only, x0, y0,
 							  z0, x1, y1, z1, tex, tex_rotate);
 }
@@ -2203,8 +2203,8 @@ size_t render_block_repeater(struct displaylist* d, struct block_info* this,
 							 uint8_t* vertex_light, bool count_only) {
 	uint8_t dir = this->block->metadata & 0x03;
 	uint8_t delay = (this->block->metadata >> 2) & 0x03;
-	uint8_t top_tex = blocks[this->block->type]->getTextureIndex(this, side);
-	uint8_t lamp_tex = tex_atlas_lookup(this->block->type == BLOCK_REPEATER_ON ?
+	uint16_t top_tex = blocks[this->block->type]->getTextureIndex(this, side);
+	uint16_t lamp_tex = tex_atlas_lookup(this->block->type == BLOCK_REPEATER_ON ?
 											TEXAT_REDSTONE_TORCH_LIT :
 											TEXAT_REDSTONE_TORCH);
 	size_t count = 0;
@@ -2252,9 +2252,9 @@ size_t render_block_torch(struct displaylist* d, struct block_info* this,
 		int16_t x = W2C_COORD(this->x);
 		int16_t y = W2C_COORD(this->y);
 		int16_t z = W2C_COORD(this->z);
-		uint8_t tex = blocks[this->block->type]->getTextureIndex(this, side);
-		uint8_t tex_x = TEX_OFFSET(TEXTURE_X(tex));
-		uint8_t tex_y = TEX_OFFSET(TEXTURE_Y(tex));
+		uint16_t tex = blocks[this->block->type]->getTextureIndex(this, side);
+		uint16_t tex_x = TEX_OFFSET(TEXTURE_X(tex));
+		uint16_t tex_y = TEX_OFFSET(TEXTURE_Y(tex));
 		uint8_t light = (MAX_U8(this->block->torch_light,
 								blocks[this->block->type]->luminance)
 						 << 4)
@@ -2429,7 +2429,7 @@ size_t render_block_piston(struct displaylist* d, struct block_info* this,
 		int16_t y1 = BLK_LEN;
 		int16_t z0 = 0;
 		int16_t z1 = BLK_LEN;
-		uint8_t tex = blocks[this->block->type]->getTextureIndex(this, side);
+		uint16_t tex = blocks[this->block->type]->getTextureIndex(this, side);
 
 		switch(facing) {
 			case SIDE_RIGHT:
@@ -2514,7 +2514,7 @@ size_t render_block_piston_head(struct displaylist* d, struct block_info* this,
 	}
 
 	if(side == facing || side == blocks_side_opposite(facing)) {
-		uint8_t tex = tex_atlas_lookup(TEXAT_PISTON_PLATE);
+		uint16_t tex = tex_atlas_lookup(TEXAT_PISTON_PLATE);
 		return render_cuboid_side(d, this, side, vertex_light, count_only, x0,
 								  y0, z0, x1, y1, z1, tex,
 								  piston_head_side_rotate(facing, side));
@@ -2628,7 +2628,7 @@ size_t render_block_rail(struct displaylist* dl,
     int16_t y = W2C_COORD(this->y);
     int16_t z = W2C_COORD(this->z);
 
-    uint8_t tex       = blocks[this->block->type]->getTextureIndex(this, side);
+    uint16_t tex       = blocks[this->block->type]->getTextureIndex(this, side);
     uint8_t luminance = blocks[this->block->type]->luminance;
 
     uint8_t shape     = this->block->metadata & 0xF;
@@ -2656,9 +2656,9 @@ size_t render_block_rail(struct displaylist* dl,
         tex = tex_atlas_lookup(TEXAT_RAIL_CURVED);
     }
 
-    uint8_t tx = TEX_OFFSET(TEXTURE_X(tex));
-    uint8_t ty = TEX_OFFSET(TEXTURE_Y(tex));
-    uint8_t uv[4][2] = {
+    uint16_t tx = TEX_OFFSET(TEXTURE_X(tex));
+    uint16_t ty = TEX_OFFSET(TEXTURE_Y(tex));
+    uint16_t uv[4][2] = {
         { tx,      ty      },
         { tx + 16, ty      },
         { tx + 16, ty + 16 },
@@ -2779,37 +2779,44 @@ static inline uint8_t redstone_vertex_light(uint8_t base, uint8_t level) {
 
 static void render_redstone(struct displaylist* dl, int16_t x, int16_t y, int16_t z,
 							uint16_t a, uint16_t b, uint16_t c, uint16_t d,
-							uint8_t level, const uint8_t (*tex_coords)[2],
-							uint8_t* vertex_light, int tex_rotate)
+							uint8_t level, const uint16_t (*tex_coords)[2],
+							uint8_t* vertex_light, int tex_rotate, bool backface)
 	{
-	displaylist_pos(dl, x * BLK_LEN, y * BLK_LEN + a, z * BLK_LEN);
-	displaylist_color(dl, redstone_vertex_light(
-		DIM_LIGHT(vertex_light[4], NULL, false, 0), level));
-	displaylist_texcoord(dl, tex_coords[(tex_rotate + 0) % 4][0],
-							tex_coords[(tex_rotate + 0) % 4][1]);
-	displaylist_pos(dl, x * BLK_LEN + BLK_LEN, y * BLK_LEN + b,
-					z * BLK_LEN);
-	displaylist_color(dl, redstone_vertex_light(
-		DIM_LIGHT(vertex_light[5], NULL, false, 0), level));
-	displaylist_texcoord(dl, tex_coords[(tex_rotate + 1) % 4][0],
-							tex_coords[(tex_rotate + 1) % 4][1]);
-	displaylist_pos(dl, x * BLK_LEN + BLK_LEN, y * BLK_LEN + c,
-					z * BLK_LEN + BLK_LEN);
-	displaylist_color(dl, redstone_vertex_light(
-		DIM_LIGHT(vertex_light[6], NULL, false, 0), level));
-	displaylist_texcoord(dl, tex_coords[(tex_rotate + 2) % 4][0],
-							tex_coords[(tex_rotate + 2) % 4][1]);
-	displaylist_pos(dl, x * BLK_LEN, y * BLK_LEN + d,
-					z * BLK_LEN + BLK_LEN);
-	displaylist_color(dl, redstone_vertex_light(
-		DIM_LIGHT(vertex_light[7], NULL, false, 0), level));
-	displaylist_texcoord(dl, tex_coords[(tex_rotate + 3) % 4][0],
-							tex_coords[(tex_rotate + 3) % 4][1]);
+	const int order[4] = {backface ? 3 : 0, backface ? 2 : 1,
+						  backface ? 1 : 2, backface ? 0 : 3};
+	const int16_t px[4] = {
+		x * BLK_LEN,
+		x * BLK_LEN + BLK_LEN,
+		x * BLK_LEN + BLK_LEN,
+		x * BLK_LEN,
+	};
+	const int16_t py[4] = {
+		y * BLK_LEN + a,
+		y * BLK_LEN + b,
+		y * BLK_LEN + c,
+		y * BLK_LEN + d,
+	};
+	const int16_t pz[4] = {
+		z * BLK_LEN,
+		z * BLK_LEN,
+		z * BLK_LEN + BLK_LEN,
+		z * BLK_LEN + BLK_LEN,
+	};
+	const uint8_t vl[4] = {4, 5, 6, 7};
+
+	for(int i = 0; i < 4; i++) {
+		const int v = order[i];
+		displaylist_pos(dl, px[v], py[v], pz[v]);
+		displaylist_color(dl, redstone_vertex_light(
+			DIM_LIGHT(vertex_light[vl[v]], NULL, false, 0), level));
+		displaylist_texcoord(dl, tex_coords[(tex_rotate + v) % 4][0],
+							 tex_coords[(tex_rotate + v) % 4][1]);
+	}
 	}
 
 static void render_redstone_offset(struct displaylist* dl, int16_t x, int16_t y, int16_t z,
 								   uint16_t a, uint16_t b, uint16_t c, uint16_t d,
-								   uint8_t level, const uint8_t (*tex_coords)[2],
+								   uint8_t level, const uint16_t (*tex_coords)[2],
 								   uint8_t* vertex_light, int tex_rotate,
 								   int16_t ox, int16_t oz)
 	{
@@ -2839,7 +2846,7 @@ static void render_redstone_offset(struct displaylist* dl, int16_t x, int16_t y,
 	}
 
 static void render_redstone_vertical(struct displaylist* dl, int16_t x, int16_t y, int16_t z,
-									 uint8_t level, const uint8_t (*tex_coords)[2],
+									 uint8_t level, const uint16_t (*tex_coords)[2],
 									 uint8_t* vertex_light, int tex_rotate, int dir)
 	{
 	const int16_t offset = -4;
@@ -2921,14 +2928,12 @@ static void render_redstone_vertical(struct displaylist* dl, int16_t x, int16_t 
 size_t render_block_redstone_wire(struct displaylist* dl, struct block_info* this,
 						 enum side side, struct block_info* it,
 						 uint8_t* vertex_light, bool count_only) {
-	if(side != SIDE_TOP) {
+	if(side != SIDE_TOP && side != SIDE_BOTTOM) {
 		#ifdef REDSTONE_CASE_DEBUG
 		printf("return 0;\n");
 		#endif
 		return 0;
 	}
-
-	if(!count_only) {
 
 		bool has_near = false;
 		uint8_t near_mask = 0; // bit0=+X, bit1=-X, bit2=+Z, bit3=-Z
@@ -3056,7 +3061,7 @@ size_t render_block_redstone_wire(struct displaylist* dl, struct block_info* thi
 		printf("%d    %d    %d    %d\n", dir_state[0], dir_state[1], dir_state[2], dir_state[3]);
 		#endif
 
-		uint8_t tex;
+		uint16_t tex;
 		int cases = -1;
 		int tex_rotate = 0;
 		
@@ -3185,6 +3190,8 @@ size_t render_block_redstone_wire(struct displaylist* dl, struct block_info* thi
 		printf("cases=%d\n", cases);
 		#endif
 
+		size_t quad_count = 1;
+
 		switch (cases) {
 			case 0: { // ----------------------- 0 ------------
 				#ifdef REDSTONE_CASE_DEBUG
@@ -3212,14 +3219,16 @@ size_t render_block_redstone_wire(struct displaylist* dl, struct block_info* thi
 						TEXTURE_Y(tex_atlas_lookup(TEXAT_REDSTONE_MIDDLE_OFF)));
 				#endif
 
-				uint8_t tex_coords[4][2] = {
+				uint16_t tex_coords[4][2] = {
 					{TEX_OFFSET(TEXTURE_X(tex)), TEX_OFFSET(TEXTURE_Y(tex))},
 					{TEX_OFFSET(TEXTURE_X(tex)) + 16, TEX_OFFSET(TEXTURE_Y(tex))},
 					{TEX_OFFSET(TEXTURE_X(tex)) + 16, TEX_OFFSET(TEXTURE_Y(tex)) + 16},
 					{TEX_OFFSET(TEXTURE_X(tex)), TEX_OFFSET(TEXTURE_Y(tex)) + 16},
 				};
-				render_redstone(dl, x, y, z, a, b, c, d, lvl, tex_coords,
-								vertex_light, tex_rotate);
+				if(!count_only)
+					render_redstone(dl, x, y, z, a, b, c, d, lvl, tex_coords,
+									vertex_light, tex_rotate,
+									side == SIDE_BOTTOM);
 				break;
 			} case 1: { // ----------------------- 1 ------------
 				#ifdef REDSTONE_CASE_DEBUG
@@ -3248,14 +3257,16 @@ size_t render_block_redstone_wire(struct displaylist* dl, struct block_info* thi
 				#endif
 				
 
-				uint8_t tex_coords[4][2] = {
+				uint16_t tex_coords[4][2] = {
 					{TEX_OFFSET(TEXTURE_X(tex)), TEX_OFFSET(TEXTURE_Y(tex))},
 					{TEX_OFFSET(TEXTURE_X(tex)) + 16, TEX_OFFSET(TEXTURE_Y(tex))},
 					{TEX_OFFSET(TEXTURE_X(tex)) + 16, TEX_OFFSET(TEXTURE_Y(tex)) + 16},
 					{TEX_OFFSET(TEXTURE_X(tex)), TEX_OFFSET(TEXTURE_Y(tex)) + 16},
 				};
-				render_redstone(dl, x, y, z, a, b, c, d, lvl, tex_coords,
-							vertex_light, tex_rotate);
+				if(!count_only)
+					render_redstone(dl, x, y, z, a, b, c, d, lvl, tex_coords,
+								vertex_light, tex_rotate,
+								side == SIDE_BOTTOM);
 				break;
 			} case 2: { // ----------------------- 2 ------------
 				#ifdef REDSTONE_CASE_DEBUG
@@ -3284,14 +3295,16 @@ size_t render_block_redstone_wire(struct displaylist* dl, struct block_info* thi
 				#endif
 				
 
-				uint8_t tex_coords[4][2] = {
+				uint16_t tex_coords[4][2] = {
 					{TEX_OFFSET(TEXTURE_X(tex)), TEX_OFFSET(TEXTURE_Y(tex))},
 					{TEX_OFFSET(TEXTURE_X(tex)) + 16, TEX_OFFSET(TEXTURE_Y(tex))},
 					{TEX_OFFSET(TEXTURE_X(tex)) + 16, TEX_OFFSET(TEXTURE_Y(tex)) + 16},
 					{TEX_OFFSET(TEXTURE_X(tex)), TEX_OFFSET(TEXTURE_Y(tex)) + 16},
 				};
-				render_redstone(dl, x, y, z, a, b, c, d, lvl, tex_coords,
-							vertex_light, tex_rotate);
+				if(!count_only)
+					render_redstone(dl, x, y, z, a, b, c, d, lvl, tex_coords,
+								vertex_light, tex_rotate,
+								side == SIDE_BOTTOM);
 				break;
 			} 
 			case 3:		
@@ -3323,17 +3336,19 @@ size_t render_block_redstone_wire(struct displaylist* dl, struct block_info* thi
 						TEXTURE_Y(tex_atlas_lookup(TEXAT_REDSTONE_MIDDLE_OFF)));
 				#endif
 				
-				uint8_t tex_coords[4][2] = {
+				uint16_t tex_coords[4][2] = {
 					{TEX_OFFSET(TEXTURE_X(tex)), TEX_OFFSET(TEXTURE_Y(tex))},
 					{TEX_OFFSET(TEXTURE_X(tex)) + 16, TEX_OFFSET(TEXTURE_Y(tex))},
 					{TEX_OFFSET(TEXTURE_X(tex)) + 16, TEX_OFFSET(TEXTURE_Y(tex)) + 16},
 					{TEX_OFFSET(TEXTURE_X(tex)), TEX_OFFSET(TEXTURE_Y(tex)) + 16},
 				};
-				render_redstone(dl, x, y, z, a, b, c, d, lvl, tex_coords,
-								vertex_light, tex_rotate);
+				if(!count_only)
+					render_redstone(dl, x, y, z, a, b, c, d, lvl, tex_coords,
+									vertex_light, tex_rotate,
+									side == SIDE_BOTTOM);
 			}
 		}
-			uint8_t tex_coords[4][2] = {
+			uint16_t tex_coords[4][2] = {
 				{TEX_OFFSET(TEXTURE_X(tex)), TEX_OFFSET(TEXTURE_Y(tex))},
 				{TEX_OFFSET(TEXTURE_X(tex)) + 16, TEX_OFFSET(TEXTURE_Y(tex))},
 				{TEX_OFFSET(TEXTURE_X(tex)) + 16, TEX_OFFSET(TEXTURE_Y(tex)) + 16},
@@ -3341,9 +3356,9 @@ size_t render_block_redstone_wire(struct displaylist* dl, struct block_info* thi
 			};
 			/*render_redstone(dl, x, y, z, a, b, c, d, lvl, tex_coords,
 							vertex_light, tex_rotate);*/
-			if (above_air) {
-				uint8_t slope_tex = tex_atlas_lookup(redstone_variant_base(2));
-				uint8_t slope_tex_coords[4][2] = {
+			if (side == SIDE_TOP && above_air) {
+				uint16_t slope_tex = tex_atlas_lookup(redstone_variant_base(2));
+				uint16_t slope_tex_coords[4][2] = {
 					{TEX_OFFSET(TEXTURE_X(slope_tex)), TEX_OFFSET(TEXTURE_Y(slope_tex))},
 					{TEX_OFFSET(TEXTURE_X(slope_tex)) + 16, TEX_OFFSET(TEXTURE_Y(slope_tex))},
 					{TEX_OFFSET(TEXTURE_X(slope_tex)) + 16, TEX_OFFSET(TEXTURE_Y(slope_tex)) + 16},
@@ -3361,8 +3376,10 @@ size_t render_block_redstone_wire(struct displaylist* dl, struct block_info* thi
 						#endif
 						const int dir_rot[4] = {0, 2, 1, 3}; // +X, -X, +Z, -Z
 						int slope_rotate = dir_rot[i & 3];
-						render_redstone_vertical(dl, x, y, z, lvl, slope_tex_coords,
-												  vertex_light, slope_rotate, i);
+						quad_count += 2;
+						if(!count_only)
+							render_redstone_vertical(dl, x, y, z, lvl, slope_tex_coords,
+													  vertex_light, slope_rotate, i);
 					}
 					#ifdef REDSTONE_CASE_DEBUG
 					bool ok = neighbours_ext_get(this, dirs[i].dx, +1, dirs[i].dz, &btmp);
@@ -3372,14 +3389,13 @@ size_t render_block_redstone_wire(struct displaylist* dl, struct block_info* thi
 					
 				}
 			}
-	}
 	//#undef REDSTONE_CASE_DEBUG
 	#ifdef REDSTONE_CASE_DEBUG
 	else {
 		printf("no redstone rendering\n");
 	}
 	#endif
-	return 1;
+	return quad_count;
 }
 
 size_t render_block_vine(struct displaylist* d, struct block_info* this,
@@ -3445,8 +3461,8 @@ size_t render_block_crops(struct displaylist* d, struct block_info* this,
 size_t render_block_melon_stem(struct displaylist* d, struct block_info* this,
 							   enum side side, struct block_info* it,
 							   uint8_t* vertex_light, bool count_only) {
-	const uint8_t tex = blocks[this->block->type]->getTextureIndex(this, side);
-	const uint8_t attached_tex = tex_atlas_lookup(TEXAT_MELON_STEM_ATTACHED);
+	const uint16_t tex = blocks[this->block->type]->getTextureIndex(this, side);
+	const uint16_t attached_tex = tex_atlas_lookup(TEXAT_MELON_STEM_ATTACHED);
 	const enum side attached_side =
 		this->block->metadata == 8 ? SIDE_LEFT :
 		this->block->metadata == 9 ? SIDE_RIGHT :
@@ -3569,7 +3585,7 @@ size_t render_block_cake(struct displaylist* d, struct block_info* this,
 						 enum side side, struct block_info* it,
 						 uint8_t* vertex_light, bool count_only) {
 	if(!count_only) {
-		uint8_t tex = blocks[this->block->type]->getTextureIndex(this, side);
+		uint16_t tex = blocks[this->block->type]->getTextureIndex(this, side);
 		uint8_t luminance = blocks[this->block->type]->luminance;
 
 		switch(side) {
@@ -3656,7 +3672,7 @@ size_t render_block_stairs_always(struct displaylist* d,
 		return 0;
 
 	if(!count_only) {
-		uint8_t tex = blocks[this->block->type]->getTextureIndex(this, side);
+		uint16_t tex = blocks[this->block->type]->getTextureIndex(this, side);
 		uint8_t luminance = blocks[this->block->type]->luminance;
 
 		if(side == SIDE_TOP) {
@@ -3679,7 +3695,7 @@ size_t render_block_stairs(struct displaylist* d, struct block_info* this,
 	size_t k = 0;
 	enum side facing = (enum side[4]) {SIDE_RIGHT, SIDE_LEFT, SIDE_BACK,
 									   SIDE_FRONT}[this->block->metadata & 3];
-	uint8_t tex = blocks[this->block->type]->getTextureIndex(this, side);
+	uint16_t tex = blocks[this->block->type]->getTextureIndex(this, side);
 	uint8_t luminance = blocks[this->block->type]->luminance;
 
 	// render "slab"
@@ -3781,10 +3797,10 @@ size_t render_block_fire(struct displaylist* d, struct block_info* this,
 	int16_t x = W2C_COORD(this->x);
 	int16_t y = W2C_COORD(this->y);
 	int16_t z = W2C_COORD(this->z);
-	uint8_t tex = blocks[this->block->type]->getTextureIndex(this, side);
+	uint16_t tex = blocks[this->block->type]->getTextureIndex(this, side);
 	uint8_t luminance = blocks[this->block->type]->luminance;
-	uint8_t tex_x = TEX_OFFSET(TEXTURE_X(tex));
-	uint8_t tex_y = TEX_OFFSET(TEXTURE_Y(tex));
+	uint16_t tex_x = TEX_OFFSET(TEXTURE_X(tex));
+	uint16_t tex_y = TEX_OFFSET(TEXTURE_Y(tex));
 	uint16_t height = 360;
 
 	if(is_floating) {
@@ -3925,7 +3941,7 @@ size_t render_block_pressure_plate(struct displaylist* d,
 								   struct block_info* it, uint8_t* vertex_light,
 								   bool count_only) {
 	if(!count_only) {
-		uint8_t tex = blocks[this->block->type]->getTextureIndex(this, side);
+		uint16_t tex = blocks[this->block->type]->getTextureIndex(this, side);
 		uint8_t luminance = blocks[this->block->type]->luminance;
 		uint8_t height = this->block->metadata ? 8 : 16;
 
@@ -3990,9 +4006,9 @@ size_t render_block_fence_always(struct displaylist* d, struct block_info* this,
 	int16_t x = W2C_COORD(this->x);
 	int16_t y = W2C_COORD(this->y);
 	int16_t z = W2C_COORD(this->z);
-	uint8_t tex = blocks[this->block->type]->getTextureIndex(this, side);
-	uint8_t tex_x = TEX_OFFSET(TEXTURE_X(tex));
-	uint8_t tex_y = TEX_OFFSET(TEXTURE_Y(tex));
+	uint16_t tex = blocks[this->block->type]->getTextureIndex(this, side);
+	uint16_t tex_x = TEX_OFFSET(TEXTURE_X(tex));
+	uint16_t tex_y = TEX_OFFSET(TEXTURE_Y(tex));
 	uint8_t luminance = blocks[this->block->type]->luminance;
 	// Fence connections (support all 4 horizontal directions; gates count as connectable).
 	// Also connect wooden fences and nether brick fences together.
@@ -4300,9 +4316,9 @@ size_t render_block_fence(struct displaylist* d, struct block_info* this,
 		int16_t x = W2C_COORD(this->x);
 		int16_t y = W2C_COORD(this->y);
 		int16_t z = W2C_COORD(this->z);
-		uint8_t tex = blocks[this->block->type]->getTextureIndex(this, side);
-		uint8_t tex_x = TEX_OFFSET(TEXTURE_X(tex));
-		uint8_t tex_y = TEX_OFFSET(TEXTURE_Y(tex));
+		uint16_t tex = blocks[this->block->type]->getTextureIndex(this, side);
+		uint16_t tex_x = TEX_OFFSET(TEXTURE_X(tex));
+		uint16_t tex_y = TEX_OFFSET(TEXTURE_Y(tex));
 		uint8_t luminance = blocks[this->block->type]->luminance;
 
 		// TODO: textures are not perfect but I'll take it
@@ -4362,7 +4378,7 @@ size_t render_block_fence_gate(struct displaylist* d, struct block_info* this,
 							   uint8_t* vertex_light, bool count_only) {
 	(void)it;
 
-	const uint8_t tex = blocks[this->block->type]->getTextureIndex(this, side);
+	const uint16_t tex = blocks[this->block->type]->getTextureIndex(this, side);
 	const uint8_t meta = this->block->metadata;
 	const bool open = (meta & 0x04) != 0;
 	const uint8_t facing = meta & 0x03;
@@ -4540,10 +4556,10 @@ static size_t door_side_helper(struct displaylist* d, struct block_info* this,
 							   uint8_t* vertex_light, bool flip_front,
 							   bool flip_back, bool count_only) {
 	size_t count = 0;
-	uint8_t tex = blocks[this->block->type]->getTextureIndex(this, side);
+	uint16_t tex = blocks[this->block->type]->getTextureIndex(this, side);
 	uint8_t luminance = blocks[this->block->type]->luminance;
-	uint8_t tex_x = TEX_OFFSET(TEXTURE_X(tex));
-	uint8_t tex_y = TEX_OFFSET(TEXTURE_Y(tex));
+	uint16_t tex_x = TEX_OFFSET(TEXTURE_X(tex));
+	uint16_t tex_y = TEX_OFFSET(TEXTURE_Y(tex));
 	int16_t x = W2C_COORD(this->x);
 	int16_t y = W2C_COORD(this->y);
 	int16_t z = W2C_COORD(this->z);
@@ -4594,10 +4610,10 @@ static size_t sign_side_helper(struct displaylist* d, struct block_info* this,
 							   uint8_t* vertex_light, bool flip_front,
 							   bool flip_back, bool count_only) {
 	size_t count = 0;
-	uint8_t tex = blocks[this->block->type]->getTextureIndex(this, side);
+	uint16_t tex = blocks[this->block->type]->getTextureIndex(this, side);
 	uint8_t luminance = blocks[this->block->type]->luminance;
-	uint8_t tex_x = TEX_OFFSET(TEXTURE_X(tex));
-	uint8_t tex_y = TEX_OFFSET(TEXTURE_Y(tex));
+	uint16_t tex_x = TEX_OFFSET(TEXTURE_X(tex));
+	uint16_t tex_y = TEX_OFFSET(TEXTURE_Y(tex));
 	int16_t x = W2C_COORD(this->x);
 	int16_t y = W2C_COORD(this->y);
 	int16_t z = W2C_COORD(this->z);
@@ -4673,7 +4689,7 @@ size_t render_block_trapdoor(struct displaylist* d,
         );
     } else {
         if (!count_only) {
-            uint8_t tex = blocks[this->block->type]
+            uint16_t tex = blocks[this->block->type]
                               ->getTextureIndex(this, side);
             uint8_t lumi = blocks[this->block->type]->luminance;
             render_block_side(
@@ -4826,14 +4842,7 @@ size_t render_block_tripwire(struct displaylist* d, struct block_info* this,
 
 	const int16_t bx = W2C_COORD(this->x) * BLK_LEN;
 	const int16_t bz = W2C_COORD(this->z) * BLK_LEN;
-	const int16_t y = W2C_COORD(this->y) * BLK_LEN
-					  + ((this->block->metadata & 0x04) ? 16 : 0);
-	const uint8_t ring = tex_atlas_lookup(TEXAT_STONE);
-	const uint8_t rest = tex_atlas_lookup(TEXAT_PLANKS);
-	const uint8_t ring_x = TEX_OFFSET(TEXTURE_X(ring));
-	const uint8_t ring_y = TEX_OFFSET(TEXTURE_Y(ring));
-	const uint8_t rest_x = TEX_OFFSET(TEXTURE_X(rest));
-	const uint8_t rest_y = TEX_OFFSET(TEXTURE_Y(rest));
+	const int16_t y = W2C_COORD(this->y) * BLK_LEN + 16;
 	const bool connect_left = this->neighbours
 							  && tripwire_connects(&this->neighbours[SIDE_LEFT],
 												   SIDE_LEFT);
@@ -4846,35 +4855,95 @@ size_t render_block_tripwire(struct displaylist* d, struct block_info* this,
 	const bool connect_back = this->neighbours
 							  && tripwire_connects(&this->neighbours[SIDE_BACK],
 												   SIDE_BACK);
+	uint16_t tex;
+	uint16_t tex_x;
+	uint16_t tex_y;
+	int tex_rotate = 0;
 
 	if(side != SIDE_TOP && side != SIDE_BOTTOM)
 		return 0;
 
+	if(connect_left && connect_right && !connect_front && !connect_back) {
+		tex = tex_atlas_lookup(TEXAT_TRIPWIRE_STRAIGHT);
+		tex_rotate = 0;
+	} else if(!connect_left && !connect_right && connect_front && connect_back) {
+		tex = tex_atlas_lookup(TEXAT_TRIPWIRE_STRAIGHT);
+		tex_rotate = 1;
+	} else if(!connect_left && connect_right && !connect_front && connect_back) {
+		tex = tex_atlas_lookup(TEXAT_TRIPWIRE_CORNER);
+		tex_rotate = 0;
+	} else if(connect_left && !connect_right && !connect_front && connect_back) {
+		tex = tex_atlas_lookup(TEXAT_TRIPWIRE_CORNER);
+		tex_rotate = 1;
+	} else if(connect_left && !connect_right && connect_front && !connect_back) {
+		tex = tex_atlas_lookup(TEXAT_TRIPWIRE_CORNER);
+		tex_rotate = 2;
+	} else if(!connect_left && connect_right && connect_front && !connect_back) {
+		tex = tex_atlas_lookup(TEXAT_TRIPWIRE_CORNER);
+		tex_rotate = 3;
+	} else if(!connect_left && connect_right && connect_front && connect_back) {
+		tex = tex_atlas_lookup(TEXAT_TRIPWIRE_T);
+		tex_rotate = 0;
+	} else if(connect_left && !connect_right && connect_front && connect_back) {
+		tex = tex_atlas_lookup(TEXAT_TRIPWIRE_T);
+		tex_rotate = 1;
+	} else if(connect_left && connect_right && !connect_front && connect_back) {
+		tex = tex_atlas_lookup(TEXAT_TRIPWIRE_T);
+		tex_rotate = 2;
+	} else if(connect_left && connect_right && connect_front && !connect_back) {
+		tex = tex_atlas_lookup(TEXAT_TRIPWIRE_T);
+		tex_rotate = 3;
+	} else if(!connect_left && connect_right && !connect_front && !connect_back) {
+		tex = tex_atlas_lookup(TEXAT_TRIPWIRE_STRAIGHT);
+		tex_rotate = 0;
+	} else if(connect_left && !connect_right && !connect_front && !connect_back) {
+		tex = tex_atlas_lookup(TEXAT_TRIPWIRE_STRAIGHT);
+		tex_rotate = 0;
+	} else if(!connect_left && !connect_right && connect_front && !connect_back) {
+		tex = tex_atlas_lookup(TEXAT_TRIPWIRE_STRAIGHT);
+		tex_rotate = 1;
+	} else if(!connect_left && !connect_right && !connect_front && connect_back) {
+		tex = tex_atlas_lookup(TEXAT_TRIPWIRE_STRAIGHT);
+		tex_rotate = 1;
+	} else {
+		tex = tex_atlas_lookup(TEXAT_TRIPWIRE_CROSS);
+		tex_rotate = 0;
+	}
+
 	if(count_only)
-		return 1 + connect_left + connect_right + connect_front + connect_back;
+		return 2;
 
-	render_block_side_adv_fulltex(d, bx + 112, y, bz + 112, 32, 32, ring_x,
-								  ring_y, ring_x + 16, ring_y + 16, false, 0,
-								  false, SIDE_TOP, vertex_light, 0);
+	tex_x = TEX_OFFSET(TEXTURE_X(tex));
+	tex_y = TEX_OFFSET(TEXTURE_Y(tex));
+	render_block_side_adv_fulltex(d, bx, y, bz, BLK_LEN, BLK_LEN, tex_x,
+								  tex_y, tex_x + 16, tex_y + 16, false,
+								  tex_rotate, false, SIDE_TOP, vertex_light, 0);
+	{
+		const uint16_t tex_coords[4][2] = {
+			{tex_x, tex_y},
+			{tex_x + 16, tex_y},
+			{tex_x + 16, tex_y + 16},
+			{tex_x, tex_y + 16},
+		};
 
-	if(connect_left)
-		render_block_side_adv_fulltex(d, bx, y, bz + 120, 112, 16, rest_x,
-									  rest_y, rest_x + 16, rest_y + 16, false, 0,
-									  false, SIDE_TOP, vertex_light, 0);
-	if(connect_right)
-		render_block_side_adv_fulltex(d, bx + 144, y, bz + 120, 112, 16, rest_x,
-									  rest_y, rest_x + 16, rest_y + 16, false, 0,
-									  false, SIDE_TOP, vertex_light, 0);
-	if(connect_front)
-		render_block_side_adv_fulltex(d, bx + 120, y, bz, 16, 112, rest_x,
-									  rest_y, rest_x + 16, rest_y + 16, false, 0,
-									  false, SIDE_TOP, vertex_light, 0);
-	if(connect_back)
-		render_block_side_adv_fulltex(d, bx + 120, y, bz + 144, 16, 112, rest_x,
-									  rest_y, rest_x + 16, rest_y + 16, false, 0,
-									  false, SIDE_TOP, vertex_light, 0);
-
-	return 1 + connect_left + connect_right + connect_front + connect_back;
+	displaylist_pos(d, bx, y, bz + BLK_LEN);
+	displaylist_color(d, DIM_LIGHT(vertex_light[7], NULL, false, 0));
+	displaylist_texcoord(d, tex_coords[(tex_rotate + 3) % 4][0],
+						 tex_coords[(tex_rotate + 3) % 4][1]);
+	displaylist_pos(d, bx + BLK_LEN, y, bz + BLK_LEN);
+	displaylist_color(d, DIM_LIGHT(vertex_light[6], NULL, false, 0));
+	displaylist_texcoord(d, tex_coords[(tex_rotate + 2) % 4][0],
+						 tex_coords[(tex_rotate + 2) % 4][1]);
+	displaylist_pos(d, bx + BLK_LEN, y, bz);
+	displaylist_color(d, DIM_LIGHT(vertex_light[5], NULL, false, 0));
+	displaylist_texcoord(d, tex_coords[(tex_rotate + 1) % 4][0],
+						 tex_coords[(tex_rotate + 1) % 4][1]);
+	displaylist_pos(d, bx, y, bz);
+	displaylist_color(d, DIM_LIGHT(vertex_light[4], NULL, false, 0));
+	displaylist_texcoord(d, tex_coords[(tex_rotate + 0) % 4][0],
+						 tex_coords[(tex_rotate + 0) % 4][1]);
+	}
+	return 2;
 }
 
 
@@ -4928,7 +4997,7 @@ size_t render_block_waterlily(struct displaylist* d, struct block_info* this,
 		return 0;
 
 	if(!count_only) {
-		uint8_t tex = blocks[this->block->type]->getTextureIndex(this, side);
+		uint16_t tex = blocks[this->block->type]->getTextureIndex(this, side);
 		uint8_t luminance = blocks[this->block->type]->luminance;
 		// 1/16 thick, inset by 1/16 on each side.
 		const int16_t inset = 16;
@@ -4959,9 +5028,9 @@ size_t render_block_nether_wart(struct displaylist* d, struct block_info* this,
 	const int16_t by = W2C_COORD(this->y) * BLK_LEN;
 	const int16_t bz = W2C_COORD(this->z) * BLK_LEN;
 
-	const uint8_t tex = blocks[this->block->type]->getTextureIndex(this, side);
-	const uint8_t tex_x = TEX_OFFSET(TEXTURE_X(tex));
-	const uint8_t tex_y = TEX_OFFSET(TEXTURE_Y(tex));
+	const uint16_t tex = blocks[this->block->type]->getTextureIndex(this, side);
+	const uint16_t tex_x = TEX_OFFSET(TEXTURE_X(tex));
+	const uint16_t tex_y = TEX_OFFSET(TEXTURE_Y(tex));
 	const uint8_t luminance = blocks[this->block->type]->luminance;
 
 	const int16_t inset = BLK_LEN / 4;  // 1/4 from edge
@@ -5023,10 +5092,10 @@ size_t render_block_brewing_stand(struct displaylist* d, struct block_info* this
 	(void)it;
 
 	// Brewing stand is non-full and uses two textures.
-	const uint8_t tex_stand = tex_atlas_lookup(TEXAT_BREWING_STAND);
-	const uint8_t tex_base = tex_atlas_lookup(TEXAT_BREWING_STAND_BASE);
-	const uint8_t tex_stand_x = TEX_OFFSET(TEXTURE_X(tex_stand));
-	const uint8_t tex_stand_y = TEX_OFFSET(TEXTURE_Y(tex_stand));
+	const uint16_t tex_stand = tex_atlas_lookup(TEXAT_BREWING_STAND);
+	const uint16_t tex_base = tex_atlas_lookup(TEXAT_BREWING_STAND_BASE);
+	const uint16_t tex_stand_x = TEX_OFFSET(TEXTURE_X(tex_stand));
+	const uint16_t tex_stand_y = TEX_OFFSET(TEXTURE_Y(tex_stand));
 	const uint8_t luminance = blocks[this->block->type]->luminance;
 	size_t count = 0;
 
@@ -5197,9 +5266,24 @@ size_t render_block_cauldron_always(struct displaylist* d, struct block_info* th
 	// Render an inner "box" inset by 3px (3/16) on x/z and bottom,
 	// connected to the top (y=1) and without a top face.
 	// Texture uses full tile at atlas coords (9,10) but is scaled to the face size.
-	const uint8_t tex = tex_atlas_lookup(TEXAT_CAULDRON_INSIDE);
-	const uint8_t tex_x = TEX_OFFSET(TEXTURE_X(tex));
-	const uint8_t tex_y = TEX_OFFSET(TEXTURE_Y(tex));
+	const uint16_t tex = tex_atlas_lookup(TEXAT_CAULDRON_INSIDE);
+	const uint16_t outer_side_tex = tex_atlas_lookup(TEXAT_CAULDRON_SIDE);
+	const uint16_t outer_bottom_tex = tex_atlas_lookup(TEXAT_CAULDRON_BOTTOM);
+	const uint16_t outer_top_tex = tex_atlas_lookup(TEXAT_CAULDRON_TOP);
+	const uint16_t tex_x = TEX_OFFSET(TEXTURE_X(tex));
+	const uint16_t tex_y = TEX_OFFSET(TEXTURE_Y(tex));
+	const uint16_t outer_side_u0 = TEX_OFFSET(TEXTURE_X(outer_side_tex));
+	const uint16_t outer_side_v0 = TEX_OFFSET(TEXTURE_Y(outer_side_tex));
+	const uint16_t outer_side_u1 = outer_side_u0 + 16;
+	const uint16_t outer_side_v1 = outer_side_v0 + 16;
+	const uint16_t outer_bottom_u0 = TEX_OFFSET(TEXTURE_X(outer_bottom_tex));
+	const uint16_t outer_bottom_v0 = TEX_OFFSET(TEXTURE_Y(outer_bottom_tex));
+	const uint16_t outer_bottom_u1 = outer_bottom_u0 + 16;
+	const uint16_t outer_bottom_v1 = outer_bottom_v0 + 16;
+	const uint16_t outer_top_u0 = TEX_OFFSET(TEXTURE_X(outer_top_tex));
+	const uint16_t outer_top_v0 = TEX_OFFSET(TEXTURE_Y(outer_top_tex));
+	const uint16_t outer_top_u1 = outer_top_u0 + 16;
+	const uint16_t outer_top_v1 = outer_top_v0 + 16;
 	const uint8_t luminance = blocks[this->block->type]->luminance;
 
 	// Inner box dimensions in 1/256 block units.
@@ -5215,14 +5299,23 @@ size_t render_block_cauldron_always(struct displaylist* d, struct block_info* th
 	const int16_t by = W2C_COORD(this->y) * BLK_LEN;
 	const int16_t bz = W2C_COORD(this->z) * BLK_LEN;
 
-	const uint8_t u0 = tex_x;
-	const uint8_t v0 = tex_y;
-	const uint8_t u1 = (uint8_t)(tex_x + 16);
-	const uint8_t v1 = (uint8_t)(tex_y + 16);
+	const uint16_t u0 = tex_x;
+	const uint16_t v0 = tex_y;
+	const uint16_t u1 = tex_x + 16;
+	const uint16_t v1 = tex_y + 16;
 
 	if(count_only) {
-		// We render only the face that matches `side` (no top face).
-		return (side == SIDE_TOP) ? 0 : 1;
+		// Inner and outer shell faces need explicit backfaces so the hollow
+		// cauldron remains visible from every viewing angle.
+		switch(side) {
+			case SIDE_LEFT:
+			case SIDE_RIGHT: return 4;
+			case SIDE_FRONT:
+			case SIDE_BACK: return 6;
+			case SIDE_TOP: return 1;
+			case SIDE_BOTTOM: return 3;
+			default: return 0;
+		}
 	}
 
 	const uint16_t inner_w = (uint16_t)(x1 - x0);
@@ -5231,39 +5324,106 @@ size_t render_block_cauldron_always(struct displaylist* d, struct block_info* th
 
 	switch(side) {
 		case SIDE_LEFT:
+			render_block_side_adv_fulltex(d, bx, by, bz, BLK_LEN, BLK_LEN, outer_side_u0,
+										  outer_side_v0, outer_side_u1, outer_side_v1,
+										  false, 0, true, SIDE_RIGHT, vertex_light,
+										  luminance);
 			// Inner west wall at x = x0.
 			render_block_side_adv_fulltex(d, bx + x0, by + y0, bz + z0, inner_d,
 										  inner_h, u0, v0, u1, v1, false, 0,
 										  true, SIDE_LEFT, vertex_light,
 										  luminance);
-			return 1;
+			render_block_side_adv_fulltex(d, bx + x0, by + y0, bz + z0, inner_d,
+										  inner_h, u0, v0, u1, v1, false, 0,
+										  true, SIDE_RIGHT, vertex_light,
+										  luminance);
+			return 4;
 		case SIDE_RIGHT:
+			render_block_side_adv_fulltex(d, bx + BLK_LEN, by, bz, BLK_LEN, BLK_LEN,
+										  outer_side_u0, outer_side_v0, outer_side_u1,
+										  outer_side_v1, false, 0, true, SIDE_LEFT,
+										  vertex_light, luminance);
 			// Inner east wall at x = x1.
 			render_block_side_adv_fulltex(d, bx + x1, by + y0, bz + z0, inner_d,
 										  inner_h, u0, v0, u1, v1, false, 0,
 										  true, SIDE_RIGHT, vertex_light,
 										  luminance);
-			return 1;
+			render_block_side_adv_fulltex(d, bx + x1, by + y0, bz + z0, inner_d,
+										  inner_h, u0, v0, u1, v1, false, 0,
+										  true, SIDE_LEFT, vertex_light,
+										  luminance);
+			return 4;
 		case SIDE_FRONT:
+			render_block_side_adv_fulltex(d, bx, by, bz, BLK_LEN, BLK_LEN, outer_side_u0,
+										  outer_side_v0, outer_side_u1, outer_side_v1,
+										  false, 0, true, SIDE_BACK, vertex_light,
+										  luminance);
 			// Inner north wall at z = z0.
 			render_block_side_adv_fulltex(d, bx + x0, by + y0, bz + z0, inner_w,
 										  inner_h, u0, v0, u1, v1, false, 0,
 										  true, SIDE_FRONT, vertex_light,
 										  luminance);
-			return 1;
+			render_block_side_adv_fulltex(d, bx + x0, by + y0, bz + z0, inner_w,
+										  inner_h, u0, v0, u1, v1, false, 0,
+										  true, SIDE_BACK, vertex_light,
+										  luminance);
+			render_block_side_adv_fulltex(d, bx + x0, by + y0, bz + z1, inner_w,
+										  inner_h, u0, v0, u1, v1, false, 0,
+										  true, SIDE_BACK, vertex_light,
+										  luminance);
+			render_block_side_adv_fulltex(d, bx + x0, by + y0, bz + z1, inner_w,
+										  inner_h, u0, v0, u1, v1, false, 0,
+										  true, SIDE_FRONT, vertex_light,
+										  luminance);
+			return 6;
 		case SIDE_BACK:
+			render_block_side_adv_fulltex(d, bx, by, bz + BLK_LEN, BLK_LEN, BLK_LEN,
+										  outer_side_u0, outer_side_v0, outer_side_u1,
+										  outer_side_v1, false, 0, true, SIDE_FRONT,
+										  vertex_light, luminance);
 			// Inner south wall at z = z1.
 			render_block_side_adv_fulltex(d, bx + x0, by + y0, bz + z1, inner_w,
 										  inner_h, u0, v0, u1, v1, false, 0,
 										  true, SIDE_BACK, vertex_light,
 										  luminance);
-			return 1;
+			render_block_side_adv_fulltex(d, bx + x0, by + y0, bz + z1, inner_w,
+										  inner_h, u0, v0, u1, v1, false, 0,
+										  true, SIDE_FRONT, vertex_light,
+										  luminance);
+			render_block_side_adv_fulltex(d, bx + x0, by + y0, bz + z0, inner_w,
+										  inner_h, u0, v0, u1, v1, false, 0,
+										  true, SIDE_FRONT, vertex_light,
+										  luminance);
+			render_block_side_adv_fulltex(d, bx + x0, by + y0, bz + z0, inner_w,
+										  inner_h, u0, v0, u1, v1, false, 0,
+										  true, SIDE_BACK, vertex_light,
+										  luminance);
+			return 6;
 		case SIDE_BOTTOM:
+			render_block_side_adv_fulltex(d, bx, by, bz, BLK_LEN, BLK_LEN,
+										  outer_bottom_u0, outer_bottom_v0,
+										  outer_bottom_u1, outer_bottom_v1, false, 0,
+										  true, SIDE_TOP, vertex_light, luminance);
+			render_block_side_adv_fulltex(d, bx, by, bz, BLK_LEN, BLK_LEN,
+										  outer_bottom_u0, outer_bottom_v0,
+										  outer_bottom_u1, outer_bottom_v1, false, 0,
+										  true, SIDE_BOTTOM, vertex_light, luminance);
 			// Inner bottom at y = y0 (no top face for the inner box, but we do
 			// render the bottom surface visible from inside).
 			render_block_side_adv_fulltex(d, bx + x0, by + y0, bz + z0, inner_w,
 										  inner_d, u0, v0, u1, v1, false, 0,
 										  true, SIDE_TOP, vertex_light,
+										  luminance);
+			render_block_side_adv_fulltex(d, bx + x0, by + y0, bz + z0, inner_w,
+										  inner_d, u0, v0, u1, v1, false, 0,
+										  true, SIDE_BOTTOM, vertex_light,
+										  luminance);
+			return 4;
+		case SIDE_TOP:
+			render_block_side_adv_fulltex(d, bx, by + BLK_LEN, bz, BLK_LEN,
+										  BLK_LEN, outer_top_u0, outer_top_v0,
+										  outer_top_u1, outer_top_v1, false, 0,
+										  true, SIDE_BOTTOM, vertex_light,
 										  luminance);
 			return 1;
 		default: return 0;
@@ -5306,20 +5466,20 @@ size_t render_block_cauldron_water(struct displaylist* d, struct block_info* thi
 	// IMPORTANT: Transparent pass binds `texture_anim` (anim.png), not terrain.
 	// Use the same UV tile as the fancy liquid renderer.
 	#ifdef GFX_FANCY_LIQUIDS
-	const uint8_t water_tex = TEXTURE_INDEX(1, 0);
+	const uint16_t water_tex = TEXTURE_INDEX(1, 0);
 	#else
 	// Force the animated water tile even if fancy liquids are off, otherwise the
 	// alpha channel from terrain.png would be ignored.
-	const uint8_t water_tex = TEXTURE_INDEX(1, 0);
+	const uint16_t water_tex = TEXTURE_INDEX(1, 0);
 	#endif
-	const uint8_t water_x = TEX_OFFSET(TEXTURE_X(water_tex));
-	const uint8_t water_y = TEX_OFFSET(TEXTURE_Y(water_tex));
+	const uint16_t water_x = TEX_OFFSET(TEXTURE_X(water_tex));
+	const uint16_t water_y = TEX_OFFSET(TEXTURE_Y(water_tex));
 
 	// Full tile UVs (16x16), scaled to face size.
-	const uint8_t wu0 = water_x;
-	const uint8_t wv0 = water_y;
-	const uint8_t wu1 = (uint8_t)(water_x + 16);
-	const uint8_t wv1 = (uint8_t)(water_y + 16);
+	const uint16_t wu0 = water_x;
+	const uint16_t wv0 = water_y;
+	const uint16_t wu1 = water_x + 16;
+	const uint16_t wv1 = water_y + 16;
 
 	// Cauldron levels: 1/4, 1/2, 3/4 of the inner height above the bottom inset.
 	const int16_t water_h = (int16_t)((inner_h * level) / 4);
@@ -5337,9 +5497,9 @@ size_t render_block_enchanting_table(struct displaylist* d, struct block_info* t
 									 uint8_t* vertex_light, bool count_only) {
 	(void)it;
 
-	const uint8_t tex = blocks[this->block->type]->getTextureIndex(this, side);
-	const uint8_t tex_x = TEX_OFFSET(TEXTURE_X(tex));
-	const uint8_t tex_y = TEX_OFFSET(TEXTURE_Y(tex));
+	const uint16_t tex = blocks[this->block->type]->getTextureIndex(this, side);
+	const uint16_t tex_x = TEX_OFFSET(TEXTURE_X(tex));
+	const uint16_t tex_y = TEX_OFFSET(TEXTURE_Y(tex));
 	const uint8_t luminance = blocks[this->block->type]->luminance;
 
 	// Height is 12/16 (top 4px lower than full block).
@@ -5410,13 +5570,13 @@ static struct displaylist block_cracks_dl;
 static uint8_t block_cracks_light[24];
 
 void render_block_init() {
-	displaylist_init(&block_cracks_dl, 48, 3 * 2 + 2 * 1 + 1);
+	displaylist_init(&block_cracks_dl, 48, 3 * 2 + 2 * 2 + 1);
 	memset(block_cracks_light, 0xFF, sizeof(block_cracks_light));
     for (int s = SIDE_TOP; s < SIDE_MAX; ++s) {
     }
 }
 
-static uint8_t block_cracks_texture(struct block_info* this, enum side side) {
+static uint16_t block_cracks_texture(struct block_info* this, enum side side) {
 	struct item_data it;
 	inventory_get_hotbar_item(
 		windowc_get_latest(gstate_windows()[WINDOWC_INVENTORY]), &it);
@@ -5480,7 +5640,7 @@ void render_block_cracks(struct block_data* blk, mat4 view, w_coord_t x,
 			.z = z,
 		};
 
-		uint8_t (*tmp)(struct block_info*, enum side) = b->getTextureIndex;
+		uint16_t (*tmp)(struct block_info*, enum side) = b->getTextureIndex;
 		b->getTextureIndex = block_cracks_texture;
 
 		size_t vertices = 0;
@@ -5511,7 +5671,7 @@ void render_block_cracks(struct block_data* blk, mat4 view, w_coord_t x,
 		if(b->double_sided)
 			gfx_cull_func(MODE_NONE);
 
-		gfx_bind_texture(&texture_terrain);
+		gfx_bind_texture_pixels(&texture_terrain);
 		displaylist_render_immediate(&block_cracks_dl, vertices * 4);
 
 		if(b->double_sided)

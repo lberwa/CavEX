@@ -483,20 +483,21 @@ static void chunk_mesher_rebuild(struct block_data* bd, w_coord_t cx,
 									   count_only)
 								* 4;
 
-						if(blocks[local.type]->renderBlockAlwaysTransparent) {
-							const int dp_trans = k + 6;
-							vertices[dp_trans]
-								+= blocks[local.type]->renderBlockAlwaysTransparent(
-									   d + dp_trans, &local_info, s,
-									   neighbours_info + k, vertex_light,
-									   count_only)
-								* 4;
+							if(blocks[local.type]->renderBlockAlwaysTransparent) {
+								const int dp_trans = k + 6;
+								vertices[dp_trans]
+									+= blocks[local.type]->renderBlockAlwaysTransparent(
+										   d + dp_trans, &local_info, s,
+										   neighbours_info + k, vertex_light,
+										   count_only)
+									* 4;
+							}
+
 						}
 					}
 				}
 			}
 		}
-	}
 
 	if(light_data)
 		free(light_data);
@@ -505,7 +506,7 @@ static void chunk_mesher_rebuild(struct block_data* bd, w_coord_t cx,
 static void chunk_mesher_build(struct chunk_mesher_rpc* req) {
 	for(int k = 0; k < 13; k++) {
 		req->result.has_displist[k] = false;
-		displaylist_init(req->result.mesh + k, 64, 3 * 2 + 2 * 1 + 1);
+		displaylist_init(req->result.mesh + k, 64, 3 * 2 + 2 * 2 + 1);
 	}
 
 	size_t vertices[13];
