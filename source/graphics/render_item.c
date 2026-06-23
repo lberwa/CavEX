@@ -81,10 +81,11 @@ void render_item_flat(struct item* item, struct item_data* stack, mat4 view,
 		s = TEX_OFFSET(TEXTURE_X(tex));
 		t = TEX_OFFSET(TEXTURE_Y(tex));
 
-		if(b->transparent)
+		if(b->transparent) {
 			gfx_bind_texture(&texture_anim);
-		else
+		} else {
 			gfx_bind_texture_pixels(&texture_terrain);
+		}
 	} else {
 		s = item->render_data.item.texture_x * 16;
 		t = item->render_data.item.texture_y * 16;
@@ -364,7 +365,11 @@ void render_item_block(struct item* item, struct item_data* stack, mat4 view,
 		glm_mat4_mul(view, model, modelview);
 		gfx_matrix_modelview(modelview);
 
-		gfx_bind_texture(b->transparent ? &texture_anim : &texture_terrain);
+		if(b->transparent) {
+			gfx_bind_texture(&texture_anim);
+		} else {
+			gfx_bind_texture(&texture_terrain);
+		}
 		gfx_lighting(true);
 		displaylist_render_immediate(&dl, vertices * 4);
 		gfx_matrix_modelview(GLM_MAT4_IDENTITY);

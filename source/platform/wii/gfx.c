@@ -56,9 +56,8 @@ static uint32_t current_vp_h = 0;
 void gfx_set_texcoord_div(float div);
 
 static void gfx_apply_texcoord_frac(uint8_t frac) {
-	GX_SetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX0, GX_TEX_ST, GX_U16, frac);
-	GX_SetVtxAttrFmt(GX_VTXFMT2, GX_VA_TEX0, GX_TEX_ST, GX_U16, frac);
-	GX_SetVtxAttrFmt(GX_VTXFMT3, GX_VA_TEX0, GX_TEX_ST, GX_U16, frac);
+	GX_SetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX0, GX_TEX_ST, GX_U8, frac);
+	GX_SetVtxAttrFmt(GX_VTXFMT3, GX_VA_TEX0, GX_TEX_ST, GX_U8, frac);
 }
 
 /*static void* thread_vsync(void* user) {
@@ -179,7 +178,7 @@ void gfx_setup() {
 	// blocks
 	GX_SetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XYZ, GX_S16, 8);
 	GX_SetVtxAttrFmt(GX_VTXFMT0, GX_VA_CLR0, GX_CLR_RGB, GX_RGB8, 0);
-	GX_SetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX0, GX_TEX_ST, GX_U16, 8);
+	GX_SetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX0, GX_TEX_ST, GX_U8, 8);
 
 	// entities, particles
 	GX_SetVtxAttrFmt(GX_VTXFMT1, GX_VA_POS, GX_POS_XYZ, GX_F32, 0);
@@ -194,7 +193,7 @@ void gfx_setup() {
 	// blocks etc with direct color
 	GX_SetVtxAttrFmt(GX_VTXFMT3, GX_VA_POS, GX_POS_XYZ, GX_S16, 8);
 	GX_SetVtxAttrFmt(GX_VTXFMT3, GX_VA_CLR0, GX_CLR_RGBA, GX_RGBA8, 0);
-	GX_SetVtxAttrFmt(GX_VTXFMT3, GX_VA_TEX0, GX_TEX_ST, GX_U16, 8);
+	GX_SetVtxAttrFmt(GX_VTXFMT3, GX_VA_TEX0, GX_TEX_ST, GX_U8, 8);
 
 	GX_SetArray(GX_VA_CLR0, colors, 3 * sizeof(uint8_t));
 	GX_SetNumChans(1);
@@ -280,10 +279,8 @@ void gfx_bind_texture(struct tex_gfx* tex) {
 }
 
 void gfx_set_block_atlas_size(size_t atlas_size) {
-	uint8_t frac = 8;
-	size_t s = atlas_size;
-	while(s > 256) { s >>= 1; frac++; }
-	gfx_apply_texcoord_frac(frac);
+	(void)atlas_size;
+	gfx_apply_texcoord_frac(8);
 }
 
 void gfx_bind_texture_virtual(struct tex_gfx* tex) {
@@ -302,15 +299,7 @@ float gfx_get_texcoord_div(void) {
 
 void gfx_set_texcoord_div(float div) {
 	gfx_texcoord_div = (div > 0.0f) ? div : 256.0f;
-
-	uint8_t frac = 8;
-	size_t s = (size_t)lroundf(gfx_texcoord_div);
-	while(s > 256) {
-		s >>= 1;
-		frac++;
-	}
-
-	gfx_apply_texcoord_frac(frac);
+	gfx_apply_texcoord_frac(8);
 }
 
 void gfx_copy_framebuffer(uint8_t* dest, size_t* width, size_t* height) {

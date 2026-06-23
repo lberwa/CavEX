@@ -477,7 +477,7 @@ static void screen_ingame_render2D(struct screen* s, int width, int height) {
 		return;
 	
 #ifdef NDEBUG
-	snprintf(str, sizeof(str),
+	/*snprintf(str, sizeof(str),
 	         GAME_NAME " Alpha %i.%i.%i_f%i (impl. B1.7.3)",
 	         VERSION_MAJOR, VERSION_MINOR, VERSION_PATCH, VERSION_FORK);
 	gutil_text(4, 4 + (GFX_GUI_SCALE * 8 + 1) * 0, str, GFX_GUI_SCALE * 8, true);
@@ -536,7 +536,7 @@ static void screen_ingame_render2D(struct screen* s, int width, int height) {
 		         (b && b->name) ? b->name : "<unknown>", bd.type,
 		         bd.metadata);
 		gutil_text(4, 4 + (GFX_GUI_SCALE * 8 + 1) * 6, str, GFX_GUI_SCALE * 8, true);
-	}
+	}*/
 #endif
 
 	int icon_offset = GFX_GUI_SCALE * 16;

@@ -29,8 +29,12 @@
 #include "../platform/displaylist.h"
 #include "../world.h"
 
+#ifdef PLATFORM_WII
+#define TEX_OFFSET(x) ((uint16_t)((x) * 18 + 3))
+#else
 #define TEX_OFFSET(x)                                                         \
 	((uint16_t)((x) * tex_atlas_stride() + tex_atlas_padding()))
+#endif
 
 void render_block_init(void);
 void render_block_cracks(struct block_data* blk, mat4 view, w_coord_t x,

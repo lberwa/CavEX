@@ -29,6 +29,7 @@ struct displaylist {
 	size_t length;
 	size_t index;
 	bool finished;
+	bool failed;
 #ifdef PLATFORM_PC
 	int vbo;
 #endif
