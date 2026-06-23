@@ -51,15 +51,15 @@ CPPFLAGS += -DPLATFORM_WII
 CXXFLAGS	+=	$(CFLAGS)
 CPPFLAGS	+=	-Ofast -DSPLITSCREEN=2 -g
 CFLAGS		+=	-Ofast -g -std=c99 -pedantic -Wextra -Wno-unused-parameter -flto=auto -Wall \
-				-DSPLITSCREEN=2 -DNDEBUG -DPLATFORM_WII \
-				$(MACHDEP) $(INCLUDE)
+				-DSPLITSCREEN=2  -DPLATFORM_WII \
+				$(MACHDEP) $(INCLUDE) -DNDEBUG
 
 LDFLAGS	+=	$(MACHDEP) -Wl,-Map,$(notdir $@).map
 LDFLAGS += -L$(MAKEFILE_DIR)
 
 CAVEXFAT_LIB := $(abspath $(MAKEFILE_DIR)/libcavexfat.a)
 
-LIBS	:=	-logc -lwiiuse $(CAVEXFAT_LIB) -lbte -lm -lz -lmad -lasnd
+LIBS	:=	-logc -lwiiuse -lfat -lbte -lm -lz -lmad -lasnd
 
 LIBDIRS	:= $(PORTLIBS)
 
@@ -154,7 +154,7 @@ install_desktop:
 		'Exec=/usr/local/bin/cavex' \
 		'Icon=$(HOME_PATH)/icon.png' \
 		'Terminal=false' \t
-		
+
 		'Type=Application' \
 		'Categories=Game;' \
 		'StartupNotify=true' \
