@@ -914,7 +914,7 @@
       /* Increase th for next pass */                                         \
       th += th;                                                               \
     }                                                                         \
-    M_ASSERT (org_tab == tab);                                                \
+    M_IF_DEBUG(M_ASSERT (org_tab == tab);)                                    \
   }                                                                           \
                                                                               \
   M_P(void, name, _special_stable_sort, array_t l)                            \

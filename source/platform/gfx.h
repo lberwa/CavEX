@@ -53,6 +53,7 @@ void gfx_flip_buffers(float* gpu_wait, float* vsync_wait);
 void gfx_bind_texture(struct tex_gfx* tex);
 void gfx_bind_texture_virtual(struct tex_gfx* tex);
 void gfx_bind_texture_pixels(struct tex_gfx* tex);
+void gfx_set_block_atlas_size(size_t atlas_size);
 void gfx_clear_buffers(uint8_t r, uint8_t g, uint8_t b);
 int gfx_width(void);
 int gfx_height(void);

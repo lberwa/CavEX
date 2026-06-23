@@ -26,6 +26,7 @@
 #include "../graphics/gui_util.h"
 #include "../lodepng/lodepng.h"
 #include "texture.h"
+#include "gfx.h"
 
 	struct tex_gfx texture_fog;
 	struct tex_gfx texture_terrain;
@@ -108,6 +109,7 @@ void tex_init() {
 	//void* output2 = tex_atlas_block2("terrain.png", &w, &h);
 	if(output /*&& output2*/){
 		tex_gfx_load(&texture_terrain, output, w, h, TEX_FMT_RGBA16, false);
+		gfx_set_block_atlas_size(w);
 		//tex_gfx_load(&texture_terrain2, output2, w, h, TEX_FMT_RGBA16, false);
 	}
 

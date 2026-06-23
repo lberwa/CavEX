@@ -305,6 +305,10 @@ void gfx_bind_texture(struct tex_gfx* tex) {
 					  1.0F / (float)(tex ? tex->height : 256));
 }
 
+void gfx_set_block_atlas_size(size_t atlas_size) {
+	(void)atlas_size;
+}
+
 void gfx_bind_texture_virtual(struct tex_gfx* tex) {
 	tex_gfx_bind(tex, 0);
 	gfx_set_tex_scale(1.0F / 256.0F, 1.0F / 256.0F);
