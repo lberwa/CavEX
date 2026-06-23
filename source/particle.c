@@ -437,10 +437,11 @@ static void render_single(struct particle* p, vec3 camera, float delta) {
     // Compute UV coordinates
     float u0, v0, u1, v1;
     if (p->atlas == TEXTURE_ATLAS_TERRAIN) {
+        const float atlas_size = (float)tex_atlas_size();
         u0 = p->tex_uv[0];
         v0 = p->tex_uv[1];
-        u1 = u0 + (4.0f  / (float)TERRAIN_PNG_HEIGHT);
-        v1 = v0 + (4.0f  / (float)TERRAIN_PNG_HEIGHT);
+        u1 = u0 + (4.0f / atlas_size);
+        v1 = v0 + (4.0f / atlas_size);
     } else {
         u0 = (float)TEX_OFFSET(TEXTURE_X(tile)) / (float)texture_particles.width;
         v0 = (float)TEX_OFFSET(TEXTURE_Y(tile)) / (float)texture_particles.height;

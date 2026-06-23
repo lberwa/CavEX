@@ -44,7 +44,7 @@ int gutil_control_icon(int x, enum input_button b, const char* str) {
 	if(!input_symbol(b, &symbol, &symbol_help, &category, 1))
 		return 0;
 
-	gfx_bind_texture(&texture_controls);
+	gfx_bind_texture_virtual(&texture_controls);
 	int scale = 16 * gutil_gui_scale;
 	int text_scale = 5 * gutil_gui_scale;
 

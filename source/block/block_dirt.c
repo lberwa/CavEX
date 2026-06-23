@@ -57,7 +57,9 @@ static void onRightClick(struct server_local* s, struct item_data* it,
 
     // Fallback: if it's not a hoe.. just place what you wanted to place
     if (it && items[it->id] && items[it->id]->onItemPlace) {
-        items[it->id]->onItemPlace(s, it, where, on, on_side);
+        if (items[it->id]->onItemPlace(s, it, where, on, on_side)) {
+            place_block = true;
+        }
     }
 }
 

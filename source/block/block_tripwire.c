@@ -42,6 +42,18 @@ static uint16_t getTextureIndex(struct block_info* this, enum side side) {
 	return tex_atlas_lookup(TEXAT_TRIPWIRE_CROSS);
 }
 
+static size_t renderBlock(struct displaylist* d, struct block_info* this,
+						  enum side side, struct block_info* it,
+						  uint8_t* vertex_light, bool count_only) {
+	(void)d;
+	(void)this;
+	(void)side;
+	(void)it;
+	(void)vertex_light;
+	(void)count_only;
+	return 0;
+}
+
 static bool tripwire_hitbox(struct block_info* this, struct AABB* aabb) {
 	if(!aabb)
 		return true;
@@ -136,8 +148,8 @@ struct block block_tripwire = {
 	.onRightClick = NULL,
 	.onWorldTick = onWorldTick,
 	.transparent = false,
-	.renderBlock = render_block_tripwire,
-	.renderBlockAlways = NULL,
+	.renderBlock = renderBlock,
+	.renderBlockAlways = render_block_tripwire,
 	.luminance = 0,
 	.double_sided = true,
 	.can_see_through = true,
