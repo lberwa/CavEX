@@ -153,7 +153,8 @@ install_desktop:
 		'Comment=Your favourite block game' \
 		'Exec=/usr/local/bin/cavex' \
 		'Icon=$(HOME_PATH)/icon.png' \
-		'Terminal=false' \
+		'Terminal=false' \t
+		
 		'Type=Application' \
 		'Categories=Game;' \
 		'StartupNotify=true' \

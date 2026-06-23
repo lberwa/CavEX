@@ -829,7 +829,7 @@ static int piston_head_side_rotate(enum side facing, enum side side) {
 size_t render_block_cross(struct displaylist* d, struct block_info* this,
 						  enum side side, struct block_info* it,
 						  uint8_t* vertex_light, bool count_only) {
-	if(side != SIDE_TOP)
+	if(side != SIDE_TOP && side != SIDE_BOTTOM)
 		return 0;
 
 	if(!count_only) {
@@ -854,31 +854,59 @@ size_t render_block_cross(struct displaylist* d, struct block_info* this,
 						 << 4)
 			| this->block->sky_light;
 
-		displaylist_pos(d, x, y, z);
-		displaylist_color(d, light);
-		displaylist_texcoord(d, tex_x, tex_y + 16);
-		displaylist_pos(d, x, y + BLK_LEN, z);
-		displaylist_color(d, light);
-		displaylist_texcoord(d, tex_x, tex_y);
-		displaylist_pos(d, x + BLK_LEN, y + BLK_LEN, z + BLK_LEN);
-		displaylist_color(d, light);
-		displaylist_texcoord(d, tex_x + 16, tex_y);
-		displaylist_pos(d, x + BLK_LEN, y, z + BLK_LEN);
-		displaylist_color(d, light);
-		displaylist_texcoord(d, tex_x + 16, tex_y + 16);
+		if(side == SIDE_TOP) {
+			displaylist_pos(d, x, y, z);
+			displaylist_color(d, light);
+			displaylist_texcoord(d, tex_x, tex_y + 16);
+			displaylist_pos(d, x, y + BLK_LEN, z);
+			displaylist_color(d, light);
+			displaylist_texcoord(d, tex_x, tex_y);
+			displaylist_pos(d, x + BLK_LEN, y + BLK_LEN, z + BLK_LEN);
+			displaylist_color(d, light);
+			displaylist_texcoord(d, tex_x + 16, tex_y);
+			displaylist_pos(d, x + BLK_LEN, y, z + BLK_LEN);
+			displaylist_color(d, light);
+			displaylist_texcoord(d, tex_x + 16, tex_y + 16);
 
-		displaylist_pos(d, x + BLK_LEN, y, z);
-		displaylist_color(d, light);
-		displaylist_texcoord(d, tex_x, tex_y + 16);
-		displaylist_pos(d, x + BLK_LEN, y + BLK_LEN, z);
-		displaylist_color(d, light);
-		displaylist_texcoord(d, tex_x, tex_y);
-		displaylist_pos(d, x, y + BLK_LEN, z + BLK_LEN);
-		displaylist_color(d, light);
-		displaylist_texcoord(d, tex_x + 16, tex_y);
-		displaylist_pos(d, x, y, z + BLK_LEN);
-		displaylist_color(d, light);
-		displaylist_texcoord(d, tex_x + 16, tex_y + 16);
+			displaylist_pos(d, x + BLK_LEN, y, z);
+			displaylist_color(d, light);
+			displaylist_texcoord(d, tex_x, tex_y + 16);
+			displaylist_pos(d, x + BLK_LEN, y + BLK_LEN, z);
+			displaylist_color(d, light);
+			displaylist_texcoord(d, tex_x, tex_y);
+			displaylist_pos(d, x, y + BLK_LEN, z + BLK_LEN);
+			displaylist_color(d, light);
+			displaylist_texcoord(d, tex_x + 16, tex_y);
+			displaylist_pos(d, x, y, z + BLK_LEN);
+			displaylist_color(d, light);
+			displaylist_texcoord(d, tex_x + 16, tex_y + 16);
+		} else {
+			displaylist_pos(d, x + BLK_LEN, y, z + BLK_LEN);
+			displaylist_color(d, light);
+			displaylist_texcoord(d, tex_x + 16, tex_y + 16);
+			displaylist_pos(d, x + BLK_LEN, y + BLK_LEN, z + BLK_LEN);
+			displaylist_color(d, light);
+			displaylist_texcoord(d, tex_x + 16, tex_y);
+			displaylist_pos(d, x, y + BLK_LEN, z);
+			displaylist_color(d, light);
+			displaylist_texcoord(d, tex_x, tex_y);
+			displaylist_pos(d, x, y, z);
+			displaylist_color(d, light);
+			displaylist_texcoord(d, tex_x, tex_y + 16);
+
+			displaylist_pos(d, x, y, z + BLK_LEN);
+			displaylist_color(d, light);
+			displaylist_texcoord(d, tex_x + 16, tex_y + 16);
+			displaylist_pos(d, x, y + BLK_LEN, z + BLK_LEN);
+			displaylist_color(d, light);
+			displaylist_texcoord(d, tex_x + 16, tex_y);
+			displaylist_pos(d, x + BLK_LEN, y + BLK_LEN, z);
+			displaylist_color(d, light);
+			displaylist_texcoord(d, tex_x, tex_y);
+			displaylist_pos(d, x + BLK_LEN, y, z);
+			displaylist_color(d, light);
+			displaylist_texcoord(d, tex_x, tex_y + 16);
+		}
 	}
 
 	return 2;
@@ -887,7 +915,7 @@ size_t render_block_cross(struct displaylist* d, struct block_info* this,
 size_t render_block_tree2d(struct displaylist* d, struct block_info* this,
 						  enum side side, struct block_info* it,
 						  uint8_t* vertex_light, bool count_only) {
-	if(side != SIDE_TOP)
+	if(side != SIDE_TOP && side != SIDE_BOTTOM)
 		return 0;
 
 	if(!count_only) {
@@ -914,31 +942,59 @@ size_t render_block_tree2d(struct displaylist* d, struct block_info* this,
 
 		int16_t tree_height = BLK_LEN*(6+2*(this->block->metadata & 1));
 
-		displaylist_pos(d, x, y, z);
-		displaylist_color(d, light);
-		displaylist_texcoord(d, tex_x, tex_y + 16);
-		displaylist_pos(d, x, y + tree_height, z);
-		displaylist_color(d, light);
-		displaylist_texcoord(d, tex_x, tex_y);
-		displaylist_pos(d, x + BLK_LEN, y + BLK_LEN, z + BLK_LEN);
-		displaylist_color(d, light);
-		displaylist_texcoord(d, tex_x + 16, tex_y);
-		displaylist_pos(d, x + BLK_LEN, y, z + BLK_LEN);
-		displaylist_color(d, light);
-		displaylist_texcoord(d, tex_x + 16, tex_y + 16);
+		if(side == SIDE_TOP) {
+			displaylist_pos(d, x, y, z);
+			displaylist_color(d, light);
+			displaylist_texcoord(d, tex_x, tex_y + 16);
+			displaylist_pos(d, x, y + tree_height, z);
+			displaylist_color(d, light);
+			displaylist_texcoord(d, tex_x, tex_y);
+			displaylist_pos(d, x + BLK_LEN, y + BLK_LEN, z + BLK_LEN);
+			displaylist_color(d, light);
+			displaylist_texcoord(d, tex_x + 16, tex_y);
+			displaylist_pos(d, x + BLK_LEN, y, z + BLK_LEN);
+			displaylist_color(d, light);
+			displaylist_texcoord(d, tex_x + 16, tex_y + 16);
 
-		displaylist_pos(d, x + BLK_LEN, y, z);
-		displaylist_color(d, light);
-		displaylist_texcoord(d, tex_x, tex_y + 16);
-		displaylist_pos(d, x + BLK_LEN, y + tree_height, z);
-		displaylist_color(d, light);
-		displaylist_texcoord(d, tex_x, tex_y);
-		displaylist_pos(d, x, y + tree_height, z + BLK_LEN);
-		displaylist_color(d, light);
-		displaylist_texcoord(d, tex_x + 16, tex_y);
-		displaylist_pos(d, x, y, z + BLK_LEN);
-		displaylist_color(d, light);
-		displaylist_texcoord(d, tex_x + 16, tex_y + 16);
+			displaylist_pos(d, x + BLK_LEN, y, z);
+			displaylist_color(d, light);
+			displaylist_texcoord(d, tex_x, tex_y + 16);
+			displaylist_pos(d, x + BLK_LEN, y + tree_height, z);
+			displaylist_color(d, light);
+			displaylist_texcoord(d, tex_x, tex_y);
+			displaylist_pos(d, x, y + tree_height, z + BLK_LEN);
+			displaylist_color(d, light);
+			displaylist_texcoord(d, tex_x + 16, tex_y);
+			displaylist_pos(d, x, y, z + BLK_LEN);
+			displaylist_color(d, light);
+			displaylist_texcoord(d, tex_x + 16, tex_y + 16);
+		} else {
+			displaylist_pos(d, x + BLK_LEN, y, z + BLK_LEN);
+			displaylist_color(d, light);
+			displaylist_texcoord(d, tex_x + 16, tex_y + 16);
+			displaylist_pos(d, x + BLK_LEN, y + BLK_LEN, z + BLK_LEN);
+			displaylist_color(d, light);
+			displaylist_texcoord(d, tex_x + 16, tex_y);
+			displaylist_pos(d, x, y + tree_height, z);
+			displaylist_color(d, light);
+			displaylist_texcoord(d, tex_x, tex_y);
+			displaylist_pos(d, x, y, z);
+			displaylist_color(d, light);
+			displaylist_texcoord(d, tex_x, tex_y + 16);
+
+			displaylist_pos(d, x, y, z + BLK_LEN);
+			displaylist_color(d, light);
+			displaylist_texcoord(d, tex_x + 16, tex_y + 16);
+			displaylist_pos(d, x, y + tree_height, z + BLK_LEN);
+			displaylist_color(d, light);
+			displaylist_texcoord(d, tex_x + 16, tex_y);
+			displaylist_pos(d, x + BLK_LEN, y + tree_height, z);
+			displaylist_color(d, light);
+			displaylist_texcoord(d, tex_x, tex_y);
+			displaylist_pos(d, x + BLK_LEN, y, z);
+			displaylist_color(d, light);
+			displaylist_texcoord(d, tex_x, tex_y + 16);
+		}
 	}
 
 	return 2;
@@ -4911,14 +4967,15 @@ size_t render_block_tripwire(struct displaylist* d, struct block_info* this,
 	}
 
 	if(count_only)
-		return 2;
+		return 1;
 
 	tex_x = TEX_OFFSET(TEXTURE_X(tex));
 	tex_y = TEX_OFFSET(TEXTURE_Y(tex));
-	render_block_side_adv_fulltex(d, bx, y, bz, BLK_LEN, BLK_LEN, tex_x,
-								  tex_y, tex_x + 16, tex_y + 16, false,
-								  tex_rotate, false, SIDE_TOP, vertex_light, 0);
-	{
+	if(side == SIDE_TOP) {
+		render_block_side_adv_fulltex(d, bx, y, bz, BLK_LEN, BLK_LEN, tex_x,
+									  tex_y, tex_x + 16, tex_y + 16, false,
+									  tex_rotate, false, SIDE_TOP, vertex_light, 0);
+	} else {
 		const uint16_t tex_coords[4][2] = {
 			{tex_x, tex_y},
 			{tex_x + 16, tex_y},
@@ -4926,24 +4983,24 @@ size_t render_block_tripwire(struct displaylist* d, struct block_info* this,
 			{tex_x, tex_y + 16},
 		};
 
-	displaylist_pos(d, bx, y, bz + BLK_LEN);
-	displaylist_color(d, DIM_LIGHT(vertex_light[7], NULL, false, 0));
-	displaylist_texcoord(d, tex_coords[(tex_rotate + 3) % 4][0],
-						 tex_coords[(tex_rotate + 3) % 4][1]);
-	displaylist_pos(d, bx + BLK_LEN, y, bz + BLK_LEN);
-	displaylist_color(d, DIM_LIGHT(vertex_light[6], NULL, false, 0));
-	displaylist_texcoord(d, tex_coords[(tex_rotate + 2) % 4][0],
-						 tex_coords[(tex_rotate + 2) % 4][1]);
-	displaylist_pos(d, bx + BLK_LEN, y, bz);
-	displaylist_color(d, DIM_LIGHT(vertex_light[5], NULL, false, 0));
-	displaylist_texcoord(d, tex_coords[(tex_rotate + 1) % 4][0],
-						 tex_coords[(tex_rotate + 1) % 4][1]);
-	displaylist_pos(d, bx, y, bz);
-	displaylist_color(d, DIM_LIGHT(vertex_light[4], NULL, false, 0));
-	displaylist_texcoord(d, tex_coords[(tex_rotate + 0) % 4][0],
-						 tex_coords[(tex_rotate + 0) % 4][1]);
+		displaylist_pos(d, bx, y, bz + BLK_LEN);
+		displaylist_color(d, DIM_LIGHT(vertex_light[7], NULL, false, 0));
+		displaylist_texcoord(d, tex_coords[(tex_rotate + 3) % 4][0],
+							 tex_coords[(tex_rotate + 3) % 4][1]);
+		displaylist_pos(d, bx + BLK_LEN, y, bz + BLK_LEN);
+		displaylist_color(d, DIM_LIGHT(vertex_light[6], NULL, false, 0));
+		displaylist_texcoord(d, tex_coords[(tex_rotate + 2) % 4][0],
+							 tex_coords[(tex_rotate + 2) % 4][1]);
+		displaylist_pos(d, bx + BLK_LEN, y, bz);
+		displaylist_color(d, DIM_LIGHT(vertex_light[5], NULL, false, 0));
+		displaylist_texcoord(d, tex_coords[(tex_rotate + 1) % 4][0],
+							 tex_coords[(tex_rotate + 1) % 4][1]);
+		displaylist_pos(d, bx, y, bz);
+		displaylist_color(d, DIM_LIGHT(vertex_light[4], NULL, false, 0));
+		displaylist_texcoord(d, tex_coords[(tex_rotate + 0) % 4][0],
+							 tex_coords[(tex_rotate + 0) % 4][1]);
 	}
-	return 2;
+	return 1;
 }
 
 
