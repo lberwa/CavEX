@@ -506,7 +506,11 @@ static void chunk_mesher_rebuild(struct block_data* bd, w_coord_t cx,
 static void chunk_mesher_build(struct chunk_mesher_rpc* req) {
 	for(int k = 0; k < 13; k++) {
 		req->result.has_displist[k] = false;
+#ifdef PLATFORM_WII
+		displaylist_init(req->result.mesh + k, 64, 3 * 2 + 2 * 1 + 1);
+#else
 		displaylist_init(req->result.mesh + k, 64, 3 * 2 + 2 * 2 + 1);
+#endif
 	}
 
 	size_t vertices[13];
@@ -514,7 +518,8 @@ static void chunk_mesher_build(struct chunk_mesher_rpc* req) {
 						 req->chunk->z, req->result.mesh, false, vertices);
 
 	for(int k = 0; k < 13; k++) {
-		if(vertices[k] > 0 && vertices[k] <= 0xFFFF * 4) {
+		if(!req->result.mesh[k].failed && vertices[k] > 0
+		   && vertices[k] <= 0xFFFF * 4) {
 			displaylist_finalize(req->result.mesh + k, vertices[k]);
 			req->result.has_displist[k] = true;
 		} else {

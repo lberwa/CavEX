@@ -349,10 +349,16 @@ struct texture_entry {
 
 ARRAY_DEF(dict_atlas_src, struct texture_entry, M_POD_OPLIST)
 
+#ifdef PLATFORM_WII
+#define TEXTURE_INDEX(x, y) ((uint16_t)(((y) * 16) + (x)))
+#define TEXTURE_X(idx) ((uint16_t)((idx) % 16))
+#define TEXTURE_Y(idx) ((uint16_t)((idx) / 16))
+#else
 #define TEXTURE_INDEX(x, y)                                                    \
 	((uint16_t)((y) * tex_atlas_columns() + (x)))
 #define TEXTURE_X(idx) ((uint16_t)((idx) % tex_atlas_columns()))
 #define TEXTURE_Y(idx) ((uint16_t)((idx) / tex_atlas_columns()))
+#endif
 
 // Terrain atlas size (terrain.png). Keep in sync with the actual PNG size.
 #define TERRAIN_PNG_HEIGHT 256

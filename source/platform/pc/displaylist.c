@@ -37,6 +37,7 @@ void displaylist_init(struct displaylist* l, size_t vertices,
 	l->data = NULL;
 	l->index = 0;
 	l->finished = false;
+	l->failed = false;
 }
 
 void displaylist_destroy(struct displaylist* l) {
@@ -47,11 +48,15 @@ void displaylist_destroy(struct displaylist* l) {
 
 	if(l->finished)
 		glDeleteBuffers(1, &l->vbo);
+
+	l->data = NULL;
+	l->failed = false;
 }
 
 void displaylist_reset(struct displaylist* l) {
 	assert(l && !l->finished);
 	l->index = 0;
+	l->failed = false;
 }
 
 void displaylist_finalize(struct displaylist* l, uint16_t vtxcnt) {
@@ -63,15 +68,27 @@ void displaylist_finalize(struct displaylist* l, uint16_t vtxcnt) {
 void displaylist_pos(struct displaylist* l, int16_t x, int16_t y, int16_t z) {
 	assert(l && !l->finished);
 
+	if(l->failed)
+		return;
+
 	if(!l->data) {
 		l->data = malloc(l->length);
-		assert(l->data);
+		if(!l->data) {
+			l->failed = true;
+			return;
+		}
 	}
 
 	if(l->index + 18 > l->length) {
 		l->length *= 2;
-		l->data = realloc(l->data, l->length);
-		assert(l->data);
+		void* tmp = realloc(l->data, l->length);
+		if(!tmp) {
+			free(l->data);
+			l->data = NULL;
+			l->failed = true;
+			return;
+		}
+		l->data = tmp;
 	}
 
 	MEM_FLT(l->data, l->index) = (float)x / 256.0F;
@@ -83,14 +100,18 @@ void displaylist_pos(struct displaylist* l, int16_t x, int16_t y, int16_t z) {
 }
 
 void displaylist_color(struct displaylist* l, uint8_t index) {
-	assert(l && !l->finished && l->data);
+	assert(l && !l->finished);
+	if(l->failed || !l->data)
+		return;
 
 	MEM_U8(l->data, l->index++) = index % 16;
 	MEM_U8(l->data, l->index++) = index / 16;
 }
 
 void displaylist_texcoord(struct displaylist* l, uint16_t s, uint16_t t) {
-	assert(l && !l->finished && l->data);
+	assert(l && !l->finished);
+	if(l->failed || !l->data)
+		return;
 	MEM_U16(l->data, l->index) = s;
 	l->index += 2;
 	MEM_U16(l->data, l->index) = t;
@@ -99,6 +120,8 @@ void displaylist_texcoord(struct displaylist* l, uint16_t s, uint16_t t) {
 
 void displaylist_render(struct displaylist* l) {
 	assert(l);
+	if(l->failed || !l->data)
+		return;
 
 	if(!l->finished) {
 		l->finished = true;
@@ -129,7 +152,9 @@ void displaylist_render(struct displaylist* l) {
 }
 
 void displaylist_render_immediate(struct displaylist* l, uint16_t vtxcnt) {
-	assert(l && l->data && !l->finished);
+	assert(l && !l->finished);
+	if(l->failed || !l->data)
+		return;
 	glEnableVertexAttribArray(0);
 	glEnableVertexAttribArray(3);
 	glEnableVertexAttribArray(2);
