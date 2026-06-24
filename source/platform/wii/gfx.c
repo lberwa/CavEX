@@ -56,8 +56,19 @@ static uint32_t current_vp_h = 0;
 void gfx_set_texcoord_div(float div);
 
 static void gfx_apply_texcoord_frac(uint8_t frac) {
-	GX_SetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX0, GX_TEX_ST, GX_U8, frac);
+	GX_SetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX0, GX_TEX_ST, GX_U16, frac); // Block-Pfad: U16 erlaubt >256er-Atlas
+	GX_SetVtxAttrFmt(GX_VTXFMT2, GX_VA_TEX0, GX_TEX_ST, GX_U16, frac); // GUI-Quads: frac muss zur gebundenen Textur passen (z.B. 512er-Atlas in gutil_bg)
 	GX_SetVtxAttrFmt(GX_VTXFMT3, GX_VA_TEX0, GX_TEX_ST, GX_U8, frac);
+}
+
+/* frac = log2(Texturbreite): 256->8, 512->9, 1024->10. Damit ist der Rohwert
+ * der Texcoord gleich dem Texel (raw/2^frac * texwidth = raw, wenn 2^frac =
+ * texwidth). No-Op fuer alle 256er-Texturen, nur der 512er-Atlas wird zu 9. */
+static uint8_t gfx_frac_for_width(uint32_t w) {
+	uint8_t f = 0;
+	while((1u << (f + 1)) <= w && f < 15)
+		f++;
+	return f;
 }
 
 /*static void* thread_vsync(void* user) {
@@ -178,7 +189,7 @@ void gfx_setup() {
 	// blocks
 	GX_SetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XYZ, GX_S16, 8);
 	GX_SetVtxAttrFmt(GX_VTXFMT0, GX_VA_CLR0, GX_CLR_RGB, GX_RGB8, 0);
-	GX_SetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX0, GX_TEX_ST, GX_U8, 8);
+	GX_SetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX0, GX_TEX_ST, GX_U16, 8); // Block-Pfad: U16 (frac wird per gfx_set_*_div gesetzt)
 
 	// entities, particles
 	GX_SetVtxAttrFmt(GX_VTXFMT1, GX_VA_POS, GX_POS_XYZ, GX_F32, 0);
@@ -279,8 +290,7 @@ void gfx_bind_texture(struct tex_gfx* tex) {
 }
 
 void gfx_set_block_atlas_size(size_t atlas_size) {
-	(void)atlas_size;
-	gfx_apply_texcoord_frac(8);
+	gfx_apply_texcoord_frac(gfx_frac_for_width((uint32_t)atlas_size));
 }
 
 void gfx_bind_texture_virtual(struct tex_gfx* tex) {
@@ -299,7 +309,7 @@ float gfx_get_texcoord_div(void) {
 
 void gfx_set_texcoord_div(float div) {
 	gfx_texcoord_div = (div > 0.0f) ? div : 256.0f;
-	gfx_apply_texcoord_frac(8);
+	gfx_apply_texcoord_frac(gfx_frac_for_width((uint32_t)gfx_texcoord_div));
 }
 
 void gfx_copy_framebuffer(uint8_t* dest, size_t* width, size_t* height) {
