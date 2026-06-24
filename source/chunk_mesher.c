@@ -507,8 +507,8 @@ static void chunk_mesher_build(struct chunk_mesher_rpc* req) {
 	for(int k = 0; k < 13; k++) {
 		req->result.has_displist[k] = false;
 #ifdef PLATFORM_WII
-		/* Wii: pos(3x int16) + texcoord(2x uint8) + color(1x uint8) = 9 bytes. */
-		displaylist_init(req->result.mesh + k, 64, 3 * 2 + 2 * 1 + 1);
+		/* Wii: pos(3x int16) + texcoord(2x uint16) + color(1x uint8) = 11 bytes. */
+		displaylist_init(req->result.mesh + k, 64, 3 * 2 + 2 * 2 + 1);
 #else
 		displaylist_init(req->result.mesh + k, 64, 3 * 2 + 2 * 2 + 1);
 #endif

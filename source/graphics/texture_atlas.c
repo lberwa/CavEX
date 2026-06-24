@@ -143,19 +143,20 @@ void* tex_atlas_compute(dict_atlas_src_t atlas, uint16_t* atlas_dst,
 	assert(image && width >= 16 && width == height);
 
 #ifdef PLATFORM_WII
-	/* GX uses GX_U8 texture coordinates (max value 255), so the atlas must stay
-	 * 256x256 (a larger atlas would need GX_U16, which hangs the GP on this Wii
-	 * setup). We keep a FULL 1px anti-bleed border on every tile (stride 18),
-	 * exactly like the original game: the border duplicates each tile edge, so no
-	 * matter which way the sampling rounds it always hits the tile's own edge,
-	 * never the neighbour. That removes the edge bleeding/flicker completely.
+	/* GX texture coordinates use GX_U16 with frac = log2(atlas size) (set in
+	 * gfx.c), so the raw coordinate equals the texel and we can address a larger
+	 * atlas exactly. We grow the atlas to 512x512 (2x the 256 source) and keep a
+	 * FULL 1px anti-bleed border on every tile (stride 18): the border duplicates
+	 * each tile edge, so no matter which way the sampling rounds it always hits
+	 * the tile's own edge, never the neighbour -> no edge bleeding/flicker.
 	 *
-	 * Trade-off: a 256 atlas with full borders fits 14x14 = 196 tiles. If more
-	 * than 196 are registered, the extra (last-registered) ones are dropped. */
+	 * A 512 atlas with full borders fits 28x28 = 784 tiles, far more than the
+	 * ~200 currently registered, so nothing is dropped and there is plenty of
+	 * head room for the blocks still listed in blocks.txt. */
 	uint16_t tile_size = width / 16;
 	uint16_t border_scale = width / 256;
 	uint16_t padding = 3 * border_scale;
-	uint16_t output_size = width; /* never grows: U8 coords cannot exceed 255 */
+	uint16_t output_size = width * 2; /* 512x512 atlas, addressed via GX_U16 frac 9 */
 	uint16_t stride = tile_size + 2 * border_scale;
 	uint16_t atlas_axis
 		= atlas_axis_capacity(output_size, tile_size, border_scale, padding);
