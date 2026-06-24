@@ -34,8 +34,26 @@ u8* server_receive(int* out_len);
 int server_close(void);
 char* server_get_mac_address(void);
 
+/* Netzwerk-Remote-Debug (sendet Log-Strings an einen Dev-Rechner).
+ * Standardmaessig AUS: debug_init macht einen blockierenden net_connect zu
+ * einer fest verdrahteten IP und friert sonst jede Wii ein, die kein
+ * lauschendes Dev-Terminal im Netzwerk hat. Mit -DNET_DEBUG aktivierbar. */
+#ifdef NET_DEBUG
 bool debug_init(int a, int b, int c, int d);
 int debug_send(void *data);
 int debug_close(void);
+#else
+static inline bool debug_init(int a, int b, int c, int d) {
+	(void)a; (void)b; (void)c; (void)d;
+	return false;
+}
+static inline int debug_send(void *data) {
+	(void)data;
+	return 0;
+}
+static inline int debug_close(void) {
+	return 0;
+}
+#endif
 
 #endif

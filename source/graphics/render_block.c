@@ -2660,11 +2660,15 @@ size_t render_block_fluid(struct displaylist* d, struct block_info* this,
 		uint16_t height = (this->block->metadata & 0x8) ?
 			BLK_LEN :
 			(8 - this->block->metadata) * 14 * 2;
+		/* Liquids sample the animated anim.png, which uses the fixed original
+		 * tile layout rather than the tighter terrain-atlas geometry. */
+		tex_atlas_set_anim_geometry(true);
 		render_block_side(
 			d, W2C_COORD(this->x), W2C_COORD(this->y), W2C_COORD(this->z), 0,
 			height, blocks[this->block->type]->getTextureIndex(this, side),
 			blocks[this->block->type]->luminance, true, 0, false, 0, side,
 			vertex_light);
+		tex_atlas_set_anim_geometry(false);
 	}
 
 	return 1;
@@ -5529,8 +5533,10 @@ size_t render_block_cauldron_water(struct displaylist* d, struct block_info* thi
 	// alpha channel from terrain.png would be ignored.
 	const uint16_t water_tex = TEXTURE_INDEX(1, 0);
 	#endif
+	tex_atlas_set_anim_geometry(true);
 	const uint16_t water_x = TEX_OFFSET(TEXTURE_X(water_tex));
 	const uint16_t water_y = TEX_OFFSET(TEXTURE_Y(water_tex));
+	tex_atlas_set_anim_geometry(false);
 
 	// Full tile UVs (16x16), scaled to face size.
 	const uint16_t wu0 = water_x;

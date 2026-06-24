@@ -88,6 +88,8 @@ void* framebuffer3;
 	extern void* __Arena1Hi;
 	extern void* __Arena2Lo;
 	extern void* __Arena2Hi;
+#endif
+#ifdef NET_DEBUG
 bool debugsendfirst = false;
 #endif
 #endif
@@ -335,7 +337,7 @@ int main(void) {
 
 	while(!gstate.quit) { // |-------------------| main loop |-------------------|
 		#ifdef PLATFORM_WII
-		#ifdef NDEBUG
+		#ifdef NET_DEBUG
 		if (gstate.network)
 		{
 			if (!debugsendfirst) {
@@ -343,7 +345,7 @@ int main(void) {
 				debugsendfirst = true;
 			}
 		}
-		#endif /*NDEBUG*/
+		#endif /*NET_DEBUG*/
 
 		if (net_ready)
 			gstate.network = true;

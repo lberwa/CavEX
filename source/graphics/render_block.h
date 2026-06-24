@@ -29,12 +29,12 @@
 #include "../platform/displaylist.h"
 #include "../world.h"
 
-#ifdef PLATFORM_WII
-#define TEX_OFFSET(x) ((uint16_t)((x) * 18 + 3))
-#else
+/* Sample position of a tile inside the packed atlas. Uses the runtime atlas
+ * geometry on both platforms so it always matches how tex_atlas_compute packed
+ * the tiles (the Wii previously hardcoded 18/3, which no longer matches the
+ * tighter Wii packing and caused an accumulating per-column offset). */
 #define TEX_OFFSET(x)                                                         \
 	((uint16_t)((x) * tex_atlas_stride() + tex_atlas_padding()))
-#endif
 
 void render_block_init(void);
 void render_block_cracks(struct block_data* blk, mat4 view, w_coord_t x,
