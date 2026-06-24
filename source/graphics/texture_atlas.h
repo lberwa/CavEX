@@ -349,16 +349,13 @@ struct texture_entry {
 
 ARRAY_DEF(dict_atlas_src, struct texture_entry, M_POD_OPLIST)
 
-#ifdef PLATFORM_WII
-#define TEXTURE_INDEX(x, y) ((uint16_t)(((y) * 16) + (x)))
-#define TEXTURE_X(idx) ((uint16_t)((idx) % 16))
-#define TEXTURE_Y(idx) ((uint16_t)((idx) / 16))
-#else
+/* Runtime atlas geometry on both platforms so the decode matches how
+ * tex_atlas_compute packed the tiles. (The Wii previously hardcoded a 16-wide
+ * base, which no longer matches the tighter Wii column count.) */
 #define TEXTURE_INDEX(x, y)                                                    \
 	((uint16_t)((y) * tex_atlas_columns() + (x)))
 #define TEXTURE_X(idx) ((uint16_t)((idx) % tex_atlas_columns()))
 #define TEXTURE_Y(idx) ((uint16_t)((idx) / tex_atlas_columns()))
-#endif
 
 // Terrain atlas size (terrain.png). Keep in sync with the actual PNG size.
 #define TERRAIN_PNG_HEIGHT 256
@@ -383,6 +380,9 @@ uint16_t tex_atlas_columns(void);
 uint16_t tex_atlas_stride(void);
 uint16_t tex_atlas_padding(void);
 uint16_t tex_atlas_size(void);
+/* Switch the geometry getters above to the fixed anim.png layout while
+ * rendering animated liquids (water/lava), then switch back. */
+void tex_atlas_set_anim_geometry(bool enable);
 
 
 #endif

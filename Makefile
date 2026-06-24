@@ -57,7 +57,7 @@ CFLAGS		+=	-Ofast -g -std=c99 -pedantic -Wextra -Wno-unused-parameter -flto=auto
 LDFLAGS	+=	$(MACHDEP) -Wl,-Map,$(notdir $@).map
 LDFLAGS += -L$(MAKEFILE_DIR)
 
-CAVEXFAT_LIB := $(abspath $(MAKEFILE_DIR)/libcavexfat.a)
+#CAVEXFAT_LIB := $(abspath $(MAKEFILE_DIR)/libcavexfat.a)
 
 LIBS	:=	-logc -lwiiuse -lfat -lbte -lm -lz -lmad -lasnd
 

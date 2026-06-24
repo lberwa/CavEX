@@ -222,6 +222,7 @@ bool server_data_init() {
 //debugging
 //-----------------
 
+#ifdef NET_DEBUG
 #define DEBUG_SERVER_PORT 12344
 
 static s32 dsock = -1;
@@ -255,6 +256,7 @@ int debug_close() {
     int back = net_close(dsock);
     return back;
 }
+#endif /*NET_DEBUG*/
 #endif /*PLATFORM_WII*/
 
 
@@ -367,6 +369,7 @@ char* server_get_mac_address(void)
    Debug socket
 ---------------------------------- */
 
+#ifdef NET_DEBUG
 static int dsock = -1;
 
 bool debug_init(int a, int b, int c, int d)
@@ -414,4 +417,5 @@ int debug_close(void)
     return r;
     #endif
 }
+#endif /*NET_DEBUG*/
 #endif /*PLATFORM_PC*/
