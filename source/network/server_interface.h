@@ -61,6 +61,7 @@ struct server_rpc {
 		} player_pos;
 		struct {
 			string_t name;
+			bool find_spawn; /* new world: place spawn on solid ground */
 		} load_world;
 		struct {
 			w_coord_t x, y, z;

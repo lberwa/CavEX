@@ -1,5 +1,5 @@
 /*
-	Copyright (c) 2023 ByteBit/xtreme8000
+	Copyright (c) 2026 lberwa
 
 	This file is part of CavEX.
 
@@ -17,6 +17,7 @@
 	along with CavEX.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+
 #include "../../graphics/gui_util.h"
 #include "../../graphics/gfx_settings.h"
 #include "../../network/server_local.h"
@@ -24,7 +25,7 @@
 #include "../../platform/input.h"
 #include "../game_state.h"
 
-static void screen_lworld_reset(struct screen* s, int width, int height) {
+static void screen_gworld_reset(struct screen* s, int width, int height) {
 	input_pointer_enable(true);
 
 	gstate_set_capture_input_all(false);
@@ -34,18 +35,18 @@ static void screen_lworld_reset(struct screen* s, int width, int height) {
 	gstate.world_loaded = false;
 }
 
-static void screen_lworld_update(struct screen* s, float dt) {
+static void screen_gworld_update(struct screen* s, float dt) {
 	if(gstate.world_loaded)
 		screen_set(&screen_ingame);
 }
 
-static void screen_lworld_render2D(struct screen* s, int width, int height) {
+static void screen_gworld_render2D(struct screen* s, int width, int height) {
 	gutil_bg();
 
 	gutil_text((width - gutil_font_width("Generating level", 8 * GFX_GUI_SCALE)) / 2,
 			   height / 2 - 20 * GFX_GUI_SCALE, "Generating level", 8 * GFX_GUI_SCALE, true);
 
-	gutil_text((width - gutil_font_width("Building terrain", 8 * GFX_GUI_SCALE)) / 2,
+	gutil_text((width - gutil_font_width("Building a new World", 8 * GFX_GUI_SCALE)) / 2,
 			   height / 2 + 4 * GFX_GUI_SCALE, "Building terrain", 8 * GFX_GUI_SCALE, true);
 
 	gutil_text(2 * GFX_GUI_SCALE, height - 2 * GFX_GUI_SCALE - (9 * GFX_GUI_SCALE) * 2, 
@@ -65,10 +66,10 @@ static void screen_lworld_render2D(struct screen* s, int width, int height) {
 	gfx_texture(true);
 }
 
-struct screen screen_load_world = {
-	.reset = screen_lworld_reset,
-	.update = screen_lworld_update,
-	.render2D = screen_lworld_render2D,
+struct screen screen_generate_world = {
+	.reset = screen_gworld_reset,
+	.update = screen_gworld_update,
+	.render2D = screen_gworld_render2D,
 	.render3D = NULL,
 	.render_world = false,
 };

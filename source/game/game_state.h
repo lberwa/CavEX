@@ -54,6 +54,19 @@ struct game_state {
 	bool game_run;
 	int num_players;
 	int player_sequence[4];
+	struct {
+		bool debug;
+		int chunk_build_budget_ms;
+		int chunk_build_per_tick;
+	} settings;
+	/* live chunk generation status, updated by the server thread for the debug
+	 * overlay (screen_ingame). */
+	struct {
+		bool active;       /* a chunk is currently being generated */
+		int percent;       /* progress 0..100 of the current chunk */
+		int chunk_x, chunk_z;
+		unsigned long built; /* chunks finished this session */
+	} gen_debug;
 	sig_atomic_t quit;
 	struct random_gen rand_src;
 	struct config config_user;
@@ -106,13 +119,13 @@ struct game_state {
 	int oxygen;
 #ifdef SPLITSCREEN
 	int active_player;
-struct camera cameras[4];
-struct camera_ray_result camera_hits[4];
-struct entity* local_players[4];
-struct digging diggings[4];
-struct held_anim held_item_animations[4];
-bool in_water_arr[4];
-int oxygen_arr[4];
+	struct camera cameras[4];
+	struct camera_ray_result camera_hits[4];
+	struct entity* local_players[4];
+	struct digging diggings[4];
+	struct held_anim held_item_animations[4];
+	bool in_water_arr[4];
+	int oxygen_arr[4];
 #else
 #endif
 };
@@ -179,20 +192,6 @@ static inline void gstate_set_capture_input_player(int player, bool enable) {
 	if(gstate.local_player)
 		gstate.local_player->data.local_player.capture_input = enable;
 }
-#endif
-
-#ifndef NDEBUG
-#define NDEBUG
-#endif
-
-#ifdef NDEBUG // for bg_init debugging
-//extern struct game_state gstate;
-//extern ptime_t global_last_pos_update;
-//extern struct client_rpc* global_call_type;
-//extern struct thread_channel clin_inbox;
-
-
-
 #endif
 
 #endif

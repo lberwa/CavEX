@@ -55,6 +55,14 @@ static struct thread_channel mesher_requests;
 static struct thread_channel mesher_results;
 static struct thread_channel mesher_empty_msg;
 
+/* debug counters for the in-game overlay -- tell us where the mesh pipeline
+ * stalls: sent (queued to worker), failed (queue/alloc full), received
+ * (results applied), built (worker actually finished a mesh). */
+volatile unsigned long chunk_mesher_dbg_sent = 0;
+volatile unsigned long chunk_mesher_dbg_failed = 0;
+volatile unsigned long chunk_mesher_dbg_recv = 0;
+volatile unsigned long chunk_mesher_dbg_built = 0;
+
 static int chunk_test_side(enum side* on_sides, c_coord_t x, c_coord_t y,
 						   c_coord_t z) {
 	assert(on_sides);
@@ -531,6 +539,7 @@ static void chunk_mesher_build(struct chunk_mesher_rpc* req) {
 	chunk_test_init(req->request.blocks, req->result.reachable);
 
 	free(req->request.blocks);
+	chunk_mesher_dbg_built++;
 }
 
 static void* chunk_mesher_local_thread(void* user) {
@@ -553,7 +562,15 @@ void chunk_mesher_init() {
 		tchannel_send(&mesher_empty_msg, rpc_msg + k, true);
 
 	struct thread t;
-	thread_create(&t, chunk_mesher_local_thread, NULL, 4);
+	/* Priority 16: ABOVE the local server thread (priority 8). On the single-core
+	 * Wii the server (chunk generation) used to preempt the mesher (was priority
+	 * 4), so the mesher starved and a backlog of dirty chunks never got rebuilt --
+	 * block break/place and freshly generated chunks stayed unrendered. Giving the
+	 * mesher the higher priority makes meshing win over generation: the worker
+	 * only blocks waiting for requests, so when there is meshing to do it preempts
+	 * generation, and generation transparently uses the leftover time. Still well
+	 * below the main/render thread, so rendering is unaffected. */
+	thread_create(&t, chunk_mesher_local_thread, NULL, 16);
 }
 
 void chunk_mesher_receive() {
@@ -574,6 +591,7 @@ void chunk_mesher_receive() {
 		chunk_unref(result->chunk);
 
 		tchannel_send(&mesher_empty_msg, result, true);
+		chunk_mesher_dbg_recv++;
 	}
 }
 
@@ -581,14 +599,17 @@ bool chunk_mesher_send(struct chunk* c) {
 	assert(c);
 
 	struct chunk_mesher_rpc* request;
-	if(!tchannel_receive(&mesher_empty_msg, (void**)&request, false))
+	if(!tchannel_receive(&mesher_empty_msg, (void**)&request, false)) {
+		chunk_mesher_dbg_failed++;
 		return false;
+	}
 
 	struct block_data* bd
 		= malloc((CHUNK_SIZE + 2) * (CHUNK_SIZE + 2) * (CHUNK_SIZE + 2)
 				 * sizeof(struct block_data));
 
 	if(!bd) {
+		chunk_mesher_dbg_failed++;
 		tchannel_send(&mesher_empty_msg, request, true);
 		return false;
 	}
@@ -607,5 +628,6 @@ bool chunk_mesher_send(struct chunk* c) {
 	}
 
 	tchannel_send(&mesher_requests, request, true);
+	chunk_mesher_dbg_sent++;
 	return true;
 }

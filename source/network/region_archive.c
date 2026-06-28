@@ -20,6 +20,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <string.h>
+#include <sys/stat.h>
 #include "../m-lib/m-string.h"
 
 #include "../cNBT/nbt.h"
@@ -93,6 +94,24 @@ bool region_archive_create_new(struct region_archive* ra, string_t world_name,
 							   w_coord_t x, w_coord_t z,
 							   enum world_dim dimension) {
 	assert(ra && world_name);
+
+	/* ensure the region directory exists, otherwise fopen() below fails and
+	 * nothing gets saved */
+	{
+		string_t dir;
+		if(dimension == WORLD_DIM_OVERWORLD) {
+			string_init_printf(dir, "%s/region", string_get_cstr(world_name));
+		} else {
+			string_t d1;
+			string_init_printf(d1, "%s/DIM-1", string_get_cstr(world_name));
+			mkdir(string_get_cstr(d1), 0755);
+			string_clear(d1);
+			string_init_printf(dir, "%s/DIM-1/region",
+							   string_get_cstr(world_name));
+		}
+		mkdir(string_get_cstr(dir), 0755);
+		string_clear(dir);
+	}
 
 	if(dimension == WORLD_DIM_OVERWORLD) {
 		string_init_printf(ra->file_name, "%s/region/r.%i.%i.mcr",

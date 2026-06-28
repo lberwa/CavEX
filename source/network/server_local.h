@@ -109,6 +109,12 @@ struct server_local {
 	uint8_t active_player_id;
 	struct server_world world;
 	bool world_initialized;
+	/* set for a freshly created world: snap the spawn/player onto solid ground
+	 * once the spawn area has been generated */
+	bool find_spawn;
+	/* true while the spawn area is still being generated/loaded -> the server
+	 * thread ticks without the idle delay for maximum generation speed */
+	bool loading;
 	dict_entity_t entities;
 	struct complex_block_pos chest_pos[MAX_CHESTS];
 	struct item_data chest_items[MAX_CHESTS][MAX_CHEST_SLOTS];

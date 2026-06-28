@@ -35,4 +35,6 @@ bool config_read_int_array(struct config* c, const char* key, int* dest,
 						   size_t* length);
 void config_destroy(struct config* c);
 
+void settings_init(void);
+
 #endif

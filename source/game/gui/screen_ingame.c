@@ -26,6 +26,8 @@
 #include "../../graphics/render_model.h"
 #include "../../network/server_interface.h"
 #include "../../network/server_local.h"
+#include "../../chunk_mesher.h"
+#include "../../world.h"
 #include "../../particle.h"
 #include "../../platform/gfx.h"
 #include "../../platform/input.h"
@@ -476,8 +478,10 @@ static void screen_ingame_render2D(struct screen* s, int width, int height) {
 	if(!active_inventory_window())
 		return;
 	
-#ifdef NDEBUG
-	/*snprintf(str, sizeof(str),
+//#ifdef NDEBUG
+   if (true) {
+
+	snprintf(str, sizeof(str),
 	         GAME_NAME " Alpha %i.%i.%i_f%i (impl. B1.7.3)",
 	         VERSION_MAJOR, VERSION_MINOR, VERSION_PATCH, VERSION_FORK);
 	gutil_text(4, 4 + (GFX_GUI_SCALE * 8 + 1) * 0, str, GFX_GUI_SCALE * 8, true);
@@ -536,8 +540,10 @@ static void screen_ingame_render2D(struct screen* s, int width, int height) {
 		         (b && b->name) ? b->name : "<unknown>", bd.type,
 		         bd.metadata);
 		gutil_text(4, 4 + (GFX_GUI_SCALE * 8 + 1) * 6, str, GFX_GUI_SCALE * 8, true);
-	}*/
-#endif
+	}
+
+   }
+//#endif
 
 	int icon_offset = GFX_GUI_SCALE * 16;
 	icon_offset += gutil_control_icon(icon_offset, IB_INVENTORY, "Inventory");
@@ -592,12 +598,29 @@ static void screen_ingame_render2D(struct screen* s, int width, int height) {
 				  182, 22, 182 * GFX_GUI_SCALE, 22 * GFX_GUI_SCALE);
 
 	//  +
-	gfx_blending(MODE_INVERT);
-	gfx_bind_texture(&texture_gui2);
-	gutil_texquad((width - 16 * GFX_GUI_SCALE) / 2, (height - 16 * GFX_GUI_SCALE) / 2, 0, 229, 16, 16,
-				  16 * GFX_GUI_SCALE, 16 * GFX_GUI_SCALE);
+	{
+		int cx = (width - 16 * GFX_GUI_SCALE) / 2;
+		int cy = (height - 16 * GFX_GUI_SCALE) / 2;
+		int cs = 16 * GFX_GUI_SCALE;
 
-	gfx_blending(MODE_OFF);
+		bool deferred = false;
+#ifdef PLATFORM_PC
+		deferred = true;
+#ifdef SPLITSCREEN
+		deferred = !splitscreen_enabled();
+#endif
+#endif
+		if(deferred) {
+			/* drawn on top of the composited image so the colour inversion
+			 * sees the 3D scene behind it (separate GUI FBO otherwise) */
+			gfx_crosshair(&texture_gui2, cx, cy, 0, 229, 16, 16, cs, cs);
+		} else {
+			gfx_blending(MODE_INVERT);
+			gfx_bind_texture(&texture_gui2);
+			gutil_texquad(cx, cy, 0, 229, 16, 16, cs, cs);
+			gfx_blending(MODE_OFF);
+		}
+	}
 
 	for(int k = 0; k < INVENTORY_SIZE_HOTBAR; k++) {
 		struct item_data item;
@@ -678,6 +701,52 @@ static void screen_ingame_render2D(struct screen* s, int width, int height) {
 			}
 		}
 #endif
+	}
+
+	/* debug overlay: live chunk generation progress (top-right) */
+	if(gstate.settings.debug) {
+		int sc = GFX_GUI_SCALE;
+		char gstr[64];
+		if(gstate.gen_debug.active)
+			snprintf(gstr, sizeof(gstr), "gen %d%% (%d, %d)  built %lu",
+					 gstate.gen_debug.percent, gstate.gen_debug.chunk_x,
+					 gstate.gen_debug.chunk_z, gstate.gen_debug.built);
+		else
+			snprintf(gstr, sizeof(gstr), "gen idle  built %lu",
+					 gstate.gen_debug.built);
+
+		int tw = gutil_font_width(gstr, 8 * sc);
+		int gx = width - tw - 4 * sc;
+		int gy = 4 * sc;
+		gutil_text(gx, gy, gstr, 8 * sc, true);
+
+		/* mesh pipeline diagnostics: dirty chunks waiting + mesher throughput.
+		 * dirty climbs but sent flat -> rebuilds not reaching the mesher;
+		 * sent climbs but built/recv flat -> worker thread stuck;
+		 * all climb but still stale -> rendering/displaylist issue. */
+		char mstr[80];
+		snprintf(mstr, sizeof(mstr), "dirty %lu  snt %lu fail %lu blt %lu rcv %lu",
+				 (unsigned long)world_count_dirty_chunks(&gstate.world),
+				 chunk_mesher_dbg_sent, chunk_mesher_dbg_failed,
+				 chunk_mesher_dbg_built, chunk_mesher_dbg_recv);
+		int mtw = gutil_font_width(mstr, 8 * sc);
+		gutil_text(width - mtw - 4 * sc, gy + (8 * sc + 1) * 2, mstr, 8 * sc,
+				   true);
+
+		/* progress bar under the text */
+		int bw = tw;
+		int bh = 2 * sc;
+		int bx = gx;
+		int by = gy + 9 * sc;
+		int fill = gstate.gen_debug.active
+			? bw * gstate.gen_debug.percent / 100
+			: 0;
+		gfx_texture(false);
+		gutil_texquad_col(bx, by, 0, 0, 0, 0, bw, bh, 64, 64, 64, 255);
+		if(fill > 0)
+			gutil_texquad_col(bx, by, 0, 0, 0, 0, fill, bh, 128, 255, 128,
+							  255);
+		gfx_texture(true);
 	}
 }
 

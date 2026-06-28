@@ -78,32 +78,160 @@ static int window_width = GFX_PC_WINDOW_WIDTH;
 static int window_height = GFX_PC_WINDOW_HEIGHT;
 GLFWwindow* window;
 
-/* render target (pixel‑perfect scaling): render into an offscreen FBO with
- * fixed logical resolution (fb_width x fb_height) and blit to the default
- * framebuffer with GL_NEAREST and integer scaling. */
+/* 3D render target: an offscreen FBO that is kept at the *native* window
+ * resolution so the 3D scene stays crisp. Blitted 1:1 to the screen. */
 static GLuint fbo = 0;
 static GLuint fbo_tex = 0;
 static GLuint fbo_rbo = 0;
 static int fb_width = GFX_PC_WINDOW_WIDTH;
 static int fb_height = GFX_PC_WINDOW_HEIGHT;
 
+/* 2D/GUI render target. The GUI uses a "Minecraft-style" integer-ish scaling:
+ *
+ *   s = min(window_w / BASE_W, window_h / BASE_H)
+ *   gui_logical_w = window_w / s,  gui_logical_h = window_h / s
+ *
+ * The GUI is drawn into a buffer of (gui_logical_w x gui_logical_h) and scaled
+ * by the *uniform* factor s onto the whole window. Consequences:
+ *  - at the initial window size (= BASE) s == 1 -> GUI is 1:1, exactly as it
+ *    looked when the program opened;
+ *  - the pixels always stay square (same s on both axes) -> never distorted;
+ *  - the more-stretched axis simply gets more logical pixels (more GUI room)
+ *    instead of being stretched;
+ *  - doubling the window doubles s, so one GUI pixel becomes 2x2 screen pixels.
+ */
+#define GUI_BASE_WIDTH GFX_PC_WINDOW_WIDTH
+#define GUI_BASE_HEIGHT GFX_PC_WINDOW_HEIGHT
+static GLuint fbo_gui = 0;
+static GLuint fbo_gui_tex = 0;
+static GLuint composite_prog = 0;
+static int gui_logical_w = GUI_BASE_WIDTH;
+static int gui_logical_h = GUI_BASE_HEIGHT;
+
+/* true while we are rendering the 2D/GUI pass (gfx_mode_gui*) -> gfx_width()/
+ * gfx_height() then report the logical GUI resolution so the GUI lays out
+ * exactly like before. The 3D pass keeps the native resolution. */
+static bool gui_pass = false;
+
+/* last viewport requested via gfx_viewport(), in native window pixels, so it
+ * can be re-applied when switching back to the 3D pass. */
+static int last_vp_x = 0, last_vp_y = 0;
+static int last_vp_w = GFX_PC_WINDOW_WIDTH, last_vp_h = GFX_PC_WINDOW_HEIGHT;
+
+/* world clear color (kept so gfx_finish() can clear the 3D FBO correctly even
+ * though the GUI FBO is cleared with a transparent color). */
+static float clear_r = 1.0F, clear_g = 1.0F, clear_b = 1.0F;
+
+/* deferred inverse-colour crosshair: it must invert the *final* image (3D+GUI),
+ * so it cannot be baked into the separate, transparent GUI FBO. It is recorded
+ * here (in logical GUI coords) and drawn onto the screen in gfx_finish(). */
+static bool xhair_show;
+static struct tex_gfx* xhair_tex;
+static int xhair_x, xhair_y, xhair_tx, xhair_ty, xhair_sx, xhair_sy, xhair_w,
+	xhair_h;
+
 int gfx_width() {
-	/* logical framebuffer width (fixed) */
-	return fb_width; // 802
+	/* logical GUI width during the 2D pass, native width during the 3D pass */
+	return gui_pass ? gui_logical_w : fb_width;
 }
 
 int gfx_height() {
-	/* logical framebuffer height (fixed) */
-	return fb_height; // 480
+	return gui_pass ? gui_logical_h : fb_height;
+}
+
+int gfx_gui_width(void) {
+	return gui_logical_w;
+}
+
+int gfx_gui_height(void) {
+	return gui_logical_h;
+}
+
+void gfx_pointer_to_gui(float* x, float* y) {
+	/* window pixels -> logical GUI coordinates (the GUI is rendered at
+	 * gui_logical_* and scaled onto the window) */
+	if(x)
+		*x = (*x) * (float)gui_logical_w / (float)(window_width > 0 ? window_width : 1);
+	if(y)
+		*y = (*y) * (float)gui_logical_h / (float)(window_height > 0 ? window_height : 1);
+}
+
+/* (re)allocate the offscreen render target for a given size */
+static void gfx_resize_fbo(int width, int height) {
+	if(width < 1)
+		width = 1;
+	if(height < 1)
+		height = 1;
+
+	fb_width = width;
+	fb_height = height;
+
+	/* default 3D viewport covers the whole (native) target */
+	last_vp_x = 0;
+	last_vp_y = 0;
+	last_vp_w = fb_width;
+	last_vp_h = fb_height;
+
+	if(!fbo)
+		return;
+
+	glBindTexture(GL_TEXTURE_2D, fbo_tex);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, fb_width, fb_height, 0, GL_RGBA,
+				 GL_UNSIGNED_BYTE, NULL);
+	glBindTexture(GL_TEXTURE_2D, 0);
+
+	glBindRenderbuffer(GL_RENDERBUFFER, fbo_rbo);
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, fb_width,
+						  fb_height);
+	glBindRenderbuffer(GL_RENDERBUFFER, 0);
+
+	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+	glViewport(0, 0, fb_width, fb_height);
+}
+
+/* recompute the GUI logical resolution for a given window size (see the long
+ * comment at GUI_BASE_WIDTH) and (re)allocate its texture. */
+static void gfx_resize_gui_fbo(int win_w, int win_h) {
+	if(win_w < 1)
+		win_w = 1;
+	if(win_h < 1)
+		win_h = 1;
+
+	float sx = (float)win_w / (float)GUI_BASE_WIDTH;
+	float sy = (float)win_h / (float)GUI_BASE_HEIGHT;
+	float s = (sx < sy) ? sx : sy; /* scale of the less-stretched axis */
+	if(s < 0.01F)
+		s = 0.01F;
+
+	gui_logical_w = (int)roundf((float)win_w / s);
+	gui_logical_h = (int)roundf((float)win_h / s);
+	if(gui_logical_w < 1)
+		gui_logical_w = 1;
+	if(gui_logical_h < 1)
+		gui_logical_h = 1;
+	/* guard against absurd texture sizes at extreme aspect ratios */
+	if(gui_logical_w > 8192)
+		gui_logical_w = 8192;
+	if(gui_logical_h > 8192)
+		gui_logical_h = 8192;
+
+	if(!fbo_gui)
+		return;
+
+	glBindTexture(GL_TEXTURE_2D, fbo_gui_tex);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, gui_logical_w, gui_logical_h, 0,
+				 GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+	glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 static void framebuffer_size_callback(GLFWwindow* window, int width,
 									  int height) {
 	window_width = width;
 	window_height = height;
-	/* Keep rendering viewport at the logical framebuffer size while
-	 * blitting/scaling will be handled in gfx_finish(). */
-	glViewport(0, 0, fb_width, fb_height);
+	/* 3D renders at the native window resolution (crisp). */
+	gfx_resize_fbo(width, height);
+	/* GUI uses uniform scaling: recompute its logical resolution. */
+	gfx_resize_gui_fbo(width, height);
 }
 
 static void scroll_callback(GLFWwindow* window, double xoffset,
@@ -218,9 +346,57 @@ void gfx_setup() {
 	if(glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
 		printf("FBO incomplete\n");
 
+	/* Create the fixed-resolution GUI FBO (color only, GL_NEAREST so it stays
+	 * pixelated when upscaled). Cleared transparent so the 3D shows through. */
+	glGenTextures(1, &fbo_gui_tex);
+	glBindTexture(GL_TEXTURE_2D, fbo_gui_tex);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, gui_logical_w, gui_logical_h, 0,
+				 GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+	/* MAG nearest -> pixelated when upscaled; MIN linear -> no shimmer when the
+	 * window is smaller than the logical buffer (minification). */
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glBindTexture(GL_TEXTURE_2D, 0);
+
+	glGenFramebuffers(1, &fbo_gui);
+	glBindFramebuffer(GL_FRAMEBUFFER, fbo_gui);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
+						   fbo_gui_tex, 0);
+	if(glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+		printf("GUI FBO incomplete\n");
+	glClearColor(0, 0, 0, 0);
+	glClear(GL_COLOR_BUFFER_BIT);
+
+	/* Minimal passthrough shader to composite the GUI FBO onto the screen. */
+	composite_prog = create_shader(
+		"#version 110\n"
+		"void main() {\n"
+		"  gl_Position = gl_Vertex;\n"
+		"  gl_TexCoord[0] = gl_MultiTexCoord0;\n"
+		"}\n",
+		"#version 110\n"
+		"uniform sampler2D tex;\n"
+		"void main() {\n"
+		"  gl_FragColor = texture2D(tex, gl_TexCoord[0].st);\n"
+		"}\n");
+
+	glUseProgram(shader_prog);
+
 	/* Keep rendering bound to the FBO by default. */
 	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
 	glViewport(0, 0, fb_width, fb_height);
+
+	/* Match the FBO to the actual framebuffer size right away (HiDPI / WM may
+	 * differ from the requested window size, and the resize callback is not
+	 * guaranteed to fire on creation). */
+	{
+		int fbw, fbh;
+		glfwGetFramebufferSize(window, &fbw, &fbh);
+		window_width = fbw;
+		window_height = fbh;
+		gfx_resize_fbo(fbw, fbh);
+		gfx_resize_gui_fbo(fbw, fbh);
+	}
 
 	tex_init();
 	gfx_bind_texture(&texture_terrain);
@@ -250,45 +426,113 @@ float gfx_lookup_light(uint8_t light) {
 }
 
 void gfx_clear_buffers(uint8_t r, uint8_t g, uint8_t b) {
-	glClearColor(r / 255.0F, g / 255.0F, b / 255.0F, 1.0F);
+	clear_r = r / 255.0F;
+	clear_g = g / 255.0F;
+	clear_b = b / 255.0F;
+	glClearColor(clear_r, clear_g, clear_b, 1.0F);
+}
+
+void gfx_crosshair(struct tex_gfx* tex, int x, int y, int tx, int ty, int sx,
+				   int sy, int width, int height) {
+	/* recorded in logical GUI coords; actually drawn in gfx_finish() on top of
+	 * the composited image so the colour inversion sees the 3D scene */
+	xhair_tex = tex;
+	xhair_x = x;
+	xhair_y = y;
+	xhair_tx = tx;
+	xhair_ty = ty;
+	xhair_sx = sx;
+	xhair_sy = sy;
+	xhair_w = width;
+	xhair_h = height;
+	xhair_show = true;
 }
 
 void gfx_finish(bool vsync) {
-	/* Blit the logical FBO to the default framebuffer with integer nearest
-	 * scaling so pixels become larger when the window is bigger but the
-	 * logical resolution remains constant. */
+	/* The 3D FBO is at the native window resolution -> blit it 1:1 onto the
+	 * screen (crisp). The GUI FBO is at a fixed logical resolution -> composite
+	 * it on top, upscaled with GL_NEAREST (pixelated, old technique). */
 	if(fbo) {
+		glDisable(GL_SCISSOR_TEST);
+
+		/* 1) native 3D image -> screen */
 		glBindFramebuffer(GL_READ_FRAMEBUFFER, fbo);
 		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+		glBlitFramebuffer(0, 0, fb_width, fb_height, 0, 0, window_width,
+						  window_height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
 
-	/* compute floating scale to allow fractional upscaling */
-	float scale_x = (float)window_width / (float)fb_width;
-	float scale_y = (float)window_height / (float)fb_height;
-	float scale_f = (scale_x < scale_y) ? scale_x : scale_y;
-	if(scale_f <= 0.0f) scale_f = 1.0f;
+		/* 2) GUI image -> screen. The logical buffer already has the window's
+		 * aspect ratio (gui_logical_w/h = window/s), so a fullscreen quad scales
+		 * it by the uniform factor s -> fills the window, square pixels, no
+		 * distortion. MAG nearest -> crisp pixel doubling. */
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+		glViewport(0, 0, window_width, window_height);
+		glUseProgram(composite_prog);
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, fbo_gui_tex);
+		glUniform1i(glGetUniformLocation(composite_prog, "tex"), 0);
+		glDisable(GL_DEPTH_TEST);
+		glDisable(GL_CULL_FACE);
+		glEnable(GL_BLEND);
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-	int dest_w = (int)roundf(fb_width * scale_f);
-	int dest_h = (int)roundf(fb_height * scale_f);
-	int dst_x0 = (window_width - dest_w) / 2;
-	int dst_y0 = (window_height - dest_h) / 2;
-	int dst_x1 = dst_x0 + dest_w;
-	int dst_y1 = dst_y0 + dest_h;
+		/* FBO origin is bottom-left, so tex (0,0) maps to NDC (-1,-1). */
+		glBegin(GL_QUADS);
+		glMultiTexCoord2f(GL_TEXTURE0, 0.0F, 0.0F);
+		glVertex2f(-1.0F, -1.0F);
+		glMultiTexCoord2f(GL_TEXTURE0, 1.0F, 0.0F);
+		glVertex2f(1.0F, -1.0F);
+		glMultiTexCoord2f(GL_TEXTURE0, 1.0F, 1.0F);
+		glVertex2f(1.0F, 1.0F);
+		glMultiTexCoord2f(GL_TEXTURE0, 0.0F, 1.0F);
+		glVertex2f(-1.0F, 1.0F);
+		glEnd();
 
-	/* choose filter: nearest for exact integer scales, linear for fractional */
-	float intpart;
-	float frac = modff(scale_f, &intpart);
-	GLenum filter = (fabsf(frac) < 1e-6f) ? GL_NEAREST : GL_LINEAR;
+		glUseProgram(shader_prog);
+		gfx_cull_func(MODE_BACK);
 
-	/* Note: source origin is bottom-left for framebuffer coordinates */
-	glBlitFramebuffer(0, 0, fb_width, fb_height, dst_x0, dst_y0, dst_x1,
-			  dst_y1, GL_COLOR_BUFFER_BIT, filter);
-
-		/* After blit, bind FBO again so next frame renders into it. */
-		glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-		glViewport(0, 0, fb_width, fb_height);
+		/* inverse-colour crosshair on top of the final image (3D + GUI) */
+		if(xhair_show && xhair_tex) {
+			glViewport(0, 0, window_width, window_height);
+			mat4 proj;
+			glm_ortho(0, gui_logical_w, gui_logical_h, 0, -256, 256, proj);
+			gfx_matrix_projection(proj, false);
+			gfx_matrix_modelview(GLM_MAT4_IDENTITY);
+			gfx_fog(false);
+			gfx_lighting(false);
+			gfx_texture(true);
+			gfx_alpha_test(true);
+			gfx_write_buffers(true, false, false);
+			gfx_bind_texture(xhair_tex);
+			gfx_blending(MODE_INVERT);
+			gfx_draw_quads(
+				4,
+				(int16_t[]) {xhair_x, xhair_y, -2, xhair_x + xhair_w, xhair_y,
+							 -2, xhair_x + xhair_w, xhair_y + xhair_h, -2,
+							 xhair_x, xhair_y + xhair_h, -2},
+				(uint8_t[]) {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+							 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
+				(uint16_t[]) {xhair_tx, xhair_ty, xhair_tx + xhair_sx, xhair_ty,
+							  xhair_tx + xhair_sx, xhair_ty + xhair_sy, xhair_tx,
+							  xhair_ty + xhair_sy});
+			gfx_blending(MODE_OFF);
+		}
+		xhair_show = false;
 	}
 
 	glfwSwapBuffers(window);
+
+	/* clear the GUI FBO transparent for the next frame */
+	glBindFramebuffer(GL_FRAMEBUFFER, fbo_gui);
+	glViewport(0, 0, gui_logical_w, gui_logical_h);
+	glClearColor(0, 0, 0, 0);
+	glClear(GL_COLOR_BUFFER_BIT);
+
+	/* clear the 3D FBO for the next frame */
+	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+	glViewport(0, 0, fb_width, fb_height);
+	gui_pass = false;
+	glClearColor(clear_r, clear_g, clear_b, 1.0F);
 	gfx_write_buffers(true, true, true);
 	glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
 	glfwPollEvents();
@@ -346,11 +590,25 @@ void gfx_copy_framebuffer(uint8_t* dest, size_t* width, size_t* height) {
 }
 
 void gfx_mode_world() {
+	/* render the 3D scene into the native-resolution FBO */
+	gui_pass = false;
+	if(fbo)
+		glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+	/* re-apply the stored (top-left) 3D viewport, flipped to OpenGL bottom-left */
+	glViewport(last_vp_x, fb_height - last_vp_y - last_vp_h, last_vp_w,
+			   last_vp_h);
+
 	gfx_write_buffers(true, true, true);
 	gfx_matrix_texture(false, NULL);
 }
 
 void gfx_mode_gui() {
+	/* render the 2D/GUI into the fixed-resolution GUI FBO */
+	gui_pass = true;
+	if(fbo_gui)
+		glBindFramebuffer(GL_FRAMEBUFFER, fbo_gui);
+	glViewport(0, 0, gui_logical_w, gui_logical_h);
+
 	gfx_fog(false);
 
 	mat4 proj;
@@ -365,6 +623,12 @@ void gfx_mode_gui() {
 }
 
 void gfx_mode_gui_viewport(uint32_t width, uint32_t height) {
+	/* render the 2D/GUI into the fixed-resolution GUI FBO (split-screen: the
+	 * caller sets the per-player viewport via gfx_viewport() afterwards). */
+	gui_pass = true;
+	if(fbo_gui)
+		glBindFramebuffer(GL_FRAMEBUFFER, fbo_gui);
+
 	gfx_fog(false);
 
 	mat4 proj;
@@ -378,12 +642,41 @@ void gfx_mode_gui_viewport(uint32_t width, uint32_t height) {
 	gfx_write_buffers(true, false, false);
 }
 
+/* apply a top-left viewport rect to the currently bound target, flipping Y to
+ * OpenGL's bottom-left convention. Target height = native for the 3D pass,
+ * logical for the GUI pass. */
+static void gfx_apply_viewport(int x, int y, int w, int h) {
+	int th = gui_pass ? gui_logical_h : fb_height;
+	glViewport(x, th - y - h, w, h);
+}
+
 void gfx_viewport(uint32_t x, uint32_t y, uint32_t width, uint32_t height) {
-	glViewport(x, y, width, height);
+	/* coordinates are top-left, in the space of the currently bound target
+	 * (native for the 3D pass, logical for the GUI pass), because the caller
+	 * derives them from gfx_width()/gfx_height(). */
+	if(!gui_pass) {
+		last_vp_x = x;
+		last_vp_y = y;
+		last_vp_w = width;
+		last_vp_h = height;
+	}
+	gfx_apply_viewport(x, y, width, height);
 }
 
 void gfx_viewport_reset(void) {
-	glViewport(0, 0, fb_width, fb_height);
+	/* remember the full native rect for the next 3D pass */
+	last_vp_x = 0;
+	last_vp_y = 0;
+	last_vp_w = fb_width;
+	last_vp_h = fb_height;
+	/* but apply the viewport that matches the currently bound target: if we are
+	 * in the GUI pass, the GUI FBO (gui_logical_w/h) is bound, not the native
+	 * 3D FBO -- using the native size here would draw the GUI oversized and
+	 * off-center. */
+	if(gui_pass)
+		glViewport(0, 0, gui_logical_w, gui_logical_h);
+	else
+		glViewport(0, 0, fb_width, fb_height);
 }
 
 void gfx_matrix_projection(mat4 proj, bool is_perspective) {
@@ -430,7 +723,12 @@ void gfx_blending(enum gfx_blend mode) {
 		case MODE_BLEND:
 			glDisable(GL_COLOR_LOGIC_OP);
 			glEnable(GL_BLEND);
-			glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+			/* RGB: normal alpha blend. ALPHA: accumulate coverage so the GUI
+			 * FBO stays fully opaque where it covers (e.g. the dirt menu bg);
+			 * otherwise the separate GUI buffer would let the 3D clear colour
+			 * bleed through semi-transparent overlays when composited. */
+			glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE,
+								GL_ONE_MINUS_SRC_ALPHA);
 			break;
 		case MODE_BLEND2:
 			glDisable(GL_COLOR_LOGIC_OP);
@@ -505,8 +803,12 @@ void gfx_cull_func(enum cull_func func) {
 void gfx_scissor(bool enable, uint32_t x, uint32_t y, uint32_t width,
 				 uint32_t height) {
 	if(enable) {
+		/* input is top-left (GUI/Wii convention); flip Y to OpenGL's bottom-left
+		 * using the currently bound target height (logical in the GUI pass,
+		 * native in the 3D pass) so it scales correctly with the window. */
+		int th = gui_pass ? gui_logical_h : fb_height;
 		glEnable(GL_SCISSOR_TEST);
-		glScissor(x, y, width, height);
+		glScissor((int)x, th - (int)y - (int)height, (int)width, (int)height);
 	} else {
 		glDisable(GL_SCISSOR_TEST);
 	}

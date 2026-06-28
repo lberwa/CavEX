@@ -20,6 +20,7 @@
 #include <assert.h>
 
 #include "config.h"
+#include "game/game_state.h"
 
 bool config_create(struct config* c, const char* filename) {
 	assert(c && filename);
@@ -66,4 +67,25 @@ bool config_read_int_array(struct config* c, const char* key, int* dest,
 void config_destroy(struct config* c) {
 	assert(c && c->root);
 	json_value_free(c->root);
+}
+
+
+void settings_init() {
+	gstate.settings.debug = true;
+	/* IN-GAME chunk generation speed (applies while playing, NOT on the loading
+	 * screen -- loading always runs at full speed):
+	 *   chunk_build_budget_ms = milliseconds of each ~50ms game tick spent
+	 *                       generating. This is the main knob. Going much above
+	 *                       ~40ms eats the whole tick and the game clock starts to
+	 *                       run slow (the mesher still preempts, so rendering stays
+	 *                       fine -- only movement/logic slows down).
+	 *   chunk_build_per_tick = hard cap on generation steps per tick; left high so
+	 *                       the time budget above is the real limit. */
+#ifdef PLATFORM_WII
+	gstate.settings.chunk_build_per_tick = 1000;
+	gstate.settings.chunk_build_budget_ms = 60;
+#else
+	gstate.settings.chunk_build_per_tick = 1000;
+	gstate.settings.chunk_build_budget_ms = 40;
+#endif
 }

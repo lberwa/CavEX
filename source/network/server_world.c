@@ -22,6 +22,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "../block/blocks.h"
 #include "../lighting.h"
 #include "../util.h"
 #include "client_interface.h"
@@ -4036,6 +4037,28 @@ static bool gen_finalize_chunk(struct server_world* w, struct server_chunk* sc,
 	return false;
 }
 
+/* Build the biome generator once per seed and reuse it. setupGenerator() and
+ * applySeed() are expensive; doing them on every generation step was the real
+ * bottleneck (raising the per-tick budget just burned CPU on redundant setup).
+ *
+ * Kept as a file-static (BSS), NOT inside struct server_world: that struct lives
+ * in the stack-allocated server_local, and the cubiomes Generator is large --
+ * embedding it overflowed the Wii stack (ISI crash). The local server runs on a
+ * single thread, so one shared static is safe. */
+static Generator g_biome_gen;
+static bool g_biome_gen_ready = false;
+static int64_t g_biome_gen_seed = 0;
+
+static Generator* server_world_biome_gen(struct server_world* w) {
+	if(!g_biome_gen_ready || g_biome_gen_seed != w->world_seed) {
+		setupGenerator(&g_biome_gen, MC_1_7, 0);
+		applySeed(&g_biome_gen, DIM_OVERWORLD, (uint64_t)w->world_seed);
+		g_biome_gen_seed = w->world_seed;
+		g_biome_gen_ready = true;
+	}
+	return &g_biome_gen;
+}
+
 static bool server_world_generate_chunk(struct server_world* w, w_coord_t x,
 										w_coord_t z, struct server_chunk** out) {
 	assert(w && out);
@@ -4052,21 +4075,19 @@ static bool server_world_generate_chunk(struct server_world* w, w_coord_t x,
 		return false;
 
 	uint32_t seed = (uint32_t)w->world_seed;
-	Generator biome_gen;
-	setupGenerator(&biome_gen, MC_1_7, 0);
-	applySeed(&biome_gen, DIM_OVERWORLD, (uint64_t)w->world_seed);
+	Generator* biome_gen = server_world_biome_gen(w);
 	int32_t world_x0 = x * CHUNK_SIZE;
 	int32_t world_z0 = z * CHUNK_SIZE;
 	int surface_map[CHUNK_SIZE * CHUNK_SIZE];
-	gen_generate_terrain_columns(w, &sc, surface_map, &biome_gen, &gen_args, seed,
+	gen_generate_terrain_columns(w, &sc, surface_map, biome_gen, &gen_args, seed,
 								 choice_octaves, world_x0, world_z0, x, z, 0,
 								 CHUNK_SIZE * CHUNK_SIZE);
-	gen_apply_feature_pass(w, &sc, surface_map, &biome_gen, &gen_args, seed,
+	gen_apply_feature_pass(w, &sc, surface_map, biome_gen, &gen_args, seed,
 						   world_x0, world_z0, x, z);
-	gen_generate_deco_columns(w, &sc, &biome_gen, &gen_args, seed, world_x0,
+	gen_generate_deco_columns(w, &sc, biome_gen, &gen_args, seed, world_x0,
 							  world_z0, 0,
 							  (CHUNK_SIZE - 2) * (CHUNK_SIZE - 2));
-	return gen_finalize_chunk(w, &sc, &biome_gen, &gen_args, seed, world_x0,
+	return gen_finalize_chunk(w, &sc, biome_gen, &gen_args, seed, world_x0,
 							  world_z0, x, z, out);
 }
 
@@ -4103,6 +4124,26 @@ bool server_world_pending_chunk(struct server_world* w, w_coord_t* x,
 	return true;
 }
 
+/* progress 0..100 of the chunk currently being generated, or -1 if none */
+int server_world_pending_progress(struct server_world* w) {
+	assert(w);
+	if(!w->pending_chunk.active)
+		return -1;
+	int nc = w->pending_chunk.next_column;
+	switch(w->pending_chunk.phase) {
+		case SERVER_WORLD_PENDING_TERRAIN:
+			return (int)(45.0 * nc / (CHUNK_SIZE * CHUNK_SIZE));
+		case SERVER_WORLD_PENDING_FEATURES:
+			return 45 + (int)(10.0 * nc / GEN_FEATURE_STEP_COUNT);
+		case SERVER_WORLD_PENDING_DECO:
+			return 55
+				+ (int)(40.0 * nc / ((CHUNK_SIZE - 2) * (CHUNK_SIZE - 2)));
+		case SERVER_WORLD_PENDING_FINALIZE:
+			return 95 + (int)(5.0 * nc / GEN_FINALIZE_STEP_COUNT);
+		default: return 0;
+	}
+}
+
 static bool server_world_advance_pending(struct server_world* w,
 										 struct server_chunk** out) {
 	assert(w && out);
@@ -4113,16 +4154,14 @@ static bool server_world_advance_pending(struct server_world* w,
 	int choice_octaves = (w->generator.biomal_noise3d_num_choice_octaves > 0)
 		? w->generator.biomal_noise3d_num_choice_octaves : 4;
 	uint32_t seed = (uint32_t)w->world_seed;
-	Generator biome_gen;
-	setupGenerator(&biome_gen, MC_1_7, 0);
-	applySeed(&biome_gen, DIM_OVERWORLD, (uint64_t)w->world_seed);
+	Generator* biome_gen = server_world_biome_gen(w);
 	int32_t world_x0 = w->pending_chunk.x * CHUNK_SIZE;
 	int32_t world_z0 = w->pending_chunk.z * CHUNK_SIZE;
 
 	switch(w->pending_chunk.phase) {
 	case SERVER_WORLD_PENDING_TERRAIN:
 		gen_generate_terrain_columns(w, &w->pending_chunk.chunk,
-									 w->pending_chunk.surface_map, &biome_gen,
+									 w->pending_chunk.surface_map, biome_gen,
 									 &gen_args, seed, choice_octaves, world_x0,
 									 world_z0, w->pending_chunk.x,
 									 w->pending_chunk.z,
@@ -4137,7 +4176,7 @@ static bool server_world_advance_pending(struct server_world* w,
 
 	case SERVER_WORLD_PENDING_FEATURES:
 		gen_apply_feature_step(w, &w->pending_chunk.chunk,
-							   w->pending_chunk.surface_map, &biome_gen,
+							   w->pending_chunk.surface_map, biome_gen,
 							   &gen_args, seed, world_x0, world_z0,
 							   w->pending_chunk.x, w->pending_chunk.z,
 							   w->pending_chunk.next_column);
@@ -4149,7 +4188,7 @@ static bool server_world_advance_pending(struct server_world* w,
 		return false;
 
 	case SERVER_WORLD_PENDING_DECO:
-		gen_generate_deco_columns(w, &w->pending_chunk.chunk, &biome_gen,
+		gen_generate_deco_columns(w, &w->pending_chunk.chunk, biome_gen,
 								  &gen_args, seed, world_x0, world_z0,
 								  w->pending_chunk.next_column,
 								  GEN_CHUNK_COLUMNS_PER_STEP);
@@ -4162,7 +4201,7 @@ static bool server_world_advance_pending(struct server_world* w,
 
 	case SERVER_WORLD_PENDING_FINALIZE: {
 		bool ok = gen_finalize_chunk_step(
-			w, &w->pending_chunk.chunk, &biome_gen, &gen_args, seed, world_x0, world_z0,
+			w, &w->pending_chunk.chunk, biome_gen, &gen_args, seed, world_x0, world_z0,
 			w->pending_chunk.x, w->pending_chunk.z, out,
 			w->pending_chunk.next_column);
 		w->pending_chunk.next_column++;
@@ -4444,6 +4483,68 @@ bool server_world_get_block(struct server_world* w, w_coord_t x, w_coord_t y,
 	};
 
 	return true;
+}
+
+int server_world_find_ground_y(struct server_world* w, w_coord_t x,
+							   w_coord_t z) {
+	assert(w);
+
+	/* same rule as the working animal (pig/sheep) spawn: top-down, ground must
+	 * be grass/dirt with two air blocks (feet + head) above it. Returns the
+	 * feet Y. */
+	struct block_data ground, body, head;
+	for(w_coord_t y = WORLD_HEIGHT - 2; y >= 1; y--) {
+		if(!server_world_get_block(w, x, y - 1, z, &ground)
+		   || !server_world_get_block(w, x, y, z, &body)
+		   || !server_world_get_block(w, x, y + 1, z, &head))
+			continue; /* chunk not loaded / out of range */
+
+		if((ground.type == BLOCK_GRASS || ground.type == BLOCK_DIRT)
+		   && body.type == BLOCK_AIR && head.type == BLOCK_AIR)
+			return (int)y; /* feet stand on top of the ground block */
+	}
+
+	return -1; /* no grass/dirt surface with air above */
+}
+
+bool server_world_find_spawn(struct server_world* w, w_coord_t x0, w_coord_t z0,
+							 int max_radius, w_coord_t* out_x, int* out_y,
+							 w_coord_t* out_z) {
+	assert(w && out_x && out_y && out_z);
+
+	/* 1) prefer real ground (grass/dirt) -> spiral outward from the centre */
+	for(int r = 0; r <= max_radius; r++) {
+		for(int dz = -r; dz <= r; dz++) {
+			for(int dx = -r; dx <= r; dx++) {
+				if(r != 0 && abs(dx) != r && abs(dz) != r)
+					continue; /* only the outer ring of this radius */
+
+				int gy = server_world_find_ground_y(w, x0 + dx, z0 + dz);
+				if(gy >= 0) {
+					*out_x = x0 + dx;
+					*out_y = gy;
+					*out_z = z0 + dz;
+					return true;
+				}
+			}
+		}
+	}
+
+	/* 2) fallback: no land nearby (e.g. ocean) -> stand on the topmost block of
+	 * the centre column so the player never spawns mid-air */
+	for(w_coord_t y = WORLD_HEIGHT - 1; y >= 1; y--) {
+		struct block_data b;
+		if(!server_world_get_block(w, x0, y, z0, &b))
+			continue;
+		if(b.type != BLOCK_AIR) {
+			*out_x = x0;
+			*out_y = (int)y + 1;
+			*out_z = z0;
+			return true;
+		}
+	}
+
+	return false;
 }
 
 bool server_world_set_block(struct server_local* s, w_coord_t x, w_coord_t y, w_coord_t z, struct block_data blk) {

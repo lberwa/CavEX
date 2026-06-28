@@ -58,6 +58,20 @@ void gfx_clear_buffers(uint8_t r, uint8_t g, uint8_t b);
 int gfx_width(void);
 int gfx_height(void);
 
+/* logical GUI resolution (constant within a frame, independent of the 3D/GUI
+ * render pass) and a helper to map a raw window-pixel pointer position into
+ * that logical GUI space. On the Wii these match gfx_width()/gfx_height() and
+ * the mapping is a no-op. */
+int gfx_gui_width(void);
+int gfx_gui_height(void);
+void gfx_pointer_to_gui(float* x, float* y);
+
+/* Record an inverse-colour crosshair (logical GUI coords) to be drawn on top of
+ * the final composited image. PC only; on the Wii this is a no-op (the crosshair
+ * is drawn directly with MODE_INVERT there). */
+void gfx_crosshair(struct tex_gfx* tex, int x, int y, int tx, int ty, int sx,
+				   int sy, int width, int height);
+
 void gfx_copy_framebuffer(uint8_t* dest, size_t* width, size_t* height);
 
 void gfx_matrix_projection(mat4 proj, bool is_perspective);
