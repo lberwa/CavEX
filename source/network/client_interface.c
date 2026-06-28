@@ -204,8 +204,13 @@ void clin_process(struct client_rpc* call) {
 				splitscreen_p2_spawned = true;
 			}
 #endif
-			gstate.world_loaded = true;
+			/* world_loaded is NOT set here: the initial spawn pos arrives before
+			 * the terrain is ready. We only start once the server signals
+			 * CRPC_WORLD_LOADED (spawn area chunks loaded + hotbar sent). */
 		}
+			break;
+		case CRPC_WORLD_LOADED:
+			gstate.world_loaded = true;
 			break;
 		case CRPC_WORLD_RESET:
 			world_unload_all(&gstate.world);

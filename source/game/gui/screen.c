@@ -107,10 +107,12 @@ void screen_viewport_size(int player, int* width, int* height) {
 #else
 	(void)player;
 #endif
+	/* logical GUI size, constant regardless of the current render pass (during
+	 * the update phase gfx_width()/gfx_height() would report the native size) */
 	if(width)
-		*width = gfx_width();
+		*width = gfx_gui_width();
 	if(height)
-		*height = gfx_height();
+		*height = gfx_gui_height();
 }
 
 static void screen_reset_player_context(int player, struct screen* s) {
@@ -200,6 +202,17 @@ bool screen_pointer_local(int player, int view_width, int view_height,
 		px *= (float)gui_w / (float)vp_w;
 		py *= (float)gui_h / (float)vp_h;
 	}
+#endif
+
+	/* Single view: input_pointer() returns raw window pixels, but the GUI is
+	 * laid out in the logical resolution and only scaled onto the window. Map
+	 * the pointer into that logical space so it lines up with the GUI.
+	 * (In split-screen the block above already produced GUI-space coords.) */
+#ifdef SPLITSCREEN
+	if(!splitscreen_enabled())
+		gfx_pointer_to_gui(&px, &py);
+#else
+	gfx_pointer_to_gui(&px, &py);
 #endif
 
 	*x = px;

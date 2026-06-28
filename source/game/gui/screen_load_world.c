@@ -28,6 +28,10 @@ static void screen_lworld_reset(struct screen* s, int width, int height) {
 	input_pointer_enable(true);
 
 	gstate_set_capture_input_all(false);
+
+	/* wait for a fresh "world ready" signal; a stale world_loaded from a
+	 * previous session would otherwise jump straight into the game */
+	gstate.world_loaded = false;
 }
 
 static void screen_lworld_update(struct screen* s, float dt) {
@@ -44,9 +48,10 @@ static void screen_lworld_render2D(struct screen* s, int width, int height) {
 	gutil_text((width - gutil_font_width("Building terrain", 8 * GFX_GUI_SCALE)) / 2,
 			   height / 2 + 4 * GFX_GUI_SCALE, "Building terrain", 8 * GFX_GUI_SCALE, true);
 
-	gutil_text(2 * GFX_GUI_SCALE, height - 2 * GFX_GUI_SCALE - (9 * GFX_GUI_SCALE) * 2, "Licensed under GPLv3", 8 * GFX_GUI_SCALE, true);
-	gutil_text(2 * GFX_GUI_SCALE, height - 2 * GFX_GUI_SCALE - (9 * GFX_GUI_SCALE) * 1, "Copyright (c) 2026 lberwa",
-			   8 * GFX_GUI_SCALE, true);
+	gutil_text(2 * GFX_GUI_SCALE, height - 2 * GFX_GUI_SCALE - (9 * GFX_GUI_SCALE) * 2, 
+                    "Licensed under GPLv3", 8 * GFX_GUI_SCALE, true);
+	gutil_text(2 * GFX_GUI_SCALE, height - 2 * GFX_GUI_SCALE - (9 * GFX_GUI_SCALE) * 1, 
+                    "Copyright (c) 2023-2026 ByteBit/xtreme8000, lberwa", 8 * GFX_GUI_SCALE, true);
 
 	// just a rough estimate
 	float progress

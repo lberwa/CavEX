@@ -835,6 +835,7 @@ static void server_local_process(struct server_rpc* call, void* user) {
 
 			string_set(s->level_name, call->payload.load_world.name);
 			string_clear(call->payload.load_world.name);
+			s->find_spawn = call->payload.load_world.find_spawn;
 #ifdef SRPC_LOAD_WORLD_DEBUG
 			printf("[DEBUG server_local SRPC_LOAD_WORLD] name='%s'\n", string_get_cstr(s->level_name));
 #endif
@@ -987,6 +988,11 @@ static void server_local_process(struct server_rpc* call, void* user) {
 static void server_local_update(struct server_local* s) {
 	assert(s);
 
+	/* Start of this server tick. In game we generate chunks with whatever time
+	 * is left in the ~50ms tick after the game logic ran, so we measure from
+	 * here (see the chunk loop below). */
+	ptime_t tick_begin = time_get();
+
 	// print TPS
 	#ifdef PRINT_TPS
 	ptime_t this_tick = time_get();
@@ -1087,14 +1093,10 @@ static void server_local_update(struct server_local* s) {
 												player_z);
 
 	w_coord_t cx, cz;
-	/* Debug: count loaded chunks */
-	size_t loaded_chunks = 0;
-	dict_server_chunks_it_t cit;
-	dict_server_chunks_it(cit, s->world.chunks);
-	while(!dict_server_chunks_end_p(cit)) {
-		loaded_chunks++;
-		dict_server_chunks_next(cit);
-	}
+	/* O(1): m-lib keeps the element count, so don't walk the whole dictionary
+	 * every tick (that made each tick O(N) and the whole generation O(N^2) --
+	 * the more chunks were loaded, the slower generation got). */
+	size_t loaded_chunks = dict_server_chunks_size(s->world.chunks);
 #ifdef SPLITSCREEN
 	{
 		size_t max_allowed = (size_t)(2 * MAX_VIEW_DISTANCE + 1)
@@ -1217,22 +1219,75 @@ unload_done:
 			break;
 		}
 	}
-	int load_per_tick = finished_loading ? 1 : 8;
 #else
-	int load_per_tick = s->player.finished_loading ? 1 : 8;
+	bool finished_loading = s->player.finished_loading;
 #endif
+
+	/* Chunk build speed is configurable via gstate.settings (applies both while
+	 * loading AND while streaming in game):
+	 *  - chunk_build_per_tick: work units per server tick. While generating a new
+	 *    world it counts *whole chunks* finished per tick; otherwise it counts
+	 *    generation/load steps per tick.
+	 *  - chunk_build_budget_ms: time budget per tick in milliseconds. NOTE: in
+	 *    game the chunk loop shares the 50ms tick with game logic, so a very
+	 *    large budget can make gameplay run in slow motion while it generates. */
+	bool generating = s->find_spawn;
+
+	int chunk_build = gstate.settings.chunk_build_per_tick;
+	if(chunk_build < 1)
+		chunk_build = 1;
+
+	int load_per_tick;
+	int chunk_budget_ms;
+	(void)tick_begin;
+	if(finished_loading) {
+		/* IN GAME: generation speed is controlled by the user settings
+		 * (chunk_build_*). Thanks to the mesher running at a HIGHER thread
+		 * priority than this server thread, meshing always preempts generation,
+		 * so rendering/block edits stay responsive even at a large budget --
+		 * raising the budget just lets generation use more of each tick.
+		 *  - chunk_build_budget_ms = milliseconds of each ~50ms tick spent
+		 *    generating (the main knob). Going much above ~40ms eats the whole
+		 *    tick, so the game clock (movement etc.) starts to run slow.
+		 *  - chunk_build_per_tick = hard cap on generation steps per tick (set
+		 *    high to let the time budget be the only limit). */
+		chunk_budget_ms = gstate.settings.chunk_build_budget_ms;
+		if(chunk_budget_ms < 1)
+			chunk_budget_ms = 1;
+		load_per_tick = chunk_build;
+	} else {
+		/* LOADING SCREEN: always run at full speed, independent of the in-game
+		 * settings (the server spins back-to-back here, nothing to keep at 50ms). */
 #ifdef PLATFORM_WII
-	load_per_tick = 1;
-	const int chunk_budget_ms = 8;
+		chunk_budget_ms = 60;
 #else
-	load_per_tick = (load_per_tick <= 1) ? 2 : 12;
-	const int chunk_budget_ms = 48;
+		chunk_budget_ms = 80;
 #endif
+		load_per_tick = 1000000; /* time is the only cap */
+	}
+
+	/* While loading/generating (loading screen, no game logic that must stay at
+	 * 50ms) the server thread ticks back-to-back; in game it keeps a steady
+	 * ~50ms tick (handled in server_local_thread). */
+	s->loading = !finished_loading;
+
 	int loaded_this_tick = 0;
+	/* true once there is no candidate chunk left to load/generate in range */
+	bool all_loaded = false;
 	ptime_t chunk_load_start = time_get();
-	for(int load_i = 0; load_i < load_per_tick; load_i++) {
+	for(int load_i = 0;; load_i++) {
 		if(time_diff_ms(chunk_load_start, time_get()) >= chunk_budget_ms)
 			break;
+		if(generating) {
+			/* new-world spawn generation happens on the loading screen -> full
+			 * speed, bounded only by the loading time budget above (NOT by the
+			 * in-game chunk_build_per_tick setting). */
+			if(loaded_this_tick >= 1000000) /* whole chunks per tick */
+				break;
+		} else {
+			if(load_i >= load_per_tick) /* steps per tick */
+				break;
+		}
 
 		/* recompute nearest disk candidate each iteration */
 		bool c_found = false;
@@ -1267,8 +1322,10 @@ unload_done:
 		}
 		}
 
-		if(!c_found)
+		if(!c_found) {
+			all_loaded = true; /* nothing left in range -> done */
 			break;
+		}
 
 		struct server_chunk* sc;
 		if(server_world_load_chunk(&s->world, cand_x, cand_z, &sc)) {
@@ -1307,8 +1364,33 @@ unload_done:
 		}
 	}
 
+	/* debug overlay: report current chunk generation progress */
+	{
+		int prog = server_world_pending_progress(&s->world);
+		if(prog >= 0) {
+			w_coord_t pcx = 0, pcz = 0;
+			server_world_pending_chunk(&s->world, &pcx, &pcz);
+			gstate.gen_debug.active = true;
+			gstate.gen_debug.percent = prog;
+			gstate.gen_debug.chunk_x = (int)pcx;
+			gstate.gen_debug.chunk_z = (int)pcz;
+		} else {
+			gstate.gen_debug.active = false;
+			gstate.gen_debug.percent = 100;
+		}
+		gstate.gen_debug.built += (unsigned long)loaded_this_tick;
+	}
+
+	/* When is loading "done"?
+	 *  - new world (find_spawn): only once the whole spawn area is generated
+	 *    (all_loaded), so the player never starts in ungenerated terrain.
+	 *  - existing world: as before -> as soon as a tick loads no more chunks
+	 *    from disk (loaded_this_tick == 0). Missing chunks are generated later,
+	 *    in-game, while walking. */
+	bool load_done = s->find_spawn ? all_loaded : (loaded_this_tick == 0);
+
 #ifdef SPLITSCREEN
-	if(loaded_this_tick == 0 && !finished_loading) {
+	if(load_done && !finished_loading) {
 		clin_rpc_send(&(struct client_rpc) {
 			.type = CRPC_TIME_SET,
 			.payload.time_set = s->world_time,
@@ -1318,6 +1400,25 @@ unload_done:
 			struct server_player* player = &s->players[i];
 			if(player->finished_loading)
 				continue;
+
+			/* new world: drop the spawn onto real ground near the centre */
+			if(s->find_spawn) {
+				w_coord_t sx = (w_coord_t)floor(player->x);
+				w_coord_t sz = (w_coord_t)floor(player->z);
+				w_coord_t fx, fz;
+				int fy;
+				if(server_world_find_spawn(&s->world, sx, sz,
+										   (MAX_VIEW_DISTANCE - 1) * CHUNK_SIZE,
+										   &fx, &fy, &fz)) {
+					/* player Y is the eye position (feet + ~1.62) */
+					player->x = fx + 0.5;
+					player->y = (double)fy + 1.62;
+					player->z = fz + 0.5;
+					player->spawn_x = fx;
+					player->spawn_y = fy + 2;
+					player->spawn_z = fz;
+				}
+			}
 
 			clin_rpc_send(&(struct client_rpc) {
 				CRPC_PLAYER_ID(i)
@@ -1347,15 +1448,49 @@ unload_done:
 
 			player->finished_loading = true;
 		}
+
+		s->find_spawn = false;
+
+		/* spawn area is loaded and the hotbars were sent -> start the game */
+		clin_rpc_send(&(struct client_rpc) {
+			.type = CRPC_WORLD_LOADED,
+		});
 	}
 #else
-	if(loaded_this_tick == 0 && !s->player.finished_loading) {
+	if(load_done && !s->player.finished_loading) {
 		struct client_rpc pos;
 		pos.type = CRPC_PLAYER_POS;
-		if(level_archive_read_player(&s->level, pos.payload.player_pos.position,
-									 pos.payload.player_pos.rotation, NULL,
-									 NULL))
+		if(s->find_spawn) {
+			/* new world: drop the spawn onto real ground near the centre */
+			w_coord_t sx = (w_coord_t)floor(s->player.x);
+			w_coord_t sz = (w_coord_t)floor(s->player.z);
+			w_coord_t fx, fz;
+			int fy;
+			if(server_world_find_spawn(&s->world, sx, sz,
+									   (MAX_VIEW_DISTANCE - 1) * CHUNK_SIZE, &fx,
+									   &fy, &fz)) {
+				/* player Y is the eye position (feet + ~1.62) */
+				s->player.x = fx + 0.5;
+				s->player.y = (double)fy + 1.62;
+				s->player.z = fz + 0.5;
+				s->player.spawn_x = fx;
+				s->player.spawn_y = fy + 2;
+				s->player.spawn_z = fz;
+			}
+			s->find_spawn = false;
+
+			pos.payload.player_pos.position[0] = s->player.x;
+			pos.payload.player_pos.position[1] = s->player.y;
+			pos.payload.player_pos.position[2] = s->player.z;
+			pos.payload.player_pos.rotation[0] = s->player.rx;
+			pos.payload.player_pos.rotation[1] = s->player.ry;
 			clin_rpc_send(&pos);
+		} else if(level_archive_read_player(&s->level,
+										   pos.payload.player_pos.position,
+										   pos.payload.player_pos.rotation, NULL,
+										   NULL)) {
+			clin_rpc_send(&pos);
+		}
 
 		clin_rpc_send(&(struct client_rpc) {
 			.type = CRPC_TIME_SET,
@@ -1381,6 +1516,11 @@ unload_done:
 		}
 
 		s->player.finished_loading = true;
+
+		/* spawn area is loaded and the hotbar was sent -> start the game */
+		clin_rpc_send(&(struct client_rpc) {
+			.type = CRPC_WORLD_LOADED,
+		});
 	}
 #endif
 
@@ -1475,9 +1615,21 @@ for (int i = 0; i < 4; i++) {
 }
 
 static void* server_local_thread(void* user) {
+	struct server_local* s = user;
 	while(1) {
-		server_local_update(user);
-		thread_msleep(50);
+		ptime_t tick_start = time_get();
+		server_local_update(s);
+
+		if(s->loading) {
+			/* loading screen: no game logic to pace, tick back-to-back */
+			thread_msleep(1);
+		} else {
+			/* keep a steady ~50ms game tick, but only sleep the part of it that
+			 * was NOT already spent generating chunks -> the formerly idle time
+			 * is used for generation without slowing the game tick. */
+			int sleep_ms = 50 - (int)time_diff_ms(tick_start, time_get());
+			thread_msleep(sleep_ms < 1 ? 1 : sleep_ms);
+		}
 	}
 	return NULL;
 }
@@ -1493,6 +1645,8 @@ void server_local_create(struct server_local* s) {
 	s->world_time = 0;
 	s->active_player_id = 0;
 	s->world_initialized = false;
+	s->loading = false;
+	s->find_spawn = false;
 	s->last_tick = time_get();
 
 	string_init(s->level_name);

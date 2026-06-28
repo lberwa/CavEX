@@ -71,6 +71,14 @@ static enum mp3_sound bg_playlist[16] = {
 	mp3_bg10,
 };
 
+/* recompute the list layout for the current height (must be done every frame so
+ * the dark band / list track the window when it is resized) */
+static void sworld_layout(int height) {
+	top_visible = height * 0.133F;
+	bottom_visible = height - 32 * GFX_GUI_SCALE;
+	height_visible = bottom_visible - height * 0.133F;
+}
+
 static void screen_sworld_reset(struct screen* s, int width, int height) {
 	input_pointer_enable(true);
 
@@ -147,19 +155,21 @@ static void screen_sworld_reset(struct screen* s, int width, int height) {
 
 	gui_selection = 0;
 	scroll_offset = side_padding;
-	top_visible = height * 0.133F;
-	bottom_visible = height - 32 * GFX_GUI_SCALE;
-	height_visible = bottom_visible - height * 0.133F;
+	sworld_layout(height);
 
 	//sound_init();
 	sound_play_bg(bg_playlist);
 }
 
 static void screen_sworld_update(struct screen* s, float dt) {
+	int view_w, view_h;
+	screen_viewport_size(0, &view_w, &view_h);
+	sworld_layout(view_h);
+
 	if(input_pressed(IB_GUI_UP, 0) && gui_selection > 0)
 		gui_selection--;
 
-	if(input_pressed(IB_GUI_DOWN, 0) && gui_selection < stack_size(worlds) - 1)
+	if(input_pressed(IB_GUI_DOWN, 0) && gui_selection < stack_size(worlds))
 		gui_selection++;
 
 	if(scroll_offset + (int)gui_selection * entry_height < 4)
@@ -170,20 +180,27 @@ static void screen_sworld_update(struct screen* s, float dt) {
 		scroll_offset = height_visible - side_padding
 			- (int)(gui_selection + 1) * entry_height;
 
-	if(stack_size(worlds) > 0 && input_pressed(IB_GUI_CLICK, 0)) {
-		sound_play(pcm_click);
-		struct world_option opt;
-		stack_at(worlds, &opt, gui_selection);
+	if(input_pressed(IB_GUI_CLICK, 0)) {
+		if(gui_selection == stack_size(worlds)) {
+			// "New World" entry selected
+			sound_play(pcm_click);
+			screen_set(&screen_new_world);
+		} else if(stack_size(worlds) > 0) {
+			// load the selected existing world
+			sound_play(pcm_click);
+			struct world_option opt;
+			stack_at(worlds, &opt, gui_selection);
 
-		struct server_rpc rpc = {0};
-		rpc.type = SRPC_LOAD_WORLD;
+			struct server_rpc rpc = {0};
+			rpc.type = SRPC_LOAD_WORLD;
 #ifdef SPLITSCREEN
-		rpc.player_id = 0;
+			rpc.player_id = 0;
 #endif
-		string_init_set(rpc.payload.load_world.name, opt.path);
-		svin_rpc_send(&rpc);
+			string_init_set(rpc.payload.load_world.name, opt.path);
+			svin_rpc_send(&rpc);
 
-		screen_set(&screen_load_world);
+			screen_set(&screen_load_world);
+		}
 	}
 
 	if(input_pressed(IB_BACK, 0)) {
@@ -193,6 +210,8 @@ static void screen_sworld_update(struct screen* s, float dt) {
 }
 
 static void screen_sworld_render2D(struct screen* s, int width, int height) {
+	sworld_layout(height);
+
 	gutil_bg();
 
 	gutil_text((width - gutil_font_width("Select World", 8 * GFX_GUI_SCALE)) / 2,
@@ -238,6 +257,21 @@ static void screen_sworld_render2D(struct screen* s, int width, int height) {
 	}
 
 	gfx_scissor(false, 0, 0, 0, 0);
+
+	bool selected = (gui_selection == stack_size(worlds));
+
+    	// Texcoords für hell/dunkel
+    	int tex_x = 0;
+    	int tex_y = selected ? 62 : 42; // hell : dunkel
+    	int tex_w = 200;
+    	int tex_h = 20;
+
+    	// Button skalieren auf 300x40
+		gfx_bind_texture(&texture_gui2);
+    	gutil_texquad(width / 2, height - 55, tex_x, tex_y, tex_w, tex_h, 300, 40);
+
+    	gutil_text(width / 2 + 300/2 - (gutil_font_width("New World", 20)/2),
+				   height - 55 + 10, "New World", 20, true);
 
 	int icon_offset = 16 * GFX_GUI_SCALE;
 	icon_offset += gutil_control_icon(icon_offset, IB_GUI_UP, "Change selection");

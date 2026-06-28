@@ -195,6 +195,17 @@ void server_world_destroy(struct server_world* w);
 
 bool server_world_get_block(struct server_world* w, w_coord_t x, w_coord_t y,
 							w_coord_t z, struct block_data* blk);
+/* Highest safe feet Y at (x,z): grass/dirt ground with air above.
+   Returns -1 if the column is unsuitable or the chunk is not loaded. */
+int server_world_find_ground_y(struct server_world* w, w_coord_t x, w_coord_t z);
+/* Find a spawn near (x0,z0): spirals out (up to max_radius blocks) for real
+   ground (grass/dirt); falls back to the topmost block of the centre column so
+   the player never spawns mid-air. Returns feet x/y/z. */
+bool server_world_find_spawn(struct server_world* w, w_coord_t x0, w_coord_t z0,
+							 int max_radius, w_coord_t* out_x, int* out_y,
+							 w_coord_t* out_z);
+/* progress 0..100 of the chunk currently being generated, or -1 if none */
+int server_world_pending_progress(struct server_world* w);
 bool server_world_set_block(struct server_local* s, w_coord_t x, w_coord_t y, w_coord_t z, struct block_data blk);
 
 bool server_world_furthest_chunk(struct server_world* w, w_coord_t dist,

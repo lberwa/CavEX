@@ -105,17 +105,14 @@ static void splitscreen_viewport_rect(int player_index, int player_count,
 	int w = gfx_width();
 	int h = gfx_height();
 
+	// Top-left origin convention (matches the GUI screens and Wii GX). On PC the
+	// gfx layer flips Y internally for OpenGL, so player 0 is always on top.
 	if(player_count == 2) {
 		int vp_h = h / 2;
 		*out_x = 0;
 		*out_w = w;
 		*out_h = vp_h;
-		#ifdef PLATFORM_WII
 		*out_y = (player_index == 0) ? 0 : vp_h;
-		#else
-		// OpenGL viewport/scissor origin is bottom-left -> player 0 on top.
-		*out_y = (player_index == 0) ? vp_h : 0;
-		#endif
 		return;
 	}
 
@@ -127,11 +124,7 @@ static void splitscreen_viewport_rect(int player_index, int player_count,
 		*out_w = vp_w;
 		*out_h = vp_h;
 		*out_x = col * vp_w;
-		#ifdef PLATFORM_WII
 		*out_y = row * vp_h;
-		#else
-		*out_y = (1 - row) * vp_h;
-		#endif
 		return;
 	}
 
@@ -140,11 +133,12 @@ static void splitscreen_viewport_rect(int player_index, int player_count,
 	*out_x = 0;
 	*out_w = w;
 	*out_h = vp_h;
-	*out_y = (player_count - 1 - player_index) * vp_h;
+	*out_y = player_index * vp_h;
 }
 #endif
 
 #ifdef PLATFORM_PC // find out which path it is
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -276,6 +270,8 @@ int main(void) {
 #else
 	load_config();
 #endif
+
+	settings_init();
 
 	input_init();
 	blocks_init();
@@ -618,6 +614,11 @@ int main(void) {
 				for(int p = 0; p < player_count; p++) {
 					int vp_x, vp_y, vp_w, vp_h;
 					int gui_w, gui_h;
+#ifdef PLATFORM_PC
+					/* enter the 3D pass first so gfx_width()/gfx_height() report
+					 * the native resolution for the viewport math below */
+					gfx_mode_world();
+#endif
 					splitscreen_viewport_rect(p, player_count, &vp_x, &vp_y,
 											  &vp_w, &vp_h);
 					splitscreen_load_player(p);
@@ -626,7 +627,20 @@ int main(void) {
 							  screen_get_player(p) :
 							  gstate.current_screen;
 
-					gfx_viewport(vp_x, vp_y, vp_w, vp_h);
+					/* Render the SAME projection as single-player and just crop
+					 * to the player's strip (cover + scissor), so the world is
+					 * not squished/stretched. The 3D viewport covers the strip at
+					 * the full-screen aspect; the scissor clips it to the strip
+					 * (e.g. 2-player = single-player view cut off top/bottom). */
+					{
+						int fw = gfx_width(), fh = gfx_height();
+						float cover
+							= fmaxf((float)vp_w / fw, (float)vp_h / fh);
+						int pw = (int)roundf(fw * cover);
+						int ph = (int)roundf(fh * cover);
+						gfx_viewport(vp_x + vp_w / 2 - pw / 2,
+									 vp_y + vp_h / 2 - ph / 2, pw, ph);
+					}
 					gfx_scissor(true, vp_x, vp_y, vp_w, vp_h);
 
 					if(render_world) {
@@ -639,9 +653,9 @@ int main(void) {
 						gfx_fog_color(atmosphere_color[0], atmosphere_color[1],
 										atmosphere_color[2]);
 
-						// In splitscreen the viewport is smaller, but we keep the
-						// original full-screen aspect ratio for 3D projection to
-						// avoid "wide" distortion (e.g. vp_h/2 making aspect 2x).
+						// Use the single-player (full-screen) aspect so the view
+						// is identical to single-player; the strip just crops it
+						// (see the cover+scissor viewport above).
 						camera_update_viewport(&gstate.camera, gstate.in_water,
 											   (float)gfx_width()
 												   / (float)gfx_height());
@@ -698,12 +712,32 @@ int main(void) {
 						#endif
 					}
 
+#ifdef PLATFORM_PC
+					/* The GUI is drawn into a separate fixed-resolution buffer.
+					 * Switch to the GUI pass first (so gfx_width()/gfx_height()
+					 * report the logical resolution), then recompute this
+					 * player's viewport in that logical space. */
+					gfx_mode_gui();
+					int gvp_x, gvp_y, gvp_w, gvp_h;
+					splitscreen_viewport_rect(p, player_count, &gvp_x, &gvp_y,
+											  &gvp_w, &gvp_h);
+					gfx_viewport(gvp_x, gvp_y, gvp_w, gvp_h);
+					gfx_scissor(true, gvp_x, gvp_y, gvp_w, gvp_h);
+
+					gui_w = gvp_w;
+					gui_h = gvp_h;
+					if(active_screen != &screen_ingame)
+						screen_viewport_size(p, &gui_w, &gui_h);
+
+					gfx_mode_gui_viewport(gui_w, gui_h);
+#else
 					gui_w = vp_w;
 					gui_h = vp_h;
 					if(active_screen != &screen_ingame)
 						screen_viewport_size(p, &gui_w, &gui_h);
 
 					gfx_mode_gui_viewport(gui_w, gui_h);
+#endif
 
 					if(gstate.in_water) {
 						gfx_bind_texture(&texture_water);

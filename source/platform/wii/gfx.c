@@ -116,6 +116,34 @@ int gfx_height() {
 	return 480;
 }
 
+int gfx_gui_width(void) {
+	return gfx_width();
+}
+
+int gfx_gui_height(void) {
+	return gfx_height();
+}
+
+void gfx_pointer_to_gui(float* x, float* y) {
+	/* Wii: the IR pointer is already in screen/GUI space */
+	(void)x;
+	(void)y;
+}
+
+void gfx_crosshair(struct tex_gfx* tex, int x, int y, int tx, int ty, int sx,
+				   int sy, int width, int height) {
+	/* Wii draws the crosshair directly with MODE_INVERT (single framebuffer) */
+	(void)tex;
+	(void)x;
+	(void)y;
+	(void)tx;
+	(void)ty;
+	(void)sx;
+	(void)sy;
+	(void)width;
+	(void)height;
+}
+
 void gfx_setup() {
 	VIDEO_Init();
 	screenMode = VIDEO_GetPreferredMode(NULL);

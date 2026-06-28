@@ -21,6 +21,7 @@
 #define SCREEN_H
 
 #include <stdbool.h>
+#include <stddef.h>
 
 #include "../../cglm/cglm.h"
 
@@ -37,8 +38,10 @@ struct screen {
 extern struct screen screen_ingame;
 extern struct screen screen_game_menu;
 extern struct screen screen_load_world;
+extern struct screen screen_generate_world;
 
 extern struct screen screen_select_world;
+extern struct screen screen_new_world;
 extern struct screen screen_mainmenu;
 extern struct screen spieleranzahl_auswählen;
 extern struct screen screen_controllerauswahl;
@@ -52,6 +55,14 @@ extern struct screen screen_iron_chest;
 extern struct screen screen_sign;
 extern struct screen screen_pause;
 extern struct screen screen_enchanting_table;
+extern struct screen screen_keyboard;
+
+/* Open the on-screen keyboard. The current contents of `target` are edited in
+ * place; on "OK" the result (max `max_len` bytes incl. terminator) is written
+ * back to `target`, on "Cancel" it is left unchanged. Afterwards `on_done` is
+ * shown. */
+void screen_keyboard_open(char* target, size_t max_len, const char* title,
+						  struct screen* on_done);
 
 void screen_set(struct screen* s);
 void menu_screen_set(struct screen* s);

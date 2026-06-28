@@ -46,6 +46,7 @@ enum client_rpc_type {
 	CRPC_PLAYER_SET_HEALTH,
 	CRPC_SPAWN_MONSTER,
 	CRPC_SPAWN_MINECART,
+	CRPC_WORLD_LOADED, /* spawn area chunks loaded + hotbar sent -> start game */
 };
 
 #ifdef SPLITSCREEN

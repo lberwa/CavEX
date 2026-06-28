@@ -30,4 +30,10 @@ void chunk_mesher_init(void);
 void chunk_mesher_receive(void);
 bool chunk_mesher_send(struct chunk* c);
 
+/* debug counters (see chunk_mesher.c) for the in-game overlay */
+extern volatile unsigned long chunk_mesher_dbg_sent;
+extern volatile unsigned long chunk_mesher_dbg_failed;
+extern volatile unsigned long chunk_mesher_dbg_recv;
+extern volatile unsigned long chunk_mesher_dbg_built;
+
 #endif

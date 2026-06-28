@@ -634,6 +634,26 @@ size_t world_build_chunks(struct world* w, size_t tokens) {
 	return tokens;
 }
 
+/* debug: how many loaded chunks still want a mesh rebuild (rebuild_displist).
+ * If this keeps climbing while the mesher counters stand still, the rebuild
+ * requests are not reaching the mesher. */
+size_t world_count_dirty_chunks(struct world* w) {
+	assert(w);
+
+	size_t dirty = 0;
+	dict_wsection_it_t it;
+	dict_wsection_it(it, w->sections);
+	while(!dict_wsection_end_p(it)) {
+		struct world_section* s = &dict_wsection_ref(it)->value;
+		for(size_t k = 0; k < COLUMN_HEIGHT; k++) {
+			if(s->column[k] && s->column[k]->rebuild_displist)
+				dirty++;
+		}
+		dict_wsection_next(it);
+	}
+	return dirty;
+}
+
 void world_render_completed(struct world* w, bool new_render) {
 	assert(w);
 

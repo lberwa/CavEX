@@ -147,7 +147,9 @@ add_executable(cavex
 				source/game/gui/screen_ingame.c
 				source/game/gui/screen_game_menu.c
 				source/game/gui/screen_load_world.c
+				source/game/gui/screen_generate_world.c
 				source/game/gui/screen_select_world.c
+				source/game/gui/screen_new_world.c
 				source/game/gui/screen_inventory.c
 				source/game/gui/screen_iron_chest.c
 				source/game/gui/screen_crafting.c
@@ -156,6 +158,7 @@ add_executable(cavex
 				source/game/gui/screen_chest.c
 				source/game/gui/screen_enchanting_table.c
 				source/game/gui/screen_sign.c
+				source/game/gui/screen_keyboard.c
 				source/game/gui/screen_pause.c
 				source/game/gui/screen_mainmenu.c
 				source/game/gui/screen_players.c

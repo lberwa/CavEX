@@ -15,7 +15,7 @@
 
 * If you jump into a block, you will get stuck and won't be able to move.
 
-* Placing blocks on dirt doesn't consume the block.
+* ~~Placing blocks on dirt doesn't consume the block.~~
 
 * Stair and fence hitboxes are incorrect.
 
@@ -24,3 +24,5 @@
 * Chests don't rotate when placed from a different side.
 
 * Chests can't combine into a double chest.
+
+* sort worlds with date
