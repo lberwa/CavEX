@@ -164,6 +164,7 @@ add_executable(cavex
 				source/game/gui/screen_players.c
 				source/game/gui/screen_server.c
 				source/game/gui/screen_controllers.c
+				source/game/gui/screen_main_settings.c
 				source/game/gui/screen.c
 				source/game/camera.c
 				source/game/game_state.c
@@ -236,6 +237,7 @@ add_executable(cavex
 				source/platform/thread.c
 				source/platform/time.c
 				source/platform/texture.c
+				source/platform/pc/pc_input.c
 
 				source/chunk_mesher.c
 				source/chunk.c

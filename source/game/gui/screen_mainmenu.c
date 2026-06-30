@@ -18,6 +18,7 @@
 */
 
 #include "../../graphics/gui_util.h"
+#include "../../graphics/gfx_settings.h"
 #include "../../network/level_archive.h"
 #include "../../network/server_interface.h"
 #include "../../platform/gfx.h"
@@ -111,7 +112,7 @@ static void screen_mainmenu_update(struct screen* s, float dt) {
 				
 				break;
             case 2: // Einstellungen
-                //settings_menu();
+                menu_screen_set(&screen_msettings);
                 break;
             case 3: // Beenden
                 gstate.quit = true;
@@ -172,6 +173,8 @@ static void screen_mainmenu_render2D(struct screen* s, int width, int height) {
 		gutil_text(wx + 20, wy + 40, "Versuchen sie es", 16, false);
 		gutil_text(wx + 20, wy + 60, "später erneut.", 16, false);
 	}
+
+	gutil_license(width, height);
 
 	int icon_offset = 32;
 	icon_offset += gutil_control_icon(icon_offset, IB_GUI_UP, "Change selection");

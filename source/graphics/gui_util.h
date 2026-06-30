@@ -27,6 +27,15 @@
 #include "../platform/input.h"
 #include "../platform/texture.h"
 
+struct button {
+	int x;
+	int y;
+	int width;
+	int height;
+	const char *text;
+	bool choosen;
+};
+
 int gutil_control_icon(int x, enum input_button b, const char* str);
 void gutil_set_gui_scale(int scale);
 int gutil_get_gui_scale(void);
@@ -44,6 +53,7 @@ void gutil_window(int x, int y, int width, int height, char title[]);
 void gutil_reset_font(struct tex_gfx* tex);
 int  gutil_font_width(const char* str, int scale);
 void gutil_text(int x, int y, const char* str, int scale, bool shadow);
+void gutil_license(int width, int height);
 int  gutil_text_col(int col); 
 /*
 {0x00, 0x00, 0x00}, {0x00, 0x00, 0xAA}, {0x00, 0xAA, 0x00},
@@ -55,5 +65,13 @@ int  gutil_text_col(int col);
 */
 
 void gutil_draw_item(struct item_data* item, int x, int y, int layer);
+
+void gutil_button_reset(void);
+void gutil_button(int x, int y, int width, int height, 
+				  const char* text, void (*func)(int), 
+				  int arg, int pos_x, int pos_y);
+void gutil_button_render(void);
+void gutil_button_update(void);
+void gutil_button_new_menu(void);
 
 #endif

@@ -56,6 +56,7 @@ extern struct screen screen_sign;
 extern struct screen screen_pause;
 extern struct screen screen_enchanting_table;
 extern struct screen screen_keyboard;
+extern struct screen screen_msettings;
 
 /* Open the on-screen keyboard. The current contents of `target` are edited in
  * place; on "OK" the result (max `max_len` bytes incl. terminator) is written

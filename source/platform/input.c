@@ -59,7 +59,7 @@ void input_init() {
 
 void input_poll() { }
 
-	void input_native_key_status(int key, int player, bool* pressed, bool* released,
+void input_native_key_status(int key, int player, bool* pressed, bool* released,
 								 bool* held) {
 		int orig_key = key;
 		// On PC we have one shared keyboard/mouse. The higher layers pass a

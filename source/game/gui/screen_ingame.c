@@ -478,9 +478,8 @@ static void screen_ingame_render2D(struct screen* s, int width, int height) {
 	if(!active_inventory_window())
 		return;
 	
-//#ifdef NDEBUG
-   if (true) {
-
+   if (gstate.settings.debug) 
+   {
 	snprintf(str, sizeof(str),
 	         GAME_NAME " Alpha %i.%i.%i_f%i (impl. B1.7.3)",
 	         VERSION_MAJOR, VERSION_MINOR, VERSION_PATCH, VERSION_FORK);
@@ -541,9 +540,7 @@ static void screen_ingame_render2D(struct screen* s, int width, int height) {
 		         bd.metadata);
 		gutil_text(4, 4 + (GFX_GUI_SCALE * 8 + 1) * 6, str, GFX_GUI_SCALE * 8, true);
 	}
-
    }
-//#endif
 
 	int icon_offset = GFX_GUI_SCALE * 16;
 	icon_offset += gutil_control_icon(icon_offset, IB_INVENTORY, "Inventory");

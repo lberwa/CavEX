@@ -96,6 +96,7 @@ bool debugsendfirst = false;
 
 #ifdef PLATFORM_PC
 #include <signal.h>
+#include "platform/pc/pc_input.h"
 #endif
 
 #ifdef SPLITSCREEN
@@ -331,6 +332,10 @@ int main(void) {
 
 	sound_init();
 
+#ifdef PLATFORM_PC
+	pc_init();
+#endif
+
 	while(!gstate.quit) { // |-------------------| main loop |-------------------|
 		#ifdef PLATFORM_WII
 		#ifdef NET_DEBUG
@@ -358,6 +363,16 @@ int main(void) {
 		gstate.stats.dt = time_diff_s(last_frame, this_frame);
 		gstate.stats.fps = 1.0F / gstate.stats.dt;
 		last_frame = this_frame;
+
+		if(gstate.paused) {
+			/* Freeze the world clock while paused: advance world_time_start in
+			 * lock-step with real time so "elapsed since start" stays constant.
+			 * Without this the interpolated/displayed time keeps running during
+			 * pause and then snaps backwards when the server resends the (frozen)
+			 * time on unpause -- the time appeared to run backwards. */
+			gstate.world_time_start = time_add_ms(
+				gstate.world_time_start, (int)(gstate.stats.dt * 1000.0F));
+		}
 
 		if(!gstate.paused) daytime
 			= (float)((gstate.world_time
@@ -859,6 +874,14 @@ int main(void) {
 			if(image) {
 				gfx_copy_framebuffer(image, &width, &height);
 
+				/* Screenshots must be opaque. The GUI and the crosshair are drawn
+				 * with alpha blending, so the framebuffer's alpha channel is < 255
+				 * where they were drawn -- saved as 32-bit RGBA they would come out
+				 * transparent. Force every pixel's alpha to fully opaque. */
+				uint8_t* px = image;
+				for(size_t i = 0; i < width * height; i++)
+					px[i * 4 + 3] = 0xFF;
+
 				char name[64];
 #ifdef PLATFORM_WII
 				snprintf(name, sizeof(name), "%ld.png", (long)time(NULL));
@@ -870,6 +893,9 @@ int main(void) {
 			}
 		}
 
+#ifdef PLATFORM_PC
+		pc_update();
+#endif
 		sound_update();
 		input_poll();
 		gfx_finish(true);
