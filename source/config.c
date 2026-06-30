@@ -88,4 +88,6 @@ void settings_init() {
 	gstate.settings.chunk_build_per_tick = 1000;
 	gstate.settings.chunk_build_budget_ms = 40;
 #endif
+
+	gstate.settings.start_fullscreen = false;
 }

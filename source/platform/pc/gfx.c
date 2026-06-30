@@ -448,12 +448,16 @@ void gfx_crosshair(struct tex_gfx* tex, int x, int y, int tx, int ty, int sx,
 	xhair_show = true;
 }
 
-void gfx_finish(bool vsync) {
-	/* The 3D FBO is at the native window resolution -> blit it 1:1 onto the
-	 * screen (crisp). The GUI FBO is at a fixed logical resolution -> composite
-	 * it on top, upscaled with GL_NEAREST (pixelated, old technique). */
-	if(fbo) {
-		glDisable(GL_SCISSOR_TEST);
+/* Composite the 3D FBO + GUI FBO onto the default framebuffer (the screen).
+ * Split out of gfx_finish so a screenshot can trigger the same composite and
+ * then read the finished image back from framebuffer 0 -- otherwise glReadPixels
+ * would only see the still-bound GUI FBO (no world). Does NOT swap buffers and
+ * does NOT clear xhair_show, so the caller controls those. */
+static void gfx_composite_to_default(void) {
+	if(!fbo)
+		return;
+
+	glDisable(GL_SCISSOR_TEST);
 
 		/* 1) native 3D image -> screen */
 		glBindFramebuffer(GL_READ_FRAMEBUFFER, fbo);
@@ -517,8 +521,11 @@ void gfx_finish(bool vsync) {
 							  xhair_ty + xhair_sy});
 			gfx_blending(MODE_OFF);
 		}
-		xhair_show = false;
-	}
+}
+
+void gfx_finish(bool vsync) {
+	gfx_composite_to_default();
+	xhair_show = false;
 
 	glfwSwapBuffers(window);
 
@@ -565,11 +572,18 @@ void gfx_bind_texture_pixels(struct tex_gfx* tex) {
 void gfx_copy_framebuffer(uint8_t* dest, size_t* width, size_t* height) {
 	assert(width && height);
 
-	*width = gfx_width();
-	*height = gfx_height();
+	/* The final image lives in the default framebuffer only AFTER the 3D + GUI
+	 * FBOs are composited (normally in gfx_finish). A screenshot is taken before
+	 * that, so composite now and read back the window-sized result -- otherwise
+	 * we would only capture the GUI FBO (no world). */
+	*width = window_width;
+	*height = window_height;
 
 	if(!dest)
 		return;
+
+	gfx_composite_to_default();
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 	void* tmp = malloc(*width * 4);
 

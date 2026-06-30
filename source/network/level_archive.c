@@ -410,4 +410,5 @@ void level_archive_destroy(struct level_archive* la) {
 
 	string_clear(la->file_name);
 	nbt_free(la->data);
+	la->data = NULL;
 }

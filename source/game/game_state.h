@@ -37,12 +37,15 @@
 #include "../world.h"
 #include "camera.h"
 #include "gui/screen.h"
+#include "../graphics/gfx_settings.h"
 
 #define GAME_NAME "CavEX"
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 3
 #define VERSION_PATCH 0
 #define VERSION_FORK  3
+#define LICENSE "Licensed under GPLv3"
+#define COPYRIGHT "Copyright (c) 2023-2026 ByteBit/xtreme8000, lberwa"
 
 struct game_state {
 #ifdef FAST_MOVING
@@ -58,6 +61,7 @@ struct game_state {
 		bool debug;
 		int chunk_build_budget_ms;
 		int chunk_build_per_tick;
+		bool start_fullscreen;
 	} settings;
 	/* live chunk generation status, updated by the server thread for the debug
 	 * overlay (screen_ingame). */

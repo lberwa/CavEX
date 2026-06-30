@@ -17,6 +17,7 @@
 	along with CavEX.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <math.h>
 #include <string.h>
 #include <stdio.h>
 
@@ -25,6 +26,7 @@
 #include "gfx_settings.h"
 #include "render_block.h"
 #include "texture_atlas.h"
+#include "../game/game_state.h"
 
 static int gutil_text_collor = 15;
 static int gutil_gui_scale = GFX_GUI_SCALE;
@@ -429,4 +431,183 @@ void gutil_bg_panorama() {
 
     if(scroll_x >= total_width)
         scroll_x -= total_width;
+}
+
+void gutil_license(int width, int height) {
+	size_t size = 6 * GFX_GUI_SCALE;
+	gutil_text(width - gutil_font_width(LICENSE, size) - 5, 
+			height - 2 * GFX_GUI_SCALE - (9 * GFX_GUI_SCALE) * 2 + GFX_GUI_SCALE, 
+            LICENSE, size, true); 
+	gutil_text(width - gutil_font_width(COPYRIGHT, size) - 5, 
+			height - 2 * GFX_GUI_SCALE - (9 * GFX_GUI_SCALE) * 1 + GFX_GUI_SCALE*2, 
+            COPYRIGHT, size, true);
+	
+	char str[64];
+	snprintf(str, sizeof(str),
+	         GAME_NAME " Alpha %i.%i.%i_f%i (impl. B1.7.3)",
+	         VERSION_MAJOR, VERSION_MINOR, VERSION_PATCH, VERSION_FORK);
+	gutil_text(5, height - 2 * GFX_GUI_SCALE - (9 * GFX_GUI_SCALE) * 1 + GFX_GUI_SCALE*2, 
+				str, size, true);
+}
+
+#define b_size 16
+#define x_max  3
+#define y_max  6
+
+static struct button buttons[b_size];
+static int8_t enable_buttons = 0;
+static int choosen_pos[2] = {-1, -1};
+static bool buttons_pos[x_max][y_max] = { false };
+
+// Pointer-Status (einmal pro Frame in gutil_button_reset ermittelt)
+static bool ptr_available;
+static float ptr_x, ptr_y;
+static float last_ptr_x, last_ptr_y;
+// true = D-Pad-Navigation aktiv, false = Maus/Pointer steuert die Auswahl
+static bool dpad_active;
+// gui_click einmal pro Frame abfragen: input_native_key_status() markiert die
+// Taste bei der ERSTEN Abfrage als "held", spaetere Abfragen im selben Frame
+// liefern dann faelschlich false. Pro Button abzufragen wuerde also nur den
+// ersten Button klickbar machen.
+static bool button_click;
+
+void gutil_button_reset() {
+	memset(buttons, 0, sizeof(buttons));
+	memset(buttons_pos, 0, sizeof(buttons_pos));
+	enable_buttons = 0;
+
+	button_click = input_pressed(IB_GUI_CLICK, 0);
+
+	float angle;
+	ptr_available = input_pointer(&ptr_x, &ptr_y, &angle, 0);
+	if (ptr_available) {
+		gfx_pointer_to_gui(&ptr_x, &ptr_y);
+		// eine echte Mausbewegung (> 2 px) schaltet zurueck in den Pointer-Modus
+		if (fabsf(ptr_x - last_ptr_x) > 2.0F
+		    || fabsf(ptr_y - last_ptr_y) > 2.0F) {
+			dpad_active = false;
+			// Maus uebernimmt -> D-Pad-Auswahl verwerfen, naechster
+			// Pfeildruck startet wieder bei (0,0)
+			choosen_pos[0] = -1;
+			choosen_pos[1] = -1;
+		}
+		last_ptr_x = ptr_x;
+		last_ptr_y = ptr_y;
+	}
+}
+
+void gutil_button(int x, int y, int width, int height,
+					const char* text, void (*func)(int),
+					int arg, int pos_x, int pos_y)
+{
+	buttons[enable_buttons].x = x;
+	buttons[enable_buttons].y = y;
+	buttons[enable_buttons].width  = width;
+	buttons[enable_buttons].height = height;
+	buttons[enable_buttons].text = text;
+
+	bool hover = ptr_available
+		&& ptr_x >= x && ptr_x < x + width
+		&& ptr_y >= y && ptr_y < y + height;
+	bool selected = choosen_pos[0] == pos_x && choosen_pos[1] == pos_y;
+
+	buttons[enable_buttons].choosen = dpad_active ? selected : hover;
+
+	if (button_click && buttons[enable_buttons].choosen) {
+		func(arg);
+	}
+
+	if (pos_x >= 0 && pos_x < x_max && pos_y >= 0 && pos_y < y_max)
+		buttons_pos[pos_x][pos_y] = true;
+
+	enable_buttons++;
+}
+
+void gutil_button_update() {
+	int dx = 0, dy = 0;
+	if (input_pressed(IB_GUI_RIGHT, 0))
+		dx = 1;
+	else if (input_pressed(IB_GUI_LEFT, 0))
+		dx = -1;
+	else if (input_pressed(IB_GUI_DOWN, 0))
+		dy = 1;
+	else if (input_pressed(IB_GUI_UP, 0))
+		dy = -1;
+
+	if (dx == 0 && dy == 0)
+		return;
+
+	dpad_active = true; // ein Pfeildruck aktiviert die D-Pad-Navigation
+
+	// Noch nichts ausgewählt -> ersten vorhandenen Button (links oben) wählen
+	if (choosen_pos[0] < 0 || choosen_pos[1] < 0) {
+		for (int y = 0; y < y_max; y++) {
+			for (int x = 0; x < x_max; x++) {
+				if (buttons_pos[x][y]) {
+					choosen_pos[0] = x;
+					choosen_pos[1] = y;
+					return;
+				}
+			}
+		}
+		return;
+	}
+
+	// Zickzack-Suche: Ziel ist die Nachbar-Spalte/-Zeile in Richtung (dx,dy).
+	// Quer dazu wird ausgehend von der aktuellen Position gesucht:
+	// zuerst gleiche Linie, dann +1, -1, +2, -2, ... (unten/rechts zuerst).
+	if (dx != 0) {
+		int col = choosen_pos[0] + dx; // feste Zielspalte
+		if (col < 0 || col >= x_max)
+			return; // am Rand -> Auswahl bleibt
+		int base = choosen_pos[1];
+		for (int i = 0; i < 2 * y_max; i++) {
+			int delta = (i + 1) / 2;
+			int row = (i % 2 == 1) ? base + delta : base - delta;
+			if (row < 0 || row >= y_max)
+				continue;
+			if (buttons_pos[col][row]) {
+				choosen_pos[0] = col;
+				choosen_pos[1] = row;
+				return;
+			}
+		}
+	} else {
+		int row = choosen_pos[1] + dy; // feste Zielzeile
+		if (row < 0 || row >= y_max)
+			return;
+		int base = choosen_pos[0];
+		for (int i = 0; i < 2 * x_max; i++) {
+			int delta = (i + 1) / 2;
+			int col = (i % 2 == 1) ? base + delta : base - delta;
+			if (col < 0 || col >= x_max)
+				continue;
+			if (buttons_pos[col][row]) {
+				choosen_pos[0] = col;
+				choosen_pos[1] = row;
+				return;
+			}
+		}
+	}
+}
+
+void gutil_button_render() {
+	for (int i=0; i<enable_buttons; i++) {
+    	int tex_x = 0;
+    	int tex_y = buttons[i].choosen ? 62 : 42; // hell : dunkel
+    	int tex_w = 200;
+    	int tex_h = 20;
+
+		gfx_bind_texture(&texture_gui2);
+    	gutil_texquad(buttons[i].x, buttons[i].y, tex_x, tex_y, 
+					  tex_w, tex_h, buttons[i].width, buttons[i].height);
+
+
+    	gutil_text(buttons[i].x + buttons[i].width/2 - (gutil_font_width(buttons[i].text, 20)/2),
+				   buttons[i].y, buttons[i].text, 20, true);
+	}
+}
+
+void gutil_button_new_menu() {
+	memset(choosen_pos, -1, sizeof(choosen_pos));
 }

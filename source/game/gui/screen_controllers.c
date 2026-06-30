@@ -260,6 +260,8 @@ static void screen_controllerauswahl_render2D(struct screen* s, int width, int h
         } 
     } 
 
+    gutil_license(width, height);
+
     // Steuerungs-Icons
     int icon_offset = 32;
     icon_offset += gutil_control_icon(icon_offset, IB_GUI_DOWN, "Change selection");

@@ -152,6 +152,8 @@ static void screen_spieleranzahl_auswählen_render2D(struct screen* s, int width
 									 y + 10, menu_options[i], 20, true);
 	}
 
+	gutil_license(width, height);
+
     int icon_offset = 32;
     icon_offset += gutil_control_icon(icon_offset, IB_GUI_UP, "Change selection");
     icon_offset += gutil_control_icon(icon_offset, IB_GUI_CLICK, "Select option");

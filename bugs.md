@@ -26,3 +26,7 @@
 * Chests can't combine into a double chest.
 
 * sort worlds with date
+
+* TNT and Creeper drop glass
+
+* still water looks like stone brick
