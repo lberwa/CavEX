@@ -29,12 +29,17 @@
 #include "screen.h"
 #include "../../sound.h"
 
+#ifdef PLATFORM_WII
+#include "../../boot/extension.h"
+#endif
+
 #include <assert.h>
 #include <dirent.h>
 #include "../../m-lib/m-string.h"
 #include <string.h>
 #include <time.h>
 #include <stdbool.h>
+#include <stdio.h>
 
 static const char* menu_options[4] = {
     "Start",
@@ -45,6 +50,11 @@ static const char* menu_options[4] = {
 
 static size_t gui_selection;
 static bool server_failed = false;
+
+// Status des Overlay-Moduls, das im Menue geladen wird
+static bool ext_result_show = false;
+static bool ext_result_ok = false;
+static char ext_result_line[48] = "";
 
 static enum mp3_sound bg_playlist[16] = {
 	mp3_bg1,
@@ -77,9 +87,16 @@ static void screen_mainmenu_reset(struct screen* s, int width, int height) {
 static void screen_mainmenu_update(struct screen* s, float dt) {
 	if (server_failed) {
 
-	if (input_pressed(IB_ANY, 0)) 
+	if (input_pressed(IB_ANY, 0))
 		sound_play(pcm_click);
 		server_failed = false;
+
+	} else if (ext_result_show) {
+
+		if (input_pressed(IB_ANY, 0)) {
+			sound_play(pcm_click);
+			ext_result_show = false;
+		}
 
 	} else {
 
@@ -103,12 +120,21 @@ static void screen_mainmenu_update(struct screen* s, float dt) {
 				#endif*/
 				break;
             case 1: // Server
-				if (gstate.network) {
-                	menu_screen_set(&screen_server);
-				} else {
-					server_failed = true;
-					return;
+#ifdef WITH_PYTHON
+				// CPython ist in CavEX gelinkt -> ./init.py in-process ausfuehren
+				{
+					extern void cavex_run_python_file(const char *path);
+					extern bool g_sdtrace;
+					extern void sdlog(const char *msg);
+					g_sdtrace = true; // schon VOR dem Aufruf tracen
+					sdlog("=== Server gedrueckt, rufe cavex_run_python_file ===");
+					cavex_run_python_file("./init.py");
+					sdlog("=== zurueck aus cavex_run_python_file ===");
 				}
+#else
+				server_failed = true;
+				return;
+#endif
 				
 				break;
             case 2: // Einstellungen
@@ -173,6 +199,26 @@ static void screen_mainmenu_render2D(struct screen* s, int width, int height) {
 		gutil_text(wx + 20, wy + 40, "Versuchen sie es", 16, false);
 		gutil_text(wx + 20, wy + 60, "später erneut.", 16, false);
 	}
+/*
+	if (ext_result_show) {
+		int window_width = 300;
+		int wx = width / 2 - window_width / 2;
+		int wy = height / 2 - 70;
+
+		gutil_window(wx, wy, window_width, 130,
+					 ext_result_ok ? "Modul lief" : "Modul-Fehler");
+
+		gutil_text(wx + 20, wy + 40, ext_result_line, 16, false);
+
+#ifdef PLATFORM_WII
+		// letzte Nachricht des Moduls selbst -> zeigt, was es getan hat
+		const char* msg = ext_last_message();
+		if (msg && msg[0])
+			gutil_text(wx + 20, wy + 62, msg, 14, false);
+#endif
+
+		gutil_text(wx + 20, wy + 100, "Taste = weiter", 14, false);
+	}*/
 
 	gutil_license(width, height);
 

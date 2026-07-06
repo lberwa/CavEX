@@ -27,6 +27,12 @@
 #include "../platform/input.h"
 #include "../platform/texture.h"
 
+typedef enum {
+	BUTTON_BUTTON,
+	BUTTON_TOGGLE,
+	BUTTON_SCROLLER
+} button_type;
+
 struct button {
 	int x;
 	int y;
@@ -34,6 +40,8 @@ struct button {
 	int height;
 	const char *text;
 	bool choosen;
+	bool enable;
+	button_type type;
 };
 
 int gutil_control_icon(int x, enum input_button b, const char* str);
@@ -70,6 +78,8 @@ void gutil_button_reset(void);
 void gutil_button(int x, int y, int width, int height, 
 				  const char* text, void (*func)(int), 
 				  int arg, int pos_x, int pos_y);
+void gutil_button_toggle(int x, int y, bool enable, void (*func)(int),
+						   int arg, int pos_x, int pos_y);
 void gutil_button_render(void);
 void gutil_button_update(void);
 void gutil_button_new_menu(void);

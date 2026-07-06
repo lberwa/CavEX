@@ -22,6 +22,7 @@
 #include <malloc.h>
 #include <math.h>
 #include <string.h>
+#include <ogc/machine/processor.h> /* _CPU_ISR_Disable/Restore */
 
 #include "../../graphics/texture_atlas.h"
 #include "../../util.h"
@@ -54,6 +55,15 @@ static uint32_t current_vp_h = 0;
 
 // Forward declarations (C99 forbids implicit function declarations).
 void gfx_set_texcoord_div(float div);
+
+/* Fuer Overlay-Module: den vom Host initialisierten Grafik-Kontext herausgeben.
+   Als void*, damit gfx.h keine GX-Header braucht. */
+void* gfx_wii_screenmode(void) {
+	return screenMode;
+}
+void* gfx_wii_backbuffer(void) {
+	return frame;
+}
 
 static void gfx_apply_texcoord_frac(uint8_t frac) {
 	GX_SetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX0, GX_TEX_ST, GX_U16, frac); // Block-Pfad: U16 erlaubt >256er-Atlas
@@ -251,6 +261,111 @@ void gfx_setup() {
 	GX_SetLineWidth(12, GX_TO_ZERO);
 
 	GX_DrawDone();
+}
+
+/* Stellt CavEX' GX/Video nach einer Python-Uebernahme (rendering_adopt) wieder
+   her. Python macht ein eigenes GX_Init (fremder FIFO) und uebernimmt die
+   Videoausgabe -> danach zeichnet CavEX in einen unsichtbaren Zustand. Hier
+   wird die GX-Pipeline auf CavEX' FIFO zurueckgesetzt und neu konfiguriert
+   (wie in gfx_setup, aber OHNE VIDEO_Init/Framebuffer-Alloc/MQ/tex_init --
+   die sind einmalig und bleiben gueltig). */
+extern void sdlog(const char *msg);
+
+void gfx_wii_restore(void) {
+	sdlog("restore: start");
+
+	/* Frame-Pipeline auf definierten Zustand zuruecksetzen. Nach Pythons
+	   Video-Uebernahme kann frame_empty leer sein -> gfx_flip_buffers wuerde
+	   in MQ_Receive(frame_empty, BLOCK) ewig haengen (eingefrorenes Menue).
+	   IRQ aus, damit copy_buffers (VI-Retrace-Callback) nicht dazwischenfunkt. */
+	{
+		u32 level;
+		mqmsg_t tmp;
+		_CPU_ISR_Disable(level);
+		current_frame = NULL;
+		while(MQ_Receive(frame_draw, &tmp, MQ_MSG_NOBLOCK)) { }
+		while(MQ_Receive(frame_empty, &tmp, MQ_MSG_NOBLOCK)) { }
+		MQ_Send(frame_empty, frameBuffer[0], MQ_MSG_BLOCK);
+		MQ_Send(frame_empty, frameBuffer[1], MQ_MSG_BLOCK);
+		frame = frameBuffer[2];
+		_CPU_ISR_Restore(level);
+	}
+	sdlog("restore: nach pipeline-reset");
+
+	/* Video-Ausgabe wieder auf CavEX' Pipeline (Callback ggf. neu setzen). */
+	VIDEO_SetPreRetraceCallback(copy_buffers);
+	VIDEO_SetNextFramebuffer(frameBuffer[0]);
+	VIDEO_Flush();
+	sdlog("restore: nach VIDEO setup");
+
+	/* KEIN GX_Init! Der GP blieb die ganze Zeit auf CavEX' FIFO (Python macht
+	   kein GX_Init mehr) -> nur den GX-State neu setzen. Ein GX_Init hier
+	   wuerde den GP-Finish-Mechanismus stoeren -> GX_WaitDrawDone haengt. */
+	sdlog("restore: (kein GX_Init)");
+	gfx_clear_buffers(255, 255, 255);
+	GX_SetViewport(0, 0, screenMode->fbWidth, screenMode->efbHeight, 0, 1);
+	current_vp_x = 0;
+	current_vp_y = 0;
+	current_vp_w = screenMode->fbWidth;
+	current_vp_h = screenMode->efbHeight;
+	GX_SetDispCopyYScale(
+		GX_GetYScaleFactor(screenMode->efbHeight, screenMode->xfbHeight));
+	GX_SetScissor(0, 0, screenMode->fbWidth, screenMode->efbHeight);
+	GX_SetDispCopySrc(0, 0, screenMode->fbWidth, screenMode->efbHeight);
+	GX_SetDispCopyDst(screenMode->fbWidth, screenMode->xfbHeight);
+	GX_SetCopyFilter(GX_FALSE, NULL, GX_FALSE, NULL);
+	GX_SetFieldMode(screenMode->field_rendering,
+					((screenMode->viHeight == 2 * screenMode->xfbHeight) ?
+						 GX_ENABLE :
+						 GX_DISABLE));
+
+	GX_SetCullMode(GX_CULL_BACK);
+	GX_CopyDisp(frameBuffer[0], GX_TRUE);
+	GX_SetDispCopyGamma(GX_GM_1_0);
+
+	GX_InvalidateTexAll();
+	GX_ClearVtxDesc();
+	GX_SetVtxDesc(GX_VA_POS, GX_DIRECT);
+	GX_SetVtxDesc(GX_VA_CLR0, GX_INDEX8);
+	GX_SetVtxDesc(GX_VA_TEX0, GX_DIRECT);
+
+	GX_SetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XYZ, GX_S16, 8);
+	GX_SetVtxAttrFmt(GX_VTXFMT0, GX_VA_CLR0, GX_CLR_RGB, GX_RGB8, 0);
+	GX_SetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX0, GX_TEX_ST, GX_U16, 8);
+
+	GX_SetVtxAttrFmt(GX_VTXFMT1, GX_VA_POS, GX_POS_XYZ, GX_F32, 0);
+	GX_SetVtxAttrFmt(GX_VTXFMT1, GX_VA_CLR0, GX_CLR_RGBA, GX_RGBA8, 0);
+	GX_SetVtxAttrFmt(GX_VTXFMT1, GX_VA_TEX0, GX_TEX_ST, GX_F32, 0);
+
+	GX_SetVtxAttrFmt(GX_VTXFMT2, GX_VA_POS, GX_POS_XYZ, GX_S16, 0);
+	GX_SetVtxAttrFmt(GX_VTXFMT2, GX_VA_CLR0, GX_CLR_RGBA, GX_RGBA8, 0);
+	GX_SetVtxAttrFmt(GX_VTXFMT2, GX_VA_TEX0, GX_TEX_ST, GX_U16, 8);
+
+	GX_SetVtxAttrFmt(GX_VTXFMT3, GX_VA_POS, GX_POS_XYZ, GX_S16, 8);
+	GX_SetVtxAttrFmt(GX_VTXFMT3, GX_VA_CLR0, GX_CLR_RGBA, GX_RGBA8, 0);
+	GX_SetVtxAttrFmt(GX_VTXFMT3, GX_VA_TEX0, GX_TEX_ST, GX_U8, 8);
+
+	GX_SetArray(GX_VA_CLR0, colors, 3 * sizeof(uint8_t));
+	GX_SetNumChans(1);
+	GX_SetNumTexGens(1);
+	GX_SetNumTevStages(1);
+	gfx_texture(true);
+	gfx_alpha_test(true);
+
+	/* Texturen NICHT neu laden (tex_init) -- nur die vorhandenen rebinden. */
+	gfx_bind_texture(&texture_terrain);
+	tex_gfx_bind(&texture_fog, GX_TEXMAP1);
+
+	GX_SetTexCoordGen(GX_TEXCOORD1, GX_TG_MTX2x4, GX_TG_POS, GX_TEXMTX1);
+	GX_SetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR0A0);
+
+	GX_SetLineWidth(12, GX_TO_ZERO);
+
+	/* Nur flushen (nicht-blockierend). Ein blockierendes GX_DrawDone haengt
+	   hier nach Pythons GX-Nutzung. Die eigentliche GPU-Sync macht der normale
+	   Loop (gfx_finish: GX_SetDrawDone, gfx_flip_buffers: GX_WaitDrawDone). */
+	GX_Flush();
+	sdlog("restore: nach GX_Flush (ENDE)");
 }
 
 void gfx_update_light(float daytime, const float* light_lookup) {

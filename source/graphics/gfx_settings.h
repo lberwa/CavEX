@@ -50,6 +50,10 @@
 #define GFX_PC_WINDOW_WIDTH 802
 #define GFX_PC_WINDOW_HEIGHT 480
 
+#ifndef WITH_PYTHON
+#define WITH_PYTHON
+#endif
+
 // TODO: 240p on Wii?
 
 //PC only: render polygons as wireframes (will break text and texture rendering, for testing purposes only)

@@ -102,4 +102,13 @@ void gfx_draw_quads(size_t vertex_count, const int16_t* vertices,
 					const uint8_t* colors, const uint16_t* texcoords);
 void gfx_draw_quads_flt(size_t vertex_count, const float* vertices,
 						const uint8_t* colors, const float* texcoords);
+
+#ifdef PLATFORM_WII
+/* Fuer Overlay-Module: Zeiger auf den vom Host bereits initialisierten
+   Grafik-Kontext. Rueckgabe als void* (opaque), damit hier keine GX-Header
+   noetig sind. */
+void* gfx_wii_screenmode(void); /* GXRModeObj* des Hosts    */
+void* gfx_wii_backbuffer(void); /* aktueller Back-Buffer     */
+#endif
+
 #endif
