@@ -85,8 +85,13 @@ static const void* swapped_memscan(void* dest, const void* src, size_t n)
         return NBT_EMEM;                 \
 } while(0)
 
+/* Maximale Verschachtelungstiefe. Schuetzt auf der Wii (kleiner Stack) vor
+ * Stack-Overflow durch beschaedigte/tief verschachtelte NBT-Daten. Echte
+ * Minecraft-NBT verschachtelt selten tiefer als ~20. */
+#define NBT_MAX_DEPTH 512
+
 /* Parses a tag, given a name (may be NULL) and a type. Fills in the payload. */
-static nbt_node* parse_unnamed_tag(nbt_type type, char* name, const char** memory, size_t* length);
+static nbt_node* parse_unnamed_tag(nbt_type type, char* name, const char** memory, size_t* length, int depth);
 
 /*
  * Reads some bytes from the memory stream. This macro will read `n'
@@ -148,7 +153,7 @@ parse_error:
     return NULL;
 }
 
-static nbt_node* parse_named_tag(const char** memory, size_t* length)
+static nbt_node* parse_named_tag(const char** memory, size_t* length, int depth)
 {
   char* name = NULL;
 
@@ -157,7 +162,7 @@ static nbt_node* parse_named_tag(const char** memory, size_t* length)
 
   name = read_string(memory, length);
 
-  nbt_node* ret = parse_unnamed_tag((nbt_type)type, name, memory, length);
+  nbt_node* ret = parse_unnamed_tag((nbt_type)type, name, memory, length, depth);
   if(ret == NULL) goto parse_error;
 
   return ret;
@@ -177,9 +182,13 @@ static struct nbt_byte_array read_byte_array(const char** memory, size_t* length
 
     READ_GENERIC(&ret.length, sizeof ret.length, swapped_memscan, goto parse_error);
 
-    if(ret.length < 0) goto parse_error;
+    /* Laenge muss in den verbleibenden Puffer passen -- sonst ist die Datei
+     * beschaedigt und wir wuerden riesig/ungueltig allokieren. */
+    if(ret.length < 0 || (size_t)ret.length > *length) goto parse_error;
 
-    CHECKED_MALLOC(ret.data, ret.length, goto parse_error);
+    if(ret.length == 0) return ret; /* gueltiges leeres Array, data == NULL */
+
+    CHECKED_MALLOC(ret.data, (size_t)ret.length, goto parse_error);
 
     READ_GENERIC(ret.data, (size_t)ret.length, memscan, goto parse_error);
 
@@ -201,9 +210,14 @@ static struct nbt_int_array read_int_array(const char** memory, size_t* length)
 
     READ_GENERIC(&ret.length, sizeof ret.length, swapped_memscan, goto parse_error);
 
-    if(ret.length < 0) goto parse_error;
+    /* Division statt Multiplikation -> kein Integer-Overflow, und die Daten
+     * muessen tatsaechlich in den verbleibenden Puffer passen. */
+    if(ret.length < 0 || (size_t)ret.length > *length / sizeof(int32_t))
+        goto parse_error;
 
-    CHECKED_MALLOC(ret.data, ret.length * sizeof(int32_t), goto parse_error);
+    if(ret.length == 0) return ret; /* gueltiges leeres Array, data == NULL */
+
+    CHECKED_MALLOC(ret.data, (size_t)ret.length * sizeof(int32_t), goto parse_error);
 
     READ_GENERIC(ret.data, (size_t)ret.length * sizeof(int32_t), memscan, goto parse_error);
 
@@ -230,9 +244,14 @@ static struct nbt_long_array read_long_array(const char** memory, size_t* length
 
     READ_GENERIC(&ret.length, sizeof ret.length, swapped_memscan, goto parse_error);
 
-    if(ret.length < 0) goto parse_error;
+    /* Division statt Multiplikation -> kein Integer-Overflow, und die Daten
+     * muessen tatsaechlich in den verbleibenden Puffer passen. */
+    if(ret.length < 0 || (size_t)ret.length > *length / sizeof(int64_t))
+        goto parse_error;
 
-    CHECKED_MALLOC(ret.data, ret.length * sizeof(int64_t), goto parse_error);
+    if(ret.length == 0) return ret; /* gueltiges leeres Array, data == NULL */
+
+    CHECKED_MALLOC(ret.data, (size_t)ret.length * sizeof(int64_t), goto parse_error);
 
     READ_GENERIC(ret.data, (size_t)ret.length * sizeof(int64_t), memscan, goto parse_error);
 
@@ -285,7 +304,7 @@ static nbt_type list_is_homogenous(const struct nbt_list* list)
     return type;
 }
 
-static struct nbt_list* read_list(const char** memory, size_t* length)
+static struct nbt_list* read_list(const char** memory, size_t* length, int depth)
 {
     uint8_t type;
     int32_t elems;
@@ -302,6 +321,9 @@ static struct nbt_list* read_list(const char** memory, size_t* length)
     READ_GENERIC(&type, sizeof type, swapped_memscan, goto parse_error);
     READ_GENERIC(&elems, sizeof elems, swapped_memscan, goto parse_error);
 
+    /* negative Elementzahl aus beschaedigter Datei abfangen */
+    if(elems < 0) goto parse_error;
+
     ret->data->type = type == TAG_INVALID ? TAG_COMPOUND : (nbt_type)type;
 
     for(int32_t i = 0; i < elems; i++)
@@ -310,7 +332,7 @@ static struct nbt_list* read_list(const char** memory, size_t* length)
 
         CHECKED_MALLOC(new, sizeof *new, goto parse_error);
 
-        new->data = parse_unnamed_tag((nbt_type)type, NULL, memory, length);
+        new->data = parse_unnamed_tag((nbt_type)type, NULL, memory, length, depth);
 
         if(new->data == NULL)
         {
@@ -331,7 +353,7 @@ parse_error:
     return NULL;
 }
 
-static struct nbt_list* read_compound(const char** memory, size_t* length)
+static struct nbt_list* read_compound(const char** memory, size_t* length, int depth)
 {
     struct nbt_list* ret;
 
@@ -358,7 +380,7 @@ static struct nbt_list* read_compound(const char** memory, size_t* length)
             goto parse_error;
         );
 
-        new_entry->data = parse_unnamed_tag((nbt_type)type, name, memory, length);
+        new_entry->data = parse_unnamed_tag((nbt_type)type, name, memory, length, depth);
 
         if(new_entry->data == NULL)
         {
@@ -383,9 +405,12 @@ parse_error:
 /*
  * Parses a tag, given a name (may be NULL) and a type. Fills in the payload.
  */
-static nbt_node* parse_unnamed_tag(nbt_type type, char* name, const char** memory, size_t* length)
+static nbt_node* parse_unnamed_tag(nbt_type type, char* name, const char** memory, size_t* length, int depth)
 {
-    nbt_node* node;
+    nbt_node* node = NULL;
+
+    /* zu tiefe Verschachtelung -> Abbruch statt Stack-Overflow */
+    if(depth > NBT_MAX_DEPTH) goto parse_error;
 
     CHECKED_MALLOC(node, sizeof *node, goto parse_error);
 
@@ -428,10 +453,10 @@ static nbt_node* parse_unnamed_tag(nbt_type type, char* name, const char** memor
         node->payload.tag_string = read_string(memory, length);
         break;
     case TAG_LIST:
-        node->payload.tag_list = read_list(memory, length);
+        node->payload.tag_list = read_list(memory, length, depth + 1);
         break;
     case TAG_COMPOUND:
-        node->payload.tag_compound = read_compound(memory, length);
+        node->payload.tag_compound = read_compound(memory, length, depth + 1);
         break;
 
     default:
@@ -459,7 +484,7 @@ nbt_node* nbt_parse(const void* mem, size_t len)
     const char** memory = (const char**)&mem;
     size_t* length = &len;
 
-    return parse_named_tag(memory, length);
+    return parse_named_tag(memory, length, 0);
 }
 
 /* spaces, not tabs ;) */

@@ -121,22 +121,18 @@ static wav_t load_file(const char *path) {
     
     FILE *f = fopen(path, "rb");
     if(!f) {
-        debug_send(" data is NULL   ");
         return w;
     }
 
-    debug_send("no return in load file");
     
     fseek(f, 0, SEEK_END);
     w.size = ftell(f);
     rewind(f);
-    debug_send("2");
     w.data = memalign(32, w.size);
     fread(w.data, 1, w.size, f);
     DCFlushRange(w.data, w.size);
     fclose(f);
 
-    debug_send("return w");
 
     return w;
 }
@@ -274,7 +270,6 @@ static const char* sound_get_mp3_path(enum mp3_sound sound) {
 
 
 void sound_init() {
-    debug_send("initializing mp3 sound system...                ");
     pcm_playlist_init(16);
     
     ASND_Init();
@@ -285,7 +280,6 @@ void sound_init() {
 
     SND_Init(INIT_RATE_48000); // oder 48000
     SND_Pause(0);
-    debug_send("alle initalisiert                  ");
 }
 
 enum mp3_sound w_sound;
@@ -327,7 +321,7 @@ void worker(MP3Player* player) {
 void* worker(void* arg) {
     const char* path = sound_get_mp3_path(w_sound);
     FILE* f = fopen(path, "rb");
-    if(!f) { debug_send("Failed to open MP3"); return NULL; }
+    if(!f) { return NULL; }
 
     char* buffer = memalign(32, MP3_CHUNK_SIZE);
     size_t read;
@@ -350,14 +344,11 @@ void* worker(void* arg) {
 #ifdef BG_MUSIC
 void* worker(void* arg) {
     char* path = sound_get_mp3_path(w_sound);
-    debug_send(path);
 
     FILE* musicFile = fopen(path, "rb");
     if(!musicFile) {
-        debug_send("Failed to open MP3 file!");
         //return false;
     }
-    debug_send("MP3 file opened");
 
     // Dateigröße ermitteln
     fseek(musicFile, 0, SEEK_END);
@@ -367,14 +358,12 @@ void* worker(void* arg) {
     // Speicher für MP3
     char* musicBuffer = (char*) malloc(musicFileSize);
     if(!musicBuffer) {
-        debug_send("Failed to allocate memory for MP3!");
         fclose(musicFile);
         //return false;
     }
 
     size_t bytesRead = fread(musicBuffer, 1, musicFileSize, musicFile);
     //fclose(musicFile);
-    debug_send("MP3 file loaded into buffer");
 
     MP3Player_PlayBuffer(musicBuffer, bytesRead, NULL);
     return NULL;
@@ -386,7 +375,6 @@ static bool st_sound_play_bg(enum mp3_sound sound) {
     w_sound = sound;
 
     LWP_CreateThread(&t, worker, NULL, NULL, 0, 64);
-    debug_send("MP3 playback started");
     return true;
 }
 #endif
@@ -410,13 +398,9 @@ void sound_update() {
     #ifdef BG_MUSIC
     if (music_run) {
         if (!MP3Player_IsPlaying()) {
-            debug_send("MP3 ist nicht am spielen, nächster Titel wird gestartet");
             bg_playlist_num++;
             if (bg_playlist[bg_playlist_num] == NULL)
              bg_playlist_num = 0;
-            debug_send(&bg_playlist_num);
-            debug_send(&bg_playlist[bg_playlist_num]);
-            debug_send("st_sound_play_bg wird aufgerufen");
             st_sound_play_bg(bg_playlist[bg_playlist_num]);
             music_run = false;
         }
@@ -426,7 +410,6 @@ void sound_update() {
     for(int i = 0; i < pcm_playlist_num; i++) {
         if (!ASND_StatusVoice(pcm_playlist[i])) {
             pcm_playlist_remove(i);
-            debug_send("remove");
             i--;
         }
     }
@@ -436,35 +419,28 @@ void sound_update() {
 
 bool sound_play_bg(enum mp3_sound sound[16]) {
     #ifdef BG_MUSIC
-    debug_send("sound_play_bg aufgerufen");
     if (!sound)
      return false;
-    debug_send("sound array ist nicht null");
     music_run = true;
     for (int i = 0; i < 16; i++) {
         
         bg_playlist[i] = sound[i];
      }
-    debug_send("bg_playlist gesetzt");
     return true;
     #endif
 }
 
 bool sound_play(enum pcm_sound sound) {
-    debug_send("start!!!!!!!!!!!!!!1    ");
     //debug_send("nicht sound NULL");
     if (pcm_playlist_num > 15)
      return false;
-    debug_send("liste nicht zu lang    ");
     const char* path = sound_get_pcm_path(sound);
-    debug_send(path);
     wav_t sound_data = load_file(path);
 
     int voice = SND_GetFirstUnusedVoice();
 
     pcm_playlist_add(voice);
     
-    debug_send("pcm_playlist");
 
     if(sound_data.data) {
 		SND_SetVoice(
@@ -772,16 +748,13 @@ void sound_update(void) {
 
 bool sound_play_bg(enum mp3_sound sound[16]) {
     #ifdef BG_MUSIC
-    debug_send("sound_play_bg aufgerufen");
     if (!sound)
      return false;
-    debug_send("sound array ist nicht null");
     music_run = true;
     for (int i = 0; i < 16; i++) {
         
         bg_playlist[i] = sound[i];
      }
-    debug_send("bg_playlist gesetzt");
     return true;
     #endif
 }

@@ -453,6 +453,8 @@ void gutil_license(int width, int height) {
 #define b_size 16
 #define x_max  3
 #define y_max  6
+#define toggle_width 90
+#define toggle_height 40
 
 static struct button buttons[b_size];
 static int8_t enable_buttons = 0;
@@ -505,6 +507,7 @@ void gutil_button(int x, int y, int width, int height,
 	buttons[enable_buttons].width  = width;
 	buttons[enable_buttons].height = height;
 	buttons[enable_buttons].text = text;
+	buttons[enable_buttons].type = BUTTON_BUTTON;
 
 	bool hover = ptr_available
 		&& ptr_x >= x && ptr_x < x + width
@@ -593,6 +596,7 @@ void gutil_button_update() {
 
 void gutil_button_render() {
 	for (int i=0; i<enable_buttons; i++) {
+	  if (buttons[i].type == BUTTON_BUTTON) {
     	int tex_x = 0;
     	int tex_y = buttons[i].choosen ? 62 : 42; // hell : dunkel
     	int tex_w = 200;
@@ -605,9 +609,59 @@ void gutil_button_render() {
 
     	gutil_text(buttons[i].x + buttons[i].width/2 - (gutil_font_width(buttons[i].text, 20)/2),
 				   buttons[i].y, buttons[i].text, 20, true);
+		
+	  } else if (buttons[i].type == BUTTON_TOGGLE) {
+		int tex_x = 0;
+    	int tex_y = 22;
+    	int tex_w = 200;
+    	int tex_h = 20;
+
+		int btex_x = 0;
+    	int btex_y = buttons[i].choosen ? 62 : 42; // hell : dunkel
+    	int btex_w = 200;
+    	int btex_h = 20;
+
+		int x = buttons[i].x + (buttons[i].enable ? toggle_width - toggle_height/2 : 0);
+
+		gfx_bind_texture(&texture_gui2);
+		gutil_texquad(buttons[i].x, buttons[i].y, tex_x, tex_y,
+					  tex_w, tex_h, toggle_width, toggle_height);
+		gutil_texquad(x, buttons[i].y - toggle_height/4, btex_x, btex_y, btex_w, btex_h, 
+					  toggle_height/2, toggle_height + toggle_height/2);
+		gutil_texquad(buttons[i].x + toggle_width/2 - 2, buttons[i].y + 2, btex_x, 42, btex_w, btex_h, 
+					  4, toggle_height - 4);
+	  }
 	}
 }
 
 void gutil_button_new_menu() {
 	memset(choosen_pos, -1, sizeof(choosen_pos));
+}
+
+void gutil_button_toggle(int x, int y, bool enable, void (*func)(int),
+						   int arg, int pos_x, int pos_y) 
+{
+	buttons[enable_buttons].x = x;
+	buttons[enable_buttons].y = y;
+	buttons[enable_buttons].width  = -1;
+	buttons[enable_buttons].height = -1;
+	buttons[enable_buttons].text = NULL;
+	buttons[enable_buttons].enable = enable;
+	buttons[enable_buttons].type = BUTTON_TOGGLE;	
+
+	bool hover = ptr_available
+		&& ptr_x >= x && ptr_x < x + toggle_width
+		&& ptr_y >= y && ptr_y < y + toggle_height;
+	bool selected = choosen_pos[0] == pos_x && choosen_pos[1] == pos_y;
+
+	buttons[enable_buttons].choosen = dpad_active ? selected : hover;
+
+	if (button_click && buttons[enable_buttons].choosen) {
+		func(arg);
+	}
+
+	if (pos_x >= 0 && pos_x < x_max && pos_y >= 0 && pos_y < y_max)
+		buttons_pos[pos_x][pos_y] = true;
+
+	enable_buttons++;
 }

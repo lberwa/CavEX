@@ -72,6 +72,8 @@ static void set(int s) {
 }
 
 static void screen_msettings_update(struct screen* s, float dt) {
+	gutil_bg();
+
 	// logische GUI-Groesse benutzen: in der update-Phase liefert gfx_width()
 	// die native Fenstergroesse, die Buttons werden aber in GUI-Koordinaten
 	// gezeichnet -> sonst stimmt die Zentrierung nicht.
@@ -82,8 +84,11 @@ static void screen_msettings_update(struct screen* s, float dt) {
 	switch (menu) {
         case DEBUG:
 		{
-			gutil_button(width/2 - 150, height/2 - 100, 300, 50, gstate.settings.debug ? "ON":"OFF",
-							&set, DEBUG_SET, 0, 0);
+			//gutil_button(width/2 - 150, height/2 - 100, 300, 50, gstate.settings.debug ? "ON":"OFF",
+			//				&set, DEBUG_SET, 0, 0);
+			gutil_text(width/2 - 150, height/2 - 150, "Debug:", 20, true);
+			gutil_button_toggle(width/2 - 150, height/2 - 100, 
+								gstate.settings.debug, &set, DEBUG_SET, 0, 0);
 
 			gutil_button(width/2 - 150, height/2 + 50, 300, 50, "Back", &choose, MAIN, 0, 1);
 		}
@@ -91,21 +96,19 @@ static void screen_msettings_update(struct screen* s, float dt) {
 
 		default: // MAIN
         {
-            gutil_button(width/2 - 350, height/2 - 100, 300, 50, "Debug", &choose, DEBUG, 0, 0);
-
+            gutil_button(width/2 - 350, height/2 - 100, 300, 50,"Debug", &choose, DEBUG, 0, 0);
+#ifdef PLATFORM_PC
 			gutil_button(width/2 + 50, height/2 - 100, 300, 50, "Fullscreen", &choose, FULLSCREEN, 1, 0);	
-			
+#endif
 			gutil_button(width/2 - 350, height/2 + 50, 300, 50, "World Generator", &choose, WORLD_GENERATOR, 0, 1);
 
-			gutil_button(width/2 + 50, height/2 + 50, 300, 50, "Back", &set, QUIT, 1, 1);
+			gutil_button(width/2 + 50,  height/2 + 50, 300, 50, "Back", &set, QUIT, 1, 1);
         }
     }
 	gutil_button_update();
 }
 
 static void screen_msettings_render2D(struct screen* s, int width, int height) {
-	gutil_bg();
-
     gutil_button_render();
 
 	gutil_license(width, height);

@@ -62,6 +62,81 @@
 #define CAMERA_DBG_PRINTF(...) ((void)0)
 #endif
 
+/* Checkpoint/Trace-System (FAT-sicher).
+   - Hauptschleife/Python schreiben Checkpoints in einen RAM-Ringpuffer (nur
+     Pointer-Stores -> kein SD-Zugriff, veraendert das Timing kaum, versteckt
+     also keinen Heisenbug und kollidiert nicht mit Pythons FAT-Zugriffen).
+   - Ein Hintergrund-Thread flusht den Puffer nach sd:/cptrace.txt, aber NUR
+     wenn Python gerade NICHT laeuft (g_python_running == false) -> kein
+     FAT-Deadlock mit runpy.
+   - Beim Freeze in der CavEX-Schleife (Python schon zurueck) flusht der Thread
+     bis zum letzten erreichten Checkpoint -> letzte Zeile = Freeze-Ort. */
+bool g_sdtrace = false;
+volatile bool g_python_running = false;
+volatile const char *g_cp = "init";
+
+#if defined(PLATFORM_WII) && defined(CP_TRACE)
+#include "platform/thread.h"
+#define CP_BUF 1024
+static const char *g_cp_buf[CP_BUF];
+static volatile int g_cp_widx = 0; /* naechster Schreibindex (nur main) */
+static struct thread g_cp_thread;
+#endif
+
+void sdlog(const char *msg) {
+	g_cp = msg; /* billig */
+#if defined(PLATFORM_WII) && defined(CP_TRACE)
+	if(g_sdtrace) { /* erst ab Server-Druck puffern */
+		int i = g_cp_widx;
+		g_cp_buf[i % CP_BUF] = msg;
+		g_cp_widx = i + 1;
+	}
+#endif
+#if defined(PLATFORM_WII) && defined(SD_LOG)
+	if(g_sdtrace) {
+		FILE *f = fopen("sd:/cavexlog.txt", "a");
+		if(f) {
+			fputs(msg, f);
+			fputc('\n', f);
+			fclose(f);
+		}
+	}
+#endif
+}
+
+#if defined(PLATFORM_WII) && defined(CP_TRACE)
+static void cp_write(const char *m) {
+	FILE *f = fopen("sd:/cptrace.txt", "a");
+	if(f) {
+		fputs(m, f);
+		fputc('\n', f);
+		fclose(f);
+	}
+}
+static void *cp_logger(void *arg) {
+	(void)arg;
+	int ridx = 0;
+	cp_write("=== logger up ==="); /* Beweis: Thread laeuft (FAT hier frei) */
+	while(1) {
+		/* durchgehend flushen (libfat serialisiert; kein Gate mehr) */
+		if(ridx < g_cp_widx) {
+			FILE *f = fopen("sd:/cptrace.txt", "a");
+			if(f) {
+				while(ridx < g_cp_widx) {
+					const char *m = g_cp_buf[ridx % CP_BUF];
+					fputs(m ? m : "(null)", f);
+					fputc('\n', f);
+					ridx++;
+				}
+				fclose(f);
+			}
+		}
+		thread_msleep(16);
+	}
+	return NULL;
+}
+#endif
+
 #ifdef PLATFORM_WII
 static void *xfb2 = NULL;
 
@@ -75,6 +150,7 @@ static void *net_thread(void *arg) {
 GXRModeObj* rmode3;
 void* framebuffer3;
 #endif
+
 #ifdef PLATFORM_WII
 #ifdef NDEBUG
 	// ram checken
@@ -89,6 +165,7 @@ void* framebuffer3;
 	extern void* __Arena2Lo;
 	extern void* __Arena2Hi;
 #endif
+
 #ifdef NET_DEBUG
 bool debugsendfirst = false;
 #endif
@@ -262,6 +339,9 @@ int main(void) {
 		SYS_STDIO_Report(true);
 		SYS_Report("[INIT] STDIO redirection is now active\n");
 	#endif
+	#if defined(CP_TRACE)
+		thread_create(&g_cp_thread, cp_logger, NULL, 50);
+	#endif
 #endif
 
 #ifdef PLATFORM_WII
@@ -352,6 +432,23 @@ int main(void) {
 			gstate.network = true;
 		else
 			gstate.network = false;
+
+		#ifdef RUN_PY_SELFTEST
+		/* Einmaliger CPython-Selbsttest, sobald Netzwerk oben ist (damit die
+		   Logs per debug_send am PC ankommen). Zeigt, ob libpython in CavEX
+		   startet oder wo es haengt.
+		   Getrennt von WITH_PYTHON: so bleibt libpython GELINKT, wird aber nur
+		   ausgefuehrt, wenn RUN_PY_SELFTEST gesetzt ist (Diagnose: linken vs.
+		   ausfuehren). */
+		{
+			extern void cavex_python_selftest(void);
+			static bool py_selftest_done = false;
+			if(!py_selftest_done && gstate.network) {
+				py_selftest_done = true;
+				cavex_python_selftest();
+			}
+		}
+		#endif /*RUN_PY_SELFTEST*/
 		#endif /*PLATFORM_WII*/
 
 		#ifdef PLATFORM_PC
@@ -601,17 +698,22 @@ int main(void) {
 		}
 #endif
 
+		sdlog("loop: top");
 		world_update_lighting(&gstate.world);
 		world_build_chunks(&gstate.world, CHUNK_MESHER_QLENGTH);
 
+		sdlog("loop: vor screen->update");
 		if(gstate.current_screen->update)
 			gstate.current_screen->update(gstate.current_screen,
 											gstate.stats.dt);
+		sdlog("loop: nach screen->update");
 
 		render_world
 			= gstate.current_screen->render_world && gstate.world_loaded;
 
+		sdlog("loop: vor gfx_flip_buffers");
 		gfx_flip_buffers(&gstate.stats.dt_gpu, &gstate.stats.dt_vsync);
+		sdlog("loop: nach gfx_flip_buffers");
 
 		bool rendered_2d = false;
 		if(!gstate.paused) {
@@ -896,9 +998,13 @@ int main(void) {
 #ifdef PLATFORM_PC
 		pc_update();
 #endif
+		sdlog("loop: vor sound_update");
 		sound_update();
+		sdlog("loop: vor input_poll");
 		input_poll();
+		sdlog("loop: vor gfx_finish");
 		gfx_finish(true);
+		sdlog("loop: nach gfx_finish (Frame-Ende)");
 
 //--------------------------------------------------------------------
 	#ifdef DEBUGSEND

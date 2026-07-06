@@ -2,9 +2,8 @@
 	"paths": {
 		"texturepack": "assets",
 		"worlds": "saves",
-		"bg": "bg",
-		"MP3": "mp32",
-		"sounds": "mp32/sound",
+		"MP3": "assets/sound",
+		"sounds": "assets/sound/sound",
 		"tmp": "tmp"
 	},
 	"input": {
