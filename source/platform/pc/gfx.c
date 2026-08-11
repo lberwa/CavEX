@@ -33,6 +33,10 @@
 #include "../gfx.h"
 #include "../input.h"
 #include "../texture.h"
+#include "shaders_fallback.h"
+
+#include <sys/stat.h>
+#include <sys/types.h>
 
 static void shader_error(GLuint shader) {
 	GLint is_compiled = 0;
@@ -48,6 +52,49 @@ static void shader_error(GLuint shader) {
 
 		glDeleteShader(shader);
 	}
+}
+
+/* Legt alle Verzeichnisebenen von path an (wie "mkdir -p"). path ist eine
+   DATEI -> alles bis zum letzten '/' wird als Ordner erstellt. Best effort. */
+static void make_parent_dirs(const char* path) {
+	char tmp[512];
+	size_t n = strlen(path);
+	if(n == 0 || n >= sizeof(tmp))
+		return;
+	memcpy(tmp, path, n + 1);
+
+	for(char* p = tmp + 1; *p; p++) {
+		if(*p == '/') {
+			*p = '\0';
+			mkdir(tmp, 0755); /* Fehler (z.B. EEXIST) ignorieren */
+			*p = '/';
+		}
+	}
+	/* der Teil nach dem letzten '/' ist der Dateiname -> nicht anlegen */
+}
+
+/* Laedt eine Shader-Datei. Fehlt sie, wird der eingebettete Fallback-Inhalt
+   (shaders_fallback.h) an den Pfad geschrieben und verwendet -- so startet der
+   PC-Build auch ohne mitgelieferte vertex.shader/fragment.shader. Fehlt auch
+   der Zielordner (z.B. assets/), wird er zuvor angelegt.
+   Rueckgabe: malloc'ter, nullterminierter Quelltext (Aufrufer gibt ihn frei). */
+static char* load_or_create_shader(const char* path, const char* fallback) {
+	char* src = file_read(path);
+	if(src)
+		return src;
+
+	/* Datei fehlt -> Zielordner sicherstellen und Fallback schreiben (best
+	   effort). */
+	make_parent_dirs(path);
+	FILE* f = fopen(path, "wb");
+	if(f) {
+		fwrite(fallback, 1, strlen(fallback), f);
+		fclose(f);
+	}
+
+	/* Inhalt unabhaengig vom Schreib-Erfolg zurueckgeben (z.B. bei
+	   schreibgeschuetztem Verzeichnis laeuft der Renderer trotzdem). */
+	return strdup(fallback);
 }
 
 static GLuint create_shader(const char* vertex, const char* fragment) {
@@ -154,6 +201,22 @@ void gfx_pointer_to_gui(float* x, float* y) {
 		*x = (*x) * (float)gui_logical_w / (float)(window_width > 0 ? window_width : 1);
 	if(y)
 		*y = (*y) * (float)gui_logical_h / (float)(window_height > 0 ? window_height : 1);
+}
+
+/* Maus-Cursor in LOGISCHEN GUI-Koordinaten (dasselbe Koordinatensystem wie
+   gfx_width()/gfx_height() waehrend des GUI-Passes und wie gutil_text/-texquad).
+   Holt die rohe Cursorposition (Fensterpixel) via GLFW und rechnet sie mit
+   gfx_pointer_to_gui() um. Fuer init_pc.py exponiert. */
+void gfx_pointer_gui(int* out_x, int* out_y) {
+	double dx = 0.0, dy = 0.0;
+	if(window)
+		glfwGetCursorPos(window, &dx, &dy);
+	float fx = (float)dx, fy = (float)dy;
+	gfx_pointer_to_gui(&fx, &fy);
+	if(out_x)
+		*out_x = (int)fx;
+	if(out_y)
+		*out_y = (int)fy;
 }
 
 /* (re)allocate the offscreen render target for a given size */
@@ -286,13 +349,15 @@ void gfx_setup() {
 	string_printf(
 		shader_file, "%s/vertex.shader",
 		config_read_string(&gstate.config_user, "paths.texturepack", "assets"));
-	void* vertex = file_read(string_get_cstr(shader_file));
+	void* vertex
+		= load_or_create_shader(string_get_cstr(shader_file), FALLBACK_VERTEX_SHADER);
 	assert(vertex);
 
 	string_printf(
 		shader_file, "%s/fragment.shader",
 		config_read_string(&gstate.config_user, "paths.texturepack", "assets"));
-	void* fragment = file_read(string_get_cstr(shader_file));
+	void* fragment = load_or_create_shader(string_get_cstr(shader_file),
+										   FALLBACK_FRAGMENT_SHADER);
 	assert(fragment);
 
 	string_clear(shader_file);

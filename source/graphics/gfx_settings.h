@@ -51,7 +51,7 @@
 #define GFX_PC_WINDOW_HEIGHT 480
 
 #ifndef WITH_PYTHON
-#define WITH_PYTHON
+//#define WITH_PYTHON
 #endif
 
 // TODO: 240p on Wii?

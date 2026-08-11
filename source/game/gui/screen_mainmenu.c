@@ -51,10 +51,9 @@ static const char* menu_options[4] = {
 static size_t gui_selection;
 static bool server_failed = false;
 
-// Status des Overlay-Moduls, das im Menue geladen wird
-static bool ext_result_show = false;
-static bool ext_result_ok = false;
-static char ext_result_line[48] = "";
+// Python-Fehler (Datei:Zeile + Meldung), gesetzt von cavex_run_python_file
+extern char g_py_error[160];
+extern bool g_py_error_show;
 
 static enum mp3_sound bg_playlist[16] = {
 	mp3_bg1,
@@ -81,21 +80,46 @@ static void screen_mainmenu_reset(struct screen* s, int width, int height) {
 
 	gstate_set_capture_input_all(false);
 
-	sound_init();
+	//sound_init();
 	sound_play_bg(bg_playlist);
 }
 static void screen_mainmenu_update(struct screen* s, float dt) {
+#ifdef WITH_PYTHON
+	/* Fehlt eine WICHTIGE Textur (default.png/gui_2.png, gesetzt in tex_init),
+	   starten wir automatisch den Server-Flow (init.py mit "no_resources"), das
+	   die Ressourcen nachlaedt. WICHTIG: nicht sofort, sondern erst nach ein paar
+	   gerenderten Frames -- sonst ist der GL/GUI-Zustand noch nicht bereit und
+	   main.py zeigt nichts an. So laeuft es im exakt gleichen Kontext wie ein
+	   manueller "Server"-Klick. */
+	{
+		extern bool g_missing_resources;
+		extern void cavex_run_python_file(const char* path, const char* arg);
+		static int no_res_frames = 0;
+		static bool no_res_done = false;
+		if(!no_res_done && g_missing_resources) {
+			if(++no_res_frames >= 3) {
+				no_res_done = true;
+				cavex_run_python_file(
+					config_read_string(&gstate.config_user,
+										"paths.python_file", "init.py"),
+					"no_resources");
+			}
+			return; // waehrend der Wartezeit keine Menue-Eingaben verarbeiten
+		}
+	}
+#endif
+
 	if (server_failed) {
 
 	if (input_pressed(IB_ANY, 0))
 		sound_play(pcm_click);
 		server_failed = false;
 
-	} else if (ext_result_show) {
+	} else if (g_py_error_show) {
 
 		if (input_pressed(IB_ANY, 0)) {
 			sound_play(pcm_click);
-			ext_result_show = false;
+			g_py_error_show = false;
 		}
 
 	} else {
@@ -123,12 +147,14 @@ static void screen_mainmenu_update(struct screen* s, float dt) {
 #ifdef WITH_PYTHON
 				// CPython ist in CavEX gelinkt -> ./init.py in-process ausfuehren
 				{
-					extern void cavex_run_python_file(const char *path);
+					extern void cavex_run_python_file(const char *path,
+													  const char *arg);
 					extern bool g_sdtrace;
 					extern void sdlog(const char *msg);
 					g_sdtrace = true; // schon VOR dem Aufruf tracen
 					sdlog("=== Server gedrueckt, rufe cavex_run_python_file ===");
-					cavex_run_python_file("./init.py");
+					cavex_run_python_file(config_read_string(&gstate.config_user,
+										  "paths.python_file", "init.py"), NULL);
 					sdlog("=== zurueck aus cavex_run_python_file ===");
 				}
 #else
@@ -199,32 +225,46 @@ static void screen_mainmenu_render2D(struct screen* s, int width, int height) {
 		gutil_text(wx + 20, wy + 40, "Versuchen sie es", 16, false);
 		gutil_text(wx + 20, wy + 60, "später erneut.", 16, false);
 	}
-/*
-	if (ext_result_show) {
-		int window_width = 300;
+	if (g_py_error_show) {
+		int window_width = 420;
 		int wx = width / 2 - window_width / 2;
-		int wy = height / 2 - 70;
+		int wy = height / 2 - 80;
 
-		gutil_window(wx, wy, window_width, 130,
-					 ext_result_ok ? "Modul lief" : "Modul-Fehler");
+		gutil_window(wx, wy, window_width, 160, "Python-Fehler");
 
-		gutil_text(wx + 20, wy + 40, ext_result_line, 16, false);
+		// lange Meldung in Zeilen zu ~40 Zeichen umbrechen (max 4 Zeilen)
+		const int per_line = 40;
+		int len = (int)strlen(g_py_error);
+		char line[per_line + 1];
+		for (int li = 0; li < 4; li++) {
+			int off = li * per_line;
+			if (off >= len)
+				break;
+			int n = len - off;
+			if (n > per_line)
+				n = per_line;
+			memcpy(line, g_py_error + off, n);
+			line[n] = '\0';
+			gutil_text(wx + 15, wy + 35 + li * 22, line, 14, false);
+		}
 
-#ifdef PLATFORM_WII
-		// letzte Nachricht des Moduls selbst -> zeigt, was es getan hat
-		const char* msg = ext_last_message();
-		if (msg && msg[0])
-			gutil_text(wx + 20, wy + 62, msg, 14, false);
-#endif
-
-		gutil_text(wx + 20, wy + 100, "Taste = weiter", 14, false);
-	}*/
+		gutil_text(wx + 15, wy + 135, "Taste = weiter", 14, false);
+	}
 
 	gutil_license(width, height);
 
 	int icon_offset = 32;
 	icon_offset += gutil_control_icon(icon_offset, IB_GUI_UP, "Change selection");
 	icon_offset += gutil_control_icon(icon_offset, IB_GUI_CLICK, "Select option");
+
+	float x, y, a;
+	bool avaiable = screen_pointer_local(0, width, height, &x, &y, &a);
+
+	if(avaiable) {
+		gfx_bind_texture_virtual(&texture_pointer);
+		gutil_texquad_rt_any(x, y, glm_rad(a), 0, 0, 256, 256, 
+							 48 * GFX_GUI_SCALE, 48 * GFX_GUI_SCALE);
+	}
 }
 
 struct screen screen_mainmenu = {

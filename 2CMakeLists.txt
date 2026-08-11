@@ -14,6 +14,10 @@ find_package(ALSA REQUIRED)
 find_package(Threads REQUIRED)
 find_package(glfw3 3.3 REQUIRED)
 find_package(OpenGL REQUIRED)
+# Optional: CPython zum Einbetten (fuer den "Server"-Menuepunkt, run_python.c).
+# Wenn vorhanden -> WITH_PYTHON, sonst faellt cavex_run_python_file auf den
+# leeren Stub zurueck (Build funktioniert trotzdem).
+find_package(Python3 COMPONENTS Development.Embed)
 find_package(GLEW REQUIRED)
 
 add_executable(cavex
@@ -250,6 +254,8 @@ add_executable(cavex
 				source/config.c
 				source/particle.c
 				source/sound.c
+				source/run_python.c
+				source/boot/boot.c
 
 				source/lodepng/lodepng.c
 
@@ -272,7 +278,11 @@ add_executable(cavex
 				source/pc_sound/src/os/unix/pa_unix_util.c
 			)
 
-target_compile_definitions(cavex PRIVATE PLATFORM_PC CGLM_ALL_UNALIGNED)
+# PA_USE_ALSA=1 ist noetig, damit PortAudio das ALSA-Backend registriert
+# (pa_unix_hostapis.c nimmt PaAlsa_Initialize nur bei #if PA_USE_ALSA in die
+# Initializer-Liste auf). Ohne das Makro gibt es 0 Host-APIs -> 0 Geraete ->
+# Pa_GetDefaultOutputDevice() == -1 -> "Device unavailable".
+target_compile_definitions(cavex PRIVATE PLATFORM_PC CGLM_ALL_UNALIGNED PA_USE_ALSA=1)
 target_include_directories(cavex PRIVATE source/cubiomes)
 target_compile_options(cavex PRIVATE -fwrapv)
 
@@ -284,3 +294,14 @@ set_target_properties(
 set_property(TARGET cavex PROPERTY INTERPROCEDURAL_OPTIMIZATION False)
 
 target_link_libraries(cavex ${CMAKE_THREAD_LIBS_INIT} ZLIB::ZLIB ${ALSA_LIBRARIES} glfw GLEW::GLEW OpenGL::GL m)
+
+# CPython einbetten (nur wenn gefunden). init_pc.py ruft CavEX-Funktionen ueber
+# ctypes anhand der aus run_python.c uebergebenen Adressen auf.
+if(Python3_FOUND)
+	target_compile_definitions(cavex PRIVATE WITH_PYTHON)
+	target_include_directories(cavex PRIVATE ${Python3_INCLUDE_DIRS})
+	target_link_libraries(cavex ${Python3_LIBRARIES})
+	message(STATUS "cavex: Python-Embedding aktiv (${Python3_VERSION})")
+else()
+	message(STATUS "cavex: kein Python-Embedding (Python3 Development.Embed nicht gefunden)")
+endif()

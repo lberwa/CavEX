@@ -25,6 +25,30 @@
 #include "../platform/texture.h"
 #include "texture_atlas.h"
 
+/* Diagnose-SD-Log fuer den Texture-Atlas-Crash (per -DTEX_ATLAS_SDLOG). Schreibt
+   synchron nach sd:/texatlaslog.txt (fopen/fclose je Zeile -> jede geloggte Zeile
+   ist garantiert auf der Karte, bevor die naechste Operation crashen kann). Die
+   letzte Zeile der Datei zeigt damit die Entry, bei der es gestorben ist. */
+#if defined(PLATFORM_WII) && defined(TEX_ATLAS_SDLOG)
+#include <stdarg.h>
+static void tex_atlas_log(const char* fmt, ...) {
+	char buf[256];
+	va_list ap;
+	va_start(ap, fmt);
+	vsnprintf(buf, sizeof buf, fmt, ap);
+	va_end(ap);
+	FILE* f = fopen("sd:/texatlaslog.txt", "a");
+	if(f) {
+		fputs(buf, f);
+		fputc('\n', f);
+		fclose(f);
+	}
+}
+#define TEX_ATLAS_LOG(...) tex_atlas_log(__VA_ARGS__)
+#else
+#define TEX_ATLAS_LOG(...) ((void)0)
+#endif
+
 static uint16_t global_block_atlas[TEXAT_MAX];
 static uint16_t global_block_atlas2[TEXAT_MAX];
 static uint16_t global_particle_atlas[TEXAT_MAX];
@@ -125,6 +149,14 @@ static uint16_t atlas_axis_capacity(uint16_t size, uint16_t tile_size,
 
 void* tex_atlas_compute(dict_atlas_src_t atlas, uint16_t* atlas_dst,
 						uint8_t* image, size_t width, size_t height) {
+	/* Canary: allererste Zeile -> erscheint, sobald die Funktion betreten wird,
+	   noch vor jeder Rechnung. Fehlt selbst diese Zeile in der Datei, wurde die
+	   Funktion nicht erreicht oder das Makro ist nicht einkompiliert. */
+	TEX_ATLAS_LOG("=== tex_atlas_compute ENTER: atlas=%p dst=%p image=%p w=%u "
+				  "h=%u ===",
+				  (void*)atlas, (void*)atlas_dst, (void*)image, (unsigned)width,
+				  (unsigned)height);
+
 #if 0
 	if (!image) {
 	    printf("Error: image is NULL\n");
@@ -140,7 +172,16 @@ void* tex_atlas_compute(dict_atlas_src_t atlas, uint16_t* atlas_dst,
 	}
 #endif
 
-	assert(image && width >= 16 && width == height);
+	/* Defensiv: schlaegt das Laden der Textur fehl (fehlende Datei, falsches CWD
+	   nach Reboot), liefert tex_read() NULL mit Muell-Dimensionen. KEIN assert
+	   hier -- eine fehlende Textur ist ein regulaerer Fall (der Aufrufer laedt
+	   dann das lila "missing texture"-Muster). Sonst dereferenziert die
+	   Kopierschleife NULL+Offset (DSI). Der Aufrufer behandelt NULL sauber. */
+	if(!image || width < 16 || width != height) {
+		TEX_ATLAS_LOG("ABORT: ungueltiges image=%p w=%u h=%u -> return NULL",
+					  (void*)image, (unsigned)width, (unsigned)height);
+		return NULL;
+	}
 
 #ifdef PLATFORM_WII
 	/* GX texture coordinates use GX_U16 with frac = log2(atlas size) (set in
@@ -169,12 +210,20 @@ void* tex_atlas_compute(dict_atlas_src_t atlas, uint16_t* atlas_dst,
 	last_atlas_padding = padding;
 	last_atlas_size = output_size;
 
-	uint8_t* output = malloc((size_t)output_size * output_size * 4);
+	size_t output_bytes = (size_t)output_size * output_size * 4;
+	uint8_t* output = malloc(output_bytes);
+
+	TEX_ATLAS_LOG("compute WII: image=%p w=%u h=%u tile=%u bscale=%u pad=%u "
+				  "outsz=%u stride=%u axis=%u count=%u out=%p outbytes=%u",
+				  (void*)image, (unsigned)width, (unsigned)height, tile_size,
+				  border_scale, padding, output_size, stride, atlas_axis,
+				  (unsigned)dict_atlas_src_size(atlas), (void*)output,
+				  (unsigned)output_bytes);
 
 	if(!output)
 		return NULL;
 
-	memset(output, 255, (size_t)output_size * output_size * 4);
+	memset(output, 255, output_bytes);
 
 	dict_atlas_src_it_t it;
 	dict_atlas_src_it(it, atlas);
@@ -190,6 +239,32 @@ void* tex_atlas_compute(dict_atlas_src_t atlas, uint16_t* atlas_dst,
 
 		size_t current_x = (current % atlas_axis) * stride + padding;
 		size_t current_y = (current / atlas_axis) * stride + padding;
+
+#if defined(PLATFORM_WII) && defined(TEX_ATLAS_SDLOG)
+		{
+			/* Worst-case-Offsets an der aeussersten Ecke der Kachel (inkl.
+			   Border). Uebersteigt src_max image_bytes oder dst_max
+			   output_bytes, ist der Zugriff out-of-bounds -> Ursache. */
+			int64_t cx = tile_size + border_scale - 1;
+			int64_t cy = tile_size + border_scale - 1;
+			size_t src_max = ((clamp_n(cx, tile_size) + e->x * tile_size)
+							  + (clamp_n(cy, tile_size) + e->y * tile_size)
+									* width)
+				* 4 + 3;
+			size_t dst_max
+				= ((current_x + cx) + (current_y + cy) * output_size) * 4 + 3;
+			size_t image_bytes = (size_t)width * height * 4;
+			TEX_ATLAS_LOG("  e[%d] name=%d x=%u y=%u col=%d bg=%d cx=%u cy=%u "
+						  "src_max=%u/%u dst_max=%u/%u%s",
+						  current, (int)e->name, e->x, e->y, e->colorize.enable,
+						  e->bg.enable, (unsigned)current_x, (unsigned)current_y,
+						  (unsigned)src_max, (unsigned)image_bytes,
+						  (unsigned)dst_max, (unsigned)output_bytes,
+						  (src_max >= image_bytes || dst_max >= output_bytes)
+							  ? " !!OOB!!"
+							  : "");
+		}
+#endif
 
 		for(int64_t y = -border_scale; y < tile_size + border_scale; y++) {
 			for(int64_t x = -border_scale; x < tile_size + border_scale; x++) {

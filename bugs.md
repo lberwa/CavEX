@@ -5,13 +5,11 @@
 
 * Random crashes, once in a while. Maybe I'll implement an optional auto-save, to prevent some headaches and tears
 
-* Particles already spark fire before the torch is showing, after placing a torch
+* ~~Particles already spark fire before the torch is showing, after placing a torch~~
 
-* If you jump into water or climb down the ladder, you take damage
+* ~~If you jump into water or climb down the ladder, you take damage~~
 
 * Redstone doesn't really work
-
-* Probably more
 
 * If you jump into a block, you will get stuck and won't be able to move.
 
@@ -30,3 +28,15 @@
 * TNT and Creeper drop glass
 
 * still water looks like stone brick
+
+* Input system of the PC must work like on the Wii: checking ... every frame all buttons and register them for input_pressed() and input_released()
+
+* ~~Upgrader~~
+
+* ~~backup upgrader~~
+
+* ~~frozen config.json if no config.json~~
+
+* save player camera pos of player 2
+
+* Buttons like in settings in main menu

@@ -444,8 +444,8 @@ void gutil_license(int width, int height) {
 	
 	char str[64];
 	snprintf(str, sizeof(str),
-	         GAME_NAME " Alpha %i.%i.%i_f%i (impl. B1.7.3)",
-	         VERSION_MAJOR, VERSION_MINOR, VERSION_PATCH, VERSION_FORK);
+	         GAME_NAME " Alpha %i.%i.%i_f%i (impl. %s)",
+	         VERSION_MAJOR, VERSION_MINOR, VERSION_PATCH, VERSION_FORK, VERSION_IMPL);
 	gutil_text(5, height - 2 * GFX_GUI_SCALE - (9 * GFX_GUI_SCALE) * 1 + GFX_GUI_SCALE*2, 
 				str, size, true);
 }

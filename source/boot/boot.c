@@ -17,17 +17,19 @@
 	along with CavEX.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include "boot.h"
+
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
-#include <ogc/system.h>
-#include <ogc/machine/processor.h>
 
 #include <stdio.h>
 #include <fcntl.h>
 #include <unistd.h>
 
-#include "boot.h"
+#ifdef PLATFORM_WII
+#include <ogc/system.h>
+#include <ogc/machine/processor.h>
 
 #include "panic.h"
 #include "loader_reloc.h"
@@ -109,7 +111,8 @@ extern int stat (const char *__restrict __file,
 		 struct stat *__restrict __buf) __THROW __nonnull ((1, 2));
 
 
-static bool launch_external_dol(entry_point *ep, const char *path, const char *args) 
+static bool launch_external_dol(entry_point *ep, void **arena2hi_out,
+								const char *path, const char *args)
 {
 	struct stat st;
 	int fd;
@@ -144,23 +147,83 @@ static bool launch_external_dol(entry_point *ep, const char *path, const char *a
 	if (args)
 		arg_len = strlen(args) + 1;
 
-	ok = loader_reloc(ep, data, st.st_size, args, arg_len, true);
-	blob_free(data);
+	/* Reihenfolge ist kritisch: die Dienste MUESSEN heruntergefahren werden,
+	   solange die libogc-Datenstrukturen (u.a. die Reset-Funktions-Queue) noch
+	   gueltig sind. loader_reloc() kopiert das neue Image IN-PLACE an seine
+	   finalen Adressen und ueberschreibt dabei das .data-Segment des laufenden
+	   Programms -- danach ist libogc unbrauchbar. arena2hi wird deshalb JETZT
+	   ausgelesen und an loader_exec() weitergereicht.
 
-	if (!ok)
+	   Der Blob wird bewusst nicht mehr freigegeben: nach erfolgreicher
+	   Relokation kehren wir nie zurueck, und blob_free() wuerde ohnehin auf
+	   libogc (SYS_GetArena2Hi) zugreifen, dessen Zustand dann bereits zerstoert
+	   ist. */
+	*arena2hi_out = SYS_GetArena2Hi();
+
+	loader_shutdown_services();
+
+	ok = loader_reloc(ep, data, st.st_size, args, arg_len, true);
+	if (!ok) {
+		/* Fehlschlag erst nach dem Shutdown -> es gibt keinen Weg zurueck in
+		   das (halb tote) Spiel. Deterministisch abbrechen statt undefiniert
+		   weiterzulaufen. */
+		gprintf("loader_reloc failed after service shutdown\n");
+		panic();
+	}
 
 	return ok;
 }
 
 bool boot_dol(const char *path, const char *args) {
     entry_point ep;
+    void *arena2hi;
     bool ok;
 
-    ok = launch_external_dol(&ep, path, args);
+    ok = launch_external_dol(&ep, &arena2hi, path, args);
     if (!ok)
         return false;
 
-    loader_exec(ep);
+    loader_exec(ep, arena2hi);
 
     return true;
 }
+#endif
+
+#ifdef PLATFORM_PC
+
+/* PC-Gegenstueck zu loader_exec() auf der Wii: statt eine externe DOL zu laden
+   und dorthin zu vektorisieren, startet sich der Prozess komplett neu. execv()
+   ersetzt das laufende Prozessabbild durch eine frische Instanz derselben
+   Executable (/proc/self/exe) -- das entspricht dem Wii-Verhalten "alles
+   herunterfahren und von vorne starten". path/args werden ignoriert (auf der
+   Wii ist "boot.dol" ohnehin CavEX selbst).
+
+   Kehrt nur zurueck, wenn execv() fehlschlaegt (dann false). */
+bool boot_dol(const char *path, const char *args) {
+	(void)path;
+	(void)args;
+
+	char exe[512];
+	ssize_t len = readlink("/proc/self/exe", exe, sizeof(exe) - 1);
+	if (len <= 0)
+		return false;
+	exe[len] = '\0';
+
+	/* Wurde das Binary seit dem Start ersetzt (z.B. durch einen Rebuild),
+	   haengt der Kernel " (deleted)" an /proc/self/exe -> execv() faende den
+	   Pfad nicht (ENOENT). Suffix abschneiden, damit die frisch gebaute
+	   Executable am echten Pfad gestartet wird. */
+	const char *deleted = " (deleted)";
+	size_t dlen = strlen(deleted);
+	if ((size_t)len > dlen && strcmp(exe + len - dlen, deleted) == 0)
+		exe[len - dlen] = '\0';
+
+	char *const argv[] = {exe, NULL};
+	execv(exe, argv);
+
+	/* nur erreichbar, wenn execv() fehlgeschlagen ist */
+	perror("boot_dol: execv");
+	return false;
+}
+
+#endif

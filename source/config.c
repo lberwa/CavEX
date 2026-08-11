@@ -18,13 +18,58 @@
 */
 
 #include <assert.h>
+#include <stdio.h>
+#include <string.h>
+#include <sys/stat.h>
 
 #include "config.h"
+#include "config_frozen.h"
 #include "game/game_state.h"
+
+/* Legt alle Verzeichnisebenen von path an (wie "mkdir -p"); path ist eine
+   DATEI -> alles bis zum letzten '/' wird als Ordner erstellt. Best effort. */
+static void config_make_parent_dirs(const char* path) {
+	char tmp[512];
+	size_t n = strlen(path);
+	if(n == 0 || n >= sizeof(tmp))
+		return;
+	memcpy(tmp, path, n + 1);
+
+	for(char* p = tmp + 1; *p; p++) {
+		if(*p == '/') {
+			*p = '\0';
+			mkdir(tmp, 0755); /* Fehler (z.B. EEXIST) ignorieren */
+			*p = '/';
+		}
+	}
+}
+
+/* Schreibt die eingebettete ("frozen") Default-Config nach filename. Der Inhalt
+   ist plattformabhaengig (config_wii.json bzw. config_pc.json). Best effort. */
+static void config_write_frozen(const char* filename) {
+#ifdef PLATFORM_WII
+	const char* content = FROZEN_CONFIG_WII;
+#else
+	const char* content = FROZEN_CONFIG_PC;
+#endif
+	config_make_parent_dirs(filename);
+	FILE* f = fopen(filename, "wb");
+	if(f) {
+		fwrite(content, 1, strlen(content), f);
+		fclose(f);
+	}
+}
 
 bool config_create(struct config* c, const char* filename) {
 	assert(c && filename);
 	c->root = json_parse_file(filename);
+
+	if(!c->root) {
+		/* Config fehlt (oder ist kaputt) -> frozen Default dorthin schreiben und
+		   erneut laden, damit das Spiel auf beiden Plattformen startet. */
+		config_write_frozen(filename);
+		c->root = json_parse_file(filename);
+	}
 
 	if(!c->root)
 		return false;

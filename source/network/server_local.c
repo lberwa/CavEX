@@ -514,8 +514,8 @@ void server_local_set_player_health(struct server_local* s, int player_id, short
 			}
 		}
 
-		//respawn with half health
-		player->health = MAX_PLAYER_HEALTH/2;
+		//respawn with full health
+		player->health = MAX_PLAYER_HEALTH;
 		player->x = player->spawn_x;
 		player->y = player->spawn_y;
 		player->z = player->spawn_z;
@@ -889,7 +889,7 @@ static void server_local_process(struct server_rpc* call, void* user) {
 						sp->z = base_pos[2] + (float)(i * 2);
 						sp->rx = base_rot[0];
 						sp->ry = base_rot[1];
-						sp->fall_y = (int)sp->y;
+						sp->fall_distance = 0.0f;
 						sp->old_vel_y = 0;
 						sp->vel_y = 0;
 						sp->has_pos = true;
@@ -910,7 +910,7 @@ static void server_local_process(struct server_rpc* call, void* user) {
 					player->z = base_pos[2];
 					player->rx = base_rot[0];
 					player->ry = base_rot[1];
-					player->fall_y = player->y;
+					player->fall_distance = 0.0f;
 					player->old_vel_y = 0;
 					player->vel_y = 0;
 					player->has_pos = true;
@@ -1539,23 +1539,51 @@ for (int i = 0; i < 4; i++) {
 		server_world_get_block(&s->world, player->x-1, player->y, player->z, &blk);
 		bool in_water = (blk.type == BLOCK_WATER_STILL || blk.type == BLOCK_WATER_FLOW);
 		bool in_lava = (blk.type == BLOCK_LAVA_STILL || blk.type == BLOCK_LAVA_FLOW);
+		int feet_y = (int)floor(player->y - 1.62);
+		struct block_data blk_climb, blk_climb2;
+		server_world_get_block(&s->world, player->x, feet_y,     player->z, &blk_climb);
+		server_world_get_block(&s->world, player->x, feet_y + 1, player->z, &blk_climb2);
+		bool on_climbable = (blk_climb.type  == BLOCK_LADDER || blk_climb.type  == BLOCK_VINE
+		                  || blk_climb2.type == BLOCK_LADDER || blk_climb2.type == BLOCK_VINE);
 		if(player->y != 0) {
 			server_world_get_block(&s->world, player->x-1, player->y-1, player->z, &blk);
 			if(blk.type == BLOCK_LAVA_STILL || blk.type == BLOCK_LAVA_FLOW) in_lava = true;
 		}
 
-		// check if player is falling
-		// reset falling height if player is underwater
-		if((player->old_vel_y >= -0.079f && player->vel_y < -0.079f) || in_water) {
-			player->fall_y = player->y;
-		}
+		// landing check first, before fall_distance gets reset
+		bool falling = player->vel_y < -0.079f;
 		if(player->old_vel_y < -0.079f && player->vel_y >= -0.079f) {
-			int fall_distance = player->fall_y - player->y;
-			if(fall_distance >= 4 && server_local_damage_enabled()) {
-				server_local_set_player_health(s, i, player->health-HEALTH_PER_HEART*(fall_distance-3));
+			struct block_data blk_below;
+			server_world_get_block(&s->world, player->x-1, player->y-1, player->z, &blk_below);
+			bool landed_in_water = in_water
+				|| blk_below.type == BLOCK_WATER_STILL
+				|| blk_below.type == BLOCK_WATER_FLOW;
+			int fall_blocks = (int)player->fall_distance;
+			if(i == 0) printf("[LAND p%d] fall_dist=%.2f (%d Bloecke) wasser=%s -> schaden=%d Herzen\n",
+				i, player->fall_distance, fall_blocks,
+				landed_in_water ? "JA" : "nein",
+				(fall_blocks >= 4 && !landed_in_water) ? fall_blocks-3 : 0);
+			if(fall_blocks >= 4 && server_local_damage_enabled() && !landed_in_water) {
+				server_local_set_player_health(s, i, player->health-HEALTH_PER_HEART*(fall_blocks-3));
 			}
-			player->fall_y = player->y;
+			player->fall_distance = 0.0f;
 		}
+
+		// accumulate fall distance
+		if(in_water || on_climbable) {
+			player->fall_distance = 0.0f;
+		} else if(falling) {
+			player->fall_distance -= player->vel_y;
+		} else {
+			player->fall_distance = 0.0f;
+		}
+		if(i == 0) printf("[FALL p%d] pos=(%.2f,%.2f,%.2f) feet_y=%d blk=%d/%d vel_y=%.3f fall_dist=%.2f | falle=%s leiter=%s wasser=%s\n",
+			i, player->x, player->y, player->z,
+			feet_y, blk_climb.type, blk_climb2.type,
+			player->vel_y, player->fall_distance,
+			falling ? "JA" : "nein",
+			on_climbable ? "JA" : "nein",
+			in_water ? "JA" : "nein");
 
 		if(in_lava) {
 			// damage player in lava every 8 ticks
@@ -1579,23 +1607,54 @@ for (int i = 0; i < 4; i++) {
 	server_world_get_block(&s->world, s->player.x-1, s->player.y, s->player.z, &blk);
 	bool in_water = (blk.type == BLOCK_WATER_STILL || blk.type == BLOCK_WATER_FLOW);
 	bool in_lava = (blk.type == BLOCK_LAVA_STILL || blk.type == BLOCK_LAVA_FLOW);
+	int feet_y = (int)floor(s->player.y - 1.62);
+	struct block_data blk_climb, blk_climb2;
+	server_world_get_block(&s->world, s->player.x, feet_y,     s->player.z, &blk_climb);
+	server_world_get_block(&s->world, s->player.x, feet_y + 1, s->player.z, &blk_climb2);
+	bool on_climbable = (blk_climb.type  == BLOCK_LADDER || blk_climb.type  == BLOCK_VINE
+	                  || blk_climb2.type == BLOCK_LADDER || blk_climb2.type == BLOCK_VINE);
 	if(s->player.y != 0) {
 		server_world_get_block(&s->world, s->player.x-1, s->player.y-1, s->player.z, &blk);
 		if(blk.type == BLOCK_LAVA_STILL || blk.type == BLOCK_LAVA_FLOW) in_lava = true;
 	}
 
-	// check if player is falling
-	// reset falling height if player is underwater
-	if((s->player.old_vel_y >= -0.079f && s->player.vel_y < -0.079f) || in_water) {
-		s->player.fall_y = s->player.y;
-	}
+	// landing check first, before fall_distance gets reset
+	bool falling = s->player.vel_y < -0.079f;
 	if(s->player.old_vel_y < -0.079f && s->player.vel_y >= -0.079f) {
-		int fall_distance = s->player.fall_y - s->player.y;
-		if(fall_distance >= 4 && server_local_damage_enabled()) {
-			server_local_set_player_health(s, 0, s->player.health-HEALTH_PER_HEART*(fall_distance-3));
+		struct block_data blk_below;
+		server_world_get_block(&s->world, s->player.x-1, s->player.y-1, s->player.z, &blk_below);
+		bool landed_in_water = in_water
+			|| blk_below.type == BLOCK_WATER_STILL
+			|| blk_below.type == BLOCK_WATER_FLOW;
+		int fall_blocks = (int)s->player.fall_distance;
+		printf("[LAND] fall_dist=%.2f (%d Bloecke) wasser=%s -> schaden=%d Herzen\n",
+			s->player.fall_distance, fall_blocks,
+			landed_in_water ? "JA" : "nein",
+			(fall_blocks >= 4 && !landed_in_water) ? fall_blocks-3 : 0);
+		if(fall_blocks >= 4 && server_local_damage_enabled() && !landed_in_water) {
+			server_local_set_player_health(s, 0, s->player.health-HEALTH_PER_HEART*(fall_blocks-3));
 		}
-		s->player.fall_y = s->player.y;
+		s->player.fall_distance = 0.0f;
 	}
+
+	// accumulate fall distance
+	if(in_water || on_climbable) {
+		s->player.fall_distance = 0.0f;
+	} else if(falling) {
+		s->player.fall_distance -= s->player.vel_y;
+	} else {
+		s->player.fall_distance = 0.0f;
+	}
+
+#ifdef FALL_HEALTH_DEBUG
+	printf("[FALL] pos=(%.2f,%.2f,%.2f) feet_y=%d blk=%d/%d vel_y=%.3f fall_dist=%.2f | falle=%s leiter=%s wasser=%s\n",
+		s->player.x, s->player.y, s->player.z,
+		feet_y, blk_climb.type, blk_climb2.type,
+		s->player.vel_y, s->player.fall_distance,
+		falling ? "JA" : "nein",
+		on_climbable ? "JA" : "nein",
+		in_water ? "JA" : "nein");
+#endif
 
 	if(in_lava) {
 		// damage player in lava every 8 ticks
@@ -1683,7 +1742,7 @@ void server_local_create(struct server_local* s) {
 		s->players[i].z = 0.0;
 		s->players[i].vel_y = 0.0f;
 		s->players[i].old_vel_y = 0.0f;
-		s->players[i].fall_y = 0;
+		s->players[i].fall_distance = 0.0f;
 		s->players[i].oxygen = MAX_OXYGEN;
 		s->players[i].health = MAX_PLAYER_HEALTH;
 		s->players[i].spawn_x = 0;

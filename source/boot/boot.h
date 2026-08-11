@@ -20,6 +20,8 @@
 #ifndef BOOT_H
 #define BOOT_H
 
+#include <stdbool.h>
+
 bool boot_dol(const char *path, const char *args);
 
 #endif

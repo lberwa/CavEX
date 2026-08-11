@@ -470,6 +470,9 @@ bool sound_play(enum pcm_sound sound) {
 #include <stdbool.h>
 #include <string.h>
 #include <math.h>
+#include <pthread.h>
+#include <unistd.h>
+#include <fcntl.h>
 
 #include "pc_sound/include/portaudio.h"
 #include "sound.h"
@@ -477,10 +480,12 @@ bool sound_play(enum pcm_sound sound) {
 #include "game/game_state.h"
 
 #define MAX_PCM_PLAYLIST 16
+#define OUT_CHANNELS 2      // Stream ist stereo (siehe Pa_OpenDefaultStream)
 
 typedef struct {
     uint8_t *data;
-    size_t size;
+    size_t size;            // Groesse der PCM-Daten in Bytes
+    size_t pos;             // aktuelle Abspielposition in Bytes
     int channels;
     int sample_rate;
 } wav_t;
@@ -488,6 +493,10 @@ typedef struct {
 // PCM playlist
 static wav_t pcm_playlist[MAX_PCM_PLAYLIST];
 static int pcm_playlist_num = 0;
+
+// Schuetzt pcm_playlist: der PortAudio-Callback laeuft in einem eigenen Thread,
+// sound_play()/sound_update() im Main-Thread.
+static pthread_mutex_t pcm_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static float global_volume = 1.0f;
 
@@ -506,26 +515,69 @@ static wav_t load_wav_file(const char *path) {
         return w;
     }
 
-    // Einfacher Loader: Header überspringen, nur PCM 16-bit Stereo 44.1kHz
-    fseek(f, 44, SEEK_SET); // skip WAV header
-    fseek(f, 0, SEEK_END);
-    long file_size = ftell(f);
-    rewind(f);
-    fseek(f, 44, SEEK_SET); // header überspringen
-    size_t data_size = file_size - 44;
-
-    w.data = malloc(data_size);
-    if (!w.data) {
+    // RIFF/WAVE-Kopf pruefen
+    unsigned char riff[12];
+    if (fread(riff, 1, 12, f) != 12
+        || memcmp(riff, "RIFF", 4) != 0 || memcmp(riff + 8, "WAVE", 4) != 0) {
+        fprintf(stderr, "Not a RIFF/WAVE file: %s\n", path);
         fclose(f);
         return w;
     }
 
-    fread(w.data, 1, data_size, f);
-    w.size = data_size;
-    w.channels = 2;
-    w.sample_rate = 44100;
+    int channels = 2, sample_rate = 44100, bits = 16;
 
+    // Chunks der Reihe nach durchgehen und gezielt "fmt " und "data" lesen.
+    // WICHTIG: es koennen andere Chunks (z.B. LIST/INFO) VOR "data" liegen --
+    // deshalb NICHT einfach 44 Bytes ueberspringen.
+    for (;;) {
+        unsigned char ch[8];
+        if (fread(ch, 1, 8, f) != 8)
+            break;
+        uint32_t csize = ch[4] | (ch[5] << 8) | (ch[6] << 16)
+                         | ((uint32_t)ch[7] << 24);
+
+        if (memcmp(ch, "fmt ", 4) == 0) {
+            unsigned char fmt[16];
+            uint32_t n = csize < 16 ? csize : 16;
+            if (fread(fmt, 1, n, f) != n)
+                break;
+            channels = fmt[2] | (fmt[3] << 8);
+            sample_rate = fmt[4] | (fmt[5] << 8) | (fmt[6] << 16)
+                          | ((uint32_t)fmt[7] << 24);
+            bits = fmt[14] | (fmt[15] << 8);
+            // Rest des fmt-Chunks + evtl. Pad-Byte ueberspringen
+            if (csize > n)
+                fseek(f, (long)(csize - n), SEEK_CUR);
+            if (csize & 1)
+                fseek(f, 1, SEEK_CUR);
+        } else if (memcmp(ch, "data", 4) == 0) {
+            w.data = malloc(csize);
+            if (!w.data) {
+                fclose(f);
+                return w;
+            }
+            w.size = fread(w.data, 1, csize, f);
+            break;
+        } else {
+            // unbekannter Chunk -> ueberspringen (+ Pad-Byte bei ungerader Groesse)
+            fseek(f, (long)(csize + (csize & 1)), SEEK_CUR);
+        }
+    }
     fclose(f);
+
+    w.pos = 0;
+    w.channels = channels;
+    w.sample_rate = sample_rate;
+
+    // Der Callback erwartet 16-bit-PCM. Andere Formate lieber ablehnen als
+    // Rauschen abspielen. (Das Konvertierungsskript erzeugt pcm_s16le/stereo/44100.)
+    if (bits != 16 || !w.data) {
+        if (bits != 16)
+            fprintf(stderr, "WAV %s: erwartet 16-bit, ist %d-bit\n", path, bits);
+        free(w.data);
+        w.data = NULL;
+        w.size = 0;
+    }
     return w;
 }
 
@@ -632,17 +684,37 @@ static int pa_callback(const void *inputBuffer, void *outputBuffer,
                        void *userData) {
     float *out = (float*)outputBuffer;
     (void)inputBuffer;
-    size_t frames_remaining = framesPerBuffer;
+    (void)timeInfo;
+    (void)statusFlags;
+    (void)userData;
 
+    unsigned long total = framesPerBuffer * OUT_CHANNELS;
+
+    // Immer zuerst mit Stille fuellen -- sonst spielt PortAudio bei leerer
+    // Playlist den uninitialisierten Puffer ab (Dauerrauschen).
+    for (unsigned long i = 0; i < total; i++)
+        out[i] = 0.0f;
+
+    pthread_mutex_lock(&pcm_mutex);
     for (int i = 0; i < pcm_playlist_num; i++) {
         wav_t *w = &pcm_playlist[i];
-        size_t samples = w->size / sizeof(int16_t);
-        int16_t *data16 = (int16_t*)w->data;
+        if (!w->data || w->channels != OUT_CHANNELS)
+            continue; // nur 16-bit-Stereo (siehe load_wav_file)
 
-        for (size_t j = 0; j < frames_remaining * w->channels && j < samples; j++) {
-            out[j] = data16[j] / 32768.0f * global_volume;
+        const int16_t *data16 = (const int16_t*)w->data;
+        size_t total_samples = w->size / sizeof(int16_t);
+        size_t s = w->pos / sizeof(int16_t); // aktueller Sample-Index (alle Kanaele)
+
+        // Ab aktueller Position ins Ausgabe-Frame mischen (additiv + clampen).
+        for (unsigned long j = 0; j < total && s < total_samples; j++, s++) {
+            float v = out[j] + (data16[s] / 32768.0f) * global_volume;
+            if (v > 1.0f) v = 1.0f;
+            else if (v < -1.0f) v = -1.0f;
+            out[j] = v;
         }
+        w->pos = s * sizeof(int16_t); // Position fuer naechsten Callback merken
     }
+    pthread_mutex_unlock(&pcm_mutex);
 
     return paContinue;
 }
@@ -651,51 +723,49 @@ static int pa_callback(const void *inputBuffer, void *outputBuffer,
 // Init / Cleanup
 //----------------------
 void sound_init(void) {
-    printf("start\n");
-    
+    // Schon initialisiert? Sonst wuerde ein zweiter Stream auf demselben
+    // Geraet geoeffnet -> zwei Callbacks, Chaos.
+    if (pa_stream)
+        return;
+
+    // PortAudio/ALSA/JACK/BlueALSA schreiben beim Initialisieren jede Menge
+    // Backend-Gemecker direkt nach stderr ("unable to open slave", "jack server
+    // is not running", ...). Waehrend der Init stderr temporaer nach /dev/null
+    // umleiten und danach wiederherstellen -> Konsole bleibt sauber.
+    int saved_stderr = dup(STDERR_FILENO);
+    int devnull = open("/dev/null", O_WRONLY);
+    if (devnull != -1) {
+        dup2(devnull, STDERR_FILENO);
+        close(devnull);
+    }
+
     PaError err = Pa_Initialize();
+    if (err == paNoError) {
+        err = Pa_OpenDefaultStream(&pa_stream,
+                                   0,          // input channels
+                                   2,          // output channels
+                                   paFloat32,  // 32-bit float output
+                                   44100,      // sample rate
+                                   256,        // frames per buffer
+                                   pa_callback,
+                                   NULL);
+        if (err == paNoError)
+            Pa_StartStream(pa_stream);
+    }
+
+    // stderr wiederherstellen (VOR eventuellen Fehlermeldungen)
+    if (saved_stderr != -1) {
+        dup2(saved_stderr, STDERR_FILENO);
+        close(saved_stderr);
+    }
+
     if (err != paNoError) {
         fprintf(stderr, "PortAudio init failed: %s\n", Pa_GetErrorText(err));
+        pa_stream = NULL;
         return;
     }
-    /*
-    int numDevices = Pa_GetDeviceCount();
-    printf("numDevices: %d", numDevices);
-    for(int i=0;i<numDevices;i++){
-        const PaDeviceInfo* info = Pa_GetDeviceInfo(i);
-        printf("Device %d: %s, maxOut: %d\n", i, info->name, info->maxOutputChannels);
-    }*/
-    int numDevices = Pa_GetDeviceCount();
-    for(int i=0;i<numDevices;i++){
-        const PaDeviceInfo* info = Pa_GetDeviceInfo(i);
-        printf("Device %d: %s, maxOutChannels=%d, defaultSampleRate=%f\n",
-           i, info->name, info->maxOutputChannels, info->defaultSampleRate);
-    }
-    /*PaStream* stream;
-    err = Pa_OpenStream(&stream,
-                            NULL,       // kein Input
-                            &outputParams, // hier explizit DeviceIndex=HDMI
-                            44100, 256, paClipOff,
-                            NULL, NULL);
-*/
-
-    err = Pa_OpenDefaultStream(&pa_stream,
-                               0,          // input channels
-                               2,          // output channels
-                               paFloat32,  // 32-bit float output
-                               44100,      // sample rate
-                               256,        // frames per buffer
-                               pa_callback,
-                               NULL);
-    if (err != paNoError) {
-        fprintf(stderr, "PortAudio open stream failed: %s\n", Pa_GetErrorText(err));
-        return;
-    }
-
-    Pa_StartStream(pa_stream);
 
     pcm_playlist_num = 0;
-    return;
 }
 
 void sound_shutdown(void) {
@@ -725,25 +795,40 @@ void sound_set_volume(float volume) {
 // PCM Playback
 //----------------------
 bool sound_play(enum pcm_sound sound) {
-    if (pcm_playlist_num >= MAX_PCM_PLAYLIST) return false;
-
     const char *path = sound_get_pcm_path(sound);
     if (!path) return false;
 
+    // Laden ausserhalb des Locks (Disk-I/O), damit der Callback nicht wartet.
     wav_t w = load_wav_file(path);
     if (!w.data) return false;
 
+    pthread_mutex_lock(&pcm_mutex);
+    if (pcm_playlist_num >= MAX_PCM_PLAYLIST) {
+        pthread_mutex_unlock(&pcm_mutex);
+        free(w.data);
+        return false;
+    }
     pcm_playlist[pcm_playlist_num++] = w;
+    pthread_mutex_unlock(&pcm_mutex);
     return true;
 }
 
-// Entfernt abgespielte PCM-Dateien
+// Entfernt NUR fertig abgespielte PCM-Dateien (pos >= size). Vorher wurde hier
+// jeden Frame ALLES freigegeben -> der Callback las freigegebenen Speicher
+// (use-after-free) und kein Sound war je zu Ende hoerbar.
 void sound_update(void) {
-    // Einfach: Wenn ein Sound abgespielt wurde, danach freigeben
+    pthread_mutex_lock(&pcm_mutex);
+    int k = 0;
     for (int i = 0; i < pcm_playlist_num; i++) {
-        free(pcm_playlist[i].data);
+        wav_t *w = &pcm_playlist[i];
+        if (w->data && w->pos < w->size) {
+            pcm_playlist[k++] = *w;   // noch am Spielen -> behalten
+        } else {
+            free(w->data);            // fertig -> Speicher freigeben
+        }
     }
-    pcm_playlist_num = 0;
+    pcm_playlist_num = k;
+    pthread_mutex_unlock(&pcm_mutex);
 }
 
 bool sound_play_bg(enum mp3_sound sound[16]) {

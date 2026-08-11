@@ -104,12 +104,19 @@ extern struct tex_gfx texture_server[12];
 void tex_init_pre(void);
 void tex_init(void);
 
+/* Wird waehrend tex_init auf true gesetzt, wenn eine der WICHTIGEN Texturen
+   (default.png = Font, gui_2.png) fehlt. Loest in main() das Nachladen ueber
+   init.py mit dem Argument "no_resources" aus. */
+extern bool g_missing_resources;
+
 uint8_t* tex_read(const char* filename, size_t* width, size_t* height);
 
 
 void tex_gfx_load(struct tex_gfx* tex, void* img, size_t width, size_t height,
 				  enum tex_format type, bool linear);
-void tex_gfx_load_file(struct tex_gfx* tex, const char* filename,
+/* Laedt filename in tex. Fehlt die Datei, wird stattdessen ein magenta/schwarzes
+   "missing texture"-Karomuster geladen und false zurueckgegeben. */
+bool tex_gfx_load_file(struct tex_gfx* tex, const char* filename,
 					   enum tex_format type, bool linear);
 void tex_gfx_bind(struct tex_gfx* tex, int slot);
 void tex_gfx_lookup(struct tex_gfx* tex, int x, int y, uint8_t* color);
