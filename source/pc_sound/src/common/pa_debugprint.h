@@ -92,8 +92,11 @@ void PaUtil_DebugPrint( const char *format, ... );
  PA_DEBUG(("errorno: %d", 1001 ));
 */
 
-#define PA_ENABLE_DEBUG_OUTPUT
-#define PA_LOG_API_CALLS
+/* Debug-Spam deaktiviert: PA_LOG_API_CALLS druckt bei jedem PortAudio-Aufruf
+   Zeilen wie "Pa_StartStream called:" nach stderr. Zum Debuggen wieder
+   einkommentieren. */
+/* #define PA_ENABLE_DEBUG_OUTPUT */
+/* #define PA_LOG_API_CALLS */
 
 #ifdef PA_ENABLE_DEBUG_OUTPUT
 #define PA_DEBUG(x) PaUtil_DebugPrint x ;

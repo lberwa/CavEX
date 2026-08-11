@@ -31,7 +31,11 @@
 #include "elf_abi.h"
 #include "asm.h"
 
-extern void __exception_closeall ();
+#ifdef BUILD_LIBOGC31
+static inline void __exception_closeall(void) { }
+#else
+extern void __exception_closeall(void);
+#endif
 
 typedef struct _dolheader {
 	u32 text_pos[7];
@@ -280,17 +284,23 @@ static const u32 exec_stub[] = {
 	0x4e800420	// bctr
 };
 
-void loader_exec (entry_point ep) {
-	gprintf ("shutting down services and vectoring...\n");
+void loader_shutdown_services (void) {
+	gprintf ("shutting down services...\n");
 	SYS_ResetSystem (SYS_SHUTDOWN, 0, 0);
 
 	__exception_closeall ();
-	
+}
+
+void loader_exec (entry_point ep, void *arena2hi) {
+	gprintf ("vectoring...\n");
+
 	// these pokes make ninty SDK dols work, I'm told
 	*(vu32*)0x800000F8 = 0x0E7BE2C0; // Bus Clock Speed
 	*(vu32*)0x800000FC = 0x2B73A840; // CPU Clock Speed
 
-	void *target = (void *)((int)(SYS_GetArena2Hi() - sizeof exec_stub) & ~31);
+	// arena2hi wurde VOR der Relokation ausgelesen -- SYS_GetArena2Hi() waere
+	// jetzt unbrauchbar, weil loader_reloc() libogcs .data ueberschrieben hat.
+	void *target = (void *)((int)((u8 *)arena2hi - sizeof exec_stub) & ~31);
 	void (*f_exec_stub) (int) = target;
 
 	memcpy(target, exec_stub, sizeof exec_stub);

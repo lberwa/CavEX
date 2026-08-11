@@ -3,9 +3,10 @@
 		"texturepack": "Cavex/assets",
 		"worlds": "Cavex/saves",
 		"bg": "Cavex/bg",
-		"MP3": "Cavex/mp32",
-		"sounds": "Cavex/mp32/sound",
-		"tmp": "Cavex/tmp"
+		"MP3": "Cavex/assets/sound",
+		"sounds": "Cavex/assets/sound/sound",
+		"tmp": "Cavex/tmp",
+		"python_file": "Cavex/init.py"
 	},
 	"input": {
 		"p1": {

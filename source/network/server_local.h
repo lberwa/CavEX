@@ -97,7 +97,7 @@ struct server_player {
 	int oxygen;
 	int spawn_x, spawn_y, spawn_z;
 	float vel_y, old_vel_y;
-	int fall_y;
+	float fall_distance;
 };
 
 struct server_local {

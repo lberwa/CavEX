@@ -38,19 +38,13 @@
 #include "camera.h"
 #include "gui/screen.h"
 #include "../graphics/gfx_settings.h"
-
-#define GAME_NAME "CavEX"
-#define VERSION_MAJOR 0
-#define VERSION_MINOR 3
-#define VERSION_PATCH 0
-#define VERSION_FORK  3
-#define LICENSE "Licensed under GPLv3"
-#define COPYRIGHT "Copyright (c) 2023-2026 ByteBit/xtreme8000, lberwa"
+#include "../version.h"
 
 struct game_state {
 #ifdef FAST_MOVING
 	bool fast_moving;
 #endif
+	bool reboot;
 	bool network;
 	int gerenderte_splitscreen_anzahl; 
 	int height2_icon;
@@ -140,15 +134,19 @@ extern struct game_state gstate;
 static inline struct window_container** gstate_windows(void) {
 	return gstate.windows;
 }
+
 static inline int gstate_active_player(void) {
 	return gstate.active_player;
 }
+
 static inline int splitscreen_player_count(void) {
 	return (gstate.num_players > 4) ? 4 : gstate.num_players;
 }
+
 static inline bool splitscreen_enabled(void) {
 	return gstate.num_players > 1;
 }
+
 static inline void splitscreen_load_player(int idx) {
 	gstate.active_player = idx;
 	gstate.camera = gstate.cameras[idx];
@@ -160,14 +158,16 @@ static inline void splitscreen_load_player(int idx) {
 	gstate.in_water = gstate.in_water_arr[idx];
 	gstate.oxygen = gstate.oxygen_arr[idx];
 }
-	static inline void splitscreen_store_player(int idx) {
-		gstate.cameras[idx] = gstate.camera;
-		gstate.camera_hits[idx] = gstate.camera_hit;
-		gstate.diggings[idx] = gstate.digging;
-		gstate.held_item_animations[idx] = gstate.held_item_animation;
-		gstate.in_water_arr[idx] = gstate.in_water;
-		gstate.oxygen_arr[idx] = gstate.oxygen;
-	}
+
+static inline void splitscreen_store_player(int idx) {
+	gstate.cameras[idx] = gstate.camera;
+	gstate.camera_hits[idx] = gstate.camera_hit;
+	gstate.diggings[idx] = gstate.digging;
+	gstate.held_item_animations[idx] = gstate.held_item_animation;
+	gstate.in_water_arr[idx] = gstate.in_water;
+	gstate.oxygen_arr[idx] = gstate.oxygen;
+}
+
 static inline void gstate_set_capture_input_all(bool enable) {
 	int count = splitscreen_player_count();
 	for(int i = 0; i < count; i++) {
@@ -175,22 +175,27 @@ static inline void gstate_set_capture_input_all(bool enable) {
 			gstate.local_players[i]->data.local_player.capture_input = enable;
 	}
 }
+
 static inline void gstate_set_capture_input_player(int player, bool enable) {
 	if(player >= 0 && player < splitscreen_player_count()
 	   && gstate.local_players[player])
 		gstate.local_players[player]->data.local_player.capture_input = enable;
 }
+
 #else
 static inline struct window_container** gstate_windows(void) {
 	return gstate.windows;
 }
+
 static inline int gstate_active_player(void) {
 	return 0;
 }
+
 static inline void gstate_set_capture_input_all(bool enable) {
 	if(gstate.local_player)
 		gstate.local_player->data.local_player.capture_input = enable;
 }
+
 static inline void gstate_set_capture_input_player(int player, bool enable) {
 	(void)player;
 	if(gstate.local_player)

@@ -4,7 +4,8 @@
 		"worlds": "saves",
 		"MP3": "assets/sound",
 		"sounds": "assets/sound/sound",
-		"tmp": "tmp"
+		"tmp": "tmp",
+		"python_file": "init.py"
 	},
 	"input": {
 		"player_forward": [0, 200, 910],

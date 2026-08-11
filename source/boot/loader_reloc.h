@@ -39,7 +39,17 @@ typedef void (*entry_point) (void);
 
 bool loader_reloc (entry_point *ep, const u8 *addr, u32 size, const char *args,
 				   u16 arg_len, bool check_overlap);
-void loader_exec (entry_point ep);
+
+/* Faehrt alle libogc-Dienste herunter (SYS_ResetSystem + __exception_closeall).
+   MUSS aufgerufen werden, SOLANGE die libogc-Datenstrukturen noch gueltig sind,
+   d.h. VOR loader_reloc() (die In-Place-Relokation ueberschreibt das
+   .data-Segment des laufenden Programms). */
+void loader_shutdown_services (void);
+
+/* arena2hi: der VOR loader_reloc() ausgelesene SYS_GetArena2Hi()-Wert. Nach der
+   Relokation ist libogcs .data unbrauchbar, daher darf SYS_GetArena2Hi() hier
+   nicht mehr aufgerufen werden. */
+void loader_exec (entry_point ep, void *arena2hi);
 
 #endif
 

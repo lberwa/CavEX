@@ -52,10 +52,9 @@
 * Texture orientation for blocks that have a specific "direction"
 	- Bed placement isn't correct yet
 * Random crashes, once in a while. Maybe I'll implement an optional auto-save, to prevent some headaches and tears
-* Particles already spark fire before the torch is showing, after placing a torch
+* ~~Particles already spark fire before the torch is showing, after placing a torch~~
 * If you jump into water or climb down the ladder, you take damage
 * Redstone doesn't really work
-* Probably more
 * If you jump into a block, you will get stuck and won't be able to move.
 * All bugs from [bugs.md](./bugs.md)
 
@@ -169,7 +168,7 @@ cd buildpc
 
 ### Wii:
 
-There should then be a boot.dol file in the ready-wii directory that your Wii can run. To copy the game to your `apps/` folder, it needs to look like this:
+you can Download a ready boot.dol from [here](https://example.com/boot.dol) or the full app [here](https://example.com/last_release). To copy the game to your `apps/` folder, it needs to look like this:
 
 ```apps/cavex/
 cavex

@@ -16,6 +16,15 @@ $(error "Please set DEVKITPPC in your environment. export DEVKITPPC=<path to>dev
 endif
 
 include $(DEVKITPPC)/wii_rules
+
+# MY=1 → libogc-eigenes (stabil, original, funktioniert)
+# MY=0 → libogc 3.1.0  (experimentell, Startup-Patch)
+MY ?= 0
+
+ifeq ($(MY), 1)
+export LIBOGC_INC := $(DEVKITPRO)/libogc-eigenes/gc
+export LIBOGC_LIB := $(DEVKITPRO)/libogc-eigenes/lib/wii
+endif
 endif
 #---------------------------------------------------------------------------------
 # TARGET is the name of the output
@@ -37,16 +46,19 @@ CAVEX_DIR   :=  $(PC_BUILD)/$(CAVEX)
 nropt       ?=  $(shell nproc)
 SOURCES		:=	source source/block source/entity source/graphics source/network \
 				source/game source/game/gui source/platform source/item source/item/items \
-				source/cNBT source/parson source/cubiomes #source/boot #source/lodepng
+				source/cNBT source/parson source/cubiomes source/boot #source/lodepng
 DATA		:=  
 TEXTURES	:=	textures
 INCLUDES	:=
 
-CPPFLAGS += -D__WII__
-CFLAGS += -D__WII__ -DPLATFORM_WII
-CFLAGS += -D__WII__ -DPLATFORM_WII
-CFLAGS += -DPLATFORM_WII
-CPPFLAGS += -DPLATFORM_WII
+CPPFLAGS += -D__WII__ -DPLATFORM_WII
+CFLAGS   += -D__WII__ -DPLATFORM_WII
+
+ifeq ($(MY), 1)
+CFLAGS += -I$(DEVKITPRO)/libogc-eigenes/gc
+else
+CFLAGS += -I$(DEVKITPRO)/libogc-eigenes/gc -DBUILD_LIBOGC31
+endif
 
 # SD-Trace-Log nach sd:/cavexlog.txt (Debug, synchron -> kann Races verstecken).
 #CFLAGS += -DSD_LOG
@@ -56,6 +68,13 @@ CPPFLAGS += -DPLATFORM_WII
 # Zum Debuggen einkommentieren. Standardmaessig AUS.
 #CFLAGS += -DCP_TRACE
 #CPPFLAGS += -DCP_TRACE
+
+# TEX_ATLAS_SDLOG: Diagnose fuer den Texture-Atlas-Crash nach Reboot. Schreibt
+# je Atlas-Entry Puffer-Pointer, Groessen und die berechneten Max-Offsets nach
+# sd:/texatlaslog.txt. Die letzte Zeile vor dem Crash zeigt die schuldige Entry
+# (Out-of-Bounds an Quelle oder Ziel wird direkt sichtbar). Standardmaessig AUS.
+#CFLAGS += -DTEX_ATLAS_SDLOG
+#CPPFLAGS += -DTEX_ATLAS_SDLOG
 
 # Netzwerk-Remote-Debug (debug_init/debug_send, TCP Port 12344).
 # AUS: die vielen debug_send-Aufrufe im Code (z.B. in sound_play) feuern sonst
@@ -69,28 +88,50 @@ CPPFLAGS += -DPLATFORM_WII
 # noetig, damit Python.h unter -std=c99 die pthread-Typen kennt.
 CPYTHON_DIR ?= $(DEVKITPRO)/extras/cpython/3.15.0a7
 PY_INCLUDE  := -I$(CPYTHON_DIR)/build-wii -I$(CPYTHON_DIR)/Include
-PY_LIBDIRS  := -L$(CPYTHON_DIR)/libs -L$(CPYTHON_DIR)/gdbm/install-wii/lib \
+ifeq ($(MY), 1)
+PY_LIBDIRS  := -L$(DEVKITPRO)/libogc-eigenes/lib/wii \
+               -L$(CPYTHON_DIR)/libs -L$(CPYTHON_DIR)/gdbm/install-wii/lib \
                -L$(CPYTHON_DIR)/xz/install-wii/lib \
                -L$(CPYTHON_DIR)/uuid/install-wii/lib \
                -L$(DEVKITPRO)/portlibs/ppc/lib
+else
+PY_LIBDIRS  := -L$(DEVKITPRO)/libogc/lib/wii \
+               -L$(CPYTHON_DIR)/libs -L$(CPYTHON_DIR)/gdbm/install-wii/lib \
+               -L$(CPYTHON_DIR)/xz/install-wii/lib \
+               -L$(CPYTHON_DIR)/uuid/install-wii/lib \
+               -L$(DEVKITPRO)/portlibs/ppc/lib
+endif
+
 PY_LIBS     := -lpython3.15 -lcurl -lmbedtls -lmbedx509 -lmbedcrypto -ltfpsacrypto \
                -lz -lgdbm_compat -lgdbm -llzma -lbz2 -luuid -lfatpy -lbitmap
 
 CXXFLAGS	+=	$(CFLAGS)
 CPPFLAGS	+=	-Ofast -DSPLITSCREEN=2 -g
 CFLAGS		+=	-Ofast -g -std=c99 -pedantic -Wextra -Wno-unused-parameter -Wall \
-				-DSPLITSCREEN=2  -DPLATFORM_WII -D_POSIX_THREADS -DWITH_PYTHON \
-				$(PY_INCLUDE) $(MACHDEP) $(INCLUDE) -DNDEBUG
+				-DSPLITSCREEN=2  -DPLATFORM_WII -D_POSIX_THREADS \
+				$(PY_INCLUDE) $(MACHDEP) $(INCLUDE) -DNDEBUG #-DWITH_PYTHON 
 
 LDFLAGS	+=	$(MACHDEP) -Wl,-Map,$(notdir $@).map
 LDFLAGS += -L$(MAKEFILE_DIR)
-# CavEX und libpython (wiitoolsmodule) betten beide lodepng ein -> doppelte
-# Symbole. Erste Definition (CavEX) gewinnt.
 LDFLAGS += -Wl,--allow-multiple-definition
 
-#CAVEXFAT_LIB := $(abspath $(MAKEFILE_DIR)/libcavexfat.a)
+ifeq ($(MY), 1)
+# MY=1: libogc-eigenes — original, kein Patch nötig
+LDFLAGS += -L$(DEVKITPRO)/libogc-eigenes/lib/wii
+LIBS    :=  $(PY_LIBS) -lwiiuse -lbte -lmad -lasnd -lfat -logc -lm
+else
+# MY=0: Startup + Basis-Libs aus lib/wii/ (HBC-kompatibel, im Repo enthalten)
+# Nutzer braucht nur libogc 3.1.0 — libogc-eigenes ist nicht mehr nötig.
+LDFLAGS += -L$(MAKEFILE_DIR)lib/wii
+LDFLAGS += -L$(DEVKITPRO)/libogc/lib/wii
+LDFLAGS += $(MAKEFILE_DIR)source/boot/ogc_crt0.o \
+           $(MAKEFILE_DIR)source/boot/system_asm.o \
+           $(MAKEFILE_DIR)source/boot/system.o
+LIBS    :=  $(PY_LIBS) -lwiiuse -lbte -lmad -lasnd -lfat \
+            $(MAKEFILE_DIR)lib/wii/libogc.a -logc -lm
+endif
 
-LIBS	:=	$(PY_LIBS) -lwiiuse -lbte -lmad -lasnd -lfat -logc -lm
+#CAVEXFAT_LIB := $(abspath $(MAKEFILE_DIR)/libcavexfat.a)
 
 LIBDIRS	:= $(PORTLIBS)
 
@@ -166,9 +207,21 @@ pc:
 	@cp -r $(CURDIR)/assets $(CAVEX_DIR)/
 	@cp -r $(CURDIR)/saves $(CAVEX_DIR)/
 	@cp $(CURDIR)/config_pc.json $(CAVEX_DIR)/
+	@cp $(CURDIR)/init_pc.py $(CAVEX_DIR)/init.py
 	@cd $(PC_BUILD) && unset CC CXX CPPFLAGS CFLAGS CXXFLAGS LDFLAGS && TMPDIR="$(CURDIR)/$(PC_BUILD)/tmp" cmake -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=OFF .
 	@cd $(PC_BUILD) && env TMPDIR="$(CURDIR)/$(PC_BUILD)/tmp" $(MAKE) -j$(nropt)
 
+pc-just-make:
+	@[ -d $(PC_BUILD) ] || mkdir -p $(PC_BUILD)
+	@[ -d $(PC_BUILD)/tmp ] || mkdir -p $(PC_BUILD)/tmp
+
+	@rm -f $(PC_BUILD)/source
+	@ln -s $(CURDIR)/source $(PC_BUILD)/
+
+	@cp $(CURDIR)/2CMakeLists.txt $(PC_BUILD)/CMakeLists.txt
+
+	@cd $(PC_BUILD) && unset CC CXX CPPFLAGS CFLAGS CXXFLAGS LDFLAGS && TMPDIR="$(CURDIR)/$(PC_BUILD)/tmp" cmake -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=OFF .
+	@cd $(PC_BUILD) && env TMPDIR="$(CURDIR)/$(PC_BUILD)/tmp" $(MAKE) -j$(nropt)
 
 config:
 	@jq --arg home "$(HOME_PATH)" \
@@ -212,6 +265,7 @@ pc-install: pc config install_desktop
 	@rm -rf /usr/local/bin/$(CAVEX)/saves
 	@mv     /usr/local/bin/$(CAVEX)/assets $(HOME_PATH)/
 	@cp     $(PC_BUILD)/install_config_pc.json /usr/local/bin/$(CAVEX)/config_pc.json
+	@cp     $(PC_BUILD)/init_pc.py /usr/local/bin/$(CAVEX)/init.py
 	@cp     $(MAKEFILE_DIR)/pc-icon.png $(HOME_PATH)/icon.png
 	@chown -R "$(INSTALL_USER)" "$(HOME_PATH)"
 

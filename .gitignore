@@ -26,9 +26,19 @@ boot.elf
 boot.dol
 ffCavEX.dol
 ffCavEX.elf
-!ready_wii/
-!ready_wii/boot.elf
-!ready_wii/boot.dol
+ready_wii/
+ready_wii/boot.elf
+ready_wii/boot.dol
+
+!lib/
+!lib/wii/
+!lib/wii/libasnd.a
+!lib/wii/libbte.a
+!lib/wii/libfat.a
+!lib/wii/libmad.a
+!lib/wii/libogc.a
+!lib/wii/libwiiuse.a
+**/*.o
 
 backup/
 assets2/
@@ -39,4 +49,15 @@ saves2/
 saves3/
 server_client2/
 
+data.json.bak
+
+wiitools.pyi
+
+.version-pc/
+.version-wii/
+
+**/__pycache__/
+assets/sound/ignore/
+
+.claude/
 CLAUDE.md

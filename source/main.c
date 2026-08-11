@@ -26,8 +26,11 @@
 
 #ifdef PLATFORM_WII
 	#include "fat.h"
-	#include <gccore.h> 
+	#include <gccore.h>
 	#include <network.h>
+	#include <unistd.h>
+	uint32_t __ppc_excpt_buf[8] __attribute__((aligned(32)));
+	void (*__ppc_excpt_table[20])(void);
 #endif
 
 #include "item/recipe.h"
@@ -51,6 +54,7 @@
 #include "world.h"
 #include "sound.h"
 #include "network/server_comunication.h"
+#include "boot/boot.h"
 
 #include "cNBT/nbt.h"
 #include "cglm/cglm.h"
@@ -260,9 +264,15 @@ int load_config(void) {
 
 #endif
 
-int main(void) {
+/* Von Python (gfx.reboot()) aufgerufen: markiert einen Neustart und beendet die
+   Hauptschleife. Der Reboot-Check am Ende von main() ruft dann boot_dol(). */
+void cavex_request_reboot(void) {
+	gstate.reboot = true;
+	gstate.quit = true;
+}
 
-	#ifdef PLATFORM_PC
+int main(void) {
+#ifdef PLATFORM_PC
 	signal(SIGPIPE, SIG_IGN);
 
 	// find out which path it is
@@ -275,20 +285,22 @@ int main(void) {
     pclose(fp);
 
     pictures[strcspn(pictures, "\n")] = 0;
-	#endif
+#endif
 
 	//video_init_custom();
-	#ifdef PLATFORM_WII
+#ifdef PLATFORM_WII
 	VIDEO_Init();
 
 	rmode3 = VIDEO_GetPreferredMode(NULL);
     framebuffer3 = MEM_K0_TO_K1(SYS_AllocateFramebuffer(rmode3));
-	#endif
+#endif
 
 	float daytime, tick_delta;
 	bool render_world;
 
-	gstate.quit = false;
+	gstate.quit   = false;
+	gstate.reboot = false;
+
 	gstate.camera = (struct camera) {
 		.x = 0, .y = 0, .z = 0, .rx = 0, .ry = 0, .controller = {0, 0, 0}};
 	gstate.config.fov = 70.0F;
@@ -1165,6 +1177,32 @@ int main(void) {
 #endif
 		//debug_send(text2);
 //----------------------------------------------------------------------------
+	}
+
+	if (gstate.reboot) {
+#ifdef PLATFORM_WII
+		/* Die rebootete Instanz bekommt kein HBC-argv -> ihr Arbeitsverzeichnis
+		   waere die SD-Wurzel, und relative Asset-Pfade (paths.texturepack=
+		   "assets" -> "assets/terrain.png") schluegen fehl. tex_read() liefert
+		   dann NULL, und der Texture-Atlas dereferenziert NULL -> DSI-Crash.
+
+		   Fix: den absoluten boot.dol-Pfad als argv[0] uebergeben. libfats
+		   fatInitDefault() chdirt beim Start in dessen Verzeichnis, exakt wie
+		   beim HBC-Start. Das aktuelle CWD ist korrekt (sonst haette schon der
+		   HBC-Start die relativen Pfade nicht gefunden), also liefert getcwd()
+		   das App-Verzeichnis. */
+		char cwd[256];
+		char dolpath[256];
+		if (getcwd(cwd, sizeof cwd)
+		   && snprintf(dolpath, sizeof dolpath, "%s/boot.dol", cwd)
+				  < (int) sizeof dolpath) {
+			boot_dol(dolpath, dolpath);
+		} else {
+			boot_dol("boot.dol", NULL);
+		}
+#else
+		boot_dol("boot.dol", NULL);
+#endif
 	}
 
 	return 0;

@@ -3,9 +3,10 @@
 		"texturepack": "$(HOME_PATH)/assets",
 		"worlds": "$(HOME_PATH)/saves",
 		"bg": ".$(HOME_PATH)/bg",
-		"MP3": "$(HOME_PATH)/mp32",
-		"sounds": "$(HOME_PATH)/mp32/sound",
-		"tmp": "$(HOME_PATH)/tmp"
+		"MP3": "$(HOME_PATH)/assets/sound",
+		"sounds": "$(HOME_PATH)/assets/sound/sound",
+		"tmp": "$(HOME_PATH)/tmp",
+		"python_file": "$(HOME_PATH)/init.py"
 	},
 	"input": {
 		"p1": {

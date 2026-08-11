@@ -112,6 +112,15 @@ static void screen_msettings_render2D(struct screen* s, int width, int height) {
     gutil_button_render();
 
 	gutil_license(width, height);
+
+	float x, y, a;
+	bool avaiable = screen_pointer_local(0, width, height, &x, &y, &a);
+
+	if(avaiable) {
+		gfx_bind_texture_virtual(&texture_pointer);
+		gutil_texquad_rt_any(x, y, glm_rad(a), 0, 0, 256, 256, 
+							 48 * GFX_GUI_SCALE, 48 * GFX_GUI_SCALE);
+	}
 }
 
 struct screen screen_msettings = {
