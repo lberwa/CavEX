@@ -48,8 +48,31 @@
 #define MAX_OXYGEN 351
 #define OXYGEN_THRESHOLD 0
 
+/* Max fluid (water/lava) cell changes buffered per world tick. Fluid spreading
+ * reads the OLD world state and queues changes here; they are applied all at
+ * once after the tick (double-buffer / cellular-automaton). If a single step
+ * produces more changes than this, the surplus is simply handled next step. */
+#define MAX_FLUID_CHANGES 4096
+
+/* Max fluid cells scheduled for a flow update in one round. Only water next to
+ * a recent block change is scheduled, so this bounds the active "wavefront". */
+#define MAX_FLUID_UPDATES 8192
+/* Open-addressing dedup table for the schedule; power of two, > MAX_FLUID_UPDATES
+ * so it never fills past ~50% load. Without dedup the buffer overflows with
+ * duplicate wakes during recession and real cells get dropped (never dry up). */
+#define FLUID_HASH_SIZE 16384
+
 struct complex_block_pos {
 	int x, y, z;
+};
+
+struct fluid_change {
+	w_coord_t x, y, z;
+	struct block_data blk;
+};
+
+struct fluid_pos {
+	w_coord_t x, y, z;
 };
 
 struct furnace_data {
@@ -130,6 +153,14 @@ struct server_local {
 	struct level_archive level;
 	bool paused;
 	ptime_t last_tick;
+	/* pending fluid changes for this tick (see MAX_FLUID_CHANGES) */
+	struct fluid_change fluid_changes[MAX_FLUID_CHANGES];
+	int fluid_change_count;
+	/* water cells scheduled for a flow update (see MAX_FLUID_UPDATES) */
+	struct fluid_pos fluid_sched[MAX_FLUID_UPDATES];
+	int fluid_sched_count;
+	/* dedup table: fluid_sched index + 1 per slot, 0 = empty (see FLUID_HASH_SIZE) */
+	int32_t fluid_hash[FLUID_HASH_SIZE];
 };
 
 void server_local_create(struct server_local* s);
@@ -143,5 +174,16 @@ void server_local_spawn_block_drops(struct server_local* s,
 void server_local_send_inv_changes(uint8_t player_id, set_inv_slot_t changes,
 								   struct inventory* inv, uint8_t window);
 void server_local_set_player_health(struct server_local* s, int player_id, short new_health);
+/* queue a fluid cell change to be applied after the current world tick */
+void server_local_queue_fluid_change(struct server_local* s, w_coord_t x,
+									 w_coord_t y, w_coord_t z,
+									 struct block_data blk);
+/* apply all queued fluid changes and reset the buffer */
+void server_local_flush_fluid_changes(struct server_local* s);
+/* wake a water cell so it re-evaluates its flow on the next fluid round */
+void server_local_schedule_fluid(struct server_local* s, w_coord_t x,
+								 w_coord_t y, w_coord_t z);
+/* process one round of scheduled water flow updates */
+void server_local_tick_fluids(struct server_local* s);
 extern bool place_block;
 #endif

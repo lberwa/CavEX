@@ -48,10 +48,11 @@ static uint32_t gfx_depth_func_last = GX_LEQUAL;
 
 static int gfx_screen_width = 802;
 static float gfx_texcoord_div = 256.0f;
-static uint32_t current_vp_x = 0;
-static uint32_t current_vp_y = 0;
-static uint32_t current_vp_w = 0;
-static uint32_t current_vp_h = 0;
+/* signed: the split-screen cover viewport can have a negative origin */
+static int current_vp_x = 0;
+static int current_vp_y = 0;
+static int current_vp_w = 0;
+static int current_vp_h = 0;
 
 // Forward declarations (C99 forbids implicit function declarations).
 void gfx_set_texcoord_div(float div);
@@ -538,21 +539,36 @@ void gfx_mode_gui_viewport(uint32_t width, uint32_t height) {
 	gfx_write_buffers(true, false, false);
 }
 
-void gfx_viewport(uint32_t x, uint32_t y, uint32_t width, uint32_t height) {
+void gfx_viewport(int32_t x, int32_t y, int32_t width, int32_t height) {
 	float scale_x = (float)screenMode->fbWidth / (float)gfx_width();
 	float scale_y = (float)screenMode->efbHeight / (float)gfx_height();
-	uint32_t phys_x = (uint32_t)lroundf((float)x * scale_x);
-	uint32_t phys_y = (uint32_t)lroundf((float)y * scale_y);
-	uint32_t phys_w = (uint32_t)lroundf((float)width * scale_x);
-	uint32_t phys_h = (uint32_t)lroundf((float)height * scale_y);
+	int phys_x = (int)lroundf((float)x * scale_x);
+	int phys_y = (int)lroundf((float)y * scale_y);
+	int phys_w = (int)lroundf((float)width * scale_x);
+	int phys_h = (int)lroundf((float)height * scale_y);
 
 	current_vp_x = phys_x;
 	current_vp_y = phys_y;
 	current_vp_w = phys_w;
 	current_vp_h = phys_h;
+	/* The origin may be negative for the split-screen cover viewport (the top
+	 * player's full-screen view is centered on its strip, so it starts above
+	 * the EFB). GX_SetViewport takes f32 and handles that. */
 	GX_SetViewport((f32)phys_x, (f32)phys_y, (f32)phys_w, (f32)phys_h, 0.0f,
 	               1.0f);
-	GX_SetScissor(phys_x, phys_y, phys_w, phys_h);
+	/* GX_SetScissor takes unsigned EFB pixels, so a negative origin must be
+	 * clamped (and the width/height shrunk by the clipped amount). The caller
+	 * usually sets the real per-player scissor via gfx_scissor() right after;
+	 * this keeps GX from ever seeing a wrapped negative in the meantime. */
+	int sx = phys_x < 0 ? 0 : phys_x;
+	int sy = phys_y < 0 ? 0 : phys_y;
+	int sw = phys_x < 0 ? phys_w + phys_x : phys_w;
+	int sh = phys_y < 0 ? phys_h + phys_y : phys_h;
+	if(sw < 0)
+		sw = 0;
+	if(sh < 0)
+		sh = 0;
+	GX_SetScissor(sx, sy, sw, sh);
 }
 
 void gfx_viewport_reset(void) {

@@ -540,6 +540,10 @@ static void screen_ingame_render2D(struct screen* s, int width, int height) {
 		         bd.metadata);
 		gutil_text(4, 4 + (GFX_GUI_SCALE * 8 + 1) * 6, str, GFX_GUI_SCALE * 8, true);
 	}
+
+	snprintf(str, sizeof(str), "server: %.1f TPS, tick %.1f ms (target 20 / 50)",
+	         gstate.stats.server_tps, gstate.stats.server_tick_ms);
+	gutil_text(4, 4 + (GFX_GUI_SCALE * 8 + 1) * 7, str, GFX_GUI_SCALE * 8, true);
    }
 
 	int icon_offset = GFX_GUI_SCALE * 16;
@@ -589,9 +593,19 @@ static void screen_ingame_render2D(struct screen* s, int width, int height) {
 
 	icon_offset += gutil_control_icon(icon_offset, IB_HOME, "Pause");
 
+	/* Vertikaler Abstand der Hotbar-Unterkante zum unteren Viewport-Rand.
+	 * Im Splitscreen auf 0 -> die Unterkante des Inventars sitzt bei beiden
+	 * Spielern buendig am unteren Strip-Rand. Die ganze HUD-Gruppe (Herzen,
+	 * Sauerstoff) rutscht dabei einheitlich mit. */
+	int hud_gap = (GFX_GUI_SCALE * 16) * 8 / 5;
+#ifdef SPLITSCREEN
+	if(splitscreen_enabled())
+		hud_gap = 0;
+#endif
+
 	// draw hotbar
 	gfx_bind_texture(&texture_gui2);
-	gutil_texquad((width - 182 * GFX_GUI_SCALE) / 2, height - (GFX_GUI_SCALE * 16) * 8 / 5 - 22 * GFX_GUI_SCALE, 0, 0,
+	gutil_texquad((width - 182 * GFX_GUI_SCALE) / 2, height - hud_gap - 22 * GFX_GUI_SCALE, 0, 0,
 				  182, 22, 182 * GFX_GUI_SCALE, 22 * GFX_GUI_SCALE);
 
 	//  +
@@ -625,7 +639,7 @@ static void screen_ingame_render2D(struct screen* s, int width, int height) {
 			   windowc_get_latest(gstate_windows()[WINDOWC_INVENTORY]),
 			   k + INVENTORY_SLOT_HOTBAR, &item))
 			gutil_draw_item(&item, (width - 182 * GFX_GUI_SCALE) / 2 + 3 * GFX_GUI_SCALE + 20 * GFX_GUI_SCALE * k,
-							height - (GFX_GUI_SCALE * 16) * 8 / 5 - 19 * GFX_GUI_SCALE, 0);
+							height - hud_gap - 19 * GFX_GUI_SCALE, 0);
 	}
 
 	gfx_blending(MODE_BLEND);
@@ -636,7 +650,7 @@ static void screen_ingame_render2D(struct screen* s, int width, int height) {
 					  + 20 * GFX_GUI_SCALE 
 						  * inventory_get_hotbar(windowc_get_latest(
 							  gstate_windows()[WINDOWC_INVENTORY])),
-				  height - (GFX_GUI_SCALE * 16) * 8 / 5 - 23 * GFX_GUI_SCALE, 208, 0, 24, 24, 24 * GFX_GUI_SCALE, 24 * GFX_GUI_SCALE);
+				  height - hud_gap - 23 * GFX_GUI_SCALE, 208, 0, 24, 24, 24 * GFX_GUI_SCALE, 24 * GFX_GUI_SCALE);
 
 	{
 		// HUD is rendered once per viewport. In splitscreen mode `main.c` already
@@ -650,7 +664,7 @@ static void screen_ingame_render2D(struct screen* s, int width, int height) {
 		for(int k = 0; k < MAX_PLAYER_HEALTH / HEALTH_PER_HEART; k++) {
 			gutil_texquad(
 				heart_x_base + k * heart_spacing,
-				height - (GFX_GUI_SCALE * 16) * 8 / 5
+				height - hud_gap
 					- (22 + 10) * GFX_GUI_SCALE,
 				16, 229, 9, 9, 9 * GFX_GUI_SCALE, 9 * GFX_GUI_SCALE);
 		}
@@ -659,7 +673,7 @@ static void screen_ingame_render2D(struct screen* s, int width, int height) {
 				k++) {
 				gutil_texquad(
 					heart_x_base + k * heart_spacing,
-					height - (GFX_GUI_SCALE * 16) * 8 / 5
+					height - hud_gap
 						- (22 + 10) * GFX_GUI_SCALE,
 					52, 229, 9, 9, 9 * GFX_GUI_SCALE, 9 * GFX_GUI_SCALE);
 			}
@@ -670,7 +684,7 @@ static void screen_ingame_render2D(struct screen* s, int width, int height) {
 			for(int k = 0; k < ((gstate.oxygen - OXYGEN_THRESHOLD) / 32); k++) {
 				gutil_texquad(
 					oxy_x_base + k * heart_spacing,
-					height - (GFX_GUI_SCALE * 20) * 8 / 5
+					height - hud_gap - (GFX_GUI_SCALE * 4) * 8 / 5
 						- (22 + 10) * GFX_GUI_SCALE,
 					17, 249, 9, 9, 9 * GFX_GUI_SCALE, 9 * GFX_GUI_SCALE);
 			}

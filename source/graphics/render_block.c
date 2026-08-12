@@ -405,16 +405,17 @@ static inline void render_block_side_adv_fulltex(
 	}
 }
 
-static inline void render_block_side(struct displaylist* d, int16_t x,
-									 int16_t y, int16_t z, int16_t yoffset,
-									 uint16_t height, uint16_t tex,
-									 uint8_t luminance, bool shade_sides,
-									 uint16_t inset, bool tex_flip_h,
-									 int tex_rotate, enum side side,
-									 const uint8_t* vertex_light) {
-	uint16_t tex_x = TEX_OFFSET(TEXTURE_X(tex));
-	uint16_t tex_y = TEX_OFFSET(TEXTURE_Y(tex));
-
+// Same as render_block_side() but takes precomputed pixel offsets. Used for
+// liquids, whose UVs address anim.png (via tex_atlas_anim_x/y) rather than the
+// terrain atlas -- computed by the caller so no global thread-shared state.
+static inline void render_block_side_tex(struct displaylist* d, int16_t x,
+										 int16_t y, int16_t z, int16_t yoffset,
+										 uint16_t height, uint16_t tex_x,
+										 uint16_t tex_y, uint8_t luminance,
+										 bool shade_sides, uint16_t inset,
+										 bool tex_flip_h, int tex_rotate,
+										 enum side side,
+										 const uint8_t* vertex_light) {
 	switch(side) {
 		case SIDE_LEFT: // x minus
 			render_block_side_adv(
@@ -456,6 +457,21 @@ static inline void render_block_side(struct displaylist* d, int16_t x,
 			break;
 		default: break;
 	}
+}
+
+// Terrain-atlas variant: resolves the tile index to pixel offsets, then defers
+// to render_block_side_tex. This keeps all existing callers unchanged.
+static inline void render_block_side(struct displaylist* d, int16_t x,
+									 int16_t y, int16_t z, int16_t yoffset,
+									 uint16_t height, uint16_t tex,
+									 uint8_t luminance, bool shade_sides,
+									 uint16_t inset, bool tex_flip_h,
+									 int tex_rotate, enum side side,
+									 const uint8_t* vertex_light) {
+	render_block_side_tex(d, x, y, z, yoffset, height,
+						  TEX_OFFSET(TEXTURE_X(tex)), TEX_OFFSET(TEXTURE_Y(tex)),
+						  luminance, shade_sides, inset, tex_flip_h, tex_rotate,
+						  side, vertex_light);
 }
 
 static size_t render_cuboid_side(struct displaylist* d, struct block_info* this,
@@ -2660,15 +2676,15 @@ size_t render_block_fluid(struct displaylist* d, struct block_info* this,
 		uint16_t height = (this->block->metadata & 0x8) ?
 			BLK_LEN :
 			(8 - this->block->metadata) * 14 * 2;
-		/* Liquids sample the animated anim.png, which uses the fixed original
-		 * tile layout rather than the tighter terrain-atlas geometry. */
-		tex_atlas_set_anim_geometry(true);
-		render_block_side(
+		/* Liquids sample the animated anim.png (fixed tile layout). Offsets are
+		 * computed explicitly here so no global state is shared with the render
+		 * thread (that race made atlas textures flicker). */
+		uint16_t tex = blocks[this->block->type]->getTextureIndex(this, side);
+		render_block_side_tex(
 			d, W2C_COORD(this->x), W2C_COORD(this->y), W2C_COORD(this->z), 0,
-			height, blocks[this->block->type]->getTextureIndex(this, side),
+			height, tex_atlas_anim_x(tex), tex_atlas_anim_y(tex),
 			blocks[this->block->type]->luminance, true, 0, false, 0, side,
 			vertex_light);
-		tex_atlas_set_anim_geometry(false);
 	}
 
 	return 1;
@@ -5533,10 +5549,8 @@ size_t render_block_cauldron_water(struct displaylist* d, struct block_info* thi
 	// alpha channel from terrain.png would be ignored.
 	const uint16_t water_tex = TEXTURE_INDEX(1, 0);
 	#endif
-	tex_atlas_set_anim_geometry(true);
-	const uint16_t water_x = TEX_OFFSET(TEXTURE_X(water_tex));
-	const uint16_t water_y = TEX_OFFSET(TEXTURE_Y(water_tex));
-	tex_atlas_set_anim_geometry(false);
+	const uint16_t water_x = tex_atlas_anim_x(water_tex);
+	const uint16_t water_y = tex_atlas_anim_y(water_tex);
 
 	// Full tile UVs (16x16), scaled to face size.
 	const uint16_t wu0 = water_x;

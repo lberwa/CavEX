@@ -73,23 +73,20 @@ void render_item_flat(struct item* item, struct item_data* stack, mat4 view,
 			.torch_light = 15,
 		};
 
-		/* Transparent blocks (liquids) sample the animated anim.png, which keeps
-		 * the fixed original tile layout; use that geometry for their texcoords. */
-		if(b->transparent)
-			tex_atlas_set_anim_geometry(true);
-
 		uint16_t tex = b->getTextureIndex(
 			&(struct block_info) {
 				.block = &this_blk, .neighbours = NULL, .x = 0, .y = 0, .z = 0},
 			SIDE_TOP);
 
-		s = TEX_OFFSET(TEXTURE_X(tex));
-		t = TEX_OFFSET(TEXTURE_Y(tex));
-
+		/* Transparent blocks (liquids) sample the animated anim.png, which keeps
+		 * the fixed original tile layout; compute those offsets explicitly. */
 		if(b->transparent) {
-			tex_atlas_set_anim_geometry(false);
+			s = tex_atlas_anim_x(tex);
+			t = tex_atlas_anim_y(tex);
 			gfx_bind_texture(&texture_anim);
 		} else {
+			s = TEX_OFFSET(TEXTURE_X(tex));
+			t = TEX_OFFSET(TEXTURE_Y(tex));
 			gfx_bind_texture_pixels(&texture_terrain);
 		}
 	} else {

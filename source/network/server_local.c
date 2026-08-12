@@ -533,7 +533,83 @@ void server_local_set_player_health(struct server_local* s, int player_id, short
 		.type = CRPC_PLAYER_SET_HEALTH,
 		.payload.player_set_health.health = player->health
 	});
-} 
+}
+
+void server_local_queue_fluid_change(struct server_local* s, w_coord_t x,
+									 w_coord_t y, w_coord_t z,
+									 struct block_data blk) {
+	if(s->fluid_change_count >= MAX_FLUID_CHANGES)
+		return; // buffer full: the surplus is handled on the next fluid step
+	s->fluid_changes[s->fluid_change_count++] = (struct fluid_change) {
+		.x = x, .y = y, .z = z, .blk = blk,
+	};
+}
+
+void server_local_flush_fluid_changes(struct server_local* s) {
+	for(int i = 0; i < s->fluid_change_count; i++) {
+		struct fluid_change* fc = &s->fluid_changes[i];
+		server_world_set_block(s, fc->x, fc->y, fc->z, fc->blk);
+	}
+	s->fluid_change_count = 0;
+}
+
+void server_local_schedule_fluid(struct server_local* s, w_coord_t x,
+								 w_coord_t y, w_coord_t z) {
+	// dedup via open addressing: the same cell is woken by many neighbours each
+	// round; without this the buffer overflows with duplicates and real cells
+	// get dropped (and then never dry up).
+	uint32_t h = ((uint32_t)x * 73856093u) ^ ((uint32_t)y * 19349663u)
+		^ ((uint32_t)z * 83492791u);
+	uint32_t slot = h & (FLUID_HASH_SIZE - 1);
+	while(s->fluid_hash[slot]) {
+		struct fluid_pos* p = &s->fluid_sched[s->fluid_hash[slot] - 1];
+		if(p->x == x && p->y == y && p->z == z)
+			return; // already scheduled this round
+		slot = (slot + 1) & (FLUID_HASH_SIZE - 1);
+	}
+	if(s->fluid_sched_count >= MAX_FLUID_UPDATES)
+		return; // wavefront buffer full: the rest is handled once it drains
+	s->fluid_sched[s->fluid_sched_count] = (struct fluid_pos) {
+		.x = x, .y = y, .z = z,
+	};
+	s->fluid_hash[slot] = s->fluid_sched_count + 1;
+	s->fluid_sched_count++;
+}
+
+void server_local_tick_fluids(struct server_local* s) {
+	int n = s->fluid_sched_count;
+	if(n == 0)
+		return;
+
+	// Snapshot this round's schedule; cells woken while we process (via
+	// server_world_set_block -> schedule_fluid during the flush below) accumulate
+	// fresh in fluid_sched and are handled next round -> one ring per round.
+	static struct fluid_pos work[MAX_FLUID_UPDATES];
+	memcpy(work, s->fluid_sched, (size_t)n * sizeof(struct fluid_pos));
+	s->fluid_sched_count = 0;
+	// clear the dedup table so next round's wakes start fresh
+	memset(s->fluid_hash, 0, sizeof(s->fluid_hash));
+	s->fluid_change_count = 0;
+
+	for(int i = 0; i < n; i++) {
+		struct block_data bd;
+		if(!server_world_get_block(&s->world, work[i].x, work[i].y, work[i].z,
+								   &bd))
+			continue;
+		if(bd.type != BLOCK_WATER_STILL && bd.type != BLOCK_WATER_FLOW)
+			continue; // block changed to non-water since it was scheduled
+		block_water_flow_update(s, &(struct block_info) {
+			.block = &bd,
+			.neighbours = NULL,
+			.x = work[i].x,
+			.y = work[i].y,
+			.z = work[i].z,
+		});
+	}
+
+	server_local_flush_fluid_changes(s);
+}
+
 
 bool place_block = false;
 
@@ -1088,6 +1164,11 @@ static void server_local_update(struct server_local* s) {
 	server_world_random_tick(&s->world, &s->rand_src, s, px, pz,
 							 MAX_VIEW_DISTANCE - 2);
 	server_world_tick(&s->world, s);
+	/* Water flow: every 5th tick, process the cells woken by recent block
+	 * changes (Minecraft's fluid tick rate). Static/generated water that nobody
+	 * disturbed is never scheduled, so it stays put and doesn't churn. */
+	if(s->world_time % 5 == 0)
+		server_local_tick_fluids(s);
 	server_local_try_spawn_nearby_animal(s, player_x, player_y, player_z);
 	server_local_try_spawn_nearby_dark_monster(s, player_x, player_y,
 												player_z);
@@ -1559,10 +1640,14 @@ for (int i = 0; i < 4; i++) {
 				|| blk_below.type == BLOCK_WATER_STILL
 				|| blk_below.type == BLOCK_WATER_FLOW;
 			int fall_blocks = (int)player->fall_distance;
+
+#ifdef FALL_HEALTH_DEBUG
 			if(i == 0) printf("[LAND p%d] fall_dist=%.2f (%d Bloecke) wasser=%s -> schaden=%d Herzen\n",
 				i, player->fall_distance, fall_blocks,
 				landed_in_water ? "JA" : "nein",
 				(fall_blocks >= 4 && !landed_in_water) ? fall_blocks-3 : 0);
+#endif
+
 			if(fall_blocks >= 4 && server_local_damage_enabled() && !landed_in_water) {
 				server_local_set_player_health(s, i, player->health-HEALTH_PER_HEART*(fall_blocks-3));
 			}
@@ -1577,6 +1662,8 @@ for (int i = 0; i < 4; i++) {
 		} else {
 			player->fall_distance = 0.0f;
 		}
+
+#ifdef FALL_HEALTH_DEBUG
 		if(i == 0) printf("[FALL p%d] pos=(%.2f,%.2f,%.2f) feet_y=%d blk=%d/%d vel_y=%.3f fall_dist=%.2f | falle=%s leiter=%s wasser=%s\n",
 			i, player->x, player->y, player->z,
 			feet_y, blk_climb.type, blk_climb2.type,
@@ -1584,6 +1671,7 @@ for (int i = 0; i < 4; i++) {
 			falling ? "JA" : "nein",
 			on_climbable ? "JA" : "nein",
 			in_water ? "JA" : "nein");
+#endif
 
 		if(in_lava) {
 			// damage player in lava every 8 ticks
@@ -1627,10 +1715,14 @@ for (int i = 0; i < 4; i++) {
 			|| blk_below.type == BLOCK_WATER_STILL
 			|| blk_below.type == BLOCK_WATER_FLOW;
 		int fall_blocks = (int)s->player.fall_distance;
+
+#ifdef FALL_HEALTH_DEBUG
 		printf("[LAND] fall_dist=%.2f (%d Bloecke) wasser=%s -> schaden=%d Herzen\n",
 			s->player.fall_distance, fall_blocks,
 			landed_in_water ? "JA" : "nein",
 			(fall_blocks >= 4 && !landed_in_water) ? fall_blocks-3 : 0);
+#endif
+
 		if(fall_blocks >= 4 && server_local_damage_enabled() && !landed_in_water) {
 			server_local_set_player_health(s, 0, s->player.health-HEALTH_PER_HEART*(fall_blocks-3));
 		}
@@ -1675,9 +1767,28 @@ for (int i = 0; i < 4; i++) {
 
 static void* server_local_thread(void* user) {
 	struct server_local* s = user;
+	ptime_t last_start = time_get();
+	gstate.stats.server_tps = 20.0f; /* sensible initial reading */
 	while(1) {
 		ptime_t tick_start = time_get();
+
+		/* effective tick period incl. sleep -> real ticks/second. Lightly
+		 * smoothed so the debug number is readable. A value clearly below 20
+		 * means the server thread can't keep up and the game runs slow. */
+		int32_t period_ms = time_diff_ms(last_start, tick_start);
+		last_start = tick_start;
+		if(period_ms > 0) {
+			float inst_tps = 1000.0f / (float)period_ms;
+			gstate.stats.server_tps
+				= gstate.stats.server_tps * 0.9f + inst_tps * 0.1f;
+		}
+
 		server_local_update(s);
+
+		/* pure work time of one tick (world tick + fluids + chunk gen). If this
+		 * exceeds 50ms the 20 TPS target can't be met -> water/mobs slow down. */
+		gstate.stats.server_tick_ms
+			= (float)time_diff_ms(tick_start, time_get());
 
 		if(s->loading) {
 			/* loading screen: no game logic to pace, tick back-to-back */
@@ -1707,6 +1818,9 @@ void server_local_create(struct server_local* s) {
 	s->loading = false;
 	s->find_spawn = false;
 	s->last_tick = time_get();
+	s->fluid_change_count = 0;
+	s->fluid_sched_count = 0;
+	memset(s->fluid_hash, 0, sizeof(s->fluid_hash));
 
 	string_init(s->level_name);
 
