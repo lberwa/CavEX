@@ -3719,7 +3719,8 @@ static void gen_generate_terrain_columns(struct server_world* w,
 		}
 
 		if(GEN_ENABLE_SNOW_SURFACE_LAYER && w->generator.finisher_snow
-		   && surface > gen_args->sea_level + 1 && isSnowy(biome_id)) {
+		   && surface > gen_args->sea_level + 1 && isSnowy(biome_id)
+		   && surface < WORLD_HEIGHT - 1) { /* surface+1 darf nicht WORLD_HEIGHT sein */
 			size_t top_idx = S_CHUNK_IDX(lx, surface + 1, lz);
 			if(sc->ids[top_idx] == BLOCK_AIR)
 				sc->ids[top_idx] = BLOCK_SNOW;
@@ -4449,10 +4450,13 @@ static bool server_world_light_get_block(void* user, w_coord_t x, w_coord_t y,
 static void server_world_light_set_light(void* user, w_coord_t x, w_coord_t y,
 										 w_coord_t z, uint8_t light) {
 	assert(user);
+	if(y < 0 || y >= WORLD_HEIGHT)
+		return;
 	struct server_world* w = user;
 	struct server_chunk* sc = dict_server_chunks_get(
 		w->chunks, S_CHUNK_ID(WCOORD_CHUNK_OFFSET(x), WCOORD_CHUNK_OFFSET(z)));
-	assert(sc);
+	if(!sc)
+		return;
 
 	size_t idx = S_CHUNK_IDX(x, y, z);
 	nibble_write(sc->lighting_sky, idx, light & 0xF);
@@ -4561,6 +4565,7 @@ bool server_world_set_block(struct server_local* s, w_coord_t x, w_coord_t y, w_
 		sc->modified = true;
 		sc->ids[idx] = blk.type;
 		nibble_write(sc->metadata, idx, blk.metadata);
+		sc->tick_valid = false; /* tick_count neu zaehlen beim naechsten Tick */
 
 		if(w->dimension != WORLD_DIM_NETHER)
 			lighting_heightmap_update(sc->heightmap, W2C_COORD(x), y,
@@ -4800,6 +4805,27 @@ void server_world_tick(struct server_world* w, struct server_local* s) {
         w_coord_t        baseX    = S_CHUNK_X(dict_server_chunks_ref(it)->key) * CHUNK_SIZE;
         w_coord_t        baseZ    = S_CHUNK_Z(dict_server_chunks_ref(it)->key) * CHUNK_SIZE;
 
+        /* Lazy-Count: nach jeder Blockaenderung (tick_valid=false) einmal alle
+         * Bloecke zaehlen die onWorldTick haben. Fast jeder Chunk in einer
+         * normalen Welt hat 0 solcher Bloecke -> den kompletten 16x16x128-Scan
+         * komplett ueberspringen und sofort zum naechsten Chunk. Auf der Wii
+         * waren das ~4 Mio. Blockzugriffe/Tick -> 180 ms. */
+        if(!sc->tick_valid) {
+            uint16_t cnt = 0;
+            for(int i = 0; i < CHUNK_SIZE * CHUNK_SIZE * WORLD_HEIGHT; i++) {
+                uint8_t t = sc->ids[i];
+                if(t && blocks[t] && blocks[t]->onWorldTick)
+                    cnt++;
+            }
+            sc->tick_count = cnt;
+            sc->tick_valid = true;
+        }
+
+        if(sc->tick_count == 0) {
+            dict_server_chunks_next(it);
+            continue;
+        }
+
         for (int cx = 0; cx < CHUNK_SIZE; cx++) {
             for (int cz = 0; cz < CHUNK_SIZE; cz++) {
                 for (int y = 0; y < WORLD_HEIGHT; y++) {
@@ -4811,8 +4837,6 @@ void server_world_tick(struct server_world* w, struct server_local* s) {
                     if (!b || !b->onWorldTick)
                         continue;
 
-
-                    // determine if we need any neigbour info, only is needed for these types
                     bool needNeighbours =
                         (blk.type == BLOCK_REDSTONE_WIRE) ||
                         (blk.type == BLOCK_REDSTONE_TORCH) ||
@@ -4829,7 +4853,6 @@ void server_world_tick(struct server_world* w, struct server_local* s) {
                     struct block_data neighbour_data[SIDE_MAX];
                     struct block_data* neigh_ptr = NULL;
                     if (needNeighbours) {
-
 						for (int side = 0; side < SIDE_MAX; ++side) {
 							int ox, oy, oz;
 							blocks_side_offset((enum side)side, &ox, &oy, &oz);
@@ -4848,9 +4871,7 @@ void server_world_tick(struct server_world* w, struct server_local* s) {
                                 neighbour_data[side].torch_light = 0;
 							}
 						}
-
                         neigh_ptr = neighbour_data;
-
                     }
                     struct block_info info = {
                         .block      = &blk,
@@ -4861,16 +4882,15 @@ void server_world_tick(struct server_world* w, struct server_local* s) {
                     };
 
                     b->onWorldTick(s, &info);
-						
+
 					float time = fmodf(daytime_get_time(), 24000.0f);
 					if (b->onDay && time >= 0.0f && time < 13000.0f)
 						b->onDay(s, &info);
-
 					if (b->onNight && time >= 13000.0f && time < 24000.0f)
-						b->onNight(s, &info);	
-                    }
+						b->onNight(s, &info);
                 }
             }
+        }
 
         dict_server_chunks_next(it);
     }

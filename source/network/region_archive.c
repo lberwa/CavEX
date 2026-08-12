@@ -57,7 +57,7 @@ static size_t fwrite_u32(uint32_t in, FILE* f) {
 static int sort_region_chunks(const void* a, const void* b) {
 	uint32_t offset_a = (*(const uint32_t*)a) >> 8;
 	uint32_t offset_b = (*(const uint32_t*)b) >> 8;
-	return offset_a - offset_b;
+	return (offset_a > offset_b) - (offset_a < offset_b);
 }
 
 static bool rebuild_occupied_list(struct region_archive* ra) {
@@ -259,6 +259,11 @@ bool region_archive_get_blocks(struct region_archive* ra, w_coord_t x,
 
 	uint8_t type;
 	if(!fread(&type, sizeof(uint8_t), 1, f) || type > 3) {
+		fclose(f);
+		return false;
+	}
+
+	if(length < 2) { /* length-1 wuerde zu malloc(0) oder malloc(UINT32_MAX) fuehren */
 		fclose(f);
 		return false;
 	}

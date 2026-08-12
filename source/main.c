@@ -347,10 +347,10 @@ int main(void) {
 
 #ifdef PLATFORM_WII
 	fatInitDefault();
-	#ifndef NDEBUG
+	/*#ifndef NDEBUG
 		SYS_STDIO_Report(true);
 		SYS_Report("[INIT] STDIO redirection is now active\n");
-	#endif
+	#endif*/
 	#if defined(CP_TRACE)
 		thread_create(&g_cp_thread, cp_logger, NULL, 50);
 	#endif
@@ -415,7 +415,7 @@ int main(void) {
 
 	console_init(xfb2,20,20,rmode3->fbWidth,rmode3->xfbHeight,rmode3->fbWidth*VI_DISPLAY_PIX_SZ);
 	
-    static int net_ready = 0;
+    static volatile int net_ready = 0;
     lwp_t thread;
     LWP_CreateThread(
         &thread,

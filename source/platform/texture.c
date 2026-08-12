@@ -303,8 +303,10 @@ void tex_init() {
 
 	size_t fog_size = 128;
 	uint8_t* fog = malloc(fog_size * fog_size * 4);
-	gen_texture_fog(fog, fog_size);
-	tex_gfx_load(&texture_fog, fog, fog_size, fog_size, TEX_FMT_I8, true);
+	if(fog) {
+		gen_texture_fog(fog, fog_size);
+		tex_gfx_load(&texture_fog, fog, fog_size, fog_size, TEX_FMT_I8, true);
+	}
 }
 
 uint8_t* tex_read(const char* filename, size_t* width, size_t* height) {

@@ -58,6 +58,7 @@ wiitools.pyi
 
 **/__pycache__/
 assets/sound/ignore/
+a.out
 
 .claude/
 CLAUDE.md

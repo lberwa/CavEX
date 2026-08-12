@@ -66,7 +66,7 @@ static bool music_run = false;
 
 void pcm_playlist_init(int capacity) {
     pcm_playlist = malloc(sizeof(int) * capacity);
-    pcm_playlist_cap = capacity;
+    pcm_playlist_cap = pcm_playlist ? capacity : 0;
     pcm_playlist_num = 0;
 }
 

@@ -557,12 +557,12 @@ static void screen_ingame_render2D(struct screen* s, int width, int height) {
 	    );
 	    if (ptr) {
 	        struct entity *e = *ptr;
-	        if (e->leftClickText) {
+	        if (e && e->leftClickText) {
 	            icon_offset += gutil_control_icon(icon_offset,
 	                                              IB_ACTION1,
 	                                              e->leftClickText);
 	        }
-	        if (e->rightClickText) {
+	        if (e && e->rightClickText) {
 	            icon_offset += gutil_control_icon(icon_offset,
 	                                              IB_ACTION2,
 	                                              e->rightClickText);
