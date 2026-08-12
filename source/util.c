@@ -63,6 +63,10 @@ void* file_read(const char* name) {
 	size_t length = ftell(f);
 	fseek(f, 0, SEEK_SET);
 	char* res = malloc(length + 1);
+	if(!res) {
+		fclose(f);
+		return NULL;
+	}
 	res[length] = 0;
 	(void)!fread(res, length, 1, f);
 	fclose(f);

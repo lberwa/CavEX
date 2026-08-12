@@ -464,22 +464,25 @@ void clin_process(struct client_rpc* call) {
 #endif
 			if(lp && (call->payload.pickup_item.collector_id == 0
 					  || call->payload.pickup_item.collector_id == lp->id)) {
-				struct entity* e = *(dict_entity_get(
-					gstate.entities, call->payload.pickup_item.entity_id));
+				struct entity** eptr = dict_entity_get(
+					gstate.entities, call->payload.pickup_item.entity_id);
+				struct entity* e = eptr ? *eptr : NULL;
 				if(e)
 					glm_vec3_copy((vec3) {cam->x, cam->y - 0.2F, cam->z},
 								  e->network_pos);
 			}
 		} break;
-		case CRPC_ENTITY_DESTROY:
-			free(*dict_entity_get(gstate.entities,
-							  call->payload.entity_destroy.entity_id));
+		case CRPC_ENTITY_DESTROY: {
+			struct entity** eptr = dict_entity_get(
+				gstate.entities, call->payload.entity_destroy.entity_id);
+			if(eptr) free(*eptr);
 			dict_entity_erase(gstate.entities,
 							  call->payload.entity_destroy.entity_id);
-			break;
+		} break;
 		case CRPC_ENTITY_MOVE: {
-			struct entity* e = *(dict_entity_get(
-				gstate.entities, call->payload.entity_move.entity_id));
+			struct entity** eptr = dict_entity_get(
+				gstate.entities, call->payload.entity_move.entity_id);
+			struct entity* e = eptr ? *eptr : NULL;
 			if(e)
 				glm_vec3_copy(call->payload.entity_move.pos, e->network_pos);
 		} break;

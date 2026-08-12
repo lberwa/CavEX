@@ -1102,40 +1102,53 @@ static void server_local_update(struct server_local* s) {
 
 	s->world_time++;
 
-	dict_entity_it_t it;
-	dict_entity_it(it, s->entities);
-
-	while(!dict_entity_end_p(it)) {
-		uint32_t key = dict_entity_ref(it)->key;
-		struct entity* e = dict_entity_ref(it)->value;
-
-		if(e->tick_server) {
-			bool remove = (e->delay_destroy == 0) || e->tick_server(e, s);
-			dict_entity_next(it);
-
-			if(remove) {
-				clin_rpc_send(&(struct client_rpc) {
-					.type = CRPC_ENTITY_DESTROY,
-					.payload.entity_destroy.entity_id = key,
-				});
-
-				free(e);
-				dict_entity_erase(s->entities, key);
-			} else if(e->delay_destroy < 0) {
-				// TODO: find a more optimized way of moving entities on both client and server
-				/*
-				clin_rpc_send(&(struct client_rpc) {
-					.type = CRPC_ENTITY_MOVE,
-					.payload.entity_move.entity_id = key,
-					.payload.entity_move.pos
-					= {e->pos[0], e->pos[1], e->pos[2]},
-				});
-				*/
-			}
-		} else {
-			dict_entity_next(it);
+	/* Entity-Keys vor dem Tick in ein Array snapshotten. tick_server() kann
+	 * dict_entity_safe_get() aufrufen (z.B. via server_local_spawn_item),
+	 * was einen Rehash ausloesen und den Iterator invalidieren wuerde. Durch
+	 * das Snapshot-Muster wird das Dict waehrend des Ticks nicht iteriert. */
+#define ENTITY_TICK_CAP 512
+	uint32_t tick_keys[ENTITY_TICK_CAP];
+	int tick_count = 0;
+	{
+		dict_entity_it_t snap;
+		dict_entity_it(snap, s->entities);
+		while(!dict_entity_end_p(snap)) {
+			if(dict_entity_ref(snap)->value->tick_server
+			   && tick_count < ENTITY_TICK_CAP)
+				tick_keys[tick_count++] = dict_entity_ref(snap)->key;
+			dict_entity_next(snap);
 		}
 	}
+
+	for(int _i = 0; _i < tick_count; _i++) {
+		uint32_t key = tick_keys[_i];
+		struct entity** ep = dict_entity_get(s->entities, key);
+		if(!ep) continue; /* wurde von einem frueheren Tick in diesem Frame entfernt */
+		struct entity* e = *ep;
+
+		bool remove = (e->delay_destroy == 0) || e->tick_server(e, s);
+
+		if(remove) {
+			clin_rpc_send(&(struct client_rpc) {
+				.type = CRPC_ENTITY_DESTROY,
+				.payload.entity_destroy.entity_id = key,
+			});
+
+			free(e);
+			dict_entity_erase(s->entities, key);
+		} else if(e->delay_destroy < 0) {
+			// TODO: find a more optimized way of moving entities on both client and server
+			/*
+			clin_rpc_send(&(struct client_rpc) {
+				.type = CRPC_ENTITY_MOVE,
+				.payload.entity_move.entity_id = key,
+				.payload.entity_move.pos
+				= {e->pos[0], e->pos[1], e->pos[2]},
+			});
+			*/
+		}
+	}
+#undef ENTITY_TICK_CAP
 
 #ifdef SPLITSCREEN
 		w_coord_t px = WCOORD_CHUNK_OFFSET(floor(s->players[0].x));

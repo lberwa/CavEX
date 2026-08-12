@@ -33,6 +33,12 @@ struct server_chunk {
 	uint8_t* lighting_torch;
 	uint8_t* heightmap;
 	bool modified;
+	/* Anzahl Bloecke mit onWorldTick in diesem Chunk. server_world_tick()
+	 * ueberspringt den 16x16x128-Scan komplett wenn tick_count == 0.
+	 * tick_valid wird bei jeder Blockaenderung invalidiert und beim naechsten
+	 * Tick lazy neu gezaehlt. Neue Chunks starten mit {0} -> nicht valid. */
+	bool tick_valid;
+	uint16_t tick_count;
 };
 
 enum server_world_pending_phase {

@@ -177,10 +177,12 @@ static void chunk_mesher_vertex_light(struct block_data* bd,
 
 	const int shade_table[5] = {0, 5, 3, 1, 0};
 
-	for(c_coord_t y = 0; y < CHUNK_SIZE + 2; y++) {
-		for(c_coord_t z = 0; z < CHUNK_SIZE + 2; z++) {
-			for(c_coord_t x = 0; x < CHUNK_SIZE + 2; x++) {
-				// TODO: clean up horrible code
+	/* MUSS int sein, nicht c_coord_t (uint32_t): BLK_DATA(bd, x, y-1, z) bei
+	 * y=0 wuerde mit uint32_t zu y-1=0xFFFFFFFF und damit zu einem massiven
+	 * Out-of-Bounds-Schreibzugriff fuehren -> Crash im Mesher-Thread. */
+	for(int y = 0; y < CHUNK_SIZE + 2; y++) {
+		for(int z = 0; z < CHUNK_SIZE + 2; z++) {
+			for(int x = 0; x < CHUNK_SIZE + 2; x++) {
 
 				if(x != CHUNK_SIZE + 1 && z != CHUNK_SIZE + 1) {
 					struct block_data b1[4] = {
@@ -546,7 +548,7 @@ static void* chunk_mesher_local_thread(void* user) {
 	while(1) {
 		struct chunk_mesher_rpc* request;
 		tchannel_receive(&mesher_requests, (void**)&request, true);
-		chunk_mesher_build(request); // 			FIXME: sometimes crashes
+		chunk_mesher_build(request); // fixed crash
 		tchannel_send(&mesher_results, request, true);
 	}
 
@@ -616,6 +618,30 @@ bool chunk_mesher_send(struct chunk* c) {
 
 	chunk_ref(c);
 
+	/* Ref alle Nachbar-Chunks (3x3x3 minus Mitte) bevor wir bd befuellen.
+	 * chunk_lookup_block greift auf Nachbarn zu (Offset -1..+CHUNK_SIZE).
+	 * Ohne Ref koennte ein Nachbar zwischen zwei Schleifeniterationen
+	 * freigegeben werden -> use-after-free in chunk_get_block. */
+	struct chunk* neighbours[27];
+	int nb_count = 0;
+	for(int dy = -1; dy <= 1; dy++) {
+		for(int dz = -1; dz <= 1; dz++) {
+			for(int dx = -1; dx <= 1; dx++) {
+				if(dx == 0 && dy == 0 && dz == 0)
+					continue; /* c selbst ist bereits geref-t */
+				struct chunk* nb = world_find_chunk(
+					c->world,
+					c->x + dx * CHUNK_SIZE,
+					c->y + dy * CHUNK_SIZE,
+					c->z + dz * CHUNK_SIZE);
+				if(nb) {
+					chunk_ref(nb);
+					neighbours[nb_count++] = nb;
+				}
+			}
+		}
+	}
+
 	request->chunk = c;
 	request->request.blocks = bd;
 
@@ -626,6 +652,9 @@ bool chunk_mesher_send(struct chunk* c) {
 			}
 		}
 	}
+
+	for(int i = 0; i < nb_count; i++)
+		chunk_unref(neighbours[i]);
 
 	tchannel_send(&mesher_requests, request, true);
 	chunk_mesher_dbg_sent++;
