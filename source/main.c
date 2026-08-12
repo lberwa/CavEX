@@ -399,7 +399,12 @@ int main(void) {
 	gstate.in_water = false;
 	gstate.oxygen = MAX_OXYGEN;
 
-	struct server_local server;
+	/* server_local ist ~334 KB gross (u.a. die Fluid-Arrays fuer den
+	 * Wasserfluss). Als lokale Variable waere das ein 334-KB-Stackframe in
+	 * main() -- auf der Wii sprengt das mit dem MY=0-Custom-crt0 den kleineren
+	 * Main-Stack und die App startet gar nicht erst. Es gibt nur diese eine
+	 * Instanz und main() laeuft einmal, also statisch in den BSS legen. */
+	static struct server_local server;
 	server_local_create(&server);
 
 	ptime_t last_frame = time_get();
@@ -760,7 +765,10 @@ int main(void) {
 					 * to the player's strip (cover + scissor), so the world is
 					 * not squished/stretched. The 3D viewport covers the strip at
 					 * the full-screen aspect; the scissor clips it to the strip
-					 * (e.g. 2-player = single-player view cut off top/bottom). */
+					 * (e.g. 2-player = single-player view cut off top/bottom).
+					 * The centering gives a negative origin for the top player;
+					 * gfx_viewport takes signed coords, so this works on both PC
+					 * (GL) and Wii (GX) -- the scissor below does the cropping. */
 					{
 						int fw = gfx_width(), fh = gfx_height();
 						float cover
@@ -860,6 +868,12 @@ int main(void) {
 
 					gfx_mode_gui_viewport(gui_w, gui_h);
 #else
+					/* The HUD/2D fills the player's strip in its own coordinate
+					 * space -- reset from the oversized 3D cover viewport back to
+					 * the plain strip so it isn't shifted/scaled. */
+					gfx_viewport(vp_x, vp_y, vp_w, vp_h);
+					gfx_scissor(true, vp_x, vp_y, vp_w, vp_h);
+
 					gui_w = vp_w;
 					gui_h = vp_h;
 					if(active_screen != &screen_ingame)

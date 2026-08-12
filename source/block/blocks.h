@@ -223,4 +223,7 @@ size_t block_drop_default(struct block_info* this, struct item_data* it,
 
 void notifyNeighbours(struct server_local* s, w_coord_t x, w_coord_t y, w_coord_t z);
 
+/* one cellular-automaton step for a single water cell (see block_water.c) */
+void block_water_flow_update(struct server_local* s, struct block_info* info);
+
 #endif

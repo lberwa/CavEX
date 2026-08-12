@@ -4599,6 +4599,11 @@ bool server_world_set_block(struct server_local* s, w_coord_t x, w_coord_t y, w_
         if (!server_world_get_block(w, nx, ny, nz, &nb))
             continue;
 
+        // wake adjacent water so it re-evaluates its flow (into a new gap, or
+        // away from a block that was just placed)
+        if (nb.type == BLOCK_WATER_STILL || nb.type == BLOCK_WATER_FLOW)
+            server_local_schedule_fluid(s, nx, ny, nz);
+
         const struct block* b = blocks[nb.type];
         if (b && b->onNeighbourBlockChange) {
             struct block_info info = {
@@ -4611,6 +4616,11 @@ bool server_world_set_block(struct server_local* s, w_coord_t x, w_coord_t y, w_
             b->onNeighbourBlockChange(s, &info);
         }
     }
+
+    // if the block we just placed is water itself, wake it too so it starts
+    // flowing (bucket placement, or a freshly-spread flow cell)
+    if (blk.type == BLOCK_WATER_STILL || blk.type == BLOCK_WATER_FLOW)
+        server_local_schedule_fluid(s, x, y, z);
 
 	return sc;
 }

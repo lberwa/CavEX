@@ -421,22 +421,37 @@ uint16_t tex_atlas_lookup_particle(enum tex_atlas_entry name) {
 #define ATLAS_ANIM_PADDING 3
 #define ATLAS_ANIM_COLUMNS 16
 
-static bool global_atlas_anim_mode = false;
-
+/* Deprecated no-op: the anim.png geometry used to be selected by toggling a
+ * global here, but that global was read by the render thread (HUD/inventory UVs)
+ * while the chunk-mesher thread flipped it for liquids -> a data race that made
+ * atlas textures flicker. Liquids now compute their anim.png offsets explicitly
+ * via tex_atlas_anim_x/tex_atlas_anim_y, so nothing shares mutable state. */
 void tex_atlas_set_anim_geometry(bool enable) {
-	global_atlas_anim_mode = enable;
+	(void)enable;
+}
+
+/* Pixel offset of a tile in the raw anim.png layout (fixed 16-column grid,
+ * stride 18, padding 3). Pure -> safe to call from any thread. */
+uint16_t tex_atlas_anim_x(uint16_t tex) {
+	return (uint16_t)((tex % ATLAS_ANIM_COLUMNS) * ATLAS_ANIM_STRIDE
+					  + ATLAS_ANIM_PADDING);
+}
+
+uint16_t tex_atlas_anim_y(uint16_t tex) {
+	return (uint16_t)((tex / ATLAS_ANIM_COLUMNS) * ATLAS_ANIM_STRIDE
+					  + ATLAS_ANIM_PADDING);
 }
 
 uint16_t tex_atlas_columns(void) {
-	return global_atlas_anim_mode ? ATLAS_ANIM_COLUMNS : global_atlas_columns;
+	return global_atlas_columns;
 }
 
 uint16_t tex_atlas_stride(void) {
-	return global_atlas_anim_mode ? ATLAS_ANIM_STRIDE : global_atlas_stride;
+	return global_atlas_stride;
 }
 
 uint16_t tex_atlas_padding(void) {
-	return global_atlas_anim_mode ? ATLAS_ANIM_PADDING : global_atlas_padding;
+	return global_atlas_padding;
 }
 
 uint16_t tex_atlas_size(void) {

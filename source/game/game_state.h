@@ -72,6 +72,10 @@ struct game_state {
 		float dt, fps;
 		float dt_gpu, dt_vsync;
 		size_t chunks_rendered;
+		/* server-thread pacing (debug): work time of the last game tick and the
+		 * smoothed effective tick rate. On the Wii a tick > 50ms drops below the
+		 * 20 TPS target -> water/mobs run slow. Written from server_local_thread. */
+		float server_tick_ms, server_tps;
 	} stats;
 	struct {
 		float fov;

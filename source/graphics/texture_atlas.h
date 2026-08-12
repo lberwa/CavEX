@@ -380,9 +380,12 @@ uint16_t tex_atlas_columns(void);
 uint16_t tex_atlas_stride(void);
 uint16_t tex_atlas_padding(void);
 uint16_t tex_atlas_size(void);
-/* Switch the geometry getters above to the fixed anim.png layout while
- * rendering animated liquids (water/lava), then switch back. */
+/* Deprecated no-op (kept for source compatibility). Liquids now compute their
+ * anim.png pixel offsets directly, avoiding a mesher/render-thread data race. */
 void tex_atlas_set_anim_geometry(bool enable);
+/* Pixel offset of tile `tex` in the raw anim.png grid; pure, thread-safe. */
+uint16_t tex_atlas_anim_x(uint16_t tex);
+uint16_t tex_atlas_anim_y(uint16_t tex);
 
 
 #endif

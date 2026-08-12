@@ -454,15 +454,25 @@ static void world_light_set_light(void* user, w_coord_t x, w_coord_t y,
 void world_update_lighting(struct world* w) {
 	assert(w);
 
-	if(stack_empty(&w->lighting_updates))
+	size_t n = stack_size(&w->lighting_updates);
+	if(n == 0)
 		return;
 
-	struct world_modification_entry source;
-	stack_pop(&w->lighting_updates, &source);
-
-	world_set_block(w, source.x, source.y, source.z, source.blk, false);
-	lighting_update_at_block(source, false, world_light_get_block,
-							 world_light_set_light, w);
+	/* Apply ALL queued block updates this frame, in FIFO order (oldest first).
+	 * The container is a stack, but popping it LIFO applies several updates to
+	 * the SAME cell in reverse -- e.g. a water->air retreat would re-show water
+	 * and leave a stale puddle on the client even though the server cleared it.
+	 * Draining front-to-back keeps the client's final state matching the server
+	 * and makes fast bursts (flowing water) appear at once instead of trickling
+	 * one block per frame. */
+	for(size_t i = 0; i < n; i++) {
+		struct world_modification_entry source;
+		stack_at(&w->lighting_updates, &source, i);
+		world_set_block(w, source.x, source.y, source.z, source.blk, false);
+		lighting_update_at_block(source, false, world_light_get_block,
+								 world_light_set_light, w);
+	}
+	stack_clear(&w->lighting_updates);
 }
 
 struct chunk* world_find_chunk_neighbour(struct world* w, struct chunk* c,

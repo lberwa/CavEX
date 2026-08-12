@@ -109,7 +109,7 @@ CXXFLAGS	+=	$(CFLAGS)
 CPPFLAGS	+=	-Ofast -DSPLITSCREEN=2 -g
 CFLAGS		+=	-Ofast -g -std=c99 -pedantic -Wextra -Wno-unused-parameter -Wall \
 				-DSPLITSCREEN=2  -DPLATFORM_WII -D_POSIX_THREADS \
-				$(PY_INCLUDE) $(MACHDEP) $(INCLUDE) -DNDEBUG #-DWITH_PYTHON 
+				$(PY_INCLUDE) $(MACHDEP) $(INCLUDE) -DNDEBUG -DWITH_PYTHON 
 
 LDFLAGS	+=	$(MACHDEP) -Wl,-Map,$(notdir $@).map
 LDFLAGS += -L$(MAKEFILE_DIR)
@@ -285,8 +285,8 @@ $(BUILD):
 	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
 	cp build/boot.dol boot.dol
 	cp build/boot.elf boot.elf
-	cp boot.dol ready_wii/
-	cp boot.elf ready_wii/
+#	cp boot.dol ready_wii/
+#	cp boot.elf ready_wii/
 
 #---------------------------------------------------------------------------------
 clean:

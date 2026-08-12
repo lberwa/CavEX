@@ -729,7 +729,7 @@ static void gfx_apply_viewport(int x, int y, int w, int h) {
 	glViewport(x, th - y - h, w, h);
 }
 
-void gfx_viewport(uint32_t x, uint32_t y, uint32_t width, uint32_t height) {
+void gfx_viewport(int32_t x, int32_t y, int32_t width, int32_t height) {
 	/* coordinates are top-left, in the space of the currently bound target
 	 * (native for the 3D pass, logical for the GUI pass), because the caller
 	 * derives them from gfx_width()/gfx_height(). */
