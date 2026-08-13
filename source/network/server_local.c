@@ -491,6 +491,8 @@ void server_local_set_player_health(struct server_local* s, int player_id, short
 #else
 	struct server_player* player = &s->player;
 #endif
+	if(player->creative && new_health < player->health)
+		return;
 	player->health = new_health;
 	if (player->health > MAX_PLAYER_HEALTH) player->health = MAX_PLAYER_HEALTH;
 	if (player->health <= 0) {
@@ -685,6 +687,58 @@ static void server_local_process(struct server_rpc* call, void* user) {
 			player->active_inventory = &player->inventory;
 			break;
 		}
+		case SRPC_SET_GAMEMODE:
+			if(player->has_pos) {
+				if(call->payload.set_gamemode.toggle)
+					player->creative = !player->creative;
+				clin_rpc_send(&(struct client_rpc) {
+					CRPC_PLAYER_ID(pid)
+					.type = CRPC_GAMEMODE,
+					.payload.gamemode.creative = player->creative,
+				});
+			}
+			break;
+		case SRPC_CREATIVE_PICK_BLOCK: {
+			uint16_t id = call->payload.creative_pick_block.block_id;
+			if(player->has_pos && player->creative && id > 0 && id < 256
+			   && blocks[id] && blocks[id]->block_item.renderItem) {
+				size_t slot = inventory_get_hotbar(&player->inventory)
+					+ INVENTORY_SLOT_HOTBAR;
+				struct item_data stack = {
+					.id = id,
+					.durability = 0,
+					.count = blocks[id]->block_item.max_stack,
+				};
+				inventory_set_slot(&player->inventory, slot, stack);
+				clin_rpc_send(&(struct client_rpc) {
+					CRPC_PLAYER_ID(pid)
+					.type = CRPC_INVENTORY_SLOT,
+					.payload.inventory_slot.window = WINDOWC_INVENTORY,
+					.payload.inventory_slot.slot = slot,
+					.payload.inventory_slot.item = stack,
+				});
+			}
+			break;
+		}
+		case SRPC_CREATIVE_SET_PICKED: {
+			if(player->has_pos && player->creative) {
+				uint16_t id = call->payload.creative_set_picked.item_id;
+				struct item_data picked = {.id = 0, .durability = 0, .count = 0};
+				if(id > 0 && id < ITEMS_MAX && items[id] && items[id]->renderItem) {
+					picked.id = id;
+					picked.count = items[id]->max_stack;
+				}
+				inventory_set_picked_item(&player->inventory, picked);
+				clin_rpc_send(&(struct client_rpc) {
+					CRPC_PLAYER_ID(pid)
+					.type = CRPC_INVENTORY_SLOT,
+					.payload.inventory_slot.window = WINDOWC_INVENTORY,
+					.payload.inventory_slot.slot = SPECIAL_SLOT_PICKED_ITEM,
+					.payload.inventory_slot.item = picked,
+				});
+			}
+			break;
+		}
 		case SRPC_BLOCK_DIG:
 			if(player->has_pos && call->payload.block_dig.y >= 0
 			   && call->payload.block_dig.y < WORLD_HEIGHT
@@ -706,7 +760,7 @@ static void server_local_process(struct server_rpc* call, void* user) {
 						&player->inventory, &it_data);
 					struct item* it = has_tool ? item_get(&it_data) : NULL;
 
-					if(blocks[blk.type]
+					if(!player->creative && blocks[blk.type]
 					   && ((it
 							&& it->tool.type == blocks[blk.type]->digging.tool
 							&& it->tool.tier >= blocks[blk.type]->digging.min)
@@ -786,8 +840,9 @@ static void server_local_process(struct server_rpc* call, void* user) {
 					if(placed) {
 						size_t slot
 							= inventory_get_hotbar(&player->inventory);
-						inventory_consume(&player->inventory,
-										  slot + INVENTORY_SLOT_HOTBAR);
+						if(!player->creative)
+							inventory_consume(&player->inventory,
+											  slot + INVENTORY_SLOT_HOTBAR);
 
 						clin_rpc_send(&(struct client_rpc) {
 							CRPC_PLAYER_ID(pid)
@@ -824,6 +879,10 @@ static void server_local_process(struct server_rpc* call, void* user) {
 
 			level_archive_write_inventory(&s->level, &player->inventory);
 			level_archive_write(&s->level, LEVEL_TIME, &s->world_time);
+			{
+				int32_t gm = player->creative ? 1 : 0;
+				level_archive_write(&s->level, LEVEL_PLAYER_GAMEMODE, &gm);
+			}
 
 			level_archive_write(&s->level, LEVEL_PLAYER_HEALTH, &player->health);
 
@@ -937,6 +996,12 @@ static void server_local_process(struct server_rpc* call, void* user) {
 				s->world_initialized = true;
 
 				level_archive_read(&s->level, LEVEL_TIME, &s->world_time, 0);
+
+				{
+					int32_t gm = 0;
+					level_archive_read(&s->level, LEVEL_PLAYER_GAMEMODE, &gm, 0);
+					s->players[0].creative = (gm == 1);
+				}
 
 				// Read health/spawn if present (old `level.dat` may not have it).
 				{
@@ -1546,6 +1611,11 @@ unload_done:
 		s->find_spawn = false;
 
 		/* spawn area is loaded and the hotbars were sent -> start the game */
+		clin_rpc_send(&(struct client_rpc) {
+			CRPC_PLAYER_ID(0)
+			.type = CRPC_GAMEMODE,
+			.payload.gamemode.creative = s->players[0].creative,
+		});
 		clin_rpc_send(&(struct client_rpc) {
 			.type = CRPC_WORLD_LOADED,
 		});

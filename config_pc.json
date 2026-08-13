@@ -60,9 +60,10 @@
 		"gui_click_alt": [1001],
 		"screenshot": [291],
 		"gui_back": [256],
+		"toggle_creative": [294],
 		"any_button": [87, 83, 65]
 },
-	
+
 		"player_forward": [87],
 		"player_backward": [83],
 		"player_left": [65],
@@ -83,6 +84,7 @@
 		"gui_click_alt": [1001],
 		"screenshot": [291],
 		"gui_back": [256],
+		"toggle_creative": [294],
 		"any_button": [87, 83, 65]
 	}
 }

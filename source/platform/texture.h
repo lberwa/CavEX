@@ -70,6 +70,7 @@ extern struct tex_gfx texture_sheep_fur;
 extern struct tex_gfx texture_font;
 extern struct tex_gfx texture_anim;
 extern struct tex_gfx texture_gui_inventory;
+extern struct tex_gfx texture_gui_creative_inventory;
 extern struct tex_gfx texture_gui_crafting;
 extern struct tex_gfx texture_gui_furnace;
 extern struct tex_gfx texture_gui_brewing_stand;

@@ -34,6 +34,21 @@
 #define PLAYER_HEAD_YAW_LIMIT glm_rad(45.0F)
 #define PLAYER_BODY_FOLLOW_IDLE 0.18F
 #define PLAYER_BODY_FOLLOW_MOVING 0.28F
+#define FLY_SPEED 0.4F
+
+bool detect_double_tap(bool pressed, int* window) {
+	if(!pressed) {
+		if(*window > 0)
+			(*window)--;
+		return false;
+	}
+	if(*window > 0) {
+		*window = 0;
+		return true;
+	}
+	*window = JUMP_TAP_WINDOW;
+	return false;
+}
 
 static float angle_normalize(float angle) {
 	while(angle > GLM_PI)
@@ -283,13 +298,27 @@ static bool entity_tick(struct entity* e) {
 	int  strafe  = 0;
 	bool jumping = false;
 
+	bool sneaking = false;
 	if(e->data.local_player.capture_input) {
 		if(input_held(IB_FORWARD, player_index))  forward++;
 		if(input_held(IB_BACKWARD, player_index)) forward--;
 		if(input_held(IB_RIGHT, player_index))    strafe++;
 		if(input_held(IB_LEFT, player_index))     strafe--;
 		jumping = input_held(IB_JUMP, player_index);
+		sneaking = input_held(IB_SNEAK, player_index);
+
+		bool jump_edge = jumping && !e->data.local_player.jump_held_prev;
+		e->data.local_player.jump_held_prev = jumping;
+		if(e->data.local_player.creative
+		   && detect_double_tap(jump_edge, &e->data.local_player.jump_tap_window))
+			e->data.local_player.flying = !e->data.local_player.flying;
+	} else {
+		e->data.local_player.jump_tap_window = 0;
+		e->data.local_player.jump_held_prev = false;
 	}
+
+	if(!e->data.local_player.creative)
+		e->data.local_player.flying = false;
 
 #ifdef PLATFORM_PC
 #ifdef MOVE_DEBUG
@@ -330,7 +359,17 @@ static bool entity_tick(struct entity* e) {
 	if(e->data.local_player.jump_ticks > 0)
 		e->data.local_player.jump_ticks--;
 
-	if(jumping) {
+	bool flying = e->data.local_player.flying;
+
+	if(flying) {
+		if(jumping)
+			e->vel[1] = FLY_SPEED;
+		else if(sneaking)
+			e->vel[1] = -FLY_SPEED;
+		else
+			e->vel[1] = 0.0F;
+		e->data.local_player.jump_ticks = 0;
+	} else if(jumping) {
 		if(in_water || in_lava) {
 			e->vel[1] += 0.04F;
 		} else if(e->on_ground && e->data.local_player.jump_ticks == 0) {
@@ -386,7 +425,10 @@ static bool entity_tick(struct entity* e) {
 		}
 	}
 
-	if(in_lava) {
+	if(flying) {
+		e->vel[0] *= slipperiness * 0.91F;
+		e->vel[2] *= slipperiness * 0.91F;
+	} else if(in_lava) {
 		e->vel[0] *= 0.5F;
 		e->vel[2] *= 0.5F;
 		e->vel[1]  = e->vel[1] * 0.5F - 0.02F;
@@ -410,7 +452,7 @@ static bool entity_tick(struct entity* e) {
 		e->vel[1] *= 0.98F;
 	}
 
-	if(collision_xz && (in_lava || in_water)) {
+	if(!flying && collision_xz && (in_lava || in_water)) {
 		struct AABB tmp;
 		aabb_setsize_centered(&tmp, PLAYER_HITBOX_WIDTH, PLAYER_HITBOX_HEIGHT,
 		                      PLAYER_HITBOX_WIDTH);
@@ -489,4 +531,8 @@ bool entity_local_player_block_collide(vec3 pos, struct block_info* blk_info) {
 		e->data.local_player.jump_ticks = 0;
 		e->data.local_player.body_yaw = e->orient[0];
 		e->data.local_player.body_yaw_old = e->orient[0];
+		e->data.local_player.flying = false;
+		e->data.local_player.creative = false;
+		e->data.local_player.jump_tap_window = 0;
+		e->data.local_player.jump_held_prev = false;
 	}

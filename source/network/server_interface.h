@@ -40,6 +40,9 @@ enum server_rpc_type {
 	SRPC_WINDOW_CLICK,
 	SRPC_WINDOW_CLOSE,
 	SRPC_TOGGLE_PAUSE,
+	SRPC_SET_GAMEMODE,
+	SRPC_CREATIVE_PICK_BLOCK,
+	SRPC_CREATIVE_SET_PICKED,
 };
 
 #ifdef SPLITSCREEN
@@ -90,6 +93,15 @@ struct server_rpc {
 		struct {
 			uint8_t target_player_id;
 		} player_attack;
+		struct {
+			bool toggle;
+		} set_gamemode;
+		struct {
+			uint16_t block_id;
+		} creative_pick_block;
+		struct {
+			uint16_t item_id;
+		} creative_set_picked;
 	} payload;
 };
 
