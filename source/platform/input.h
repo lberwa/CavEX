@@ -43,6 +43,7 @@ enum input_button {
 	IB_GUI_CLICK_ALT,
 	IB_SCREENSHOT,
 	IB_BACK,
+	IB_TOGGLE_CREATIVE,
 	IB_ANY,
 };
 

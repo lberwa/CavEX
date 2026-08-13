@@ -149,7 +149,7 @@ static void screen_enchanting_table_update(struct screen* s, float dt) {
 		screen_set_player(player, &screen_ingame);
 	}
 
-	if(input_pressed(IB_GUI_CLICK, player)) {
+	if(input_pressed(IB_GUI_CLICK, player) && (!pointer_available[player] || pointer_has_item[player])) {
 		uint16_t action_id;
 		if(windowc_new_action(gstate_windows()[table_container[player]],
 		                      &action_id, false, slots[selected_slot[player]].slot)) {
@@ -162,7 +162,7 @@ static void screen_enchanting_table_update(struct screen* s, float dt) {
 				.payload.window_click.slot = slots[selected_slot[player]].slot,
 			});
 		}
-	} else if(input_pressed(IB_GUI_CLICK_ALT, player)) {
+	} else if(input_pressed(IB_GUI_CLICK_ALT, player) && (!pointer_available[player] || pointer_has_item[player])) {
 		uint16_t action_id;
 		if(windowc_new_action(gstate_windows()[table_container[player]],
 		                      &action_id, true, slots[selected_slot[player]].slot)) {
@@ -229,6 +229,7 @@ static void screen_enchanting_table_update(struct screen* s, float dt) {
 		selected_slot[player] = (size_t)pointer_slot;
 		pointer_has_item[player] = true;
 	} else {
+		pointer_has_item[player] = false;
 		if(input_pressed(IB_GUI_LEFT, player)) {
 			selected_slot[player] = slot_nearest[0];
 			pointer_has_item[player] = false;
@@ -294,14 +295,16 @@ static void screen_enchanting_table_render2D(struct screen* s, int width, int he
 			continue;
 		struct item_data item;
 		if((selected_slot[player] != k || !inventory_get_picked_item(inv, NULL)
-			|| (pointer_available[player] && pointer_has_item[player]))
+			|| pointer_available[player])
 		   && inventory_get_slot(inv, slots[k].slot, &item))
 			gutil_draw_item(&item, off_x + slots[k].x, off_y + slots[k].y, 1);
 	}
 
-	gfx_bind_texture(&texture_gui2);
-	gutil_texquad(off_x + selection->x - 4 * scale, off_y + selection->y - 4 * scale,
-				  208, 0, 24, 24, 24 * scale, 24 * scale);
+	if(!pointer_available[player] || pointer_has_item[player]) {
+		gfx_bind_texture(&texture_gui2);
+		gutil_texquad(off_x + selection->x - 4 * scale, off_y + selection->y - 4 * scale,
+					  208, 0, 24, 24, 24 * scale, 24 * scale);
+	}
 
 	int icon_offset = 16 * scale;
 	icon_offset += gutil_control_icon(icon_offset, IB_GUI_UP, "Move");
@@ -315,7 +318,7 @@ static void screen_enchanting_table_render2D(struct screen* s, int width, int he
 
 	struct item_data picked_or_selected;
 	if(inventory_get_picked_item(inv, &picked_or_selected)) {
-		if(pointer_available[player] && pointer_has_item[player]) {
+		if(pointer_available[player]) {
 			gutil_draw_item(&picked_or_selected, pointer_x[player] - 8 * scale,
 			                pointer_y[player] - 8 * scale, 0);
 		} else {

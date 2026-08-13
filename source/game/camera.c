@@ -100,7 +100,10 @@ void camera_ray_pick(struct world* w, float gx0, float gy0, float gz0,
 			}
 		}
 
-		if(gx == x1 && gy == y1 && gz == z1) {
+		bool past_x = (sx > 0) ? (gx >= x1) : (gx <= x1);
+		bool past_y = (sy > 0) ? (gy >= y1) : (gy <= y1);
+		bool past_z = (sz > 0) ? (gz >= z1) : (gz <= z1);
+		if(past_x && past_y && past_z) {
 			res->hit = false;
 			return;
 		}

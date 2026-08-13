@@ -87,9 +87,11 @@ void screen_viewport_size(int player, int* width, int* height) {
 		screen_viewport_rect(player, &x, &y, &w, &h);
 
 #ifdef PLATFORM_WII
-		if(screen_viewport_target(player) == &screen_game_menu) {
+		if(screen_viewport_target(player) == &screen_game_menu
+		   || screen_viewport_target(player) == &screen_game_settings) {
 #else
-		if(screen_get_player(player) == &screen_game_menu) {
+		if(screen_get_player(player) == &screen_game_menu
+		   || screen_get_player(player) == &screen_game_settings) {
 #endif
 			if(width)
 				*width = (int)w * ZOOM_FACTOR_GAME_MENU;
@@ -176,9 +178,11 @@ bool screen_pointer_local(int player, int view_width, int view_height,
 		int gui_w, gui_h;
 
 #ifdef PLATFORM_WII
-		if(screen_viewport_target(player) == &screen_game_menu) {
+		if(screen_viewport_target(player) == &screen_game_menu
+		   || screen_viewport_target(player) == &screen_game_settings) {
 #else
-		if(screen_get_player(player) == &screen_game_menu) {
+		if(screen_get_player(player) == &screen_game_menu
+		   || screen_get_player(player) == &screen_game_settings) {
 #endif
 			gui_w = (int)vp_w * ZOOM_FACTOR_GAME_MENU;
 			gui_h = (int)vp_h * ZOOM_FACTOR_GAME_MENU;

@@ -89,6 +89,10 @@ struct entity {
 			bool capture_input;
 			float body_yaw;
 			float body_yaw_old;
+			bool flying;
+			bool creative;
+			int jump_tap_window;
+			bool jump_held_prev;
 #ifdef SPLITSCREEN
 			uint8_t player_index;
 #endif
@@ -189,5 +193,8 @@ void entity_get_delta(struct entity* e, vec3 out_delta);
 void entity_blend_body_to_head(float* body_yaw, float head_yaw, float factor);
 void entity_tick_animation(struct entity* e, float walk_speed, int max_frame);
 void entity_choose_random_direction(struct entity* e, vec2 out_dir);
+
+#define JUMP_TAP_WINDOW 10
+bool detect_double_tap(bool pressed, int* window);
 
 #endif

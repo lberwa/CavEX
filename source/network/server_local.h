@@ -121,6 +121,7 @@ struct server_player {
 	int spawn_x, spawn_y, spawn_z;
 	float vel_y, old_vel_y;
 	float fall_distance;
+	bool creative;
 };
 
 struct server_local {

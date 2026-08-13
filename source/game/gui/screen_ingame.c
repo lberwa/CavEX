@@ -33,6 +33,7 @@
 #include "../../platform/input.h"
 #include "../game_state.h"
 #include "../../daytime.h"
+#include "screen_inventory_creative.h"
 
 #include <malloc.h>
 
@@ -195,6 +196,9 @@ void screen_ingame_render3D(struct screen* s, mat4 view) {
 		if(!active_inventory_window())
 			return;
 
+		bool creative_mode = gstate.local_player
+			&& gstate.local_player->data.local_player.creative;
+
 		// left click interaction
 		if (gstate.camera_hit.entity_hit
 		    && input_pressed(IB_ACTION1, gstate_active_player())
@@ -292,6 +296,8 @@ void screen_ingame_render3D(struct screen* s, mat4 view) {
 		int delay = blocks[blk.type] ?
 			tool_dig_delay_ms(blocks[blk.type], item_get(&it)) :
 			0;
+		if(creative_mode && delay >= 0)
+			delay = 0;
 
 		if(!gstate.camera_hit.hit || gstate.digging.x != gstate.camera_hit.x
 		   || gstate.digging.y != gstate.camera_hit.y
@@ -444,7 +450,15 @@ void screen_ingame_render3D(struct screen* s, mat4 view) {
 	}
 
 	if(input_pressed(IB_INVENTORY, gstate_active_player()))
-		screen_set_player(gstate_active_player(), &screen_inventory);
+		screen_set_player(gstate_active_player(),
+			creative_mode ? &screen_inventory_creative : &screen_inventory);
+
+	if(input_pressed(IB_TOGGLE_CREATIVE, gstate_active_player()))
+		svin_rpc_try_send(&(struct server_rpc) {
+			RPC_PLAYER_ID(gstate_active_player())
+			.type = SRPC_SET_GAMEMODE,
+			.payload.set_gamemode.toggle = true,
+		});
 }
 
 	static void screen_ingame_update(struct screen* s, float dt) {
@@ -544,6 +558,11 @@ static void screen_ingame_render2D(struct screen* s, int width, int height) {
 	snprintf(str, sizeof(str), "server: %.1f TPS, tick %.1f ms (target 20 / 50)",
 	         gstate.stats.server_tps, gstate.stats.server_tick_ms);
 	gutil_text(4, 4 + (GFX_GUI_SCALE * 8 + 1) * 7, str, GFX_GUI_SCALE * 8, true);
+
+	if(gstate.local_player && gstate.local_player->data.local_player.creative)
+		gutil_text(4, 4 + (GFX_GUI_SCALE * 8 + 1) * 8, "CREATIVE", GFX_GUI_SCALE * 8, true);
+	if(gstate.local_player && gstate.local_player->data.local_player.flying)
+		gutil_text(4, 4 + (GFX_GUI_SCALE * 8 + 1) * 9, "FLYING (Sneak=down, double Jump=off)", GFX_GUI_SCALE * 8, true);
    }
 
 	int icon_offset = GFX_GUI_SCALE * 16;
@@ -653,6 +672,9 @@ static void screen_ingame_render2D(struct screen* s, int width, int height) {
 				  height - hud_gap - 23 * GFX_GUI_SCALE, 208, 0, 24, 24, 24 * GFX_GUI_SCALE, 24 * GFX_GUI_SCALE);
 
 	{
+		bool hud_creative = gstate.local_player
+			&& gstate.local_player->data.local_player.creative;
+
 		// HUD is rendered once per viewport. In splitscreen mode `main.c` already
 		// loaded the active player via `splitscreen_load_player(p)` before
 		// calling render2D, so we must NOT swap players here (it corrupts player
@@ -661,6 +683,7 @@ static void screen_ingame_render2D(struct screen* s, int width, int height) {
 		int heart_spacing = 8 * GFX_GUI_SCALE;
 		int heart_x_base = heart_start_x;
 
+		if(!hud_creative) {
 		for(int k = 0; k < MAX_PLAYER_HEALTH / HEALTH_PER_HEART; k++) {
 			gutil_texquad(
 				heart_x_base + k * heart_spacing,
@@ -678,8 +701,9 @@ static void screen_ingame_render2D(struct screen* s, int width, int height) {
 					52, 229, 9, 9, 9 * GFX_GUI_SCALE, 9 * GFX_GUI_SCALE);
 			}
 		}
+		}
 
-		if(gstate.in_water && gstate.oxygen >= OXYGEN_THRESHOLD) {
+		if(!hud_creative && gstate.in_water && gstate.oxygen >= OXYGEN_THRESHOLD) {
 			int oxy_x_base = heart_x_base;
 			for(int k = 0; k < ((gstate.oxygen - OXYGEN_THRESHOLD) / 32); k++) {
 				gutil_texquad(

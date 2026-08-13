@@ -87,19 +87,20 @@ static void screen_gmenu_update(struct screen* s, float dt) {
 	    if(input_pressed(IB_GUI_CLICK, player)) {
 			sound_play(pcm_click);
 	        switch(gui_selection[player]) {
-            case 0:  
+            case 0:  // start
 				screen_set_player(player, &screen_ingame);
 				break;
-            case 1: 
+            case 1: // settings
+				screen_set_player(player, &screen_game_settings);
 				break;
-            case 2: 
+            case 2: // pause
                 gstate.paused = true;
                 screen_set(&screen_pause);
         		svin_rpc_send(&(struct server_rpc) {
         			.type = SRPC_TOGGLE_PAUSE,
 		        });
                 break;
-	            case 3:
+	            case 3: // save & quit
 					// Save & quit: unload the world but do NOT toggle pause here.
 					// `screen_game_menu` itself doesn't pause the server, so toggling
 					// would leave the server stuck in paused state for the next world.

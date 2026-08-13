@@ -3,7 +3,7 @@
 * Texture orientation for blocks that have a specific "direction"
   - Bed placement isn't correct yet
 
-* Random crashes, once in a while. Maybe I'll implement an optional auto-save, to prevent some headaches and tears
+* ~~Random crashes, once in a while.~~ Maybe I'll implement an optional auto-save, to prevent some headaches and tears
 
 * ~~Particles already spark fire before the torch is showing, after placing a torch~~
 
@@ -40,3 +40,5 @@
 * save player camera pos of player 2
 
 * Buttons like in settings in main menu
+
+* Waterlilies and glass_pane have a visibility bug like redstone.

@@ -90,6 +90,11 @@ struct level_archive_tag {
 		".Data.Player.Dimension", TAG_INT                                      \
 	}
 
+#define LEVEL_PLAYER_GAMEMODE                                                  \
+	(struct level_archive_tag) {                                               \
+		".Data.Player.playerGameType", TAG_INT                                 \
+	}
+
 #define LEVEL_PLAYER_INVENTORY                                                 \
 	(struct level_archive_tag) {                                               \
 		".Data.Player.Inventory", TAG_LIST                                     \

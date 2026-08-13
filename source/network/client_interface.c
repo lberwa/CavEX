@@ -497,6 +497,17 @@ void clin_process(struct client_rpc* call) {
 				lp->health = call->payload.player_set_health.health;
 		}
 		break;
+		case CRPC_GAMEMODE:
+		{
+#ifdef SPLITSCREEN
+			struct entity* lp = gstate.local_players[pid];
+#else
+			struct entity* lp = gstate.local_player;
+#endif
+			if(lp)
+				lp->data.local_player.creative = call->payload.gamemode.creative;
+		}
+		break;
 	}
 }
 

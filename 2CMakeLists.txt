@@ -149,7 +149,10 @@ add_executable(cavex
 				source/cubiomes/cubiomes_util.c
 
 				source/game/gui/screen_ingame.c
+				source/game/gui/creative_inventory_list.c
+				source/game/gui/screen_inventory_creative.c
 				source/game/gui/screen_game_menu.c
+				source/game/gui/screen_game_settings.c
 				source/game/gui/screen_load_world.c
 				source/game/gui/screen_generate_world.c
 				source/game/gui/screen_select_world.c

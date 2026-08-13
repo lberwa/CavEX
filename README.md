@@ -12,7 +12,7 @@
 
 * Added sheep and pigs and fixed a crash related to the auto-jump feature.
 
-* Added local  split-screen and multiplayer support
+* Added local split-screen and multiplayer support
 
   (in the PC version, you can change the inputs in config_pc.json or, if installed, in /usr/local/bin/Cavex/input_pc.json)
 
@@ -23,6 +23,8 @@
 * Added a random world generator
 
 * Added a server menu that executes Python scripts directly from the server.
+
+* Added Creative mode (Based on the Code of [amahpour](https://github.com/amahpour/CavEX))
 
 ---
 
@@ -37,7 +39,6 @@
 * Nether 
 * Sneaking mechanic (A button on Wii / Shift on PC)
 * Additional controller support
-* Creative mode
 * add more mobs
 * Persistent saving for dropped items and entities
 * All blocks from [blocks.txt](./blocks.txt)
@@ -51,7 +52,7 @@
 
 * Texture orientation for blocks that have a specific "direction"
 	- Bed placement isn't correct yet
-* Random crashes, once in a while. Maybe I'll implement an optional auto-save, to prevent some headaches and tears
+* ~~Random crashes, once in a while.~~ Maybe I'll implement an optional auto-save, to prevent some headaches and tears
 * ~~Particles already spark fire before the torch is showing, after placing a torch~~
 * ~~If you jump into water or climb down the ladder, you take damage~~
 * Redstone doesn't really work
