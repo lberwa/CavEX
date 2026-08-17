@@ -42,6 +42,15 @@ void thread_create(struct thread* t, void* (*entry)(void* arg), void* arg,
 	pthread_create(&t->native, NULL, entry, arg);
 }
 
+void thread_create_stack(struct thread* t, void* (*entry)(void* arg), void* arg,
+						 uint8_t priority, size_t stack_size) {
+	assert(t && entry);
+	(void)priority;
+	/* PC hat reichlich Stack; Default genügt. stack_size ignoriert. */
+	(void)stack_size;
+	pthread_create(&t->native, NULL, entry, arg);
+}
+
 void thread_join(struct thread* t) {
 	assert(t);
 	pthread_join(t->native, NULL);
@@ -127,6 +136,13 @@ void thread_create(struct thread* t, void* (*entry)(void* arg), void* arg,
 				   uint8_t priority) {
 	assert(t && entry);
 	LWP_CreateThread(&t->native, entry, arg, NULL, 0, priority);
+}
+
+void thread_create_stack(struct thread* t, void* (*entry)(void* arg), void* arg,
+						 uint8_t priority, size_t stack_size) {
+	assert(t && entry);
+	/* stackbase NULL -> libogc alloziert einen Stack der gegebenen Größe */
+	LWP_CreateThread(&t->native, entry, arg, NULL, stack_size, priority);
 }
 
 void thread_join(struct thread* t) {

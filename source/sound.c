@@ -118,7 +118,8 @@ static int* remove_element(int *list, int length, int index) {
 //--------------------------------
 static wav_t load_file(const char *path) {
     wav_t w = {0};
-    
+    if(!path) return w;
+
     FILE *f = fopen(path, "rb");
     if(!f) {
         return w;
@@ -126,9 +127,12 @@ static wav_t load_file(const char *path) {
 
     
     fseek(f, 0, SEEK_END);
-    w.size = ftell(f);
+    long sz = ftell(f);
     rewind(f);
+    if(sz <= 0) { fclose(f); return w; }
+    w.size = (size_t)sz;
     w.data = memalign(32, w.size);
+    if(!w.data) { fclose(f); return w; }
     fread(w.data, 1, w.size, f);
     DCFlushRange(w.data, w.size);
     fclose(f);

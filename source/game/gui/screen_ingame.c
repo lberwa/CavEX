@@ -36,6 +36,9 @@
 #include "screen_inventory_creative.h"
 
 #include <malloc.h>
+#ifdef PLATFORM_WII
+#include <ogc/system.h>
+#endif
 
 static struct window_container* active_inventory_window(void) {
 	return gstate_windows()[WINDOWC_INVENTORY];
@@ -783,6 +786,64 @@ static void screen_ingame_render2D(struct screen* s, int width, int height) {
 							  255);
 		gfx_texture(true);
 	}
+
+#ifdef PLATFORM_WII
+	{
+		struct mallinfo mi = mallinfo();
+		/* Der newlib-Heap waechst von MEM1 nahtlos in MEM2. "Frei" ist daher der
+		 * gesamte WIEDERVERWENDBARE Speicher: Free-List (fordblks) + noch nicht
+		 * beanspruchte MEM1- UND MEM2-Arena. Die reine MEM2-Arena (Hi-Lo) allein
+		 * ist irrefuehrend -- sie sinkt monoton (free gibt nur an die Free-List
+		 * zurueck), obwohl insgesamt reichlich frei ist. */
+		u32 mem2_hi    = (u32)SYS_GetArena2Hi();
+		u32 mem2_lo    = (u32)SYS_GetArena2Lo();
+		u32 mem2_arena = mem2_hi > mem2_lo ? mem2_hi - mem2_lo : 0;
+		u32 heap_free  = (u32)mi.fordblks + SYS_GetArena1Size();
+		u32 usable_free = heap_free + mem2_arena;
+		u32 usable_mb  = usable_free / (1024u * 1024u);
+		u32 arena_mb   = mem2_arena / (1024u * 1024u);
+		/* Balken 1 = gesamter freier Speicher (Referenz ~48MB "voll gruen"). */
+		int pct1 = usable_mb >= 48 ? 100 : (int)(usable_mb * 100 / 48);
+		/* Balken 2 = nur zur Info die MEM2-Arena. */
+		int pct2 = arena_mb >= 48 ? 100 : (int)(arena_mb * 100 / 48);
+
+		int sc = GFX_GUI_SCALE;
+		int bar_w = 80 * sc;
+		int bar_h = 4 * sc;
+		int bar_x = width - bar_w - 4 * sc;
+		int bar_y = gstate.settings.debug
+			? 4 * sc + (8 * sc + 1) * 2 + 8 * sc + 6 * sc
+			: 4 * sc;
+		int row = bar_h + 8 * sc + 2 * sc; // Abstand zwischen den zwei Zeilen
+
+		// --- Gesamter freier Speicher ---
+		int fill1 = bar_w * pct1 / 100;
+		// wenig frei = rot, viel frei = gruen
+		uint8_t r1 = pct1 < 25 ? 0xFF : (pct1 < 50 ? 0xFF : 0x00);
+		uint8_t g1 = pct1 < 25 ? 0x30 : (pct1 < 50 ? 0xAA : 0xCC);
+		char s1[24]; snprintf(s1, sizeof(s1), "FREI %uMB", usable_mb);
+		int tw1 = gutil_font_width(s1, 8 * sc);
+		gutil_text(width - tw1 - 4 * sc, bar_y + bar_h + sc, s1, 8 * sc, true);
+		gfx_texture(false);
+		gutil_texquad_col(bar_x-1, bar_y-1, 0,0,0,0, bar_w+2, bar_h+2, 0,0,0,180);
+		if(fill1 > 0)
+			gutil_texquad_col(bar_x, bar_y, 0,0,0,0, fill1, bar_h, r1,g1,0,220);
+		gfx_texture(true);
+
+		// --- MEM2 ---
+		int by2 = bar_y + row;
+		int fill2 = bar_w * pct2 / 100;
+		char s2[24];
+		snprintf(s2, sizeof(s2), "arena %uMB", arena_mb);
+		int tw2 = gutil_font_width(s2, 8 * sc);
+		gutil_text(width - tw2 - 4 * sc, by2 + bar_h + sc, s2, 8 * sc, true);
+		gfx_texture(false);
+		gutil_texquad_col(bar_x-1, by2-1, 0,0,0,0, bar_w+2, bar_h+2, 0,0,0,180);
+		if(fill2 > 0)
+			gutil_texquad_col(bar_x, by2, 0,0,0,0, fill2, bar_h, 0,0xCC,0,220);
+		gfx_texture(true);
+	}
+#endif
 }
 
 struct screen screen_ingame = {

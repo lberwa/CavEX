@@ -74,7 +74,7 @@ int  gutil_text_col(int col);
 
 void gutil_draw_item(struct item_data* item, int x, int y, int layer);
 
-void gutil_button_reset(void);
+void gutil_button_reset(int player, bool ptr_avail, float px, float py);
 void gutil_button(int x, int y, int width, int height, 
 				  const char* text, void (*func)(int), 
 				  int arg, int pos_x, int pos_y);

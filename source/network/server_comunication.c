@@ -237,7 +237,7 @@ bool debug_init(int a, int b, int c, int d) {
     struct sockaddr_in server;
     memset(&server, 0, sizeof(server));
     server.sin_family = AF_INET;
-    server.sin_port = DEBUG_SERVER_PORT; // network.h nimmt Port direkt als int
+    server.sin_port = htons(DEBUG_SERVER_PORT);
     IP4_ADDR(&server.sin_addr, a,b,c,d);
 
     if(net_connect(dsock, (struct sockaddr*)&server, sizeof(server)) < 0) {

@@ -3535,16 +3535,96 @@ static bool gen_sample_neighbor_edge_height(struct server_world* w, w_coord_t cx
 	return true;
 }
 
+/* ---- Server-Chunk-Speicherpool -----------------------------------------
+ * Kernproblem auf der Wii: pro Chunk-Lade/Entlade wurden 5 große Puffer
+ * (32K+16K+16K+16K+256B) einzeln ge-malloc'd/free'd. Beim Erkunden zerstückelt
+ * dieser Churn MEM1 so, dass ein 32-KB-calloc scheitert obwohl in Summe MB frei
+ * sind ("load OOM" bei nur 18 Chunks). Der Pool alloziert EINMAL einen festen
+ * Block und vergibt daraus Slots -> null Churn, null Fragmentierung,
+ * deterministische Obergrenze. */
+#define SC_IDS_BYTES  (CHUNK_SIZE * CHUNK_SIZE * WORLD_HEIGHT)
+#define SC_HALF_BYTES (SC_IDS_BYTES / 2)
+#define SC_HMAP_BYTES (CHUNK_SIZE * CHUNK_SIZE)
+#define SC_SET_BYTES  (SC_IDS_BYTES + 3 * SC_HALF_BYTES + SC_HMAP_BYTES)
+
+#ifndef SERVER_CHUNK_POOL_MAX
+#define SERVER_CHUNK_POOL_MAX 96 /* Obergrenze; wächst nur so weit wie MEM1 reicht */
+#endif
+
+/* Slots werden EINZELN und LAZY alloziert (je ~80KB — viel leichter im
+ * fragmentierten MEM1 zu platzieren als ein 5-MB-Block am Stück) und danach
+ * NIE freigegeben, sondern über eine Free-List wiederverwendet. Dadurch gibt es
+ * nach der Aufwärmphase keinen malloc/free-Churn mehr -> keine Fragmentierung.
+ * g_sc_cap sinkt automatisch auf die real erreichbare Slot-Zahl, sobald ein
+ * malloc scheitert (MEM1 erschöpft). */
+static uint8_t* g_sc_slot[SERVER_CHUNK_POOL_MAX];
+static int g_sc_count = 0;                       /* bisher allozierte Slots      */
+static int g_sc_cap = SERVER_CHUNK_POOL_MAX;     /* effektive Obergrenze          */
+static int16_t g_sc_freelist[SERVER_CHUNK_POOL_MAX];
+static int g_sc_freelist_n = 0;                  /* freie, wiederverwendbare Slots */
+
+int server_world_chunk_pool_total(void) { return g_sc_cap; }
+int server_world_chunk_pool_free(void) {
+	/* wiederverwendbare + noch nicht angelegte (aber innerhalb cap) Slots */
+	return g_sc_freelist_n + (g_sc_cap - g_sc_count);
+}
+
+static void sc_pool_carve(struct server_chunk* sc, int slot) {
+	uint8_t* p = g_sc_slot[slot];
+	memset(p, 0, SC_SET_BYTES);
+	sc->ids = p;            p += SC_IDS_BYTES;
+	sc->metadata = p;       p += SC_HALF_BYTES;
+	sc->lighting_sky = p;   p += SC_HALF_BYTES;
+	sc->lighting_torch = p; p += SC_HALF_BYTES;
+	sc->heightmap = p;
+	sc->from_pool = true;
+	sc->pool_slot = (int16_t)slot;
+}
+
+static bool sc_pool_take(struct server_chunk* sc) {
+	int slot = -1;
+	if(g_sc_freelist_n > 0) {
+		slot = g_sc_freelist[--g_sc_freelist_n];
+	} else if(g_sc_count < g_sc_cap) {
+		uint8_t* p = malloc(SC_SET_BYTES);
+		if(p) {
+			g_sc_slot[g_sc_count] = p;
+			slot = g_sc_count++;
+		} else {
+			/* MEM1 erschöpft -> nicht weiter wachsen */
+			g_sc_cap = g_sc_count;
+		}
+	}
+	if(slot < 0)
+		return false;
+	sc_pool_carve(sc, slot);
+	return true;
+}
+
+static void sc_pool_return(struct server_chunk* sc) {
+	int i = sc->pool_slot;
+	if(sc->from_pool && i >= 0 && i < g_sc_count
+	   && g_sc_freelist_n < SERVER_CHUNK_POOL_MAX)
+		g_sc_freelist[g_sc_freelist_n++] = (int16_t)i;
+}
+
 static bool gen_alloc_chunk_buffers(struct server_chunk* sc) {
+	*sc = (struct server_chunk) {0};
+
+	/* Bevorzugt aus dem Pool (fragmentierungsfrei). */
+	if(sc_pool_take(sc)) {
+		sc->modified = true;
+		return true;
+	}
+
+	/* Fallback: einzeln allozieren (Pool voll oder nicht verfügbar). */
 	size_t total = CHUNK_SIZE * CHUNK_SIZE * WORLD_HEIGHT;
-	*sc = (struct server_chunk) {
-		.ids = calloc(total, 1),
-		.metadata = calloc(total / 2, 1),
-		.lighting_sky = calloc(total / 2, 1),
-		.lighting_torch = calloc(total / 2, 1),
-		.heightmap = calloc(CHUNK_SIZE * CHUNK_SIZE, 1),
-		.modified = true,
-	};
+	sc->ids = calloc(total, 1);
+	sc->metadata = calloc(total / 2, 1);
+	sc->lighting_sky = calloc(total / 2, 1);
+	sc->lighting_torch = calloc(total / 2, 1);
+	sc->heightmap = calloc(CHUNK_SIZE * CHUNK_SIZE, 1);
+	sc->modified = true;
 
 	if(!sc->ids || !sc->metadata || !sc->lighting_sky || !sc->lighting_torch
 	   || !sc->heightmap) {
@@ -4231,11 +4311,24 @@ static void random_unit_vector(vec3 out) {
 void server_world_chunk_destroy(struct server_chunk* sc) {
 	assert(sc);
 
-	free(sc->ids);
-	free(sc->metadata);
-	free(sc->lighting_sky);
-	free(sc->lighting_torch);
-	free(sc->heightmap);
+	if(sc->from_pool) {
+		/* Slot in den Pool zurückgeben — kein free (die Puffer gehören dem
+		 * einmalig allozierten Pool-Block). */
+		sc_pool_return(sc);
+	} else {
+		free(sc->ids);
+		free(sc->metadata);
+		free(sc->lighting_sky);
+		free(sc->lighting_torch);
+		free(sc->heightmap);
+	}
+	sc->ids = NULL;
+	sc->metadata = NULL;
+	sc->lighting_sky = NULL;
+	sc->lighting_torch = NULL;
+	sc->heightmap = NULL;
+	sc->from_pool = false;
+	sc->pool_slot = -1;
 }
 
 void server_world_set_cuberite_defaults(struct server_world* w) {
@@ -4563,6 +4656,7 @@ bool server_world_set_block(struct server_local* s, w_coord_t x, w_coord_t y, w_
 	if(sc) {
 		size_t idx = S_CHUNK_IDX(x, y, z);
 		sc->modified = true;
+		sc->needs_save = true; /* echte Spieleraenderung -> muss auf Disk */
 		sc->ids[idx] = blk.type;
 		nibble_write(sc->metadata, idx, blk.metadata);
 		sc->tick_valid = false; /* tick_count neu zaehlen beim naechsten Tick */
@@ -4689,9 +4783,18 @@ bool server_world_load_chunk(struct server_world* w, w_coord_t x, w_coord_t z,
 			? server_world_advance_pending(w, sc)
 			: false;
 
-	struct server_chunk tmp = (struct server_chunk) {.modified = false};
-	if(!region_archive_get_blocks(ra, x, z, &tmp))
+	/* Puffer aus dem Chunk-Pool holen (fragmentierungsfrei) und die Blockdaten
+	 * hineinkopieren -- kein malloc/free-Churn pro Disk-Load mehr (das war der
+	 * Grund, warum mem2arena beim Erkunden generierter Welten auf 0 kroch). */
+	struct server_chunk tmp;
+	if(!gen_alloc_chunk_buffers(&tmp))
 		return false;
+	tmp.modified = false; /* frisch von Disk -> unveraendert, kein Save noetig */
+
+	if(!region_archive_get_blocks(ra, x, z, &tmp)) {
+		server_world_chunk_destroy(&tmp); /* Pool-Slot zurueckgeben */
+		return false;
+	}
 
 	dict_server_chunks_set_at(w->chunks, S_CHUNK_ID(x, z), tmp);
 	*sc = dict_server_chunks_get(w->chunks, S_CHUNK_ID(x, z));
@@ -4712,7 +4815,12 @@ void server_world_save_chunk_obj(struct server_world* w, bool erase,
 								 struct server_chunk* c) {
 	assert(w && c);
 
-	if(c->modified) {
+	/* Nur echte Spieleraenderungen brauchen einen Disk-Save. Rein generierte
+	 * oder von Disk geladene (unveraenderte) Chunks regenerieren identisch aus
+	 * dem Seed -> beim Entladen einfach verwerfen, KEIN malloc/Save noetig.
+	 * Das bricht den OOM-Deadlock: Speichern braucht Speicher, den es bei
+	 * vollem RAM nicht gibt, sonst blieben alle Chunks fuer immer geladen. */
+	if(c->needs_save) {
 		// load region archive into cache
 		struct region_archive tmp;
 		struct region_archive* ra = server_world_chunk_region(w, x, z);
@@ -4721,31 +4829,32 @@ void server_world_save_chunk_obj(struct server_world* w, bool erase,
 			if(!region_archive_create_new(&tmp, w->level_name,
 										  CHUNK_REGION_COORD(x),
 										  CHUNK_REGION_COORD(z), w->dimension))
-				return;
+				goto save_done;
 			ra = &tmp;
 		}
 
 		bool saved = region_archive_set_blocks(ra, x, z, c);
-		if(!saved) {
-#ifdef CHUNK_DEBUG
-			fprintf(stderr, "server_world_save_chunk_obj: failed to save chunk %d,%d — keeping in memory\n", (int)x, (int)z);
-#endif
-		} else {
+		if(saved) {
 			c->modified = false;
+			c->needs_save = false;
 		}
+#ifdef CHUNK_DEBUG
+		else
+			fprintf(stderr, "server_world_save_chunk_obj: failed to save edited chunk %d,%d\n", (int)x, (int)z);
+#endif
 	}
+save_done:
 
 	if(erase) {
-		/* Only erase the in-memory chunk if the last save succeeded (not modified),
-		 * otherwise keep it so we can retry saving later — prevents data loss when
-		 * region writes fail. */
-		if(c->modified) {
-#ifdef CHUNK_DEBUG
-			fprintf(stderr, "server_world_save_chunk_obj: skip erase of chunk %d,%d because save failed\n", (int)x, (int)z);
-#endif
-			return;
-		}
-
+		/* IMMER verwerfen — auch wenn das Speichern gerade fehlgeschlagen ist.
+		 * Früher wurde ein noch-nicht-gespeicherter (needs_save) Chunk im RAM
+		 * behalten, um Datenverlust zu vermeiden. Das erzeugte aber einen fatalen
+		 * Deadlock: unter Speicherdruck scheitert das Speichern (braucht malloc,
+		 * das es nicht gibt) -> Chunk bleibt -> wird jeden Tick erneut als
+		 * "entfernteste" gewählt -> Endlosschleife, die Eviction kommt nie zu den
+		 * anderen (freigebbaren) Chunks -> totaler Stillstand.
+		 * Ein verlorener Edit unter Extremdruck ist das kleinere Übel gegenüber
+		 * einem hängenden Spiel; das Speichern oben ist best-effort. */
 		server_world_chunk_destroy(c);
 		dict_server_chunks_erase(w->chunks, S_CHUNK_ID(x, z));
 	}

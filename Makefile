@@ -109,7 +109,8 @@ CXXFLAGS	+=	$(CFLAGS)
 CPPFLAGS	+=	-Ofast -DSPLITSCREEN=2 -g
 CFLAGS		+=	-Ofast -g -std=c99 -pedantic -Wextra -Wno-unused-parameter -Wall \
 				-DSPLITSCREEN=2  -DPLATFORM_WII -D_POSIX_THREADS \
-				$(PY_INCLUDE) $(MACHDEP) $(INCLUDE) -DWITH_PYTHON -DUSLEEP
+				$(PY_INCLUDE) $(MACHDEP) $(INCLUDE) -DWITH_PYTHON -DUSLEEP \
+				-DNET_DEBUG
 
 LDFLAGS	+=	$(MACHDEP) -Wl,-Map,$(notdir $@).map
 LDFLAGS += -L$(MAKEFILE_DIR)

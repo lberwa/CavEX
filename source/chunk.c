@@ -30,6 +30,53 @@
 #include "stack.h"
 #include "graphics/gfx_settings.h"
 
+/* Debug: live client-chunk count (chunk_init minus chunk_destroy). If this
+ * climbs while the server chunk count stays flat, client chunks are leaking
+ * (blocks + displaylists live in the MEM2 heap on Wii). */
+volatile long chunk_live_count = 0;
+
+/* ---- Client-Chunk-Block-Pool ------------------------------------------------
+ * Jeder Client-Chunk hat einen FESTEN 10-KB-Block-Puffer (c->blocks). Beim
+ * Erkunden wird pro Chunk-Load/Unload einer ge-malloc't/ge-free't -> zusammen
+ * mit den anderen Per-Chunk-Allokationen zerfranst dieser Churn den newlib-Heap
+ * (der auf der Wii erst MEM1, dann MEM2 belegt und Freigaben NICHT an die Arena
+ * zurueckgibt -> MEM2 sinkt monoton). Der Pool alloziert Slots EINMAL lazy und
+ * gibt sie nie frei, sondern ueber eine Free-List wieder aus -> nach dem
+ * Working-Set-Peak null Churn, null Fragmentierung fuer diese Puffer.
+ * Slots sind alle gleich gross -> ueber Zeiger-Free-List, kein Slot-Index noetig. */
+#define CLIENT_CHUNK_BLOCK_BYTES (CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE * 5 / 2)
+
+#ifndef CLIENT_CHUNK_POOL_MAX
+#define CLIENT_CHUNK_POOL_MAX 1024 /* > realistischer Client-Chunk-Peak (~760) */
+#endif
+
+static uint8_t* g_cc_slot[CLIENT_CHUNK_POOL_MAX]; /* alle je allozierten Slots */
+static int g_cc_count = 0;                        /* Anzahl allozierter Slots  */
+static int g_cc_cap = CLIENT_CHUNK_POOL_MAX;      /* sinkt bei malloc-Fehler   */
+static uint8_t* g_cc_free[CLIENT_CHUNK_POOL_MAX]; /* wiederverwendbare Slots   */
+static int g_cc_free_n = 0;
+
+int client_chunk_pool_slots(void) { return g_cc_count; }
+
+static uint8_t* cc_pool_take(void) {
+	if(g_cc_free_n > 0)
+		return g_cc_free[--g_cc_free_n];
+	if(g_cc_count < g_cc_cap) {
+		uint8_t* p = malloc(CLIENT_CHUNK_BLOCK_BYTES);
+		if(p) {
+			g_cc_slot[g_cc_count++] = p;
+			return p;
+		}
+		g_cc_cap = g_cc_count; /* Heap erschoepft -> nicht weiter wachsen */
+	}
+	return NULL; /* Pool voll/erschoepft -> Aufrufer faellt auf malloc zurueck */
+}
+
+static void cc_pool_return(uint8_t* p) {
+	if(g_cc_free_n < CLIENT_CHUNK_POOL_MAX)
+		g_cc_free[g_cc_free_n++] = p;
+}
+
 #define CHUNK_INDEX(x, y, z) ((x) + ((z) + (y) * CHUNK_SIZE) * CHUNK_SIZE)
 #define CHUNK_LIGHT_INDEX(x, y, z)                                             \
 	((x) + ((z) + (y) * (CHUNK_SIZE + 2)) * (CHUNK_SIZE + 2))
@@ -38,10 +85,17 @@ void chunk_init(struct chunk* c, struct world* world, w_coord_t x, w_coord_t y,
 				w_coord_t z) {
 	assert(c && world);
 
-	c->blocks = malloc(CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE * 5 / 2);
+	c->blocks = cc_pool_take();
+	if(c->blocks) {
+		c->blocks_pooled = true;
+	} else {
+		/* Pool erschoepft -> Einzel-malloc als Fallback (wird direkt ge-free't). */
+		c->blocks = malloc(CLIENT_CHUNK_BLOCK_BYTES);
+		c->blocks_pooled = false;
+	}
 	assert(c->blocks);
 
-	memset(c->blocks, BLOCK_AIR, CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE * 5 / 2);
+	memset(c->blocks, BLOCK_AIR, CLIENT_CHUNK_BLOCK_BYTES);
 
 	c->x = x;
 	c->y = y;
@@ -54,6 +108,7 @@ void chunk_init(struct chunk* c, struct world* world, w_coord_t x, w_coord_t y,
 	c->has_enchanting_table = false;
 	c->world = world;
 	c->reference_count = 0;
+	c->gpu_adopt_stamp = 0;
 	c->tmp_data.visit_stamp = 0;
 	c->tmp_data.from = SIDE_MAX;
 	c->tmp_data.used_exit_sides = 0;
@@ -61,12 +116,17 @@ void chunk_init(struct chunk* c, struct world* world, w_coord_t x, w_coord_t y,
 
 	ilist_chunks_init_field(c);
 	ilist_chunks2_init_field(c);
+
+	chunk_live_count++;
 }
 
 static void chunk_destroy(struct chunk* c) {
 	assert(c);
 
-	free(c->blocks);
+	if(c->blocks_pooled)
+		cc_pool_return(c->blocks);
+	else
+		free(c->blocks);
 
 	for(int k = 0; k < 13; k++) {
 		if(c->has_displist[k])
@@ -74,6 +134,8 @@ static void chunk_destroy(struct chunk* c) {
 	}
 
 	free(c);
+
+	chunk_live_count--;
 }
 
 void chunk_ref(struct chunk* c) {

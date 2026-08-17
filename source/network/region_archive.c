@@ -268,76 +268,70 @@ bool region_archive_get_blocks(struct region_archive* ra, w_coord_t x,
 		return false;
 	}
 
-	void* nbt_compressed = malloc(length - 1);
+	/* Ab hier laufen ALLE NBT-Allokationen (Rohpuffer, Dekomprimierung, Baum,
+	 * Byte-Arrays) durch die feste NBT-Arena -> kein Heap-Wachstum, mem2arena
+	 * bleibt beim Erkunden konstant. nbt_free wird dabei zum No-Op; die Arena
+	 * wird beim naechsten nbt_arena_begin() komplett verworfen. Die Blockdaten
+	 * werden vorher in die (gepoolten) Puffer des Aufrufers kopiert. */
+	nbt_arena_begin();
 
-	if(!nbt_compressed) {
-		fclose(f);
-		return false;
-	}
+	void* nbt_compressed = nbt_malloc(length - 1);
 
-	if(!fread(nbt_compressed, length - 1, 1, f)) {
-		free(nbt_compressed);
+	if(!nbt_compressed || !fread(nbt_compressed, length - 1, 1, f)) {
+		nbt_arena_end();
 		fclose(f);
 		return false;
 	}
 
 	nbt_node* chunk = nbt_parse_compressed(nbt_compressed, length - 1);
-
-	free(nbt_compressed);
 	fclose(f);
 
-	if(!chunk)
-		return false;
+	bool ok = false;
+	if(chunk) {
+		nbt_node* n_x = nbt_find_by_path(chunk, ".Level.xPos");
+		nbt_node* n_z = nbt_find_by_path(chunk, ".Level.zPos");
+		nbt_node* n_blocks = nbt_find_by_path(chunk, ".Level.Blocks");
+		nbt_node* n_metadata = nbt_find_by_path(chunk, ".Level.Data");
+		nbt_node* n_skyl = nbt_find_by_path(chunk, ".Level.SkyLight");
+		nbt_node* n_torchl = nbt_find_by_path(chunk, ".Level.BlockLight");
+		nbt_node* n_height = nbt_find_by_path(chunk, ".Level.HeightMap");
 
-	nbt_node* n_x = nbt_find_by_path(chunk, ".Level.xPos");
-	nbt_node* n_z = nbt_find_by_path(chunk, ".Level.zPos");
-
-	if(!n_x || !n_z || n_x->type != TAG_INT || n_z->type != TAG_INT
-	   || n_x->payload.tag_int != x || n_z->payload.tag_int != z) {
-		nbt_free(chunk);
-		return false;
+		if(n_x && n_z && n_x->type == TAG_INT && n_z->type == TAG_INT
+		   && n_x->payload.tag_int == x && n_z->payload.tag_int == z
+		   && n_blocks && n_metadata && n_skyl && n_torchl && n_height
+		   && n_blocks->type == TAG_BYTE_ARRAY
+		   && n_metadata->type == TAG_BYTE_ARRAY
+		   && n_skyl->type == TAG_BYTE_ARRAY
+		   && n_torchl->type == TAG_BYTE_ARRAY
+		   && n_height->type == TAG_BYTE_ARRAY
+		   && n_blocks->payload.tag_byte_array.length
+			   == CHUNK_SIZE * CHUNK_SIZE * WORLD_HEIGHT
+		   && n_metadata->payload.tag_byte_array.length
+			   == CHUNK_SIZE * CHUNK_SIZE * WORLD_HEIGHT / 2
+		   && n_skyl->payload.tag_byte_array.length
+			   == CHUNK_SIZE * CHUNK_SIZE * WORLD_HEIGHT / 2
+		   && n_torchl->payload.tag_byte_array.length
+			   == CHUNK_SIZE * CHUNK_SIZE * WORLD_HEIGHT / 2
+		   && n_height->payload.tag_byte_array.length
+			   == CHUNK_SIZE * CHUNK_SIZE) {
+			assert(sc->ids && sc->metadata && sc->lighting_sky
+				   && sc->lighting_torch && sc->heightmap);
+			memcpy(sc->ids, n_blocks->payload.tag_byte_array.data,
+				   CHUNK_SIZE * CHUNK_SIZE * WORLD_HEIGHT);
+			memcpy(sc->metadata, n_metadata->payload.tag_byte_array.data,
+				   CHUNK_SIZE * CHUNK_SIZE * WORLD_HEIGHT / 2);
+			memcpy(sc->lighting_sky, n_skyl->payload.tag_byte_array.data,
+				   CHUNK_SIZE * CHUNK_SIZE * WORLD_HEIGHT / 2);
+			memcpy(sc->lighting_torch, n_torchl->payload.tag_byte_array.data,
+				   CHUNK_SIZE * CHUNK_SIZE * WORLD_HEIGHT / 2);
+			memcpy(sc->heightmap, n_height->payload.tag_byte_array.data,
+				   CHUNK_SIZE * CHUNK_SIZE);
+			ok = true;
+		}
 	}
 
-	nbt_node* n_blocks = nbt_find_by_path(chunk, ".Level.Blocks");
-	nbt_node* n_metadata = nbt_find_by_path(chunk, ".Level.Data");
-	nbt_node* n_skyl = nbt_find_by_path(chunk, ".Level.SkyLight");
-	nbt_node* n_torchl = nbt_find_by_path(chunk, ".Level.BlockLight");
-	nbt_node* n_height = nbt_find_by_path(chunk, ".Level.HeightMap");
-
-	if(!n_blocks || !n_metadata || !n_skyl || !n_torchl || !n_height
-	   || n_blocks->type != TAG_BYTE_ARRAY || n_metadata->type != TAG_BYTE_ARRAY
-	   || n_skyl->type != TAG_BYTE_ARRAY || n_torchl->type != TAG_BYTE_ARRAY
-	   || n_height->type != TAG_BYTE_ARRAY
-	   || n_blocks->payload.tag_byte_array.length
-		   != CHUNK_SIZE * CHUNK_SIZE * WORLD_HEIGHT
-	   || n_metadata->payload.tag_byte_array.length
-		   != CHUNK_SIZE * CHUNK_SIZE * WORLD_HEIGHT / 2
-	   || n_skyl->payload.tag_byte_array.length
-		   != CHUNK_SIZE * CHUNK_SIZE * WORLD_HEIGHT / 2
-	   || n_torchl->payload.tag_byte_array.length
-		   != CHUNK_SIZE * CHUNK_SIZE * WORLD_HEIGHT / 2
-	   || n_height->payload.tag_byte_array.length != CHUNK_SIZE * CHUNK_SIZE) {
-		nbt_free(chunk);
-		return false;
-	}
-
-	// borrow memory regions from nbt tree
-
-	n_blocks->type = TAG_INVALID;
-	n_metadata->type = TAG_INVALID;
-	n_skyl->type = TAG_INVALID;
-	n_torchl->type = TAG_INVALID;
-	n_height->type = TAG_INVALID;
-
-	sc->ids = n_blocks->payload.tag_byte_array.data;
-	sc->metadata = n_metadata->payload.tag_byte_array.data;
-	sc->lighting_sky = n_skyl->payload.tag_byte_array.data;
-	sc->lighting_torch = n_torchl->payload.tag_byte_array.data;
-	sc->heightmap = n_height->payload.tag_byte_array.data;
-
-	nbt_free(chunk);
-
-	return true;
+	nbt_arena_end();
+	return ok;
 }
 
 static bool file_overwrite_index(FILE* f, size_t index, uint32_t data) {

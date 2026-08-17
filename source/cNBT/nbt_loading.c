@@ -16,6 +16,7 @@
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <zlib.h>
 
 /*
@@ -28,6 +29,92 @@
 
 /* The number of bytes to process at a time */
 #define CHUNK_SIZE 4096
+
+/* --- Vorab reservierte Arena für den zlib-Deflate-Zustand --------------------
+ * Warum das nötig ist: das Komprimieren beim Chunk-Speichern braucht ~256KB
+ * Arbeitsspeicher (Fenster + Hash-Tabellen). Mit zalloc=Z_NULL holt zlib die
+ * per malloc — und unter Speicherdruck (voller MEM2) scheitert das, der Chunk
+ * lässt sich nicht speichern -> Datenverlust oder Deadlock. Das eigentliche
+ * SD-Schreiben braucht dagegen fast keinen RAM.
+ * Lösung: EINE feste Arena, die pro Save wiederverwendet wird. Saves laufen
+ * sequenziell im Server-Thread, also genügt ein Puffer. Damit braucht das
+ * Komprimieren nie wieder malloc und kann nicht mehr an RAM-Mangel scheitern. */
+#define NBT_ZARENA_SIZE (320 * 1024)
+static unsigned char nbt_zarena[NBT_ZARENA_SIZE];
+static size_t nbt_zarena_off;
+
+static voidpf nbt_zarena_alloc(voidpf opaque, uInt items, uInt size) {
+    (void)opaque;
+    size_t need = ((size_t)items * (size_t)size + 15u) & ~(size_t)15u;
+    if(nbt_zarena_off + need > NBT_ZARENA_SIZE)
+        return Z_NULL; /* Arena zu klein -> zlib fällt sauber auf Fehler zurück */
+    void* p = nbt_zarena + nbt_zarena_off;
+    nbt_zarena_off += need;
+    return p;
+}
+
+static void nbt_zarena_free(voidpf opaque, voidpf address) {
+    (void)opaque;
+    (void)address; /* Bump-Allokator: alles wird pro Save auf einmal freigegeben */
+}
+
+/* --- NBT-Parse-Arena (churn-freies Chunk-Laden) -----------------------------
+ * Beim Erkunden generierter Welten wird pro Disk-Chunk der Rohpuffer, der
+ * dekomprimierte Puffer, der NBT-Baum und dessen Byte-Arrays alloziert und
+ * gleich wieder freigegeben. Diese grossen transienten malloc/free lassen den
+ * newlib-Heap in die MEM2-Arena wachsen (die er NIE zurueckgibt) -> mem2arena
+ * (Anzeige oben rechts) kriecht auf 0, dann laden keine Chunks mehr.
+ * Loesung: waehrend des Chunk-Parsens laufen ALLE NBT-Allokationen durch einen
+ * festen Bump-Puffer; nbt_free wird zum No-Op, die Arena wird pro Chunk per
+ * nbt_arena_begin() zurueckgesetzt -> NULL Heap-Wachstum, mem2arena bleibt
+ * konstant. Chunk-Loads laufen sequenziell im Server-Thread -> ein Puffer
+ * genuegt. Ist das Flag aus, verhaelt sich alles exakt wie zuvor (echtes
+ * malloc/free), damit level.dat & Co. unveraendert bleiben. */
+#define NBT_PARENA_SIZE (1024 * 1024)
+static unsigned char nbt_parena[NBT_PARENA_SIZE];
+static size_t nbt_parena_off;
+static bool nbt_parena_active = false;
+
+void nbt_arena_begin(void) {
+    nbt_parena_off = 0;
+    nbt_parena_active = true;
+}
+
+void nbt_arena_end(void) {
+    nbt_parena_active = false;
+}
+
+bool nbt_arena_is_active(void) {
+    return nbt_parena_active;
+}
+
+void* nbt_malloc(size_t n) {
+    if(!nbt_parena_active)
+        return malloc(n);
+    size_t need = (n + 15u) & ~(size_t)15u;
+    if(nbt_parena_off + need > NBT_PARENA_SIZE)
+        return NULL; /* Arena zu klein -> Parse scheitert sauber (NULL-Check) */
+    void* p = nbt_parena + nbt_parena_off;
+    nbt_parena_off += need;
+    return p;
+}
+
+void* nbt_realloc(void* old, size_t oldn, size_t n) {
+    if(!nbt_parena_active)
+        return realloc(old, n);
+    /* Bump-Arena kann nicht in-place wachsen -> neu belegen + kopieren. Der alte
+     * Block bleibt in der Arena liegen (wird pro Chunk eh zurueckgesetzt). */
+    void* p = nbt_malloc(n);
+    if(p && old && oldn)
+        memcpy(p, old, oldn < n ? oldn : n);
+    return p;
+}
+
+void nbt_free_mem(void* p) {
+    if(nbt_parena_active)
+        return; /* Bump-Arena: Freigabe pauschal per nbt_arena_begin()-Reset */
+    free(p);
+}
 
 /*
  * Reads a whole file into a buffer. Returns a NULL buffer and sets errno on
@@ -85,9 +172,12 @@ static struct buffer __compress(const void* mem,
 
     errno = NBT_OK;
 
+    /* Deflate-Zustand aus der vorab reservierten Arena bedienen (kein malloc). */
+    nbt_zarena_off = 0;
+
     z_stream stream = {
-        .zalloc   = Z_NULL,
-        .zfree    = Z_NULL,
+        .zalloc   = nbt_zarena_alloc,
+        .zfree    = nbt_zarena_free,
         .opaque   = Z_NULL,
         .next_in  = (void*)mem,
         .avail_in = len

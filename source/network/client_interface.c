@@ -33,6 +33,20 @@ static struct client_rpc rpc_msg[RPC_INBOX_SIZE];
 static struct thread_channel clin_inbox;
 static struct thread_channel clin_empty_msg;
 
+/* ---- Chunk-Transfer-Puffer-Pool --------------------------------------------
+ * Pro geladenem Chunk fuellt der SERVER-Thread 4 Puffer (ids 32K | metadata 16K
+ * | sky 16K | torch 16K = 80K) und der CLIENT-Thread gibt sie nach dem Import
+ * frei. Frueher malloc/free -> cross-thread Churn, der den newlib-Heap
+ * fragmentiert (MEM2 blutet beim Laufen, obwohl der Working-Set konstant ist).
+ * Jetzt ein fester Satz 80K-Bloecke, thread-sicher ueber einen tchannel
+ * vergeben/zurueckgegeben -> null Churn. Ein Block ist zusammenhaengend, ids
+ * liegt am Blockanfang -> der Client gibt ueber den ids-Zeiger zurueck. */
+#define CHUNK_XFER_IDS (CHUNK_SIZE * CHUNK_SIZE * WORLD_HEIGHT) /* 32K */
+#define CHUNK_XFER_BYTES (CHUNK_XFER_IDS * 5 / 2)               /* 80K */
+#define CHUNK_XFER_POOL 64                                      /* 64 * 80K = 5 MB */
+static struct thread_channel clin_xfer_free;
+static bool clin_xfer_ready = false;
+
 static ptime_t last_pos_update;
 #ifdef SPLITSCREEN
 static bool splitscreen_p2_spawned = false;
@@ -71,10 +85,8 @@ void clin_chunk(w_coord_t x, w_coord_t y, w_coord_t z, w_coord_t sx,
 
 	if(world_import_chunk_column(&gstate.world, x, y, z, sx, sy, sz, ids,
 								 metadata, lighting_sky, lighting_torch)) {
-		free(ids);
-		free(metadata);
-		free(lighting_sky);
-		free(lighting_torch);
+		/* ids == Blockanfang des Transfer-Puffers -> in den Pool zurueck. */
+		clin_chunk_buf_return(ids);
 		return;
 	}
 
@@ -113,10 +125,8 @@ void clin_chunk(w_coord_t x, w_coord_t y, w_coord_t z, w_coord_t sx,
 		}
 	}
 
-	free(ids);
-	free(metadata);
-	free(lighting_sky);
-	free(lighting_torch);
+	/* ids == Blockanfang des Transfer-Puffers -> in den Pool zurueck. */
+	clin_chunk_buf_return(ids);
 }
 
 void clin_process(struct client_rpc* call) {
@@ -511,7 +521,34 @@ void clin_process(struct client_rpc* call) {
 	}
 }
 
+void clin_chunk_pool_init(void) {
+	if(clin_xfer_ready)
+		return; /* ueber Weltwechsel hinweg nur einmal allozieren */
+	tchannel_init(&clin_xfer_free, CHUNK_XFER_POOL);
+	for(int k = 0; k < CHUNK_XFER_POOL; k++) {
+		uint8_t* b = malloc(CHUNK_XFER_BYTES);
+		if(!b)
+			break; /* weniger Slots -> nur langsameres Streaming, kein Fehler */
+		tchannel_send(&clin_xfer_free, b, true);
+	}
+	clin_xfer_ready = true;
+}
+
+uint8_t* clin_chunk_buf_take(void) {
+	void* b;
+	if(!clin_xfer_ready || !tchannel_receive(&clin_xfer_free, &b, false))
+		return NULL; /* Pool leer -> Aufrufer versucht es naechsten Tick erneut */
+	return (uint8_t*)b;
+}
+
+void clin_chunk_buf_return(uint8_t* b) {
+	if(b)
+		tchannel_send(&clin_xfer_free, b, true);
+}
+
 void clin_init() {
+	clin_chunk_pool_init();
+
 	tchannel_init(&clin_inbox, RPC_INBOX_SIZE);
 	tchannel_init(&clin_empty_msg, RPC_INBOX_SIZE);
 

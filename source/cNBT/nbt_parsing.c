@@ -20,6 +20,13 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* Alle malloc/free dieses Parsers durch die NBT-Arena-Wrapper leiten: im
+ * Arena-Modus (churn-freies Chunk-Laden) kommt so der GANZE Parse-Baum inkl.
+ * Byte-Arrays aus dem festen Bump-Puffer und free wird zum No-Op. Ausserhalb
+ * sind es echtes malloc/free. buffer_free bleibt unberuehrt (eigenes Token). */
+#define malloc(n) nbt_malloc(n)
+#define free(p) nbt_free_mem(p)
+
 /* are we running on a little-endian system? */
 static int little_endian()
 {

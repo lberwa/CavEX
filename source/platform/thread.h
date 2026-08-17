@@ -55,6 +55,11 @@ struct thread_channel {
 
 void thread_create(struct thread* t, void* (*entry)(void* arg), void* arg,
 				   uint8_t priority);
+/* Wie thread_create, aber mit expliziter Stack-Größe (Bytes). stack_size==0
+ * bedeutet Plattform-Default. Für Threads mit tiefer Aufrufkette (Server-Tick:
+ * Weltgenerierung + RPC-Dispatch + Block-Drops) um Stack-Overflow zu vermeiden. */
+void thread_create_stack(struct thread* t, void* (*entry)(void* arg), void* arg,
+						 uint8_t priority, size_t stack_size);
 void thread_join(struct thread* t);
 void thread_msleep(size_t ms);
 

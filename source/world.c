@@ -153,6 +153,7 @@ void world_create(struct world* w) {
 	w->world_chunk_cache = NULL;
 	w->anim_timer = time_get();
 	w->visit_token = 1;
+	w->render_frame_stamp = 1;
 }
 
 void world_destroy(struct world* w) {
@@ -664,7 +665,10 @@ size_t world_count_dirty_chunks(struct world* w) {
 	return dirty;
 }
 
-void world_render_completed(struct world* w, bool new_render) {
+/* Retire the previous frame's render set: the GPU has finished reading those
+ * displaylists, so drop the reference token each chunk got in world_pre_render.
+ * MUST run exactly ONCE per frame, at the start of the render section. */
+void world_render_retire(struct world* w) {
 	assert(w);
 
 	ilist_chunks2_it_t it;
@@ -678,16 +682,43 @@ void world_render_completed(struct world* w, bool new_render) {
 
 	ilist_chunks2_reset(w->gpu_busy_chunks);
 
-	if(new_render) {
-		ilist_chunks_it_t it2;
-		ilist_chunks_it(it2, w->render);
+	/* Start a new frame for adoption dedup. 0 is reserved as "not adopted". */
+	if(++w->render_frame_stamp == 0)
+		w->render_frame_stamp = 1;
+}
 
-		while(!ilist_chunks_end_p(it2)) {
-			// move imaginary reference token from "render" to "gpu_busy_chunks"
-			ilist_chunks2_push_back(w->gpu_busy_chunks, ilist_chunks_ref(it2));
-			ilist_chunks_next(it2);
+/* Adopt the CURRENT render set (built by world_pre_render + rendered by
+ * world_render) into gpu_busy_chunks so its reference token survives until the
+ * next frame's retire. MUST run once per world_pre_render, i.e. after EVERY
+ * player's world_render in split-screen -- otherwise every player but the last
+ * leaks one reference per visible chunk each frame, and those chunks can never
+ * be destroyed (their refcount never hits 0), which slowly fills the heap. */
+void world_render_adopt(struct world* w) {
+	assert(w);
+
+	ilist_chunks_it_t it;
+	ilist_chunks_it(it, w->render);
+
+	while(!ilist_chunks_end_p(it)) {
+		struct chunk* c = ilist_chunks_ref(it);
+		ilist_chunks_next(it);
+
+		if(c->gpu_adopt_stamp == w->render_frame_stamp) {
+			/* Already adopted this frame (chunk visible to an earlier player).
+			 * The intrusive gpu_busy list can hold it only once, and one ref is
+			 * enough to keep it alive until retire -- so release this player's
+			 * extra reference now. Refcount stays >= 1, so no chunk_destroy and
+			 * no displaylist free while the GPU may still be reading it. */
+			chunk_unref(c);
+		} else {
+			c->gpu_adopt_stamp = w->render_frame_stamp;
+			/* move imaginary reference token from "render" to "gpu_busy_chunks" */
+			ilist_chunks2_push_back(w->gpu_busy_chunks, c);
 		}
 	}
+
+	/* The render list itself is left as-is: the next world_pre_render re-inits
+	 * it (as before), and the token ownership now lives in gpu_busy_chunks. */
 }
 
 static void world_render_spawner_mob(struct block_data* blk, mat4 view,

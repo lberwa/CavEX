@@ -27,7 +27,7 @@
 
 * TNT and Creeper drop glass
 
-* still water looks like stone brick
+* ~~still water looks like stone brick~~
 
 * Input system of the PC must work like on the Wii: checking ... every frame all buttons and register them for input_pressed() and input_released()
 
@@ -37,8 +37,22 @@
 
 * ~~frozen config.json if no config.json~~
 
-* save player camera pos of player 2
+* save player data of player 2
 
 * Buttons like in settings in main menu
 
 * Waterlilies and glass_pane have a visibility bug like redstone.
+
+* save settings in config.json
+
+* sprint with double click
+
+* sheep and pigs can't rotate
+
+* sheep and pigs drop nothing
+
+* player 2 imput prints
+
+* screen game settings input is broken
+
+* entities are able to going throw chunks and falling down

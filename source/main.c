@@ -156,11 +156,11 @@ void* framebuffer3;
 #endif
 
 #ifdef PLATFORM_WII
+#include <malloc.h>
+#include <ogc/system.h>
 #ifdef NDEBUG
 	// ram checken
-	#include <ogc/system.h>
 	#include <stdio.h>
-	#include <malloc.h>
 	#include <ogc/lwp_heap.h>
 
 
@@ -724,9 +724,26 @@ int main(void) {
 			gstate.current_screen->update(gstate.current_screen,
 											gstate.stats.dt);
 		sdlog("loop: nach screen->update");
+		cdbg_flush(); /* Debug-Nachrichten vom Server-Thread senden */
 
 		render_world
 			= gstate.current_screen->render_world && gstate.world_loaded;
+
+		/* Nebel an die (dynamische) Sichtweite koppeln: schrumpft vd, wird der
+		 * Nebel dichter genau an der Chunk-Grenze; waechst vd, zieht er wieder
+		 * auf. So werden am Rand nachladende/entladene Chunks vom Nebel verdeckt
+		 * statt sichtbar zu poppen. fog_distance = vd * 16 (= vd Chunks) ist das
+		 * urspruengliche Verhaeltnis, nur jetzt dynamisch. Sanftes Nachziehen,
+		 * damit vd-Wechsel (Governor) nicht springen. Skybox/Wolken skalieren in
+		 * gfx_util bereits mit fog_distance -> folgen automatisch mit. */
+		if(render_world) {
+			float target = (float)g_effective_view_distance * 16.0F;
+			float k = gstate.stats.dt * 6.0F;
+			if(k > 1.0F || k < 0.0F)
+				k = 1.0F;
+			gstate.config.fog_distance
+				+= (target - gstate.config.fog_distance) * k;
+		}
 
 		sdlog("loop: vor gfx_flip_buffers");
 		gfx_flip_buffers(&gstate.stats.dt_gpu, &gstate.stats.dt_vsync);
@@ -736,7 +753,13 @@ int main(void) {
 		if(!gstate.paused) {
 			// must not modify displaylists while still rendering!
 			chunk_mesher_receive();
-			world_render_completed(&gstate.world, render_world);
+			/* Retire the previous frame's rendered chunks (GPU is done with
+			 * them). Each player's current set is adopted AFTER its world_render
+			 * below -- see world_render_adopt. Splitting retire/adopt fixes a
+			 * per-frame reference leak in split-screen: previously only the last
+			 * player's render set was adopted, so every other player's visible
+			 * chunks leaked a ref each frame and could never be freed. */
+			world_render_retire(&gstate.world);
 
 			vec3 top_plane_color, bottom_plane_color, atmosphere_color;
 			daytime_sky_colors(daytime, top_plane_color, bottom_plane_color,
@@ -895,6 +918,12 @@ int main(void) {
 					if(active_screen->render2D)
 						active_screen->render2D(active_screen, gui_w, gui_h);
 
+					/* Adopt this player's rendered set (both world_render passes
+					 * above used it) so its reference survives to next frame's
+					 * retire. Must run once per world_pre_render / per player. */
+					if(render_world)
+						world_render_adopt(&gstate.world);
+
 					splitscreen_store_player(p);
 				}
 
@@ -959,6 +988,11 @@ int main(void) {
 						gutil_clouds(gstate.camera.view,
 						daytime_brightness(daytime));
 					#endif
+
+					/* Single-view path: adopt the set built by world_pre_render
+					 * (update phase) and rendered above, so its reference
+					 * survives to next frame's world_render_retire. */
+					world_render_adopt(&gstate.world);
 				}
 
 				gfx_mode_gui();
