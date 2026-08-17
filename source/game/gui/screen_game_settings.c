@@ -38,13 +38,15 @@ enum { // Buttons
 };
 
 static int8_t menu;
+static int8_t owner_player;
 
 static void screen_gsettings_reset(struct screen* s, int width, int height) {
 	input_pointer_enable(true);
 
 	gutil_button_new_menu();
 
-	gstate_set_capture_input_all(false);
+	owner_player = gstate_active_player();
+	gstate_set_capture_input_player(owner_player, false);
 
     menu = MAIN;
 }
@@ -83,7 +85,10 @@ static void set(int s) {
 static void screen_gsettings_update(struct screen* s, float dt) { }
 
 static void screen_gsettings_render2D(struct screen* s, int width, int height) {
-    gutil_button_reset();
+	float x, y, a;
+	bool avaiable = screen_pointer_local(owner_player, width, height, &x, &y, &a);
+
+    gutil_button_reset(owner_player, avaiable, x, y);
 
 	switch (menu) {
         case GAMEMODE:
@@ -120,12 +125,9 @@ static void screen_gsettings_render2D(struct screen* s, int width, int height) {
 		gutil_text(width/2 +  50, height/2 - 32, "Player 2:", 16, true);
 	}
 
-	float x, y, a;
-	bool avaiable = screen_pointer_local(0, width, height, &x, &y, &a);
-
 	if(avaiable) {
 		gfx_bind_texture_virtual(&texture_pointer);
-		gutil_texquad_rt_any(x, y, glm_rad(a), 0, 0, 256, 256, 
+		gutil_texquad_rt_any(x, y, glm_rad(a), 0, 0, 256, 256,
 							 48 * GFX_GUI_SCALE, 48 * GFX_GUI_SCALE);
 	}
 }

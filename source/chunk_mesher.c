@@ -17,11 +17,39 @@
 	along with CavEX.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+/* #define SIMULATE_OOM 150 */ /* auskommentiert = deaktiviert */
+
+/* ---- CHUNK DEBUG ---- Auf 1 setzen, nur diese Datei neu kompilieren ---- */
+#define CHUNK_MESHER_DEBUG 1
+/* ----------------------------------------------------------------------- */
+#if CHUNK_MESHER_DEBUG
+#include <stdarg.h>
+#include <stdio.h>
+#ifdef PLATFORM_WII
+#include <gccore.h>
+#endif
+#include "network/server_comunication.h"
+static void _mdbg(const char* fmt, ...) {
+	char buf[192];
+	va_list ap;
+	va_start(ap, fmt);
+	vsnprintf(buf, sizeof(buf), fmt, ap);
+	va_end(ap);
+	debug_send(buf);
+}
+#define MDBG(...) _mdbg(__VA_ARGS__)
+#else
+#define MDBG(...) ((void)0)
+#endif
+
 #include <assert.h>
+#include <malloc.h>
+#include <stdarg.h>
 #include <stdlib.h>
 #include <stdint.h>
 
 #include "chunk_mesher.h"
+#include "network/server_local.h"
 #include "platform/displaylist.h"
 #include "platform/thread.h"
 #include "stack.h"
@@ -41,6 +69,10 @@ struct chunk_mesher_rpc {
 	// ingoing
 	struct {
 		struct block_data* blocks;
+		struct block_data bd_buf[(CHUNK_SIZE + 2) * (CHUNK_SIZE + 2) * (CHUNK_SIZE + 2)];
+		uint8_t light_data_buf[(CHUNK_SIZE + 2) * (CHUNK_SIZE + 2) * (CHUNK_SIZE + 2) * 3];
+		bool visited_buf[CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE];
+		uint8_t queue_buf[CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE * 3];
 	} request;
 	// outgoing
 	struct {
@@ -142,19 +174,18 @@ static void chunk_test(struct block_data* bd, struct stack* queue,
 	}
 }
 
-static void chunk_test_init(struct block_data* bd, uint8_t* reachable) {
-	assert(bd && reachable);
+static void chunk_test_init(struct block_data* bd, uint8_t* reachable,
+							bool* visited, void* queue_buf) {
+	assert(bd && reachable && visited && queue_buf);
 
 	memset(reachable, 0, 6 * sizeof(uint8_t));
-
-	bool* visited = malloc(CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE);
-	assert(visited);
-
 	memset(visited, false, CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE);
 
 	struct stack queue;
-	stack_create(&queue, CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE / 4,
-				 sizeof(uint8_t[3]));
+	queue.element_size = 3;
+	queue.index = 0;
+	queue.length = CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE;
+	queue.data = queue_buf;
 
 	for(int y = 0; y < CHUNK_SIZE; y++) {
 		for(int x = 0; x < CHUNK_SIZE; x++) {
@@ -167,8 +198,7 @@ static void chunk_test_init(struct block_data* bd, uint8_t* reachable) {
 		}
 	}
 
-	stack_destroy(&queue);
-	free(visited);
+	/* queue.data zeigt auf queue_buf (statisch) — kein free nötig */
 }
 
 static void chunk_mesher_vertex_light(struct block_data* bd,
@@ -275,10 +305,12 @@ static void chunk_mesher_vertex_light(struct block_data* bd,
 static void chunk_mesher_rebuild(struct block_data* bd, w_coord_t cx,
 								 w_coord_t cy, w_coord_t cz,
 								 struct displaylist* d, bool count_only,
-								 size_t* vertices) {
+								 size_t* vertices, uint8_t* light_data_buf) {
 	assert(bd && d && vertices);
 
 	uint8_t* light_data = NULL;
+	bool light_data_initialized = false;
+	(void)light_data_buf;
 
 	for(int k = 0; k < 13; k++)
 		vertices[k] = 0;
@@ -367,11 +399,11 @@ static void chunk_mesher_rebuild(struct block_data* bd, w_coord_t cx,
 						if(face_visible
 						   || blocks[local.type]->renderBlockAlways) {
 							if(!light_data) {
-								light_data
-									= malloc((CHUNK_SIZE + 2) * (CHUNK_SIZE + 2)
-											 * (CHUNK_SIZE + 2) * 3);
-								assert(light_data);
-								chunk_mesher_vertex_light(bd, light_data);
+								light_data = light_data_buf;
+								if(!light_data_initialized) {
+									chunk_mesher_vertex_light(bd, light_data);
+									light_data_initialized = true;
+								}
 							}
 
 							if(!light_loaded) {
@@ -509,8 +541,7 @@ static void chunk_mesher_rebuild(struct block_data* bd, w_coord_t cx,
 			}
 		}
 
-	if(light_data)
-		free(light_data);
+	/* light_data zeigt auf light_data_buf (statisch) — kein free nötig. */
 }
 
 static void chunk_mesher_build(struct chunk_mesher_rpc* req) {
@@ -526,7 +557,8 @@ static void chunk_mesher_build(struct chunk_mesher_rpc* req) {
 
 	size_t vertices[13];
 	chunk_mesher_rebuild(req->request.blocks, req->chunk->x, req->chunk->y,
-						 req->chunk->z, req->result.mesh, false, vertices);
+						 req->chunk->z, req->result.mesh, false, vertices,
+						 req->request.light_data_buf);
 
 	for(int k = 0; k < 13; k++) {
 		if(!req->result.mesh[k].failed && vertices[k] > 0
@@ -538,9 +570,8 @@ static void chunk_mesher_build(struct chunk_mesher_rpc* req) {
 		}
 	}
 
-	chunk_test_init(req->request.blocks, req->result.reachable);
-
-	free(req->request.blocks);
+	chunk_test_init(req->request.blocks, req->result.reachable,
+					req->request.visited_buf, req->request.queue_buf);
 	chunk_mesher_dbg_built++;
 }
 
@@ -603,18 +634,36 @@ bool chunk_mesher_send(struct chunk* c) {
 	struct chunk_mesher_rpc* request;
 	if(!tchannel_receive(&mesher_empty_msg, (void**)&request, false)) {
 		chunk_mesher_dbg_failed++;
+		static int queue_full_log = 0;
+		if(++queue_full_log % 200 == 1)
+			MDBG("[MESHER] queue full fail=%lu sent=%lu built=%lu recv=%lu\n",
+				 chunk_mesher_dbg_failed, chunk_mesher_dbg_sent,
+				 chunk_mesher_dbg_built, chunk_mesher_dbg_recv);
 		return false;
 	}
 
-	struct block_data* bd
-		= malloc((CHUNK_SIZE + 2) * (CHUNK_SIZE + 2) * (CHUNK_SIZE + 2)
-				 * sizeof(struct block_data));
+	/* bd_buf liegt direkt im statischen RPC-Slot (BSS) — kein Heap-malloc,
+	 * kein OOM-Risiko durch Fragmentierung. */
+	struct block_data* bd = request->request.bd_buf;
 
-	if(!bd) {
-		chunk_mesher_dbg_failed++;
-		tchannel_send(&mesher_empty_msg, request, true);
-		return false;
+#ifdef SIMULATE_OOM
+	{
+		struct mallinfo _mi = mallinfo();
+		if((size_t)_mi.uordblks > (size_t)(SIMULATE_OOM) * 1024 * 1024) {
+			chunk_mesher_dbg_failed++;
+			tchannel_send(&mesher_empty_msg, request, true);
+			static int vd_decrement_cooldown = 0;
+			if(vd_decrement_cooldown <= 0) {
+				if(g_effective_view_distance > 1)
+					g_effective_view_distance--;
+				vd_decrement_cooldown = 40;
+			} else {
+				vd_decrement_cooldown--;
+			}
+			return false;
+		}
 	}
+#endif
 
 	chunk_ref(c);
 

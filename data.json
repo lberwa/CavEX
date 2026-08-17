@@ -4,6 +4,30 @@
   "_comment3": "########################################################################################################",
   "pc": [
     [
+      "source/game/gui/creative_inventory_list.c",
+      "source/game/gui/creative_inventory_list.c"
+    ],
+    [
+      "source/game/gui/creative_inventory_list.h",
+      "source/game/gui/creative_inventory_list.h"
+    ],
+    [
+      "source/game/gui/screen_inventory_creative.c",
+      "source/game/gui/screen_inventory_creative.c"
+    ],
+    [
+      "source/game/gui/screen_inventory_creative.h",
+      "source/game/gui/screen_inventory_creative.h"
+    ],
+    [
+      "source/game/gui/screen_game_settings.c",
+      "source/game/gui/screen_game_settings.c"
+    ],
+    [
+      "assets/gui/inventory_creative.png",
+      "../assets/gui/inventory_creative.png"
+    ],
+    [
       "init_pc.py",
       "../init.py"
     ],
@@ -4780,6 +4804,10 @@
   "_comment5": "############################################## WII #####################################################",
   "_comment6": "########################################################################################################",
   "wii": [
+    [
+      "assets/gui/inventory_creative.png",
+      "../assets/gui/inventory_creative.png"
+    ],
     [
       "init.py",
       "../init.py"

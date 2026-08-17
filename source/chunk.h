@@ -56,6 +56,14 @@ struct chunk {
 	struct world* world;
 	uint8_t reachable[6];
 	size_t reference_count;
+	/* Per-frame marker so a chunk visible to more than one split-screen player
+	 * is adopted into gpu_busy_chunks only ONCE per frame (the intrusive list
+	 * can hold it once); extra render references are released immediately. */
+	uint32_t gpu_adopt_stamp;
+	/* true if c->blocks came from the fixed client-chunk pool (return it there
+	 * on destroy) instead of a direct malloc fallback. Avoids the malloc/free
+	 * churn of the 10KB block buffer per load/unload that fragments the heap. */
+	bool blocks_pooled;
 	bool has_fog;
 	struct chunk_step {
 		uint32_t visit_stamp;
@@ -74,6 +82,9 @@ void chunk_init(struct chunk* c, struct world* world, w_coord_t x, w_coord_t y,
 				w_coord_t z);
 void chunk_ref(struct chunk* c);
 void chunk_unref(struct chunk* c);
+/* Debug/Instrumentierung: Anzahl bisher allozierter Slots im Client-Block-Pool
+ * (stabilisiert sich auf den Working-Set-Peak -> kein Heap-Churn mehr). */
+int client_chunk_pool_slots(void);
 struct block_data chunk_get_block(struct chunk* c, c_coord_t x, c_coord_t y,
 								  c_coord_t z);
 struct block_data chunk_lookup_block(struct chunk* c, w_coord_t x, w_coord_t y,

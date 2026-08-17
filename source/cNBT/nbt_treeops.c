@@ -14,6 +14,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* malloc/free durch die NBT-Arena-Wrapper leiten (siehe nbt_parsing.c). So wird
+ * beim churn-freien Chunk-Laden auch nbt_free zum No-Op auf Arena-Speicher;
+ * ausserhalb echtes malloc/free. */
+#define malloc(n) nbt_malloc(n)
+#define free(p) nbt_free_mem(p)
+
 /* strdup isn't standard. GNU extension. */
 static inline char* _nbt_strdup(const char* s)
 {

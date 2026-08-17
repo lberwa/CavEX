@@ -39,6 +39,56 @@
 #include "server_world.h"
 #include "complex_block_archive.h"
 #include "../entity/entity_monster.h"
+#ifdef PLATFORM_WII
+#include <malloc.h>
+#include <ogc/system.h>
+#endif
+
+volatile int g_effective_view_distance = MAX_VIEW_DISTANCE;
+
+/* Adaptive Chunk-Obergrenze: startet beim festen Schätzwert und justiert sich
+ * per malloc-NULL-Rückmeldung auf die REAL erreichbare Zahl. Scheitert ein Laden
+ * schon UNTERHALB dieser Grenze, ist die echte Grenze niedriger -> senken.
+ * Wird bei stabiler Lage langsam wieder angehoben. So passt sich das Spiel an
+ * die tatsächlich verfügbare (welt-/situationsabhängige) MEM2-Menge an, statt
+ * sich auf einen fest verdrahteten Wert zu verlassen. */
+static int g_chunk_cap = SERVER_CHUNK_HARD_CAP;
+
+/* ---- CHUNK DEBUG ---- Auf 1 setzen, nur diese Datei neu kompilieren ---- */
+#define CHUNK_MESHER_DEBUG 1
+/* ----------------------------------------------------------------------- */
+#if CHUNK_MESHER_DEBUG
+#include <stdio.h>
+#include <stdarg.h>
+#include "../network/server_comunication.h"
+/* Ring-Buffer: Server-Thread schreibt, Main-Thread liest+sendet.
+ * Auf Single-Core PPC reichen volatile Indices ohne Mutex. */
+#define _DBG_N   32
+#define _DBG_LEN 192
+static char _dbg_ring[_DBG_N][_DBG_LEN];
+static volatile int _dbg_w = 0;
+static volatile int _dbg_r = 0;
+
+static void _cdbg(const char* fmt, ...) {
+	int next = (_dbg_w + 1) % _DBG_N;
+	if(next == _dbg_r) return;
+	va_list ap;
+	va_start(ap, fmt);
+	vsnprintf(_dbg_ring[_dbg_w], _DBG_LEN, fmt, ap);
+	va_end(ap);
+	_dbg_w = next;
+}
+void cdbg_flush(void) {
+	while(_dbg_r != _dbg_w) {
+		debug_send(_dbg_ring[_dbg_r]);
+		_dbg_r = (_dbg_r + 1) % _DBG_N;
+	}
+}
+#define CDBG(...) _cdbg(__VA_ARGS__)
+#else
+#define CDBG(...) ((void)0)
+static inline void cdbg_flush(void) {}
+#endif
 
 #define CHUNK_DIST2(x1, x2, z1, z2)                                            \
 	(((x1) - (x2)) * ((x1) - (x2)) + ((z1) - (z2)) * ((z1) - (z2)))
@@ -1239,8 +1289,10 @@ static void server_local_update(struct server_local* s) {
 	}
 #endif
 
+	int vd = g_effective_view_distance;
+
 	server_world_random_tick(&s->world, &s->rand_src, s, px, pz,
-							 MAX_VIEW_DISTANCE - 2);
+							 vd > 2 ? vd - 2 : 0);
 	server_world_tick(&s->world, s);
 	/* Water flow: every 5th tick, process the cells woken by recent block
 	 * changes (Minecraft's fluid tick rate). Static/generated water that nobody
@@ -1252,74 +1304,212 @@ static void server_local_update(struct server_local* s) {
 												player_z);
 
 	w_coord_t cx, cz;
+	/* Langsame Erholung: alle 200 Ticks (10 s bei 20 TPS) Sichtweite um 1
+	 * erhöhen, falls sie unter MAX_VIEW_DISTANCE liegt. */
+	static int vd_prev = MAX_VIEW_DISTANCE;
+	static int dbg_tick = 0;
+
+#ifdef PLATFORM_WII
+	/* Adaptive Chunk-Grenze + Sichtweiten-Governor (alle 20 Ticks ~1s).
+	 * Seit dem festen zlib-Save-Puffer (nbt_zarena) gibt es keinen großen,
+	 * fragmentierenden malloc mehr -> der FREIE Speicher ist wieder ein
+	 * zuverlässiges Signal. Also: g_chunk_cap direkt am freien Speicher führen.
+	 *   viel frei (> HIGH) -> cap schnell anheben (zügige Erholung)
+	 *   wenig frei (< LOW)  -> cap senken (Druck ablassen)
+	 * Der OOM-Handler senkt cap zusätzlich hart, falls doch mal ein malloc
+	 * scheitert. So kann cap NICHT mehr bei einem Ausreißer-Tief kleben. */
+	static int ram_check_counter = 0;
+	static int vd_cooldown = 0;
+	if(vd_cooldown > 0)
+		vd_cooldown--;
+	if(++ram_check_counter >= 20) {
+		ram_check_counter = 0;
+
+		size_t lc = dict_server_chunks_size(s->world.chunks);
+		int vd = g_effective_view_distance;
+
+		/* Freigegebenen Heap-Top an die MEM2-Arena zurueckgeben (falls dieser
+		 * libogc-malloc das per sbrk-Shrink unterstuetzt). Ohne das kehrt MEM2
+		 * nie zurueck -> jeder Working-Set-Peak frisst MEM2 dauerhaft auf. */
+		malloc_trim(0);
+
+		u32 mem2_free = (u32)SYS_GetArena2Hi() - (u32)SYS_GetArena2Lo();
+		u32 mem1_free = (u32)mallinfo().fordblks + SYS_GetArena1Size();
+		u32 free_mb = (mem2_free + mem1_free) / (1024u * 1024u);
+		u32 mem2_mb = mem2_free / (1024u * 1024u);
+
+		/* free_mb = GESAMTER wiederverwendbarer Speicher (Free-List + Arenen).
+		 * Die Free-List ist auch dann nutzbar, wenn sie nach dem Heap-Wachstum
+		 * in MEM2 physisch in MEM1 liegt -> nur MEM2 zu zaehlen wuerde 30MB+
+		 * nutzbaren Speicher ignorieren und cap grundlos auf 8 wuergen.
+		 * mem2_mb ist nur ein WAECHTER: neue Chunks/hoeheres vd duerfen nicht
+		 * gegen eine fast leere MEM2-Arena anlaufen (Wachstum koennte Arena
+		 * brauchen, die es nicht mehr gibt). Der Overshoot bis vd=5 ist jetzt
+		 * ueber MAX_VIEW_DISTANCE=3 gedeckelt. */
+		if(free_mb >= 8 && mem2_mb >= 2 && g_chunk_cap < SERVER_CHUNK_HARD_CAP) {
+			g_chunk_cap += 8;
+			if(g_chunk_cap > SERVER_CHUNK_HARD_CAP)
+				g_chunk_cap = SERVER_CHUNK_HARD_CAP;
+		} else if(free_mb < 4 && g_chunk_cap > 8) {
+			g_chunk_cap -= 4;
+		}
+
+		if(lc > (size_t)(g_chunk_cap * 92 / 100) && vd > 1) {
+			g_effective_view_distance--;
+			vd_cooldown = 60; /* 3 s Sperre -> kein Pumpen */
+			CDBG("[VD] Druck (%zu/%d, %uMB frei, MEM2=%uMB) -> vd=%d\n",
+				 lc, g_chunk_cap, free_mb, mem2_mb, g_effective_view_distance);
+		} else if(free_mb >= 10 && mem2_mb >= 2
+				  && lc < (size_t)(g_chunk_cap * 60 / 100)
+				  && vd_cooldown == 0 && vd < MAX_VIEW_DISTANCE) {
+			g_effective_view_distance++;
+			CDBG("[VD] Luft (%zu/%d, %uMB frei, MEM2=%uMB) -> vd=%d\n",
+				 lc, g_chunk_cap, free_mb, mem2_mb, g_effective_view_distance);
+		}
+	}
+#else
+	/* PC: keine RAM-Begrenzung, immer volle Sichtweite. */
+	g_effective_view_distance = MAX_VIEW_DISTANCE;
+#endif
+
+	bool vd_shrank = g_effective_view_distance < vd_prev;
+	if(vd_shrank)
+		CDBG("[VD] gesunken %d->%d\n", vd_prev, g_effective_view_distance);
+	vd_prev = g_effective_view_distance;
+
+	/* Alle 40 Ticks (~2s) Gesamtstatus ausgeben */
+	if(++dbg_tick >= 40) {
+		dbg_tick = 0;
+		extern volatile unsigned long chunk_mesher_dbg_sent;
+		extern volatile unsigned long chunk_mesher_dbg_failed;
+		extern volatile unsigned long chunk_mesher_dbg_built;
+		extern volatile unsigned long chunk_mesher_dbg_recv;
+		/* Debug: Leak-Diagnose. cchunks = live Client-Chunks (chunk_init -
+		 * chunk_destroy); csec = geladene Client-Sections; uord = tatsaechlich
+		 * belegte Heap-Bytes (KB). Steigt cchunks/uord bei konstantem chunks,
+		 * leakt der Client-Load/Unload-Pfad. */
+		extern volatile long chunk_live_count;
+		size_t nc = dict_server_chunks_size(s->world.chunks);
+		unsigned mem2f = 0, mem1f = 0, uordk = 0;
+#ifdef PLATFORM_WII
+		mem2f = (unsigned)(((u32)SYS_GetArena2Hi() - (u32)SYS_GetArena2Lo()) / 1024);
+		mem1f = (unsigned)(((u32)mallinfo().fordblks + SYS_GetArena1Size()) / 1024);
+		uordk = (unsigned)((u32)mallinfo().uordblks / 1024);
+#endif
+		/* mem2arena = noch NICHT beanspruchte MEM2-Arena (Arena2Hi-Lo, physisch).
+		 * heapfree = GESAMTE Heap-Free-List (fordblks + freie MEM1-Arena) -- der
+		 * newlib-Heap waechst von MEM1 nahtlos in MEM2 hinein, daher liegt diese
+		 * Free-List physisch in BEIDEN Baenken und kann 24MB (MEM1 physisch)
+		 * ueberschreiten. Das ist wiederverwendbarer Speicher, NICHT "MEM1". */
+		CDBG("[STATUS] vd=%d chunks=%zu cchunks=%ld csec=%zu ccpool=%d cap=%d mem2arena=%uK heapfree=%uK uord=%uK sent=%lu fail=%lu built=%lu\n",
+			 g_effective_view_distance, nc, chunk_live_count,
+			 world_loaded_chunks(&gstate.world), client_chunk_pool_slots(),
+			 g_chunk_cap, mem2f, mem1f, uordk,
+			 chunk_mesher_dbg_sent, chunk_mesher_dbg_failed,
+			 chunk_mesher_dbg_built);
+
+		/* Pro Spieler: geladene und fehlende Chunks im Sichtbereich */
+		w_coord_t ppos[2][2] = { {px, pz}, {px1, pz1} };
+		bool pactive[2] = { true, p1_active };
+		for(int pi = 0; pi < 2; pi++) {
+			if(!pactive[pi]) continue;
+			w_coord_t ppx = ppos[pi][0], ppz = ppos[pi][1];
+			int loaded = 0, missing = 0;
+			for(w_coord_t cz = ppz - vd; cz <= ppz + vd; cz++) {
+				for(w_coord_t cx = ppx - vd; cx <= ppx + vd; cx++) {
+					if(CHUNK_DIST2(ppx, cx, ppz, cz) > vd * vd)
+						continue;
+					if(server_world_is_chunk_loaded(&s->world, cx, cz))
+						loaded++;
+					else
+						missing++;
+				}
+			}
+			CDBG("[P%d] pos=(%d,%d) loaded=%d missing=%d\n",
+				 pi + 1, (int)ppx, (int)ppz, loaded, missing);
+		}
+	}
+
 	/* O(1): m-lib keeps the element count, so don't walk the whole dictionary
 	 * every tick (that made each tick O(N) and the whole generation O(N^2) --
 	 * the more chunks were loaded, the slower generation got). */
 	size_t loaded_chunks = dict_server_chunks_size(s->world.chunks);
 #ifdef SPLITSCREEN
 	{
-		size_t max_allowed = (size_t)(2 * MAX_VIEW_DISTANCE + 1)
-			* (size_t)(2 * MAX_VIEW_DISTANCE + 1);
+		size_t max_allowed = (size_t)(2 * vd + 1) * (size_t)(2 * vd + 1);
 		if(p1_active)
 			max_allowed *= 2;
+		/* Harte (adaptive) Speichergrenze: nie mehr als g_chunk_cap Chunks
+		 * gleichzeitig, egal was vd sagt. Deckelt den RAM zuverlässig. */
+		if(max_allowed > (size_t)g_chunk_cap)
+			max_allowed = (size_t)g_chunk_cap;
 
 		if(loaded_chunks <= max_allowed) {
 			/* Avoid unload thrash when we're already under the target budget. */
 			goto unload_done;
 		}
 
-		bool unload_found = false;
-		w_coord_t unload_x = 0;
-		w_coord_t unload_z = 0;
-			w_coord_t unload_dist2 = 0;
+		/* Wenn vd gerade gesunken ist: alle out-of-range Chunks sofort entladen.
+		 * Sonst: bis zu 8 weiteste pro Tick (skaliert mit Überschuss). */
+		size_t over = loaded_chunks - max_allowed;
+		int evict_limit = vd_shrank ? (int)loaded_chunks
+		                : over > 4 * max_allowed ? 8
+		                : over > 2 * max_allowed ? 4 : 1;
 
-			dict_server_chunks_it_t u_it;
-			dict_server_chunks_it(u_it, s->world.chunks);
-			while(!dict_server_chunks_end_p(u_it)) {
-				int64_t id = dict_server_chunks_ref(u_it)->key;
-				w_coord_t ucx = S_CHUNK_X(id);
-				w_coord_t ucz = S_CHUNK_Z(id);
-			w_coord_t d0 = CHUNK_DIST2(px, ucx, pz, ucz);
-			w_coord_t d = d0;
+		/* Kandidaten sammeln (Iteration vor Eviction, da dict-Änderung
+		 * während Iteration nicht sicher ist). MAX_CHUNKS als obere Grenze.
+		 * static: nur der Server-Thread nutzt das (nicht reentrant) -> hält
+		 * ~1KB vom ohnehin tiefen server_local_update-Stackframe fern
+		 * (Stack-Overflow-Schutz auf dem kleinen Wii-Thread-Stack). */
+		static w_coord_t evict_x[MAX_CHUNKS], evict_z[MAX_CHUNKS];
+		int evict_count = 0;
+
+		dict_server_chunks_it_t u_it;
+		dict_server_chunks_it(u_it, s->world.chunks);
+		while(!dict_server_chunks_end_p(u_it)
+			  && evict_count < evict_limit && evict_count < MAX_CHUNKS) {
+			int64_t id = dict_server_chunks_ref(u_it)->key;
+			w_coord_t ucx = S_CHUNK_X(id);
+			w_coord_t ucz = S_CHUNK_Z(id);
+			w_coord_t d = CHUNK_DIST2(px, ucx, pz, ucz);
 			if(p1_active) {
 				w_coord_t d1 = CHUNK_DIST2(px1, ucx, pz1, ucz);
-				if(d1 < d)
-					d = d1;
+				if(d1 < d) d = d1;
 			}
-			if(d > MAX_VIEW_DISTANCE * MAX_VIEW_DISTANCE
-			   && (!unload_found || d > unload_dist2)) {
-				unload_found = true;
-				unload_dist2 = d;
-				unload_x = ucx;
-				unload_z = ucz;
+			if(d > vd * vd) {
+				evict_x[evict_count] = ucx;
+				evict_z[evict_count] = ucz;
+				evict_count++;
 			}
-
 			dict_server_chunks_next(u_it);
 		}
 
-		if(unload_found) {
-			// unload just one chunk
-#ifdef SRPC_LOAD_WORLD_DEBUG
-			printf("[server_local] unloading chunk %d,%d (player chunk %d,%d) loaded_chunks=%zu\n",
-				   (int)unload_x, (int)unload_z, (int)px, (int)pz, loaded_chunks);
-#endif
-			server_world_save_chunk(&s->world, true, unload_x, unload_z);
+		static unsigned long evict_total = 0;
+		if(evict_count > 0) {
+			evict_total += evict_count;
+			CDBG("[EVICT] %d chunks (total=%lu loaded=%zu->%zu max=%zu vd=%d)\n",
+				 evict_count, evict_total, loaded_chunks,
+				 loaded_chunks - evict_count, max_allowed,
+				 g_effective_view_distance);
+		}
+		for(int i = 0; i < evict_count; i++) {
+			/* erste 2 Chunks pro Tick einzeln loggen (Ringpuffer nicht fluten) */
+			if(i < 2)
+				CDBG("[EVICT]   -> chunk (%d,%d)\n",
+					 (int)evict_x[i], (int)evict_z[i]);
+			server_world_save_chunk(&s->world, true, evict_x[i], evict_z[i]);
 			clin_rpc_send(&(struct client_rpc) {
 				.type = CRPC_UNLOAD_CHUNK,
-				.payload.unload_chunk.x = unload_x,
-				.payload.unload_chunk.z = unload_z,
+				.payload.unload_chunk.x = evict_x[i],
+				.payload.unload_chunk.z = evict_z[i],
 			});
 		}
 	}
 unload_done:
 #else
-	if(server_world_furthest_chunk(&s->world, MAX_VIEW_DISTANCE, px, pz, &cx,
-								   &cz)) {
-#ifdef SRPC_LOAD_WORLD_DEBUG
-		// unload just one chunk
-		printf("[server_local] unloading chunk %d,%d (player chunk %d,%d) loaded_chunks=%zu\n",
-			   (int)cx, (int)cz, (int)px, (int)pz, loaded_chunks);
-#endif
+	if(server_world_furthest_chunk(&s->world, vd, px, pz, &cx, &cz)) {
+		CDBG("[EVICT] chunk (%d,%d) loaded=%zu vd=%d\n",
+			 (int)cx, (int)cz, loaded_chunks, g_effective_view_distance);
 		server_world_save_chunk(&s->world, true, cx, cz);
 		clin_rpc_send(&(struct client_rpc) {
 			.type = CRPC_UNLOAD_CHUNK,
@@ -1345,10 +1535,8 @@ unload_done:
 		if(pz1 > max_pz) max_pz = pz1;
 	}
 #endif
-	for(w_coord_t z = min_pz - MAX_VIEW_DISTANCE;
-		z <= max_pz + MAX_VIEW_DISTANCE; z++) {
-		for(w_coord_t x = min_px - MAX_VIEW_DISTANCE;
-			x <= max_px + MAX_VIEW_DISTANCE; x++) {
+	for(w_coord_t z = min_pz - vd; z <= max_pz + vd; z++) {
+		for(w_coord_t x = min_px - vd; x <= max_px + vd; x++) {
 			w_coord_t d = CHUNK_DIST2(px, x, pz, z);
 #ifdef SPLITSCREEN
 			if(p1_active) {
@@ -1357,7 +1545,7 @@ unload_done:
 					d = d1;
 			}
 #endif
-			if(d > MAX_VIEW_DISTANCE * MAX_VIEW_DISTANCE)
+			if(d > vd * vd)
 				continue;
 			if(!server_world_is_chunk_loaded(&s->world, x, z)
 			   && (d < c_nearest_dist2 || !c_nearest)) {
@@ -1437,6 +1625,15 @@ unload_done:
 	for(int load_i = 0;; load_i++) {
 		if(time_diff_ms(chunk_load_start, time_get()) >= chunk_budget_ms)
 			break;
+#ifdef PLATFORM_WII
+		/* Harter Lade-Stopp: nie über die Speichergrenze laden, egal was der
+		 * (nur sekündlich laufende) Governor gerade als vd gesetzt hat. Ohne
+		 * das könnte die Chunk-Zahl zwischen zwei Governor-Ticks über die
+		 * Grenze schießen und den Speicher erschöpfen. */
+		if(dict_server_chunks_size(s->world.chunks)
+		   >= (size_t)g_chunk_cap)
+			break;
+#endif
 		if(generating) {
 			/* new-world spawn generation happens on the loading screen -> full
 			 * speed, bounded only by the loading time budget above (NOT by the
@@ -1456,10 +1653,8 @@ unload_done:
 			c_found = true;
 		}
 		if(!c_found) {
-		for(w_coord_t z = min_pz - MAX_VIEW_DISTANCE;
-			z <= max_pz + MAX_VIEW_DISTANCE; z++) {
-			for(w_coord_t x = min_px - MAX_VIEW_DISTANCE;
-				x <= max_px + MAX_VIEW_DISTANCE; x++) {
+		for(w_coord_t z = min_pz - vd; z <= max_pz + vd; z++) {
+			for(w_coord_t x = min_px - vd; x <= max_px + vd; x++) {
 				w_coord_t d = CHUNK_DIST2(px, x, pz, z);
 #ifdef SPLITSCREEN
 				if(p1_active) {
@@ -1468,7 +1663,7 @@ unload_done:
 						d = d1;
 				}
 #endif
-				if(d > MAX_VIEW_DISTANCE * MAX_VIEW_DISTANCE)
+				if(d > vd * vd)
 					continue;
 				if(!server_world_is_chunk_loaded(&s->world, x, z)
 				   && (d < cand_dist2 || !c_found)) {
@@ -1489,10 +1684,22 @@ unload_done:
 		struct server_chunk* sc;
 		if(server_world_load_chunk(&s->world, cand_x, cand_z, &sc)) {
 			size_t sz = CHUNK_SIZE * CHUNK_SIZE * WORLD_HEIGHT;
-			void* ids = malloc(sz);
-			void* metadata = malloc(sz / 2);
-			void* lighting_sky = malloc(sz / 2);
-			void* lighting_torch = malloc(sz / 2);
+
+			/* Transfer-Puffer aus dem festen Pool statt malloc (kein Heap-Churn
+			 * -> keine MEM2-Fragmentierung beim Streamen). Ein Block: ids(sz) |
+			 * metadata(sz/2) | sky(sz/2) | torch(sz/2). */
+			uint8_t* block = clin_chunk_buf_take();
+			if(!block) {
+				/* Pool momentan leer (Client hat Puffer noch nicht
+				 * zurueckgegeben) — Server-Chunk bleibt geladen, naechster Tick.
+				 * Kein vd-- hier: der RAM-Governor regelt die Sichtweite. */
+				break;
+			}
+
+			uint8_t* ids           = block;
+			uint8_t* metadata      = block + sz;
+			uint8_t* lighting_sky  = block + sz + sz / 2;
+			uint8_t* lighting_torch = block + sz + sz / 2 + sz / 2;
 
 			memcpy(ids, sc->ids, sz);
 			memcpy(metadata, sc->metadata, sz / 2);
@@ -1514,12 +1721,30 @@ unload_done:
 			});
 
 			loaded_this_tick++;
+		} else if(server_world_pending_chunk(&s->world, NULL, NULL)) {
+			/* KEIN Fehler: die Chunk-Generierung ist mehrstufig (Terrain ->
+			 * Features -> Deko -> Finalize) und liefert pro Schritt false, bis
+			 * der Chunk fertig ist. Das ist Fortschritt, NICHT OOM — die Grenze
+			 * darf hier NICHT gesenkt werden (sonst spammt "[CAP] OOM" bei vollem
+			 * Speicher, und der harte Cap-Stopp würgt die Generierung ab -> die
+			 * beobachteten 0-ms-Leerlauf-Ticks während die Welt generiert). Am
+			 * selben Pending-Chunk weiterarbeiten; das Zeit-/Schrittbudget am
+			 * Schleifenanfang begrenzt die Schritte pro Tick. */
+			continue;
 		} else {
-#ifdef SRPC_LOAD_WORLD_DEBUG
-			/* failed to load this candidate, try next iteration */
-			printf("[server_local] server_world_load_chunk failed for %d,%d\n",
-				   (int)cand_x, (int)cand_z);
-#endif
+			/* Echter Fehlschlag: Allokation (malloc/Pool erschöpft) oder
+			 * Archiv-Fehler OHNE laufende Generierung. Die Grenze auf die
+			 * aktuell geladene Zahl minus Reserve absenken — so hört das Spiel
+			 * auf, gegen eine zu hohe (fest verdrahtete) Grenze anzurennen. */
+			size_t now_loaded = dict_server_chunks_size(s->world.chunks);
+			int real_cap = (int)now_loaded - 4;
+			if(real_cap < 8) real_cap = 8;
+			if(real_cap < g_chunk_cap) {
+				g_chunk_cap = real_cap;
+				CDBG("[CAP] OOM bei %zu -> harte Grenze auf %d gesenkt\n",
+					 now_loaded, g_chunk_cap);
+			}
+			break;
 		}
 	}
 
@@ -1567,7 +1792,7 @@ unload_done:
 				w_coord_t fx, fz;
 				int fy;
 				if(server_world_find_spawn(&s->world, sx, sz,
-										   (MAX_VIEW_DISTANCE - 1) * CHUNK_SIZE,
+										   (vd > 1 ? vd - 1 : 1) * CHUNK_SIZE,
 										   &fx, &fy, &fz)) {
 					/* player Y is the eye position (feet + ~1.62) */
 					player->x = fx + 0.5;
@@ -1631,7 +1856,7 @@ unload_done:
 			w_coord_t fx, fz;
 			int fy;
 			if(server_world_find_spawn(&s->world, sx, sz,
-									   (MAX_VIEW_DISTANCE - 1) * CHUNK_SIZE, &fx,
+									   (vd > 1 ? vd - 1 : 1) * CHUNK_SIZE, &fx,
 									   &fy, &fz)) {
 				/* player Y is the eye position (feet + ~1.62) */
 				s->player.x = fx + 0.5;
@@ -1955,5 +2180,8 @@ void server_local_create(struct server_local* s) {
 #endif
 
 	struct thread t;
-	thread_create(&t, server_local_thread, s, 8);
+	/* Großer Stack (128 KB): der Server-Tick hat die tiefste Aufrufkette
+	 * (Weltgenerierung, RPC-Dispatch, Block-Drops mit VLA). Der libogc-Default
+	 * ist zu klein und lief bei intensiver Nutzung in einen Stack-Overflow. */
+	thread_create_stack(&t, server_local_thread, s, 8, 128 * 1024);
 }

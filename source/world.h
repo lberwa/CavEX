@@ -61,6 +61,9 @@ struct world {
 	ilist_chunks2_t gpu_busy_chunks;
 	ptime_t anim_timer;
 	uint32_t visit_token;
+	/* Incremented once per frame by world_render_retire; matched against each
+	 * chunk's gpu_adopt_stamp to dedupe adoption across split-screen players. */
+	uint32_t render_frame_stamp;
 	struct stack lighting_updates;
 	enum world_dim dimension;
 };
@@ -73,7 +76,8 @@ w_coord_t world_get_height(struct world* w, w_coord_t x, w_coord_t z);
 void world_copy_heightmap(struct world* w, struct chunk* c, uint8_t* heightmap);
 size_t world_build_chunks(struct world* w, size_t tokens);
 size_t world_count_dirty_chunks(struct world* w);
-void world_render_completed(struct world* w, bool new_render);
+void world_render_retire(struct world* w);
+void world_render_adopt(struct world* w);
 struct chunk* world_find_chunk_neighbour(struct world* w, struct chunk* c,
 										 enum side s);
 struct chunk* world_chunk_from_section(struct world* w, struct world_section* s,

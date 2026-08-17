@@ -79,7 +79,10 @@ static void screen_msettings_update(struct screen* s, float dt) {
 	// gezeichnet -> sonst stimmt die Zentrierung nicht.
 	int width = gfx_gui_width();
 	int height = gfx_gui_height();
-    gutil_button_reset();
+	float _px = 0, _py = 0, _pa;
+	bool _ptr = input_pointer(&_px, &_py, &_pa, 0);
+	if(_ptr) gfx_pointer_to_gui(&_px, &_py);
+    gutil_button_reset(0, _ptr, _px, _py);
 
 	switch (menu) {
         case DEBUG:

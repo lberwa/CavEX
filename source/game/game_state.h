@@ -24,7 +24,7 @@
 #define SPLITSCREEN 2
 #endif
 
-//#define FAST_MOVING
+#define FAST_MOVING
 
 #include <signal.h>
 #include <stdbool.h>

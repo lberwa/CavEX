@@ -147,4 +147,11 @@ void clin_init(void);
 void clin_update(void);
 void clin_rpc_send(struct client_rpc* call);
 
+/* Chunk-Transfer-Puffer-Pool (siehe client_interface.c). Der Server nimmt einen
+ * 80K-Block (ids|metadata|sky|torch), der Client gibt ihn nach dem Import via
+ * ids-Zeiger zurueck. take() liefert NULL, wenn der Pool gerade leer ist. */
+void clin_chunk_pool_init(void);
+uint8_t* clin_chunk_buf_take(void);
+void clin_chunk_buf_return(uint8_t* b);
+
 #endif

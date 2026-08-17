@@ -23,6 +23,17 @@ extern "C" {
 #include "buffer.h" /* for struct buffer */
 #include "list.h"   /* For struct list_entry etc. */
 
+/* NBT-Parse-Arena (siehe nbt_loading.c): waehrend nbt_arena_begin()/_end() laufen
+ * alle NBT-Allokationen durch einen festen Bump-Puffer und nbt_free wird zum
+ * No-Op -> churn-freies Chunk-Laden (mem2arena bleibt konstant). Ausserhalb
+ * verhalten sich nbt_malloc/nbt_realloc/nbt_free_mem wie malloc/realloc/free. */
+void nbt_arena_begin(void);
+void nbt_arena_end(void);
+bool nbt_arena_is_active(void);
+void* nbt_malloc(size_t n);
+void* nbt_realloc(void* old, size_t oldn, size_t n);
+void nbt_free_mem(void* p);
+
 typedef enum {
     NBT_OK   =  0, /* No error. */
     NBT_ERR  = -1, /* Generic error, most likely of the parsing variety. */

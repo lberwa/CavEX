@@ -32,8 +32,34 @@
 #include "../entity/entity.h"
 
 #define MAX_REGIONS 4
-#define MAX_VIEW_DISTANCE 5 // in chunks
+/* obere Grenze in Chunks. Auf der Wii war 5 fuer 2-Spieler-Splitscreen NICHT
+ * tragbar: der Governor kletterte bis 5, dessen Working-Set-Peak beanspruchte
+ * die gesamte (nie zurueckkehrende) MEM2-Arena -> Absturz. Bei cap=96 sehen zwei
+ * getrennte Spieler ohnehin schon bei vd=3 je ~49 Chunks (98 > cap), hoeher
+ * bringt getrennt nichts. Der PC hat kein solches Limit -> dort der urspr. Wert. */
+#ifdef PLATFORM_WII
+#define MAX_VIEW_DISTANCE 3 // in chunks, obere Grenze (Wii-RAM)
+#else
+#define MAX_VIEW_DISTANCE 5 // in chunks, obere Grenze (PC)
+#endif
 #define MAX_HIGH_DETAIL_VIEW_DISTANCE 2
+
+/* Harte Obergrenze gleichzeitig geladener Server-Chunks (Wii-RAM-Schutz).
+ * Jeder Chunk kostet ~80KB Server + Client-Mesh; empirisch geht ab ~140 Chunks
+ * der MEM2-Speicher aus. 96 lässt komfortablen Puffer und ist die einzige
+ * ZUVERLÄSSIGE Grenze (Speicher-Messungen lügen bei Fragmentierung). */
+#ifndef SERVER_CHUNK_HARD_CAP
+#define SERVER_CHUNK_HARD_CAP 96
+#endif
+
+/* Dynamisch reduzierte Sichtweite (Wii-RAM-Schutz). Startet bei
+ * MAX_VIEW_DISTANCE, wird vom Haupt-Thread bei RAM-Druck verkleinert.
+ * Volatile reicht: ein Schreiber (Main-Thread), ein Leser (Server-Thread). */
+extern volatile int g_effective_view_distance;
+
+/* Debug-Nachrichten aus dem Server-Thread an den Main-Thread übertragen.
+ * Pro Frame aus dem Main-Thread aufrufen (thread-safe über Ring-Buffer). */
+void cdbg_flush(void);
 #define MAX_CHUNKS ((MAX_VIEW_DISTANCE * 2 + 2) * (MAX_VIEW_DISTANCE * 2 + 2))
 #define MAX_HIGH_DETAIL_CHUNKS ((MAX_HIGH_DETAIL_VIEW_DISTANCE * 2 + 2) * (MAX_HIGH_DETAIL_VIEW_DISTANCE * 2 + 2))
 #define MAX_CHESTS 256

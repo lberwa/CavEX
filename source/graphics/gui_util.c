@@ -472,18 +472,20 @@ static bool dpad_active;
 // liefern dann faelschlich false. Pro Button abzufragen wuerde also nur den
 // ersten Button klickbar machen.
 static bool button_click;
+static int button_player;
 
-void gutil_button_reset() {
+void gutil_button_reset(int player, bool ptr_avail, float px, float py) {
+	button_player = player;
 	memset(buttons, 0, sizeof(buttons));
 	memset(buttons_pos, 0, sizeof(buttons_pos));
 	enable_buttons = 0;
 
-	button_click = input_pressed(IB_GUI_CLICK, 0);
+	button_click = input_pressed(IB_GUI_CLICK, player);
 
-	float angle;
-	ptr_available = input_pointer(&ptr_x, &ptr_y, &angle, 0);
+	ptr_available = ptr_avail;
 	if (ptr_available) {
-		gfx_pointer_to_gui(&ptr_x, &ptr_y);
+		ptr_x = px;
+		ptr_y = py;
 		// eine echte Mausbewegung (> 2 px) schaltet zurueck in den Pointer-Modus
 		if (fabsf(ptr_x - last_ptr_x) > 2.0F
 		    || fabsf(ptr_y - last_ptr_y) > 2.0F) {
@@ -528,13 +530,13 @@ void gutil_button(int x, int y, int width, int height,
 
 void gutil_button_update() {
 	int dx = 0, dy = 0;
-	if (input_pressed(IB_GUI_RIGHT, 0))
+	if (input_pressed(IB_GUI_RIGHT, button_player))
 		dx = 1;
-	else if (input_pressed(IB_GUI_LEFT, 0))
+	else if (input_pressed(IB_GUI_LEFT, button_player))
 		dx = -1;
-	else if (input_pressed(IB_GUI_DOWN, 0))
+	else if (input_pressed(IB_GUI_DOWN, button_player))
 		dy = 1;
-	else if (input_pressed(IB_GUI_UP, 0))
+	else if (input_pressed(IB_GUI_UP, button_player))
 		dy = -1;
 
 	if (dx == 0 && dy == 0)

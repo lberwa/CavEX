@@ -8,11 +8,17 @@
 * -----------------------------------------------------------------------------
 */
 #include "buffer.h"
+#include "nbt.h" /* nbt_malloc/nbt_realloc/nbt_free_mem + nbt_arena_is_active */
 
 #include <assert.h>
 #include <stdlib.h>
 #include <stddef.h>
 #include <string.h>
+
+/* Im Arena-Modus (churn-freies Chunk-Laden) wird der Dekomprimierungs-Puffer
+ * EINMAL fest gross belegt (kein realloc-Wachstum, das den Heap fragmentiert).
+ * Reicht fuer einen dekomprimierten Chunk-NBT. */
+#define BUFFER_ARENA_CAP (384 * 1024)
 
 #ifdef __GNUC__
 #define likely(x)   __builtin_expect(!!(x), 1)
@@ -26,10 +32,11 @@ static int lazy_init(struct buffer* b)
 {
     assert(b->data == NULL);
 
-    size_t cap = 1024;
+    /* Arena-Modus: einmalig gross belegen -> nie realloc (fragmentierungsfrei). */
+    size_t cap = nbt_arena_is_active() ? BUFFER_ARENA_CAP : 1024;
 
     *b = (struct buffer) {
-        .data = malloc(cap),
+        .data = nbt_malloc(cap),
         .len  = 0,
         .cap  = cap
     };
@@ -44,7 +51,7 @@ void buffer_free(struct buffer* b)
 {
     assert(b);
 
-    free(b->data);
+    nbt_free_mem(b->data); /* im Arena-Modus No-Op */
 
     b->data = NULL;
     b->len = 0;
@@ -62,10 +69,16 @@ int buffer_reserve(struct buffer* b, size_t reserved_amount)
     if(likely(b->cap >= reserved_amount))
         return 0;
 
+    /* Arena-Modus: die feste Kapazitaet kann nicht wachsen. Reicht sie nicht,
+     * sauber scheitern (Chunk-Load faellt dann fehl -> naechster Tick). */
+    if(nbt_arena_is_active())
+        return 1;
+
+    size_t old_cap = b->cap;
     while(b->cap < reserved_amount)
         b->cap *= 2;
 
-    unsigned char* temp = realloc(b->data, b->cap);
+    unsigned char* temp = nbt_realloc(b->data, old_cap, b->cap);
 
     if(unlikely(temp == NULL))
         return buffer_free(b), 1;

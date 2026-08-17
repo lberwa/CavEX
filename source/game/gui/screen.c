@@ -149,6 +149,19 @@ void screen_set_player(int player, struct screen* s) {
 	gstate.player_screens[player] = s;
 	gstate_set_capture_input_player(player, s == &screen_ingame);
 	screen_reset_player_context(player, s);
+#ifdef SPLITSCREEN
+	/* Der Reset (z.B. screen_ingame_reset) ruft ggf. gstate_set_capture_input_all
+	 * auf und überschreibt dabei den Zustand der anderen Spieler. Danach den
+	 * korrekten Zustand für alle anderen Spieler wiederherstellen. */
+	if(splitscreen_enabled()) {
+		int count = splitscreen_player_count();
+		for(int i = 0; i < count; i++) {
+			if(i != player)
+				gstate_set_capture_input_player(i,
+					screen_get_player(i) == &screen_ingame);
+		}
+	}
+#endif
 }
 
 struct screen* screen_get_player(int player) {

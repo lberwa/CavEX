@@ -33,13 +33,29 @@ struct server_chunk {
 	uint8_t* lighting_torch;
 	uint8_t* heightmap;
 	bool modified;
+	/* true NUR bei echten Spieler-Blockaenderungen. Rein generierte (oder von
+	 * Disk geladene) Chunks haben needs_save=false und koennen beim Entladen
+	 * ohne Save/malloc verworfen werden -> bricht den OOM-Deadlock (Speichern
+	 * braucht Speicher, den es unter RAM-Druck nicht gibt). Generierte Chunks
+	 * regenerieren identisch aus dem Seed, gehen also nicht verloren. */
+	bool needs_save;
 	/* Anzahl Bloecke mit onWorldTick in diesem Chunk. server_world_tick()
 	 * ueberspringt den 16x16x128-Scan komplett wenn tick_count == 0.
 	 * tick_valid wird bei jeder Blockaenderung invalidiert und beim naechsten
 	 * Tick lazy neu gezaehlt. Neue Chunks starten mit {0} -> nicht valid. */
 	bool tick_valid;
 	uint16_t tick_count;
+	/* Herkunft der Puffer: true = aus dem vorab allozierten Chunk-Pool (Slot
+	 * pool_slot), false = per malloc/calloc (Disk-Load oder Pool-Fallback).
+	 * Zero-init -> from_pool=false -> free()-Pfad, korrekt für alle {0}-Chunks. */
+	bool from_pool;
+	int16_t pool_slot;
 };
+
+/* Pool-Auslastung für den Sichtweiten-Governor (server_local.c).
+ * free == Anzahl freier Slots, total == Poolgröße (0 wenn kein Pool aktiv). */
+int server_world_chunk_pool_free(void);
+int server_world_chunk_pool_total(void);
 
 enum server_world_pending_phase {
 	SERVER_WORLD_PENDING_NONE = 0,
