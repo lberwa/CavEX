@@ -25,6 +25,7 @@
 #include "../game/game_state.h"
 #include "../network/server_local.h"
 #include "../network/server_interface.h"
+#include "../item/inventory.h"
 #include "entity.h"
 
 #define EYE_HEIGHT 1.62F
@@ -272,6 +273,84 @@ static bool entity_tick(struct entity* e) {
 			return false; // skip walking physics when riding
 		}
 		dict_entity_next(it);
+	}
+
+	// BOAT CONTROL: while mounted (client boat passenger_id == our id), forward
+	// the steer intent to the SERVER-authoritative boat via SRPC_BOAT_CONTROL and
+	// ride along by snapping the camera onto the (server-synced) hull. The physics
+	// run only on the server; the client interpolates -> smooth, correct speed,
+	// no client/server tug-of-war (which caused the jitter + slowdown).
+	dict_entity_it_t bit;
+	dict_entity_it(bit, gstate.entities);
+	while(!dict_entity_end_p(bit)) {
+		dict_entity_itref_t* bref = dict_entity_ref(bit);
+		struct entity* boat = bref->value;
+		// Rider is stored as (id + 1); see the note in entity_boat.c onRightClick.
+		// This keeps an empty boat (passenger_id == 0) from matching player id 0.
+		if(boat && boat->type == ENTITY_BOAT
+		   && boat->data.boat.passenger_id == e->id + 1) {
+
+			// Only read steer input when input is captured, i.e. no GUI is open.
+			// Otherwise the boat keeps responding to WASD while the inventory or
+			// game menu is up.
+			int forward = 0, turn = 0;
+			bool powered = false, dismount = false;
+			if(e->data.local_player.capture_input) {
+				if(input_held(IB_FORWARD, player_index))  forward += 1;
+				if(input_held(IB_BACKWARD, player_index)) forward -= 1;
+				if(input_held(IB_RIGHT, player_index))     turn += 1;
+				if(input_held(IB_LEFT, player_index))      turn -= 1;
+
+				// Motor (issue #33): powered while the selected hotbar item is the
+				// boat motor. Computed client-side and sent along, so a plain boat
+				// and a motorised one are genuinely different in behaviour.
+				struct item_data held;
+				powered
+					= inventory_get_hotbar_item(
+						  windowc_get_latest(gstate_windows()[WINDOWC_INVENTORY]),
+						  &held)
+					&& held.id == ITEM_MOTOR;
+
+				dismount = input_pressed(IB_JUMP, player_index)
+						|| input_pressed(IB_SNEAK, player_index);
+			}
+
+			// Drive the CLIENT boat (the one that is rendered and runs its own
+			// physics client-side, since CRPC_ENTITY_MOVE is disabled here).
+			boat->data.boat.control_forward = forward;
+			boat->data.boat.control_turn = turn;
+			boat->data.boat.powered = powered;
+
+			// Also forward to the server copy so it stays in sync (used e.g. for
+			// the item drop position when the hull is destroyed).
+			svin_rpc_send(&(struct server_rpc) {
+				RPC_PLAYER_ID(player_index)
+				.type = SRPC_BOAT_CONTROL,
+				.payload.boat_control.entity_id = boat->id,
+				.payload.boat_control.forward = forward,
+				.payload.boat_control.turn = turn,
+				.payload.boat_control.dismount = dismount,
+				.payload.boat_control.powered = powered,
+			});
+
+			if(dismount) {
+				boat->data.boat.passenger_id = 0;
+				boat->rightClickText = "Ride";
+				e->pos[1] += 1.2f;
+			} else {
+				// Ride along: copy BOTH pos_old and pos from the hull so the
+				// camera interpolates in lockstep with the boat. Setting
+				// pos_old = pos instead (no interpolation gap) makes the camera
+				// jump in 20 Hz steps while the boat renders at 60 Hz -> jitter.
+				glm_vec3_copy(boat->pos_old, e->pos_old);
+				glm_vec3_copy(boat->pos, e->pos);
+				e->pos_old[1] += 1.0f;
+				e->pos[1] += 1.0f;
+			}
+
+			return false; // skip walking physics when riding
+		}
+		dict_entity_next(bit);
 	}
 
 	// ---------- normal player physics ----------

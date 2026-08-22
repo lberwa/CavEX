@@ -443,10 +443,19 @@ static void render_single(struct particle* p, vec3 camera, float delta) {
         u1 = u0 + (4.0f / atlas_size);
         v1 = v0 + (4.0f / atlas_size);
     } else {
-        u0 = (float)TEX_OFFSET(TEXTURE_X(tile)) / (float)texture_particles.width;
-        v0 = (float)TEX_OFFSET(TEXTURE_Y(tile)) / (float)texture_particles.height;
-        u1 = u0 + (16.0f / (float)texture_particles.width);
-        v1 = v0 + (16.0f / (float)texture_particles.height);
+        // Use particle-atlas layout (different stride/padding/columns from terrain).
+        uint16_t pcols    = tex_atlas_particle_columns();
+        uint16_t pstride  = tex_atlas_particle_stride();
+        uint16_t ppad     = tex_atlas_particle_padding();
+        uint16_t ptile_sz = pstride - 2 * (pstride > 8 ? 1 : 0); // tile pixels
+        // For particles.png: border_scale = width/256 = 128/256 = 0, so ptile_sz = pstride
+        ptile_sz = pstride; // no border on particle atlas
+        float pw = (float)texture_particles.width;
+        float ph = (float)texture_particles.height;
+        u0 = (float)((tile % pcols) * pstride + ppad) / pw;
+        v0 = (float)((tile / pcols) * pstride + ppad) / ph;
+        u1 = u0 + (float)ptile_sz / pw;
+        v1 = v0 + (float)ptile_sz / ph;
     }
 
     // Lookup world light at the particle's block position

@@ -5037,6 +5037,19 @@ size_t render_block_layer(struct displaylist* d, struct block_info* this,
 	return 1;
 }
 
+/* End Portal Frame: 13/16 block height (208/256 units). */
+size_t render_block_portal_frame(struct displaylist* d, struct block_info* this,
+								 enum side side, struct block_info* it,
+								 uint8_t* vertex_light, bool count_only) {
+	if(!count_only)
+		render_block_side(
+			d, W2C_COORD(this->x), W2C_COORD(this->y), W2C_COORD(this->z), 0,
+			208, blocks[this->block->type]->getTextureIndex(this, side),
+			blocks[this->block->type]->luminance, true, 0, false, 0, side,
+			vertex_light);
+	return 1;
+}
+
 size_t render_block_slab(struct displaylist* d, struct block_info* this,
 						 enum side side, struct block_info* it,
 						 uint8_t* vertex_light, bool count_only) {

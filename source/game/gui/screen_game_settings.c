@@ -35,6 +35,8 @@ enum { // Buttons
 	QUIT,
 	SET_GAMEMODE_PLAYER_ONE,
     SET_GAMEMODE_PLAYER_TWO,
+    VIEW_DISTANCE_DEC,
+    VIEW_DISTANCE_INC,
 };
 
 static int8_t menu;
@@ -79,6 +81,16 @@ static void set(int s) {
 			});
 		}
 		break;
+
+		case VIEW_DISTANCE_DEC:
+		if (gstate.settings.view_distance > MIN_VIEW_DISTANCE)
+			gstate.settings.view_distance--;
+		break;
+
+		case VIEW_DISTANCE_INC:
+		if (gstate.settings.view_distance < MAX_VIEW_DISTANCE)
+			gstate.settings.view_distance++;
+		break;
 	}
 }
 
@@ -111,6 +123,8 @@ static void screen_gsettings_render2D(struct screen* s, int width, int height) {
 
 		default: // MAIN
         {
+			gutil_button(width/2 - 70, height/2 - 30, 50, 50, "-", &set, VIEW_DISTANCE_DEC, 0, 0);
+			gutil_button(width/2 + 20, height/2 - 30, 50, 50, "+", &set, VIEW_DISTANCE_INC, 1, 0);
 			gutil_button(width/2 - 350, height/2 + 50, 300, 50, "Game mode", &choose, GAMEMODE, 0, 1);
 			gutil_button(width/2 + 50,  height/2 + 50, 300, 50, "Back", &set, QUIT, 1, 1);
         }
@@ -123,6 +137,10 @@ static void screen_gsettings_render2D(struct screen* s, int width, int height) {
 		gutil_text(width/2 - 150, height/2 - 78, "Creative:", 26, true);
 		gutil_text(width/2 - 150, height/2 - 32, "Player 1:", 16, true);
 		gutil_text(width/2 +  50, height/2 - 32, "Player 2:", 16, true);
+	} else { // MAIN
+		char vd[28];
+		snprintf(vd, sizeof(vd), "View distance: %d", gstate.settings.view_distance);
+		gutil_text(width/2 - 200, height/2 - 70, vd, 20, true);
 	}
 
 	if(avaiable) {

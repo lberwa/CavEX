@@ -363,6 +363,147 @@ static void server_local_try_spawn_nearby_dark_monster(struct server_local* s,
 }
 
 
+/* ---- Nether portal helpers -------------------------------------------- */
+
+#define PORTAL_MAX_SIDE 22  /* max interior dimension in each axis */
+
+static bool portal_scan_axis(struct server_local* s,
+                              int sx, int sy, int sz,
+                              int hdx, int hdz) {
+	struct block_data blk;
+
+	/* find vertical bounds (y) starting from sy */
+	int y_min = sy, y_max = sy;
+	while(y_min > 0) {
+		if(!server_world_get_block(&s->world, sx, y_min - 1, sz, &blk)
+		   || blk.type != BLOCK_AIR)
+			break;
+		if(sy - (--y_min) > PORTAL_MAX_SIDE)
+			return false;
+	}
+	while(y_max < WORLD_HEIGHT - 1) {
+		if(!server_world_get_block(&s->world, sx, y_max + 1, sz, &blk)
+		   || blk.type != BLOCK_AIR)
+			break;
+		if((++y_max) - sy > PORTAL_MAX_SIDE)
+			return false;
+	}
+
+	/* find horizontal bounds along (hdx, hdz) starting from h=0 */
+	int h_min = 0, h_max = 0;
+	while(true) {
+		int nh = h_min - 1;
+		if(!server_world_get_block(&s->world, sx + hdx * nh, sy, sz + hdz * nh, &blk)
+		   || blk.type != BLOCK_AIR)
+			break;
+		h_min = nh;
+		if(-h_min > PORTAL_MAX_SIDE)
+			return false;
+	}
+	while(true) {
+		int nh = h_max + 1;
+		if(!server_world_get_block(&s->world, sx + hdx * nh, sy, sz + hdz * nh, &blk)
+		   || blk.type != BLOCK_AIR)
+			break;
+		h_max = nh;
+		if(h_max > PORTAL_MAX_SIDE)
+			return false;
+	}
+
+	int width  = h_max - h_min + 1;
+	int height = y_max - y_min + 1;
+	if(width < 2 || height < 3)
+		return false;
+
+	/* verify top/bottom border = obsidian */
+	for(int h = h_min; h <= h_max; h++) {
+		int nx = sx + hdx * h, nz = sz + hdz * h;
+		if(!server_world_get_block(&s->world, nx, y_min - 1, nz, &blk)
+		   || blk.type != BLOCK_OBSIDIAN)
+			return false;
+		if(!server_world_get_block(&s->world, nx, y_max + 1, nz, &blk)
+		   || blk.type != BLOCK_OBSIDIAN)
+			return false;
+	}
+
+	/* verify left/right border = obsidian, interior = air */
+	for(int y = y_min; y <= y_max; y++) {
+		if(!server_world_get_block(&s->world, sx + hdx * (h_min - 1), y,
+		                           sz + hdz * (h_min - 1), &blk)
+		   || blk.type != BLOCK_OBSIDIAN)
+			return false;
+		if(!server_world_get_block(&s->world, sx + hdx * (h_max + 1), y,
+		                           sz + hdz * (h_max + 1), &blk)
+		   || blk.type != BLOCK_OBSIDIAN)
+			return false;
+		for(int h = h_min; h <= h_max; h++) {
+			if(!server_world_get_block(&s->world, sx + hdx * h, y,
+			                           sz + hdz * h, &blk)
+			   || blk.type != BLOCK_AIR)
+				return false;
+		}
+	}
+
+	/* valid frame — fill interior with portal blocks */
+	uint8_t meta = (hdx != 0) ? 1 : 0;
+	for(int y = y_min; y <= y_max; y++) {
+		for(int h = h_min; h <= h_max; h++) {
+			server_world_set_block(s, sx + hdx * h, y, sz + hdz * h,
+			                       (struct block_data) {
+			                           .type        = BLOCK_PORTAL,
+			                           .metadata    = meta,
+			                           .sky_light   = 0,
+			                           .torch_light = 0,
+			                       });
+		}
+	}
+	return true;
+}
+
+bool server_local_try_portal(struct server_local* s, int x, int y, int z) {
+	return portal_scan_axis(s, x, y, z, 1, 0)
+	    || portal_scan_axis(s, x, y, z, 0, 1);
+}
+
+void server_local_collapse_portal(struct server_local* s, int x, int y, int z) {
+#define MAX_PORTAL_BLOCKS 600
+	int sx[MAX_PORTAL_BLOCKS], sy[MAX_PORTAL_BLOCKS], sz[MAX_PORTAL_BLOCKS];
+	int top = 0;
+
+	struct block_data blk;
+	if(!server_world_get_block(&s->world, x, y, z, &blk)
+	   || blk.type != BLOCK_PORTAL)
+		return;
+
+	sx[top] = x; sy[top] = y; sz[top] = z; top++;
+	server_world_set_block(s, x, y, z,
+	                       (struct block_data) {.type = BLOCK_AIR});
+
+	static const int dirs[6][3] = {
+	    {1,0,0},{-1,0,0},{0,1,0},{0,-1,0},{0,0,1},{0,0,-1}
+	};
+	while(top > 0) {
+		top--;
+		int cx = sx[top], cy = sy[top], cz = sz[top];
+		for(int d = 0; d < 6; d++) {
+			int nx = cx + dirs[d][0];
+			int ny = cy + dirs[d][1];
+			int nz = cz + dirs[d][2];
+			if(!server_world_get_block(&s->world, nx, ny, nz, &blk)
+			   || blk.type != BLOCK_PORTAL)
+				continue;
+			if(top >= MAX_PORTAL_BLOCKS)
+				continue;
+			sx[top] = nx; sy[top] = ny; sz[top] = nz; top++;
+			server_world_set_block(s, nx, ny, nz,
+			                       (struct block_data) {.type = BLOCK_AIR});
+		}
+	}
+#undef MAX_PORTAL_BLOCKS
+}
+
+/* ----------------------------------------------------------------------- */
+
 struct entity* server_local_spawn_minecart(vec3 pos, struct server_local* s) {
     uint32_t entity_id = entity_gen_id(s->entities);
     struct entity** e_ptr = dict_entity_safe_get(s->entities, entity_id);
@@ -390,6 +531,65 @@ struct entity* server_local_spawn_minecart(vec3 pos, struct server_local* s) {
         .type = CRPC_SPAWN_MINECART,
         .payload.spawn_minecart.entity_id = e->id,
         .payload.spawn_minecart.pos       = { pos[0], pos[1], pos[2] },
+    });
+
+    return e;
+}
+
+struct entity* server_local_spawn_fishing_hook(vec3 pos, float rx, float ry,
+                                               uint32_t owner_id,
+                                               struct server_local* s) {
+    uint32_t entity_id = entity_gen_id(s->entities);
+    struct entity** e_ptr = dict_entity_safe_get(s->entities, entity_id);
+    *e_ptr = malloc(sizeof(struct entity));
+    struct entity* e = *e_ptr;
+    assert(e);
+
+    entity_fishing_hook(entity_id, e, true, &s->world);
+    e->teleport(e, pos);
+
+    // Throw in the direction the player is looking. rx = pitch (degrees,
+    // positive = down), ry = yaw (degrees). Matches server_local_spawn_item.
+    float rxr = glm_rad(-rx);
+    float ryr = glm_rad(ry + 90.0f);
+    float speed = 0.5f;
+    e->vel[0] = sinf(rxr) * sinf(ryr) * speed;
+    e->vel[1] = cosf(ryr) * speed;
+    e->vel[2] = cosf(rxr) * sinf(ryr) * speed;
+
+    e->data.fishing_hook.owner_id = owner_id;
+
+    clin_rpc_send(&(struct client_rpc) {
+        .type = CRPC_SPAWN_FISHING_HOOK,
+        .payload.spawn_fishing_hook.entity_id = e->id,
+        .payload.spawn_fishing_hook.owner_id  = owner_id,
+        .payload.spawn_fishing_hook.pos       = {pos[0], pos[1], pos[2]},
+        .payload.spawn_fishing_hook.vel_x     = e->vel[0],
+        .payload.spawn_fishing_hook.vel_y     = e->vel[1],
+        .payload.spawn_fishing_hook.vel_z     = e->vel[2],
+    });
+
+    return e;
+}
+
+struct entity* server_local_spawn_boat(vec3 pos, float yaw,
+                                       struct server_local* s) {
+    uint32_t entity_id = entity_gen_id(s->entities);
+    struct entity** e_ptr = dict_entity_safe_get(s->entities, entity_id);
+    *e_ptr = malloc(sizeof(struct entity));
+    struct entity* e = *e_ptr;
+    assert(e);
+
+    entity_boat(entity_id, e, true, &s->world);
+    e->teleport(e, pos);
+    e->data.boat.yaw = yaw;
+    e->orient[0] = yaw;
+
+    clin_rpc_send(&(struct client_rpc) {
+        .type = CRPC_SPAWN_BOAT,
+        .payload.spawn_boat.entity_id = e->id,
+        .payload.spawn_boat.pos       = { pos[0], pos[1], pos[2] },
+        .payload.spawn_boat.yaw       = yaw,
     });
 
     return e;
@@ -805,6 +1005,19 @@ static void server_local_process(struct server_rpc* call, void* user) {
 											   .metadata = 0,
 										   });
 
+					/* collapse any nether portal attached to broken obsidian */
+					if(blk.type == BLOCK_OBSIDIAN) {
+						static const int ndirs[6][3] = {
+						    {1,0,0},{-1,0,0},{0,1,0},{0,-1,0},{0,0,1},{0,0,-1}
+						};
+						for(int _d = 0; _d < 6; _d++)
+							server_local_collapse_portal(
+							    s,
+							    call->payload.block_dig.x + ndirs[_d][0],
+							    call->payload.block_dig.y + ndirs[_d][1],
+							    call->payload.block_dig.z + ndirs[_d][2]);
+					}
+
 					struct item_data it_data;
 					bool has_tool = inventory_get_hotbar_item(
 						&player->inventory, &it_data);
@@ -980,6 +1193,10 @@ static void server_local_process(struct server_rpc* call, void* user) {
 		        vec3 pos = { e->pos[0], e->pos[1], e->pos[2] };
 		        server_local_spawn_item(pos, &e->data.minecart.item, true, s);
 		        e->delay_destroy = 0;
+		      } else if (e->type == ENTITY_BOAT) {
+		        vec3 pos = { e->pos[0], e->pos[1], e->pos[2] };
+		        server_local_spawn_item(pos, &e->drop_item, true, s);
+		        e->delay_destroy = 0;
 		      } else if (e->type == ENTITY_MONSTER) {
 		        e->data.monster.fuse = 30;
 		        e->ai_state = AI_FUSE;
@@ -987,6 +1204,108 @@ static void server_local_process(struct server_rpc* call, void* user) {
 		    }
 		  }
 		  break;
+		case SRPC_BOAT_CONTROL: {
+		  // Apply the rider's steer/throttle to the server boat. The boat's own
+		  // tick_server integrates it; here we just latch the inputs so the
+		  // server stays authoritative over the motion (client only interpolates).
+		  struct entity** ep = dict_entity_get(
+		      s->entities, call->payload.boat_control.entity_id);
+		  if (ep && *ep && (*ep)->type == ENTITY_BOAT) {
+		    struct entity* e = *ep;
+		    if (call->payload.boat_control.dismount) {
+		      e->data.boat.passenger_id = 0;
+		      e->data.boat.control_forward = 0;
+		      e->data.boat.control_turn = 0;
+		      e->data.boat.powered = false;
+		    } else {
+		      e->data.boat.passenger_id = 1; // marker: ridden
+		      e->data.boat.control_forward = call->payload.boat_control.forward;
+		      e->data.boat.control_turn = call->payload.boat_control.turn;
+		      e->data.boat.powered = call->payload.boat_control.powered;
+		    }
+		  }
+		} break;
+		case SRPC_ITEM_USE: {
+		  // Right-click use with no block/entity target (e.g. drinking milk).
+		  struct item_data it_data;
+		  if(inventory_get_hotbar_item(&player->inventory, &it_data)) {
+		    struct item* it = item_get(&it_data);
+		    if(it && it_data.id == ITEM_MILK_BUCKET && it->onItemPlace) {
+		      it->onItemPlace(s, &it_data, NULL, NULL, SIDE_TOP);
+		    } else if(it && it_data.id == ITEM_FISHING_ROD) {
+		      // Cast or reel: find an existing hook owned by this player.
+		      uint32_t owner_key = (uint32_t)pid + 1;
+		      uint32_t existing_id = 0;
+		      bool has_bite = false;
+		      struct item_data catch_item = {.id = 0};
+
+		      vec3 hook_pos_found = {0, 0, 0};
+		      dict_entity_it_t eit;
+		      dict_entity_it(eit, s->entities);
+		      while(!dict_entity_end_p(eit)) {
+		        struct entity* ent = dict_entity_ref(eit)->value;
+		        if(ent && ent->type == ENTITY_FISHING_HOOK
+		           && ent->data.fishing_hook.owner_id == owner_key) {
+		          existing_id  = ent->id;
+		          has_bite     = ent->data.fishing_hook.has_bite;
+		          catch_item   = ent->data.fishing_hook.catch_item;
+		          glm_vec3_copy(ent->pos, hook_pos_found);
+		          break;
+		        }
+		        dict_entity_next(eit);
+		      }
+
+		      if(existing_id) {
+		        // Reel in: spawn the catch if there was a bite.
+		        if(has_bite && catch_item.id != 0)
+		          server_local_spawn_item(hook_pos_found, &catch_item,
+		                                  false, s);
+
+		        // Destroy the hook (server + client).
+		        struct entity** ep = dict_entity_get(s->entities, existing_id);
+		        if(ep) free(*ep);
+		        dict_entity_erase(s->entities, existing_id);
+		        clin_rpc_send(&(struct client_rpc) {
+		          .type = CRPC_ENTITY_DESTROY,
+		          .payload.entity_destroy.entity_id = existing_id,
+		        });
+		      } else {
+		        // Cast: spawn a new hook from the player's eye.
+		        vec3 hook_pos = {
+		            (float)player->x,
+		            (float)player->y + 0.6f,
+		            (float)player->z,
+		        };
+		        server_local_spawn_fishing_hook(hook_pos,
+		                                        player->rx, player->ry,
+		                                        owner_key, s);
+		      }
+
+		      // Reduce rod durability by 1 on each cast or reel-in.
+		      // If it breaks, clear the hotbar slot.
+		      {
+		        const size_t hotbar_rel = inventory_get_hotbar(&player->inventory);
+		        const size_t slot_abs   = INVENTORY_SLOT_HOTBAR + hotbar_rel;
+		        struct item_data rod_it;
+		        inventory_get_hotbar_item(&player->inventory, &rod_it);
+		        struct item* rod = item_get(&rod_it);
+		        if(rod && rod->has_damage) {
+		          rod_it.durability++;
+		          if(rod_it.durability >= rod->max_damage)
+		            rod_it = (struct item_data) {0}; // broken
+		          inventory_set_slot(&player->inventory, slot_abs, rod_it);
+		          set_inv_slot_t dura_changes;
+		          set_inv_slot_init(dura_changes);
+		          set_inv_slot_push(dura_changes, slot_abs);
+		          server_local_send_inv_changes(pid, dura_changes,
+		                                        &player->inventory,
+		                                        WINDOWC_INVENTORY);
+		          set_inv_slot_clear(dura_changes);
+		        }
+		      }
+		    }
+		  }
+		} break;
 		case SRPC_PLAYER_ATTACK:
 #ifdef SPLITSCREEN
 		  if(call->payload.player_attack.target_player_id < splitscreen_player_count()
@@ -1339,14 +1658,14 @@ static void server_local_update(struct server_local* s) {
 		u32 mem2_mb = mem2_free / (1024u * 1024u);
 
 		/* free_mb = GESAMTER wiederverwendbarer Speicher (Free-List + Arenen).
-		 * Die Free-List ist auch dann nutzbar, wenn sie nach dem Heap-Wachstum
-		 * in MEM2 physisch in MEM1 liegt -> nur MEM2 zu zaehlen wuerde 30MB+
-		 * nutzbaren Speicher ignorieren und cap grundlos auf 8 wuergen.
-		 * mem2_mb ist nur ein WAECHTER: neue Chunks/hoeheres vd duerfen nicht
-		 * gegen eine fast leere MEM2-Arena anlaufen (Wachstum koennte Arena
-		 * brauchen, die es nicht mehr gibt). Der Overshoot bis vd=5 ist jetzt
-		 * ueber MAX_VIEW_DISTANCE=3 gedeckelt. */
-		if(free_mb >= 8 && mem2_mb >= 2 && g_chunk_cap < SERVER_CHUNK_HARD_CAP) {
+		 * Das ist das relevante Mass: nach den Pools (Server-Chunk, Client-Block,
+		 * Transfer) und der NBT-Arena braucht das Nachladen KEINE grosse
+		 * zusammenhaengende Allokation aus der MEM2-Arena mehr -> die Free-List
+		 * (auch wenn sie physisch in MEM2 liegt) bedient es. Darum steuert der
+		 * Governor nur nach free_mb; die alte mem2arena>=2-Sperre hat den
+		 * gewuenschten vd-Wert grundlos ignoriert, obwohl 28MB frei waren.
+		 * Echte Allokationsfehler faengt der OOM-Handler (senkt cap hart) ab. */
+		if(free_mb >= 8 && g_chunk_cap < SERVER_CHUNK_HARD_CAP) {
 			g_chunk_cap += 8;
 			if(g_chunk_cap > SERVER_CHUNK_HARD_CAP)
 				g_chunk_cap = SERVER_CHUNK_HARD_CAP;
@@ -1354,22 +1673,45 @@ static void server_local_update(struct server_local* s) {
 			g_chunk_cap -= 4;
 		}
 
-		if(lc > (size_t)(g_chunk_cap * 92 / 100) && vd > 1) {
+		/* Vom Spieler gewuenschte Sichtweite als Obergrenze (nie ueber die harte
+		 * MAX_VIEW_DISTANCE). Kleiner gestellt -> beide Splitscreen-Spieler
+		 * passen sicher in die Chunk-Grenze, kein vd-Pumpen das Spieler 2 die
+		 * Chunks wegnimmt. */
+		int user_vd = gstate.settings.view_distance;
+		if(user_vd < MIN_VIEW_DISTANCE) user_vd = MIN_VIEW_DISTANCE;
+		if(user_vd > MAX_VIEW_DISTANCE) user_vd = MAX_VIEW_DISTANCE;
+
+		if(vd > user_vd) {
+			/* Setting wurde gesenkt -> sofort darauf klemmen. */
+			g_effective_view_distance = user_vd;
+		} else if(free_mb < 6 && vd > MIN_VIEW_DISTANCE) {
+			/* vd nur bei ECHTEM Speicherdruck senken (freier Speicher knapp),
+			 * NICHT blos weil die Chunk-Zahl den Cap kratzt. Sonst schrumpft die
+			 * gewuenschte Sichtweite, obwohl noch RAM frei ist (dein Fall: 28MB
+			 * frei, Wert ignoriert). Die Chunk-Zahl deckelt separat der harte
+			 * Lade-Stopp (chunks >= g_chunk_cap) -> bei zwei getrennten Spielern
+			 * fehlen am Rand hoechstens ein paar Chunks, statt beiden die Sicht
+			 * zu kuerzen. */
 			g_effective_view_distance--;
 			vd_cooldown = 60; /* 3 s Sperre -> kein Pumpen */
-			CDBG("[VD] Druck (%zu/%d, %uMB frei, MEM2=%uMB) -> vd=%d\n",
+			CDBG("[VD] RAM-Druck (%zu/%d, %uMB frei, MEM2=%uMB) -> vd=%d\n",
 				 lc, g_chunk_cap, free_mb, mem2_mb, g_effective_view_distance);
-		} else if(free_mb >= 10 && mem2_mb >= 2
+		} else if(free_mb >= 10
 				  && lc < (size_t)(g_chunk_cap * 60 / 100)
-				  && vd_cooldown == 0 && vd < MAX_VIEW_DISTANCE) {
+				  && vd_cooldown == 0 && vd < user_vd) {
 			g_effective_view_distance++;
 			CDBG("[VD] Luft (%zu/%d, %uMB frei, MEM2=%uMB) -> vd=%d\n",
 				 lc, g_chunk_cap, free_mb, mem2_mb, g_effective_view_distance);
 		}
 	}
 #else
-	/* PC: keine RAM-Begrenzung, immer volle Sichtweite. */
-	g_effective_view_distance = MAX_VIEW_DISTANCE;
+	/* PC: keine RAM-Begrenzung, aber die gewuenschte Sichtweite respektieren. */
+	{
+		int user_vd = gstate.settings.view_distance;
+		if(user_vd < MIN_VIEW_DISTANCE) user_vd = MIN_VIEW_DISTANCE;
+		if(user_vd > MAX_VIEW_DISTANCE) user_vd = MAX_VIEW_DISTANCE;
+		g_effective_view_distance = user_vd;
+	}
 #endif
 
 	bool vd_shrank = g_effective_view_distance < vd_prev;
@@ -1444,17 +1786,21 @@ static void server_local_update(struct server_local* s) {
 		if(max_allowed > (size_t)g_chunk_cap)
 			max_allowed = (size_t)g_chunk_cap;
 
-		if(loaded_chunks <= max_allowed) {
-			/* Avoid unload thrash when we're already under the target budget. */
+		if(loaded_chunks == 0) {
 			goto unload_done;
 		}
 
-		/* Wenn vd gerade gesunken ist: alle out-of-range Chunks sofort entladen.
-		 * Sonst: bis zu 8 weiteste pro Tick (skaliert mit Überschuss). */
-		size_t over = loaded_chunks - max_allowed;
+		/* WICHTIG: Chunks AUSSERHALB der Sichtweite beider Spieler (d > vd^2)
+		 * werden IMMER entladen -- auch wenn loaded == cap. Frueher lief die
+		 * Eviction nur bei loaded > max_allowed; bei loaded == cap blieben
+		 * veraltete (out-of-range) Chunks liegen und belegten das Budget, sodass
+		 * ein laufender Spieler seine fehlenden In-Range-Chunks nicht mehr laden
+		 * konnte (P1 missing=30 trotz freiem RAM). Nur die Rate skaliert mit dem
+		 * Ueberschuss; unter Cap raeumen wir mit einer Basisrate zuegig auf. */
+		size_t over = loaded_chunks > max_allowed ? loaded_chunks - max_allowed : 0;
 		int evict_limit = vd_shrank ? (int)loaded_chunks
-		                : over > 4 * max_allowed ? 8
-		                : over > 2 * max_allowed ? 4 : 1;
+		                : over > 4 * max_allowed ? 16
+		                : over > 2 * max_allowed ? 8 : 8;
 
 		/* Kandidaten sammeln (Iteration vor Eviction, da dict-Änderung
 		 * während Iteration nicht sicher ist). MAX_CHUNKS als obere Grenze.
@@ -1842,6 +2188,11 @@ unload_done:
 			.payload.gamemode.creative = s->players[0].creative,
 		});
 		clin_rpc_send(&(struct client_rpc) {
+			.type = CRPC_SPAWN_POINT,
+			.payload.spawn_point.x = s->players[0].spawn_x,
+			.payload.spawn_point.z = s->players[0].spawn_z,
+		});
+		clin_rpc_send(&(struct client_rpc) {
 			.type = CRPC_WORLD_LOADED,
 		});
 	}
@@ -1907,6 +2258,11 @@ unload_done:
 		s->player.finished_loading = true;
 
 		/* spawn area is loaded and the hotbar was sent -> start the game */
+		clin_rpc_send(&(struct client_rpc) {
+			.type = CRPC_SPAWN_POINT,
+			.payload.spawn_point.x = s->player.spawn_x,
+			.payload.spawn_point.z = s->player.spawn_z,
+		});
 		clin_rpc_send(&(struct client_rpc) {
 			.type = CRPC_WORLD_LOADED,
 		});

@@ -33,7 +33,9 @@ enum entity_type {
 	ENTITY_LOCAL_PLAYER,
 	ENTITY_ITEM,
 	ENTITY_MONSTER,
-	ENTITY_MINECART
+	ENTITY_MINECART,
+	ENTITY_BOAT,
+	ENTITY_FISHING_HOOK
 };
 
 enum ai_state {
@@ -124,6 +126,23 @@ struct entity {
 			struct item_data item;   // houdt id, count, durability
 
         } minecart;
+		struct entity_fishing_hook {
+			uint32_t owner_id;      // (player.id + 1), 0 = no owner
+			int wait_ticks;         // countdown to bite (set on first water tick)
+			bool in_water;          // currently inside a water block
+			bool has_bite;          // bite triggered; catch_item is valid
+			struct item_data catch_item; // item awarded on reel-in
+		} fishing_hook;
+		struct entity_boat {
+			float yaw;			   // heading in radians (server-authoritative)
+			uint32_t passenger_id; // non-zero while a player is aboard
+			bool in_water;		   // set by the server tick (buoyancy state)
+			int control_forward;   // last steer intent -1/0/+1 (server only)
+			int control_turn;	   // last turn  intent -1/0/+1 (server only)
+			bool powered; // motor engaged this tick: cruise forward on its own
+						  // (issue #33). Set from the rider's held motor item,
+						  // cleared on dismount. Runtime state only.
+		} boat;
 	} data;
 };
 
@@ -146,6 +165,42 @@ void entity_monster(uint32_t id, struct entity* e, bool server, void* world,
 				 int monster_id);
 
 void entity_minecart(uint32_t id, struct entity* e, bool server, void* world);
+
+// Rideable boat (issue #34). Same constructor shape as entity_item: wires the
+// tick/render/teleport callbacks and tags the entity ENTITY_BOAT.
+void entity_boat(uint32_t id, struct entity* e, bool server, void* world);
+
+// Fishing hook / bobber projectile entity.
+void entity_fishing_hook(uint32_t id, struct entity* e, bool server,
+						 void* world);
+
+// Boat hull dimensions (blocks) and physics tuning. Shared between the server
+// tick and the render so the collision box and drawn box agree.
+#define BOAT_WIDTH 1.0F
+#define BOAT_HEIGHT 0.5F
+#define BOAT_LENGTH 2.0F
+#define BOAT_TURN_SPEED 0.06F // yaw change (rad) per tick of turn input
+#define BOAT_ACCEL 0.04F	  // forward thrust per tick along the heading
+#define BOAT_DRAG 0.9F		  // fraction of horizontal speed kept per tick
+#define BOAT_BUOYANCY 0.04F	  // upward push per tick while submerged
+#define BOAT_GRAVITY 0.04F	  // downward pull per tick while airborne
+
+// Motor (issue #33): when the motor is engaged the boat self-propels forward.
+// MOTOR_THRUST is added along the heading each tick (independent of rider input,
+// so it cruises hands-off); MOTOR_MAX_SPEED caps the resulting horizontal speed
+// so a powered boat can never outrun chunk loading and skip terrain.
+#define MOTOR_THRUST 0.06F	  // forward accel per tick while powered
+#define MOTOR_MAX_SPEED 0.35F // hard cap on horizontal speed (blocks/tick)
+
+// Pure steering math: advance the heading by the turn input, add forward thrust
+// along the new heading into the x/z velocity, then apply horizontal drag.
+// forward/turn are each -1/0/+1. No engine state, so it is unit-testable.
+void entity_boat_steer(float* yaw, vec3 vel, int forward, int turn);
+
+// Pure motor math: while `powered`, add MOTOR_THRUST along the heading into the
+// x/z velocity, then clamp the horizontal speed to MOTOR_MAX_SPEED. No engine
+// state, so it is unit-testable.
+void entity_boat_throttle(float yaw, vec3 vel, bool powered);
 
 uint32_t entity_gen_id(dict_entity_t dict);
 void entities_client_tick(dict_entity_t dict);

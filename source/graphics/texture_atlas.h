@@ -331,6 +331,13 @@ enum tex_atlas_entry {
     TEXAT_PARTICLE_DROP_FALL,
     TEXAT_PARTICLE_DROP_ROUND,
 
+	TEXAT_COMMAND_BLOCK,
+
+	TEXAT_END_PORTAL_FRAME_TOP,
+	TEXAT_END_PORTAL_FRAME_SIDE,
+	TEXAT_END_PORTAL_FRAME_BOTTOM,
+	TEXAT_END_STONE,
+
 	TEXAT_MAX,
 };
 
@@ -380,6 +387,11 @@ uint16_t tex_atlas_columns(void);
 uint16_t tex_atlas_stride(void);
 uint16_t tex_atlas_padding(void);
 uint16_t tex_atlas_size(void);
+// Particle-atlas layout (independent of terrain atlas).
+uint16_t tex_atlas_particle_columns(void);
+uint16_t tex_atlas_particle_stride(void);
+uint16_t tex_atlas_particle_padding(void);
+uint16_t tex_atlas_particle_size(void);
 /* Deprecated no-op (kept for source compatibility). Liquids now compute their
  * anim.png pixel offsets directly, avoiding a mesher/render-thread data race. */
 void tex_atlas_set_anim_geometry(bool enable);

@@ -596,6 +596,17 @@ void world_pre_render(struct world* w, struct camera* c, mat4 view) {
 	ilist_chunks_init(w->render);
 	world_bfs(w, w->render, c->x, c->y, c->z, c->frustum_planes);
 
+	/* Genebelte (ferne) Chunks muessen zuerst gerendert werden (korrektes
+	 * Blending). Die Umsortierung darf NICHT waehrend der Iteration von w->render
+	 * geschehen: ein ilist_chunks_push_front in dieselbe gerade iterierte Liste
+	 * baut sie am Kopf um und macht den Iterator-Cache ungueltig -> m-lib-Assertion
+	 * "it->current->prev == it->previous" (Absturz, sobald durch dynamischen Nebel
+	 * viele Chunks has_fog haben). Stattdessen: genebelte Chunks entfernen
+	 * (remove-waehrend-Iteration ist erlaubt) und in einer temporaeren Liste
+	 * sammeln, danach geschlossen vorn einreihen. */
+	ilist_chunks_t fogged;
+	ilist_chunks_init(fogged);
+
 	ilist_chunks_it_t it;
 	ilist_chunks_it(it, w->render);
 
@@ -606,12 +617,17 @@ void world_pre_render(struct world* w, struct camera* c, mat4 view) {
 		chunk_pre_render(c, view, has_fog);
 
 		if(has_fog) {
-			ilist_chunks_remove(w->render, it);
-			ilist_chunks_push_front(w->render, c);
+			ilist_chunks_remove(w->render, it); /* entfernt c, rueckt it vor */
+			ilist_chunks_push_back(fogged, c);  /* separate Liste -> sicher */
 		} else {
 			ilist_chunks_next(it);
 		}
 	}
+
+	/* Erst NACH der Iteration die genebelten Chunks vorn anstellen (pop_back +
+	 * push_front bewahrt ihre Reihenfolge). w->render wird dabei nicht iteriert. */
+	while(!ilist_chunks_empty_p(fogged))
+		ilist_chunks_push_front(w->render, ilist_chunks_pop_back(fogged));
 }
 
 void world_pre_render_clear(struct world* w) {

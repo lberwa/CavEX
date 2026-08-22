@@ -47,9 +47,8 @@ struct item item_pumpkin_seeds = {
 	.tool.type = TOOL_TYPE_ANY,
 	.render_data = {
 		.item = {
-			// placeholder: reuse melon seeds icon for now
-			.texture_x = 3,
-			.texture_y = 7,
+			.texture_x = 11,
+			.texture_y = 6,
 		},
 	},
 };

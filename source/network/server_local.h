@@ -38,10 +38,15 @@
  * getrennte Spieler ohnehin schon bei vd=3 je ~49 Chunks (98 > cap), hoeher
  * bringt getrennt nichts. Der PC hat kein solches Limit -> dort der urspr. Wert. */
 #ifdef PLATFORM_WII
-#define MAX_VIEW_DISTANCE 3 // in chunks, obere Grenze (Wii-RAM)
+#define MAX_VIEW_DISTANCE 7 // in chunks, obere Grenze (Wii-RAM)
 #else
-#define MAX_VIEW_DISTANCE 5 // in chunks, obere Grenze (PC)
+#define MAX_VIEW_DISTANCE 15 // in chunks, obere Grenze (PC)
 #endif
+/* Untere Grenze der Sichtweite. vd=1 (nur der eigene + 4 Nachbar-Chunks) ist ein
+ * kaputter Grenzfall: der Spieler ueberrennt beim Laufen das Nachladen sofort und
+ * das Spiel stuerzt still ins HBC. Bei 1 ist ohnehin nur ~16 Bloecke Sicht, also
+ * unspielbar -> Minimum 2 (= MAX_HIGH_DETAIL_VIEW_DISTANCE). */
+#define MIN_VIEW_DISTANCE 2
 #define MAX_HIGH_DETAIL_VIEW_DISTANCE 2
 
 /* Harte Obergrenze gleichzeitig geladener Server-Chunks (Wii-RAM-Schutz).
@@ -191,7 +196,17 @@ struct server_local {
 };
 
 void server_local_create(struct server_local* s);
+bool server_local_try_portal(struct server_local* s, int x, int y, int z);
+void server_local_collapse_portal(struct server_local* s, int x, int y, int z);
 struct entity* server_local_spawn_minecart(vec3 pos, struct server_local* s);
+struct entity* server_local_spawn_boat(vec3 pos, float yaw,
+                                       struct server_local* s);
+// Cast a fishing hook from pos in the direction given by the player look
+// angles rx (pitch, degrees) and ry (yaw, degrees). owner_id must be
+// (player_entity_id + 1) to avoid the id=0 sentinel clash.
+struct entity* server_local_spawn_fishing_hook(vec3 pos, float rx, float ry,
+                                               uint32_t owner_id,
+                                               struct server_local* s);
 struct entity* server_local_spawn_item(vec3 pos, struct item_data* it,
 									   bool throw, struct server_local* s);
 struct entity* server_local_spawn_monster(vec3 pos, int monster_id,

@@ -207,6 +207,8 @@ void blocks_init() {
 	blocks[116] = &block_enchanting_table;
 	blocks[117] = &block_brewing_stand;
 	blocks[118] = &block_cauldron;
+	blocks[120] = &block_end_portal_frame;
+	blocks[121] = &block_end_stone;
 	blocks[123] = &block_redstone_lamp;
 	blocks[124] = &block_lit_redstone_lamp;
 	blocks[125] = &block_double_wooden_slab;
@@ -216,10 +218,12 @@ void blocks_init() {
 	blocks[130] = &block_ender_chest;
 	blocks[131] = &block_tripwire_hook;
 	blocks[132] = &block_tripwire;
+	blocks[137] = &block_command_block;
 	blocks[253] = &block_iron_chest;
 	blocks[96] = &block_trapdoor;
 	blocks[98] = &block_stonebrick;
 	blocks[254] = &block_tree2d;
+	blocks[255] = &block_record_cat;
 	//blocks[98] = &block_minecart;
 
 	for(int k = 0; k < 256; k++) {

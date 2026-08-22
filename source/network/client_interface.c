@@ -25,6 +25,7 @@
 #include "../game/game_state.h"
 #include "../particle.h"
 #include "../platform/thread.h"
+#include "../sound.h"
 #include "server_interface.h"
 #include "server_local.h"
 
@@ -459,9 +460,84 @@ void clin_process(struct client_rpc* call) {
 
 		    entity_minecart(call->payload.spawn_minecart.entity_id,
 		                    e,
-		                    false,                
+		                    false,
 		                    &gstate.world);
 		    e->teleport(e, call->payload.spawn_minecart.pos);
+		} break;
+
+		case CRPC_SPAWN_BOAT: {
+		    struct entity** e_ptr = dict_entity_safe_get(
+		        gstate.entities,
+		        call->payload.spawn_boat.entity_id
+		    );
+		    *e_ptr = malloc(sizeof(struct entity));
+		    struct entity* e = *e_ptr;
+		    assert(e);
+
+		    entity_boat(call->payload.spawn_boat.entity_id,
+		                e,
+		                false,
+		                &gstate.world);
+		    e->teleport(e, call->payload.spawn_boat.pos);
+		    e->data.boat.yaw = call->payload.spawn_boat.yaw;
+		    e->orient[0] = call->payload.spawn_boat.yaw;
+		} break;
+
+		case CRPC_FISHING_BITE: {
+		    // Spawn water-splash particles at the hook position and play
+		    // a sound so the player knows a fish has bitten.
+		    struct entity** ep = dict_entity_get(
+		        gstate.entities,
+		        call->payload.fishing_bite.entity_id);
+		    if(ep && *ep && (*ep)->type == ENTITY_FISHING_HOOK) {
+		        vec3 hpos;
+		        glm_vec3_copy((*ep)->pos, hpos);
+
+		        // A few upward splash particles around the bobber.
+		        for(int k = 0; k < 6; k++) {
+		            float ox = ((float)(k % 3) - 1.0f) * 0.15f;
+		            float oz = ((float)(k / 3) - 0.5f) * 0.25f;
+		            vec3 ppos = {hpos[0] + ox, hpos[1], hpos[2] + oz};
+		            vec3 pvel = {ox * 0.5f,
+		                         0.08f + (float)(k & 1) * 0.06f,
+		                         oz * 0.5f};
+		            particle_add(ppos, pvel,
+		                         tex_atlas_lookup_particle(
+		                             (k & 1) ? TEXAT_PARTICLE_SPLASH_1
+		                                     : TEXAT_PARTICLE_SPLASH_0),
+		                         0.08f, 12.0f, true,
+		                         200, 220, 255, false,
+		                         TEXTURE_ATLAS_PARTICLES);
+		        }
+		        // Bubble rising from just below the surface.
+		        vec3 bpos = {hpos[0], hpos[1] - 0.1f, hpos[2]};
+		        vec3 bvel = {0.0f, 0.1f, 0.0f};
+		        particle_add(bpos, bvel,
+		                     tex_atlas_lookup_particle(TEXAT_PARTICLE_BUBBLE),
+		                     0.06f, 8.0f, false,
+		                     255, 255, 255, false,
+		                     TEXTURE_ATLAS_PARTICLES);
+
+		        sound_play(pcm_drink);
+		    }
+		} break;
+
+		case CRPC_SPAWN_FISHING_HOOK: {
+		    struct entity** e_ptr = dict_entity_safe_get(
+		        gstate.entities,
+		        call->payload.spawn_fishing_hook.entity_id
+		    );
+		    *e_ptr = malloc(sizeof(struct entity));
+		    struct entity* e = *e_ptr;
+		    assert(e);
+		    entity_fishing_hook(call->payload.spawn_fishing_hook.entity_id,
+		                        e, false, &gstate.world);
+		    e->teleport(e, call->payload.spawn_fishing_hook.pos);
+		    e->vel[0] = call->payload.spawn_fishing_hook.vel_x;
+		    e->vel[1] = call->payload.spawn_fishing_hook.vel_y;
+		    e->vel[2] = call->payload.spawn_fishing_hook.vel_z;
+		    e->data.fishing_hook.owner_id
+		        = call->payload.spawn_fishing_hook.owner_id;
 		} break;
 
 		case CRPC_PICKUP_ITEM: {
@@ -517,6 +593,10 @@ void clin_process(struct client_rpc* call) {
 			if(lp)
 				lp->data.local_player.creative = call->payload.gamemode.creative;
 		}
+		break;
+		case CRPC_SPAWN_POINT:
+			gstate.spawn_x = call->payload.spawn_point.x;
+			gstate.spawn_z = call->payload.spawn_point.z;
 		break;
 	}
 }

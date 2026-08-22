@@ -47,8 +47,8 @@ struct item item_melon_seeds = {
 	.tool.type = TOOL_TYPE_ANY,
 	.render_data = {
 		.item = {
-			.texture_x = 3,
-			.texture_y = 7,
+			.texture_x = 10,
+			.texture_y = 6,
 		},
 	},
 };

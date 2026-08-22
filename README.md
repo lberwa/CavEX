@@ -169,7 +169,8 @@ cd buildpc
 
 ### Wii:
 
-you can Download a ready boot.dol from [here](https://example.com/boot.dol) or the full app [here](https://example.com/last_release). To copy the game to your `apps/` folder, it needs to look like this:
+Please wait for the release!
+~~you can Download a ready boot.dol from [here](https://example.com/boot.dol) or the full app [here](https://example.com/last_release).~~ To copy the game to your `apps/` folder, it needs to look like this:
 
 ```apps/cavex/
 cavex

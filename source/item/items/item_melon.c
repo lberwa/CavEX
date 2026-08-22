@@ -19,7 +19,7 @@ static bool onItemPlace(struct server_local* s, struct item_data* it,
 		return false;
 
 	server_local_set_player_health(
-		s, pid, s->players[pid].health + 2 * HEALTH_PER_HEART);
+		s, pid, s->players[pid].health + HEALTH_PER_HEART / 2);
 	return true;
 }
 
@@ -34,8 +34,8 @@ struct item item_melon = {
 	.tool.type = TOOL_TYPE_ANY,
 	.render_data = {
 		.item = {
-			.texture_x = 13,
-			.texture_y = 7,
+			.texture_x = 11,
+			.texture_y = 5,
 		},
 	},
 };

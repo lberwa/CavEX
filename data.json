@@ -4,6 +4,22 @@
   "_comment3": "########################################################################################################",
   "pc": [
     [
+      "source/graphics/render_monster.c",
+      "source/graphics/render_monster.c"
+    ],
+    [
+      "source/config_frozen.h",
+      "source/config_frozen.h"
+    ],
+    [
+      "source/graphics/font_fallback.h",
+      "source/graphics/font_fallback.h"
+    ],
+    [
+      "source/platform/pc/shaders_fallback.h",
+      "source/platform/pc/shaders_fallback.h"
+    ],
+    [
       "source/game/gui/creative_inventory_list.c",
       "source/game/gui/creative_inventory_list.c"
     ],
