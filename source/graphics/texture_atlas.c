@@ -60,6 +60,11 @@ static uint16_t last_atlas_columns = 16;
 static uint16_t last_atlas_stride = 18;
 static uint16_t last_atlas_padding = 3;
 static uint16_t last_atlas_size = 256;
+// Particle-atlas layout saved separately (tex_atlas_block() must not overwrite).
+static uint16_t particle_atlas_columns = 16;
+static uint16_t particle_atlas_stride = 8;
+static uint16_t particle_atlas_padding = 0;
+static uint16_t particle_atlas_size = 128;
 
 static int clamp_n(int x, int n) {
 	if(x < 0)
@@ -454,6 +459,11 @@ uint16_t tex_atlas_padding(void) {
 	return global_atlas_padding;
 }
 
+uint16_t tex_atlas_particle_columns(void) { return particle_atlas_columns; }
+uint16_t tex_atlas_particle_stride(void)  { return particle_atlas_stride;  }
+uint16_t tex_atlas_particle_padding(void) { return particle_atlas_padding; }
+uint16_t tex_atlas_particle_size(void)    { return particle_atlas_size;    }
+
 uint16_t tex_atlas_size(void) {
 	return global_atlas_size;
 }
@@ -468,6 +478,11 @@ void* tex_atlas_block(const char* filename, size_t* width, size_t* height) {
 	tex_atlas_reg(atlas, TEXAT_SLAB_STONE_SIDE, 5, 0);
 	tex_atlas_reg(atlas, TEXAT_SLAB_STONE_TOP, 6, 0);
 	tex_atlas_reg(atlas, TEXAT_BRICKS, 7, 0);
+	tex_atlas_reg(atlas, TEXAT_COMMAND_BLOCK, 0, 14);
+	tex_atlas_reg(atlas, TEXAT_END_PORTAL_FRAME_TOP,    12, 4);
+	tex_atlas_reg(atlas, TEXAT_END_PORTAL_FRAME_SIDE,   13, 4);
+	tex_atlas_reg(atlas, TEXAT_END_PORTAL_FRAME_BOTTOM, 14, 4);
+	tex_atlas_reg(atlas, TEXAT_END_STONE,               14, 4);
 	tex_atlas_reg(atlas, TEXAT_TNT_SIDE, 8, 0);
 	tex_atlas_reg(atlas, TEXAT_TNT_TOP, 9, 0);
 	tex_atlas_reg(atlas, TEXAT_TNT_BOTTOM, 10, 0);
@@ -782,6 +797,12 @@ void* tex_atlas_particles(const char* filename, size_t* width, size_t* height) {
 									 global_particle_atlas,
 									 image,
 									 *width, *height);
+  // Save particle-atlas layout so particle rendering can use correct UVs
+  // independently of the terrain atlas (which has different stride/padding).
+  particle_atlas_columns = last_atlas_columns;
+  particle_atlas_stride  = last_atlas_stride;
+  particle_atlas_padding = last_atlas_padding;
+  particle_atlas_size    = last_atlas_size;
   *width = last_atlas_size;
   *height = last_atlas_size;
   dict_atlas_src_clear(atlas);

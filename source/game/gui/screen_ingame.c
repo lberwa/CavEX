@@ -288,6 +288,26 @@ void screen_ingame_render3D(struct screen* s, mat4 view) {
 		}
 	}
 
+	// item use with no target (right- OR left-click in the air), e.g. drinking
+	// milk to get an empty bucket back. Only fires when neither a block nor an
+	// entity is under the crosshair, so it never interferes with placing, mining
+	// or interaction (those all require a target).
+	if(!gstate.camera_hit.hit && !gstate.camera_hit.entity_hit
+	   && (input_pressed(IB_ACTION2, gstate_active_player())
+		   || input_pressed(IB_ACTION1, gstate_active_player()))
+	   && !gstate.digging.active) {
+		struct item_data held;
+		if(inventory_get_hotbar_item(
+			   windowc_get_latest(gstate_windows()[WINDOWC_INVENTORY]), &held)
+		   && (held.id == ITEM_MILK_BUCKET
+		       || held.id == ITEM_FISHING_ROD)) {
+			svin_rpc_try_send(&(struct server_rpc) {
+				RPC_PLAYER_ID(gstate_active_player())
+				.type = SRPC_ITEM_USE,
+			});
+		}
+	}
+
 		// block dig
 		if(gstate.digging.active) {
 		struct block_data blk

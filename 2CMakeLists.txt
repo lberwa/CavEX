@@ -36,6 +36,7 @@ add_executable(cavex
 				source/block/block_clay.c
 				source/block/block_cobblestone.c
 				source/block/block_cobweb.c
+				source/block/block_command_block.c
 				source/block/block_ender_chest.c
 				source/block/block_gobweb.c
 				source/block/block_crops.c
@@ -61,6 +62,9 @@ add_executable(cavex
 				source/block/block_iron_bars.c
 				source/block/block_iron_chest.c
 				source/block/block_jukebox.c
+				source/block/block_record_cat.c
+				source/block/block_end_portal_frame.c
+				source/block/block_end_stone.c
 				source/block/block_ladder.c
 				source/block/block_lava.c
 				source/block/block_leaves.c
@@ -132,6 +136,8 @@ add_executable(cavex
 				source/entity/entity_item.c
 				source/entity/entity_monster.c
 				source/entity/entity_minecart.c
+				source/entity/entity_boat.c
+				source/entity/entity_fishing_hook.c
 
 				source/cNBT/buffer.c
 				source/cNBT/nbt_loading.c
@@ -205,6 +211,13 @@ add_executable(cavex
 				source/item/items/item_bucket_water.c
 				source/item/items/item_bucket.c
 				source/item/items/item_minecart.c
+				source/item/items/item_boat.c
+				source/item/items/item_motor.c
+				source/item/items/item_milk_bucket.c
+				source/item/items/item_fishing_rod.c
+				source/item/items/item_compass.c
+				source/item/items/item_clock.c
+				source/item/items/item_record_13.c
 				source/item/items/item_redstone.c
 				source/item/items/item_emerald.c
 				source/item/items/item_lapis_lazuli.c

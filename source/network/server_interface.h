@@ -43,6 +43,8 @@ enum server_rpc_type {
 	SRPC_SET_GAMEMODE,
 	SRPC_CREATIVE_PICK_BLOCK,
 	SRPC_CREATIVE_SET_PICKED,
+	SRPC_BOAT_CONTROL,
+	SRPC_ITEM_USE, /* right-click use with no block/entity target (e.g. milk) */
 };
 
 #ifdef SPLITSCREEN
@@ -62,6 +64,16 @@ struct server_rpc {
 			float rx, ry;
 			float vel_y;
 		} player_pos;
+		struct {
+			// Server-authoritative boat control, sent each tick by the riding
+			// client. forward/turn are -1/0/+1; dismount clears the rider;
+			// powered latches the motor (rider holds the motor item).
+			uint32_t entity_id;
+			int forward;
+			int turn;
+			bool dismount;
+			bool powered;
+		} boat_control;
 		struct {
 			string_t name;
 			bool find_spawn; /* new world: place spawn on solid ground */

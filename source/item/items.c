@@ -129,9 +129,9 @@ void items_init() {
 	items[330] = &item_door_iron;
 	items[331] = &item_redstone;
 	items[332] = &item_snow_ball;
-	// boat
+	items[333] = &item_boat;
 	items[334] = &item_leather;
-	// milk bucket
+	items[335] = &item_milk_bucket;
 	items[336] = &item_brick;
 	items[337] = &item_clay_ball;
 	items[338] = &item_sugarcane;
@@ -141,9 +141,9 @@ void items_init() {
 	// storage minecart
 	// furnace minecart
 	items[344] = &item_egg;
-	// compass
-	// fishing rod
-	// clock
+	items[345] = &item_compass;
+	items[346] = &item_fishing_rod;
+	items[347] = &item_clock;
 	items[388] = &item_emerald;
 	items[348] = &item_glowstone_dust;
 	items[349] = &item_fish;
@@ -153,6 +153,7 @@ void items_init() {
 	items[353] = &item_sugar;
 	items[354] = &item_cake;
 	items[355] = &item_bed;
+	items[356] = &item_motor;
 	// redstone repeater
 	items[357] = &item_cookie;
 	// map
@@ -166,7 +167,7 @@ void items_init() {
 	items[425] = &item_egg_sheep;
 	items[426] = &item_lapis_lazuli;
 	items[427] = &item_cocoa;
-	// golden record
+	items[2256] = &item_record_13;
 	// green record
 }
 

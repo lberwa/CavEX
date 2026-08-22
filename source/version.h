@@ -10,7 +10,7 @@
 #define GAME_NAME     "CavEX"
 #define VERSION_MAJOR 0
 #define VERSION_MINOR 3
-#define VERSION_PATCH 8
+#define VERSION_PATCH 9
 #define VERSION_FORK  3
 #define VERSION_IMPL  "B1.7.3"
 #define LICENSE       "Licensed under GPLv3"

@@ -25,6 +25,7 @@
 #include "config.h"
 #include "config_frozen.h"
 #include "game/game_state.h"
+#include "network/server_local.h" /* MAX_VIEW_DISTANCE */
 
 /* Legt alle Verzeichnisebenen von path an (wie "mkdir -p"); path ist eine
    DATEI -> alles bis zum letzten '/' wird als Ordner erstellt. Best effort. */
@@ -135,4 +136,9 @@ void settings_init() {
 #endif
 
 	gstate.settings.start_fullscreen = false;
+
+	/* Standard: maximale (hardware-sichere) Sichtweite. Der Spieler kann sie im
+	 * Spielmenue kleiner stellen -> weniger RAM-Druck, beide Splitscreen-Spieler
+	 * passen zuverlaessig in die Chunk-Grenze. */
+	gstate.settings.view_distance = 3;
 }

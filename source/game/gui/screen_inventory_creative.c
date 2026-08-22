@@ -110,16 +110,16 @@ static int tab_screen_x(int pos, bool top, int off_x, int scale) {
 // t0: 🧱 Baumaterialien
 static const uint16_t tab_list_t0[] = {
     1,2,3,4,5,7,12,13,14,15,16,17,19,24,35,
-    41,42,43,44,45,48,49,56,57,82,87,88,89,0};
+    41,42,43,44,45,48,49,56,57,82,87,88,89,90,120,121,0};
 // t1: 🛋️ Dekorationsblöcke
 static const uint16_t tab_list_t1[] = {
     6,18,20,30,31,32,37,38,39,40,50,51,52,53,54,
     78,79,81,83,84,86,91,96,0};
 // t2: ⚙️ Redstone
 static const uint16_t tab_list_t2[] = {
-    23,25,27,29,33,55,69,70,72,73,74,75,76,77,94,331,356,0};
+    23,25,27,29,33,55,69,70,72,73,74,75,76,77,94,137,331,356,0};
 // t3: 🛒 Transport
-static const uint16_t tab_list_t3[] = {27,28,66,328,333,342,343,0};
+static const uint16_t tab_list_t3[] = {27,28,66,328,333,356,342,343,0};
 // t4: leer (holzbretter hat keine eigene Kategorie)
 static const uint16_t tab_list_t4[] = {0};
 // t5: leer
@@ -128,10 +128,10 @@ static const uint16_t tab_list_t5[] = {0};
 // b0: 🧪 Materialien / Zutaten
 static const uint16_t tab_list_b0[] = {
     263,264,265,266,280,281,287,288,289,296,
-    318,334,336,337,351,352,353,0};
+    318,334,336,337,351,352,353,361,362,0};
 // b1: 🍎 Lebensmittel
 static const uint16_t tab_list_b1[] = {
-    260,282,297,319,320,322,335,344,349,350,354,357,0};
+    260,282,297,319,320,322,335,344,349,350,354,357,360,0};
 // b2: 🛠️ Werkzeuge & Nützliches
 static const uint16_t tab_list_b2[] = {
     65,256,257,258,259,261,262,267,268,269,270,271,

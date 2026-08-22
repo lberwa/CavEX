@@ -56,6 +56,10 @@ struct game_state {
 		int chunk_build_budget_ms;
 		int chunk_build_per_tick;
 		bool start_fullscreen;
+		/* Vom Spieler gewuenschte Sichtweite (Chunks). Wirkt als Obergrenze fuer
+		 * den RAM-Governor: er hebt vd nur bis hierher (und nie ueber die harte
+		 * MAX_VIEW_DISTANCE) und senkt unter Speicherdruck darunter. */
+		int view_distance;
 	} settings;
 	/* live chunk generation status, updated by the server thread for the debug
 	 * overlay (screen_ingame). */
@@ -116,6 +120,7 @@ struct game_state {
 		} switch_item;
 	} held_item_animation;
 	bool world_loaded;
+	int spawn_x, spawn_z;
 	bool in_water;
 	bool paused;
 	int oxygen;

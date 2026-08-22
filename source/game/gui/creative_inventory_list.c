@@ -30,14 +30,13 @@ static bool creative_inventory_excluded(uint16_t id) {
 	return id == BLOCK_BED || id == BLOCK_DOOR_WOOD || id == BLOCK_DOOR_IRON;
 }
 
-// Curated "featured" ids surfaced on page 1, in build-priority order, so the
-// items reached for to BUILD (bed, doors, carpet, minecart, ...) are not
-// scattered through a raw-id-ordered grid where bed/doors/minecart land on the
-// last page. These are the dedicated item ids (the raw bed/door blocks are
-// hidden by creative_inventory_excluded, so no duplicate). Any id here that is
-// not currently includable is simply skipped, so the list degrades gracefully.
-//   171 carpet, 69 lever, 77 button, 324 wooden door, 330 iron door,
-//   355 bed, 328 minecart, 333 boat
+/* ============================================================
+ * NOT USED
+ *
+ * Die Item-Listen fuer das Creative-Inventar stehen in
+ * screen_inventory_creative.c (tab_list_t0..t5 / tab_list_b0..b4).
+ * Diese FEATURED-Liste wird nicht mehr ausgewertet.
+ * ============================================================ */
 static const uint16_t FEATURED[] = {171, 69, 77, 324, 330, 355, 328, 333};
 static const size_t FEATURED_COUNT = sizeof(FEATURED) / sizeof(FEATURED[0]);
 

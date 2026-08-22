@@ -27,6 +27,12 @@ static bool onItemPlace(struct server_local* s, struct item_data* it,
 						enum side on_side) {
 	if (!on || !on->block) return false;
 
+	/* obsidian: try to ignite a nether portal frame */
+	if(on->block->type == BLOCK_OBSIDIAN) {
+		if(where && server_local_try_portal(s, where->x, where->y, where->z))
+			return false;
+	}
+
 	// Check if the clicked block is flammable
 	if (!blocks[on->block->type] || !blocks[on->block->type]->flammable)
 		return false;

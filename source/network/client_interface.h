@@ -46,6 +46,10 @@ enum client_rpc_type {
 	CRPC_PLAYER_SET_HEALTH,
 	CRPC_SPAWN_MONSTER,
 	CRPC_SPAWN_MINECART,
+	CRPC_SPAWN_BOAT,
+	CRPC_SPAWN_FISHING_HOOK,
+	CRPC_FISHING_BITE,   /* server notifies client that a fish bit the hook */
+	CRPC_SPAWN_POINT,    /* world/player spawn coordinates for compass */
 	CRPC_WORLD_LOADED, /* spawn area chunks loaded + hotbar sent -> start game */
 	CRPC_GAMEMODE,
 };
@@ -123,6 +127,23 @@ struct client_rpc {
 		    uint32_t entity_id;
 		    vec3    pos;
 		} spawn_minecart;
+		struct {
+		    uint32_t entity_id;
+		    vec3    pos;
+		    float   yaw;
+		} spawn_boat;
+		struct {
+			uint32_t entity_id;
+			uint32_t owner_id;
+			vec3     pos;
+			float    vel_x, vel_y, vel_z;
+		} spawn_fishing_hook;
+		struct {
+			uint32_t entity_id;
+		} fishing_bite;
+		struct {
+			int x, z;
+		} spawn_point;
 		struct {
 			uint32_t entity_id;
 			uint32_t collector_id;

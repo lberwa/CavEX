@@ -41,7 +41,11 @@
 
 * Buttons like in settings in main menu
 
-* Waterlilies and glass_pane have a visibility bug like redstone.
+* visibility bug like vine
+  - Waterlilies 
+  - glass_pane
+  - pumpkin stem
+  - melon stem
 
 * save settings in config.json
 
@@ -56,3 +60,7 @@
 * screen game settings input is broken
 
 * entities are able to going throw chunks and falling down
+
+* implement a minecraft terminal
+
+* the moon and sun are too little

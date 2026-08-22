@@ -379,6 +379,41 @@ void recipe_init() {
 		(struct item_data) {.id = ITEM_MINECART, .durability = 0, .count = 1}, 3, 2,
 		(uint8_t[]) {1, 0, 1, 1, 1, 1}, (struct item_data) {.id = ITEM_IRON},
 		false);
+	// boat: five planks in a U shape (#34)
+	recipe_add(recipes_crafting,
+			   (struct item_data) {.id = ITEM_BOAT, .durability = 0, .count = 1},
+			   3, 2, (uint8_t[]) {1, 0, 1, 1, 1, 1},
+			   (struct item_data) {.id = BLOCK_PLANKS}, false);
+	// boat motor (#33): two iron ingots (casing) over a redstone (power), in a
+	// 1-wide, 3-high column. Reachable from iron + redstone (both mineable).
+	recipe_add(recipes_crafting,
+			   (struct item_data) {.id = ITEM_MOTOR, .durability = 0, .count = 1},
+			   1, 3, (uint8_t[]) {1, 1, 2},
+			   (struct item_data) {.id = ITEM_IRON}, false,
+			   (struct item_data) {.id = ITEM_REDSTONE}, false);
+	// clock: 4 gold ingots in cross + redstone center
+	recipe_add(recipes_crafting,
+			   (struct item_data) {.id = ITEM_CLOCK, .durability = 0,
+								   .count = 1},
+			   3, 3, (uint8_t[]) {0, 1, 0, 1, 2, 1, 0, 1, 0},
+			   (struct item_data) {.id = ITEM_GOLD}, false,
+			   (struct item_data) {.id = ITEM_REDSTONE}, false);
+	// compass: 4 iron ingots in cross + redstone center
+	recipe_add(recipes_crafting,
+			   (struct item_data) {.id = ITEM_COMPASS, .durability = 0,
+								   .count = 1},
+			   3, 3, (uint8_t[]) {0, 1, 0, 1, 2, 1, 0, 1, 0},
+			   (struct item_data) {.id = ITEM_IRON}, false,
+			   (struct item_data) {.id = ITEM_REDSTONE}, false);
+	// fishing rod: 3 sticks diagonal + 2 strings (vanilla 1.7+ recipe)
+	// Pattern (3×3, row-major): _ _ S / _ S / / S _ /
+	// where S=stick (1), /=string (2)
+	recipe_add(recipes_crafting,
+			   (struct item_data) {.id = ITEM_FISHING_ROD, .durability = 0,
+								   .count = 1},
+			   3, 3, (uint8_t[]) {0, 0, 1, 0, 1, 2, 1, 0, 2},
+			   (struct item_data) {.id = ITEM_STICK}, false,
+			   (struct item_data) {.id = ITEM_STRING}, false);
 	recipe_add(
 		recipes_crafting,
 		(struct item_data) {.id = ITEM_BUCKET, .durability = 0, .count = 1}, 3, 2,
