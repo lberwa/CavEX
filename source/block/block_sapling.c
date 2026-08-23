@@ -49,7 +49,7 @@ static bool onItemPlace(struct server_local* s, struct item_data* it,
 						struct block_info* where, struct block_info* on,
 						enum side on_side) {
 	struct block_data blk;
-	if(!server_world_get_block(&s->world, where->x, where->y - 1, where->z,
+	if(!server_world_get_block(AWORLD(s), where->x, where->y - 1, where->z,
 							   &blk))
 		return false;
 
@@ -88,7 +88,7 @@ static void onRandomTick(struct server_local* s, struct block_info* this) {
 
 	for(int k = 1; k < height; k++) {
 		struct block_data blk;
-		if(server_world_get_block(&s->world, this->x, this->y + k, this->z,
+		if(server_world_get_block(AWORLD(s), this->x, this->y + k, this->z,
 								  &blk)
 		   && blk.type != BLOCK_AIR) {
 			return;
@@ -111,7 +111,7 @@ static void onRandomTick(struct server_local* s, struct block_info* this) {
 				if((x != 0 || z != 0 || y == 0)
 				   && ((abs(x) != size || abs(z) != size)
 					   || (rand_gen(&s->rand_src) & 1 && y < 0))
-				   && server_world_get_block(&s->world, this->x + x,
+				   && server_world_get_block(AWORLD(s), this->x + x,
 											 this->y + height + y, this->z + z,
 											 &blk)
 				   && blk.type == BLOCK_AIR) {

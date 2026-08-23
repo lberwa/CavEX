@@ -64,7 +64,7 @@ static size_t getDroppedItem(struct block_info* this, struct item_data* it,
 static bool nether_wart_has_support(struct server_local* s,
 									struct block_info* this) {
 	struct block_data below;
-	if(!server_world_get_block(&s->world, this->x, this->y - 1, this->z, &below))
+	if(!server_world_get_block(AWORLD(s), this->x, this->y - 1, this->z, &below))
 		return false;
 	return below.type == BLOCK_SOULSAND;
 }
@@ -106,14 +106,14 @@ static bool onItemPlace(struct server_local* s, struct item_data* it,
 
 	// Can only be planted on soul sand (like seeds on farmland).
 	struct block_data below;
-	if(!server_world_get_block(&s->world, where->x, where->y - 1, where->z, &below))
+	if(!server_world_get_block(AWORLD(s), where->x, where->y - 1, where->z, &below))
 		return false;
 	if(below.type != BLOCK_SOULSAND)
 		return false;
 
 	// Only place into air.
 	struct block_data cur;
-	if(!server_world_get_block(&s->world, where->x, where->y, where->z, &cur))
+	if(!server_world_get_block(AWORLD(s), where->x, where->y, where->z, &cur))
 		return false;
 	if(cur.type != BLOCK_AIR)
 		return false;

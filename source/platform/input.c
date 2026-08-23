@@ -165,8 +165,8 @@ bool input_pointer(float* x, float* y, float* angle, int player) {
 	*x = x2;
 	*y = y2;
 	*angle = 0.0F;
-	return input_pointer_enabled && x2 >= 0 && y2 >= 0 && x2 < gfx_width()
-		&& y2 < gfx_height();
+	return input_pointer_enabled && x2 >= 0 && y2 >= 0
+		&& x2 < gfx_window_width() && y2 < gfx_window_height();
 }
 
 void input_native_joystick(float dt, float* dx, float* dy, int player) {
@@ -697,17 +697,6 @@ bool input_held(enum input_button b, int player) {
 		if(held)
 			any_held = true;
 	}
-
-#ifdef PLATFORM_PC
-	if(player == 1 && (b == IB_FORWARD || b == IB_BACKWARD || b == IB_LEFT
-					   || b == IB_RIGHT || b == IB_JUMP)) {
-		if(any_pressed || any_held) {
-			printf("[input_held] player=%d vplayer=%d button=%d key=%s pressed=%d held=%d\n",
-				   player, vplayer, (int)b, key ? key : "(null)", (int)any_pressed,
-				   (int)any_held);
-		}
-	}
-#endif
 
 	return any_pressed || any_held;
 }

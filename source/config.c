@@ -141,4 +141,5 @@ void settings_init() {
 	 * Spielmenue kleiner stellen -> weniger RAM-Druck, beide Splitscreen-Spieler
 	 * passen zuverlaessig in die Chunk-Grenze. */
 	gstate.settings.view_distance = 3;
+	gstate.settings.render_scale_pct = 0; /* Standard: Minimum-Auflösung (802×480) */
 }

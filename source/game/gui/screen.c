@@ -30,8 +30,11 @@ int screen_stack_top = -1;
 
 static void screen_viewport_rect(int player, int* out_x, int* out_y,
 								 int* out_w, int* out_h) {
-	int w = gfx_width();
-	int h = gfx_height();
+	/* Immer GUI-logische Auflösung verwenden (auf Wii = native, auf PC immer
+	 * konsistent unabhängig vom aktuellen Render-Modus). So liefert diese
+	 * Funktion in reset(), update() und render2D() denselben Wert. */
+	int w = gfx_gui_width();
+	int h = gfx_gui_height();
 	int player_count = splitscreen_player_count();
 
 	if(player_count == 2) {
@@ -186,6 +189,12 @@ bool screen_pointer_local(int player, int view_width, int view_height,
 #ifdef SPLITSCREEN
 	if(splitscreen_enabled()) {
 		int vp_x, vp_y, vp_w, vp_h;
+		/* Auf PC zuerst in GUI-logische Koordinaten umrechnen (screen_viewport_rect
+		 * liefert jetzt ebenfalls GUI-logische Werte). Auf Wii ist gfx_pointer_to_gui
+		 * ein No-Op und gfx_gui_* = gfx_* → Verhalten unverändert. */
+#ifndef PLATFORM_WII
+		gfx_pointer_to_gui(&px, &py);
+#endif
 		screen_viewport_rect(player, &vp_x, &vp_y, &vp_w, &vp_h);
 
 		int gui_w, gui_h;
@@ -208,7 +217,9 @@ bool screen_pointer_local(int player, int view_width, int view_height,
 		#ifdef PLATFORM_WII
 		py -= (float)vp_y;
 		#else
-		int top_y = gfx_height() - (vp_y + vp_h);
+		/* vp_y ist jetzt in GUI-logischen Koordinaten (y=0 oben im OpenGL-
+		 * Sinne umgekehrt): gfx_gui_height() statt gfx_height() verwenden. */
+		int top_y = gfx_gui_height() - (vp_y + vp_h);
 		py -= (float)top_y;
 		#endif
 
@@ -221,13 +232,19 @@ bool screen_pointer_local(int player, int view_width, int view_height,
 	}
 #endif
 
-	/* Single view: input_pointer() returns raw window pixels, but the GUI is
-	 * laid out in the logical resolution and only scaled onto the window. Map
-	 * the pointer into that logical space so it lines up with the GUI.
-	 * (In split-screen the block above already produced GUI-space coords.) */
+	/* Single view (oder Wii Split-Screen): input_pointer() gibt rohe Fenster-Pixel
+	 * zurück; in GUI-logischen Raum umrechnen. Im PC-Split-Screen-Pfad wurde
+	 * gfx_pointer_to_gui schon oben aufgerufen. */
 #ifdef SPLITSCREEN
+#ifdef PLATFORM_WII
+	/* Wii: immer umrechnen (auf Wii ist gfx_pointer_to_gui No-Op, schadet also
+	 * nicht), damit der Nicht-Splitscreen-Wii-Pfad ebenfalls abgedeckt ist. */
 	if(!splitscreen_enabled())
 		gfx_pointer_to_gui(&px, &py);
+#else
+	if(!splitscreen_enabled())
+		gfx_pointer_to_gui(&px, &py);
+#endif
 #else
 	gfx_pointer_to_gui(&px, &py);
 #endif

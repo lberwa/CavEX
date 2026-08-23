@@ -30,7 +30,7 @@ static bool onItemPlace(struct server_local* s, struct item_data* it,
     int tz = on->z;
 	
 /*	struct block_data below;
-	if (!server_world_get_block(&s->world, where->x, where->y - 1, where->z, &below))
+	if (!server_world_get_block(AWORLD(s), where->x, where->y - 1, where->z, &below))
 		return false;
 	if (!blocks[below.type] || blocks[below.type]->can_see_through)
 		return false;

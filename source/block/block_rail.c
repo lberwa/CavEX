@@ -44,7 +44,7 @@ static inline bool isRail(uint8_t type) {
 
 static void updateRailToSlope(struct server_local* s, w_coord_t x, w_coord_t y, w_coord_t z, uint8_t newMeta) {
     struct block_data bd;
-    if (!server_world_get_block(&s->world, x, y, z, &bd) || !isRail(bd.type)) {
+    if (!server_world_get_block(AWORLD(s), x, y, z, &bd) || !isRail(bd.type)) {
         return;
     }
     uint8_t oldMeta = bd.metadata & 0xF;
@@ -68,16 +68,16 @@ static uint8_t calcRailMeta(struct server_local* s,
 	 struct block_data bd;
 
 	// curve when this rail sits atop a diagonal slope
-	bool lower_e = server_world_get_block(&s->world, x+1, y-1, z, &bd) && isRail(bd.type);
-	bool lower_w = server_world_get_block(&s->world, x-1, y-1, z, &bd) && isRail(bd.type);
-	bool lower_n = server_world_get_block(&s->world, x,   y-1, z-1, &bd) && isRail(bd.type);
-	bool lower_s = server_world_get_block(&s->world, x,   y-1, z+1, &bd) && isRail(bd.type);
+	bool lower_e = server_world_get_block(AWORLD(s), x+1, y-1, z, &bd) && isRail(bd.type);
+	bool lower_w = server_world_get_block(AWORLD(s), x-1, y-1, z, &bd) && isRail(bd.type);
+	bool lower_n = server_world_get_block(AWORLD(s), x,   y-1, z-1, &bd) && isRail(bd.type);
+	bool lower_s = server_world_get_block(AWORLD(s), x,   y-1, z+1, &bd) && isRail(bd.type);
 
 	// same‐level horizontal neighbours
-	bool n = server_world_get_block(&s->world, x,   y, z-1, &bd) && isRail(bd.type);
-	bool s_ =server_world_get_block(&s->world, x,   y, z+1, &bd) && isRail(bd.type);
-	bool w = server_world_get_block(&s->world, x-1, y, z,   &bd) && isRail(bd.type);
-	bool e = server_world_get_block(&s->world, x+1, y, z,   &bd) && isRail(bd.type);
+	bool n = server_world_get_block(AWORLD(s), x,   y, z-1, &bd) && isRail(bd.type);
+	bool s_ =server_world_get_block(AWORLD(s), x,   y, z+1, &bd) && isRail(bd.type);
+	bool w = server_world_get_block(AWORLD(s), x-1, y, z,   &bd) && isRail(bd.type);
+	bool e = server_world_get_block(AWORLD(s), x+1, y, z,   &bd) && isRail(bd.type);
 
 	// if exactly one diagonal‐below slope + exactly one H‐neighbour on the perpendicular axis => curve
 	if (lower_e && (n ^ s_) && !w && !e) return n ? 9 : 6;  // NE or SE
@@ -86,17 +86,17 @@ static uint8_t calcRailMeta(struct server_local* s,
 	if (lower_s && (w ^ e) && !n && !s_) return e ? 6 : 7;  // SE or SW
 
     // 1) slopes
-    if (server_world_get_block(&s->world, x+1,y+1,z, &bd) && isRail(bd.type)) return 2;
-    if (server_world_get_block(&s->world, x-1,y+1,z, &bd) && isRail(bd.type)) return 3;
-    if (server_world_get_block(&s->world, x,y+1,z-1, &bd) && isRail(bd.type)) return 4;
-    if (server_world_get_block(&s->world, x,y+1,z+1, &bd) && isRail(bd.type)) return 5;
+    if (server_world_get_block(AWORLD(s), x+1,y+1,z, &bd) && isRail(bd.type)) return 2;
+    if (server_world_get_block(AWORLD(s), x-1,y+1,z, &bd) && isRail(bd.type)) return 3;
+    if (server_world_get_block(AWORLD(s), x,y+1,z-1, &bd) && isRail(bd.type)) return 4;
+    if (server_world_get_block(AWORLD(s), x,y+1,z+1, &bd) && isRail(bd.type)) return 5;
 
 
     // 2) straight & curves
-    n  = server_world_get_block(&s->world, x,   y, z-1, &bd) && isRail(bd.type);
-    s_ = server_world_get_block(&s->world, x,   y, z+1, &bd) && isRail(bd.type);
-    w  = server_world_get_block(&s->world, x-1, y, z,   &bd) && isRail(bd.type);
-    e  = server_world_get_block(&s->world, x+1, y, z,   &bd) && isRail(bd.type);
+    n  = server_world_get_block(AWORLD(s), x,   y, z-1, &bd) && isRail(bd.type);
+    s_ = server_world_get_block(AWORLD(s), x,   y, z+1, &bd) && isRail(bd.type);
+    w  = server_world_get_block(AWORLD(s), x-1, y, z,   &bd) && isRail(bd.type);
+    e  = server_world_get_block(AWORLD(s), x+1, y, z,   &bd) && isRail(bd.type);
 
     if ((n||s_) && !(w||e))      return 0; // NS
     if ((w||e) && !(n||s_))      return 1; // EW
@@ -132,7 +132,7 @@ static bool onItemPlace(struct server_local* s, struct item_data* it,
                         struct block_info* where, struct block_info* on,
                         enum side on_side) {
     struct block_data below_blk;
-    if (!server_world_get_block(&s->world, where->x, where->y - 1, where->z, &below_blk)) {
+    if (!server_world_get_block(AWORLD(s), where->x, where->y - 1, where->z, &below_blk)) {
         return false;
     }
     if (!blocks[below_blk.type] || blocks[below_blk.type]->can_see_through) {
@@ -142,16 +142,16 @@ static bool onItemPlace(struct server_local* s, struct item_data* it,
     uint8_t meta = calcRailMeta(s, where->x, where->y, where->z);
     bool lower_e = false, lower_w = false, lower_n = false, lower_s = false;
     struct block_data neighbor;
-    if (server_world_get_block(&s->world, where->x + 1, where->y - 1, where->z, &neighbor) && isRail(neighbor.type)) {
+    if (server_world_get_block(AWORLD(s), where->x + 1, where->y - 1, where->z, &neighbor) && isRail(neighbor.type)) {
         lower_e = true;
     }
-    if (server_world_get_block(&s->world, where->x - 1, where->y - 1, where->z, &neighbor) && isRail(neighbor.type)) {
+    if (server_world_get_block(AWORLD(s), where->x - 1, where->y - 1, where->z, &neighbor) && isRail(neighbor.type)) {
         lower_w = true;
     }
-    if (server_world_get_block(&s->world, where->x, where->y - 1, where->z + 1, &neighbor) && isRail(neighbor.type)) {
+    if (server_world_get_block(AWORLD(s), where->x, where->y - 1, where->z + 1, &neighbor) && isRail(neighbor.type)) {
         lower_s = true;
     }
-    if (server_world_get_block(&s->world, where->x, where->y - 1, where->z - 1, &neighbor) && isRail(neighbor.type)) {
+    if (server_world_get_block(AWORLD(s), where->x, where->y - 1, where->z - 1, &neighbor) && isRail(neighbor.type)) {
         lower_n = true;
     }
 
@@ -189,7 +189,7 @@ static bool onItemPlace(struct server_local* s, struct item_data* it,
 static void onNeighbourBlockChange(struct server_local* s,
                                    struct block_info* info) {
     struct block_data cur;
-    server_world_get_block(&s->world,
+    server_world_get_block(AWORLD(s),
                            info->x, info->y, info->z,
                            &cur);
 

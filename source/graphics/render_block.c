@@ -5696,7 +5696,7 @@ void render_block_cracks(struct block_data* blk, mat4 view, w_coord_t x,
 			blocks_side_offset(k, &ox, &oy, &oz);
 
 			neighbours[k]
-				= world_get_block(&gstate.world, x + ox, y + oy, z + oz);
+				= world_get_block(gstate_player_world(gstate_active_player()), x + ox, y + oy, z + oz);
 
 			neighbours_info[k] = (struct block_info) {
 				.block = neighbours + k,
@@ -5715,7 +5715,7 @@ void render_block_cracks(struct block_data* blk, mat4 view, w_coord_t x,
 					for (int dx = -1; dx <= 1; ++dx) {
 						if (dx == 0 && dy == 0 && dz == 0) continue;
 						neighbours_ext[ei++]
-							= world_get_block(&gstate.world, x + dx, y + dy, z + dz);
+							= world_get_block(gstate_player_world(gstate_active_player()), x + dx, y + dy, z + dz);
 					}
 				}
 			}

@@ -52,7 +52,7 @@ static bool onItemPlace(struct server_local* s, struct item_data* it,
     int sx=0, sy=0, sz=0; // liquid source coords
 
     // Prefer the placement cell (most engines hit liquid here)
-    if (server_world_get_block(&s->world, tx, ty, tz, &bd)) {
+    if (server_world_get_block(AWORLD(s), tx, ty, tz, &bd)) {
         if (bd.type == BLOCK_WATER_STILL)      { filled_id = ITEM_BUCKET_WATER; sx=tx; sy=ty; sz=tz; }
         else if (bd.type == BLOCK_LAVA_STILL)  { filled_id = ITEM_BUCKET_LAVA;  sx=tx; sy=ty; sz=tz; }
     }
@@ -64,7 +64,7 @@ static bool onItemPlace(struct server_local* s, struct item_data* it,
             else if (bt == BLOCK_LAVA_STILL)  { filled_id = ITEM_BUCKET_LAVA;  sx=on->x; sy=on->y; sz=on->z; }
         }
         if (!filled_id && where && where->block) {
-            if (server_world_get_block(&s->world, where->x, where->y, where->z, &bd)) {
+            if (server_world_get_block(AWORLD(s), where->x, where->y, where->z, &bd)) {
                 if (bd.type == BLOCK_WATER_STILL)      { filled_id = ITEM_BUCKET_WATER; sx=where->x; sy=where->y; sz=where->z; }
                 else if (bd.type == BLOCK_LAVA_STILL)  { filled_id = ITEM_BUCKET_LAVA;  sx=where->x; sy=where->y; sz=where->z; }
             }

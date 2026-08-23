@@ -56,6 +56,7 @@ void gutil_texquad_rt(int x, int y, int tx, int ty, int sx, int sy, int width,
 void gutil_texquad_rt_any(int x, int y, float angle, int tx, int ty, int sx,
 						  int sy, float width, float height);
 void gutil_bg(void);
+void gutil_bg_block(int texat_id);
 void gutil_bg_panorama(void);
 void gutil_window(int x, int y, int width, int height, char title[]);
 void gutil_reset_font(struct tex_gfx* tex);

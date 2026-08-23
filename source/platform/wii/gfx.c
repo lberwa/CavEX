@@ -135,6 +135,10 @@ int gfx_gui_height(void) {
 	return gfx_height();
 }
 
+int gfx_window_width(void)  { return gfx_width();  }
+int gfx_window_height(void) { return gfx_height(); }
+
+
 void gfx_pointer_to_gui(float* x, float* y) {
 	/* Wii: the IR pointer is already in screen/GUI space */
 	(void)x;
@@ -780,4 +784,8 @@ void gfx_draw_quads_flt(size_t vertex_count, const float* vertices,
 	}
 
 	GX_End();
+}
+
+void gfx_apply_render_scale(int pct) {
+	(void)pct;
 }

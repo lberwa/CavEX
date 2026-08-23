@@ -37,6 +37,8 @@ enum { // Buttons
     SET_GAMEMODE_PLAYER_TWO,
     VIEW_DISTANCE_DEC,
     VIEW_DISTANCE_INC,
+	RENDER_SCALE_DEC,
+	RENDER_SCALE_INC,
 };
 
 static int8_t menu;
@@ -91,6 +93,24 @@ static void set(int s) {
 		if (gstate.settings.view_distance < MAX_VIEW_DISTANCE)
 			gstate.settings.view_distance++;
 		break;
+
+		case RENDER_SCALE_DEC:
+		if (gstate.settings.render_scale_pct > 0) {
+			gstate.settings.render_scale_pct -= 10;
+			if (gstate.settings.render_scale_pct < 0)
+				gstate.settings.render_scale_pct = 0;
+			gfx_apply_render_scale(gstate.settings.render_scale_pct);
+		}
+		break;
+
+		case RENDER_SCALE_INC:
+		if (gstate.settings.render_scale_pct < 100) {
+			gstate.settings.render_scale_pct += 10;
+			if (gstate.settings.render_scale_pct > 100)
+				gstate.settings.render_scale_pct = 100;
+			gfx_apply_render_scale(gstate.settings.render_scale_pct);
+		}
+		break;
 	}
 }
 
@@ -123,10 +143,12 @@ static void screen_gsettings_render2D(struct screen* s, int width, int height) {
 
 		default: // MAIN
         {
-			gutil_button(width/2 - 70, height/2 - 30, 50, 50, "-", &set, VIEW_DISTANCE_DEC, 0, 0);
-			gutil_button(width/2 + 20, height/2 - 30, 50, 50, "+", &set, VIEW_DISTANCE_INC, 1, 0);
-			gutil_button(width/2 - 350, height/2 + 50, 300, 50, "Game mode", &choose, GAMEMODE, 0, 1);
-			gutil_button(width/2 + 50,  height/2 + 50, 300, 50, "Back", &set, QUIT, 1, 1);
+			gutil_button(width/2 - 70, height/2 - 80, 50, 50, "-", &set, VIEW_DISTANCE_DEC, 0, 0);
+			gutil_button(width/2 + 20, height/2 - 80, 50, 50, "+", &set, VIEW_DISTANCE_INC, 1, 0);
+			gutil_button(width/2 - 70, height/2 + 15, 50, 50, "-", &set, RENDER_SCALE_DEC, 0, 1);
+			gutil_button(width/2 + 20, height/2 + 15, 50, 50, "+", &set, RENDER_SCALE_INC, 1, 1);
+			gutil_button(width/2 - 350, height/2 + 100, 300, 50, "Game mode", &choose, GAMEMODE, 0, 2);
+			gutil_button(width/2 + 50,  height/2 + 100, 300, 50, "Back", &set, QUIT, 1, 2);
         }
     }
 	gutil_button_update();
@@ -138,9 +160,16 @@ static void screen_gsettings_render2D(struct screen* s, int width, int height) {
 		gutil_text(width/2 - 150, height/2 - 32, "Player 1:", 16, true);
 		gutil_text(width/2 +  50, height/2 - 32, "Player 2:", 16, true);
 	} else { // MAIN
-		char vd[28];
+		char vd[48];
 		snprintf(vd, sizeof(vd), "View distance: %d", gstate.settings.view_distance);
-		gutil_text(width/2 - 200, height/2 - 70, vd, 20, true);
+		gutil_text(width/2 - 200, height/2 - 120, vd, 20, true);
+
+		int rs = gstate.settings.render_scale_pct;
+		int rw = GFX_PC_WINDOW_WIDTH  + (gfx_width()  - GFX_PC_WINDOW_WIDTH)  * rs / 100;
+		int rh = GFX_PC_WINDOW_HEIGHT + (gfx_height() - GFX_PC_WINDOW_HEIGHT) * rs / 100;
+		char rs_str[48];
+		snprintf(rs_str, sizeof(rs_str), "Render: %d%% (%dx%d)", rs, rw, rh);
+		gutil_text(width/2 - 200, height/2 - 15, rs_str, 20, true);
 	}
 
 	if(avaiable) {

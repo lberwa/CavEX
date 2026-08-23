@@ -57,7 +57,7 @@ static void onWorldTick(struct server_local* s, struct block_info* blk) {
     if (cur.type != BLOCK_REDSTONE_WIRE) return;
 
     struct block_data btmp;
-    #define GET_BLOCK_AT(xx,yy,zz, out) server_world_get_block(&s->world, (xx), (yy), (zz), (out))
+    #define GET_BLOCK_AT(xx,yy,zz, out) server_world_get_block(AWORLD(s), (xx), (yy), (zz), (out))
 
     uint8_t strong = 0;
     for (int side = 0; side < SIDE_MAX; ++side) {

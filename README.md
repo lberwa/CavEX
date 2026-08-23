@@ -26,6 +26,8 @@
 
 * Added Creative mode (Based on the Code of [amahpour](https://github.com/amahpour/CavEX))
 
+* Added Nether
+
 ---
 
 
@@ -36,7 +38,6 @@
 * Server multiplayer
 * Block gravity: sand and gravel drop down when there's nothing underneath them to support
 * ~~Water/~~lava flow: once a block has been removed next to, or underneath a liquid, it will flow there
-* Nether 
 * Sneaking mechanic (A button on Wii / Shift on PC)
 * Additional controller support
 * add more mobs

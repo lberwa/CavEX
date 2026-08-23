@@ -73,7 +73,7 @@ void screen_ingame_render3D(struct screen* s, mat4 view) {
 
 	if(gstate.world_loaded && gstate.camera_hit.hit) {
 		struct block_data blk
-			= world_get_block(&gstate.world, gstate.camera_hit.x,
+			= world_get_block(gstate_player_world(gstate_active_player()), gstate.camera_hit.x,
 							  gstate.camera_hit.y, gstate.camera_hit.z);
 
 		if(gstate.digging.active)
@@ -126,7 +126,7 @@ void screen_ingame_render3D(struct screen* s, mat4 view) {
 	float sinHalfCircleWeird = sinf(glm_pow2(dig_lerp) * GLM_PI);
 
 	struct block_data in_block
-		= world_get_block(&gstate.world, floorf(gstate.camera.x),
+		= world_get_block(gstate_player_world(gstate_active_player()), floorf(gstate.camera.x),
 						  floorf(gstate.camera.y), floorf(gstate.camera.z));
 	uint8_t light = (in_block.torch_light << 4) | in_block.sky_light;
 
@@ -311,7 +311,7 @@ void screen_ingame_render3D(struct screen* s, mat4 view) {
 		// block dig
 		if(gstate.digging.active) {
 		struct block_data blk
-			= world_get_block(&gstate.world, gstate.digging.x, gstate.digging.y,
+			= world_get_block(gstate_player_world(gstate_active_player()), gstate.digging.x, gstate.digging.y,
 							  gstate.digging.z);
 		struct item_data it;
 		inventory_get_hotbar_item(
@@ -392,7 +392,7 @@ void screen_ingame_render3D(struct screen* s, mat4 view) {
 
 		if(gstate.camera_hit.hit) {
 			struct block_data blk
-				= world_get_block(&gstate.world, gstate.camera_hit.x,
+				= world_get_block(gstate_player_world(gstate_active_player()), gstate.camera_hit.x,
 								  gstate.camera_hit.y, gstate.camera_hit.z);
 
 			struct block_data neighbours[6];
@@ -402,10 +402,11 @@ void screen_ingame_render3D(struct screen* s, mat4 view) {
 				blocks_side_offset((enum side)k, &ox, &oy, &oz);
 
 				neighbours[k] = world_get_block(
-					&gstate.world, gstate.camera_hit.x + ox,
+					gstate_player_world(gstate_active_player()), gstate.camera_hit.x + ox,
 					gstate.camera_hit.y + oy, gstate.camera_hit.z + oz);
 			}
 
+			particle_spawn_dim = gstate.player_dims[gstate_active_player()];
 			particle_generate_side(
 				&(struct block_info) {.block = &blk,
 									  .neighbours = neighbours,
@@ -523,9 +524,8 @@ static void screen_ingame_render2D(struct screen* s, int width, int height) {
 	gutil_text(4, 4 + (GFX_GUI_SCALE * 8 + 1) * 0, str, GFX_GUI_SCALE * 8, true);
 
 
-	snprintf(str, sizeof(str), "%0.1f fps, wait: gpu %0.1fms, vsync %0.1fms",
-	         gstate.stats.fps, gstate.stats.dt_gpu * 1000.0F,
-	         gstate.stats.dt_vsync * 1000.0F);
+	snprintf(str, sizeof(str), "%0.1f fps, frame %.1fms",
+	         gstate.stats.fps, gstate.stats.dt * 1000.0F);
 	gutil_text(4, 4 + (GFX_GUI_SCALE * 8 + 1) * 1, str, GFX_GUI_SCALE * 8, true);
 
 	snprintf(str, sizeof(str), "%zu chunks", gstate.stats.chunks_rendered);
@@ -567,7 +567,7 @@ static void screen_ingame_render2D(struct screen* s, int width, int height) {
 		gutil_text(4, 4 + (GFX_GUI_SCALE * 8 + 1) * 6, str, GFX_GUI_SCALE * 8, true);
 	} else	if(gstate.camera_hit.hit) {
 		struct block_data bd
-			= world_get_block(&gstate.world, gstate.camera_hit.x,
+			= world_get_block(gstate_player_world(gstate_active_player()), gstate.camera_hit.x,
 							  gstate.camera_hit.y, gstate.camera_hit.z);
 		struct block* b = blocks[bd.type];
 		snprintf(str, sizeof(str), "side: %s, (%i, %i, %i), %s, (%i:%i)",
@@ -582,10 +582,35 @@ static void screen_ingame_render2D(struct screen* s, int width, int height) {
 	         gstate.stats.server_tps, gstate.stats.server_tick_ms);
 	gutil_text(4, 4 + (GFX_GUI_SCALE * 8 + 1) * 7, str, GFX_GUI_SCALE * 8, true);
 
+	snprintf(str, sizeof(str), "mesher: %.0f builds/s, %.1f ms/build, queue %d/%d",
+	         chunk_mesher_stat_builds_per_sec,
+	         chunk_mesher_stat_ms_per_build,
+	         chunk_mesher_stat_queue_depth,
+	         CHUNK_MESHER_QLENGTH);
+	gutil_text(4, 4 + (GFX_GUI_SCALE * 8 + 1) * 8, str, GFX_GUI_SCALE * 8, true);
+
+	snprintf(str, sizeof(str),
+	         "prof: clin %.1f  tick %.1f  render %.1f  gui %.1f  finish %.1f ms",
+	         gstate.stats.prof_clin_ms,
+	         gstate.stats.prof_tick_ms,
+	         gstate.stats.prof_render_ms,
+	         gstate.stats.prof_gui_ms,
+	         gstate.stats.prof_finish_ms);
+	gutil_text(4, 4 + (GFX_GUI_SCALE * 8 + 1) * 9, str, GFX_GUI_SCALE * 8, true);
+
+	/* Portal-Teleport-Zähler: zeigt Sekunden im Portal (1..4), bei 4s Teleport */
+	int _pticks = gstate.portal_ticks_display[gstate_active_player()];
+	if(_pticks > 0) {
+		int _psec = _pticks / 20 + 1;      /* 1,2,3,4 */
+		if(_psec > 4) _psec = 4;
+		snprintf(str, sizeof(str), "Portal-Teleport: %d / 4", _psec);
+		gutil_text(4, 4 + (GFX_GUI_SCALE * 8 + 1) * 10, str, GFX_GUI_SCALE * 8, true);
+	}
+
 	if(gstate.local_player && gstate.local_player->data.local_player.creative)
-		gutil_text(4, 4 + (GFX_GUI_SCALE * 8 + 1) * 8, "CREATIVE", GFX_GUI_SCALE * 8, true);
+		gutil_text(4, 4 + (GFX_GUI_SCALE * 8 + 1) * 11, "CREATIVE", GFX_GUI_SCALE * 8, true);
 	if(gstate.local_player && gstate.local_player->data.local_player.flying)
-		gutil_text(4, 4 + (GFX_GUI_SCALE * 8 + 1) * 9, "FLYING (Sneak=down, double Jump=off)", GFX_GUI_SCALE * 8, true);
+		gutil_text(4, 4 + (GFX_GUI_SCALE * 8 + 1) * 12, "FLYING (Sneak=down, double Jump=off)", GFX_GUI_SCALE * 8, true);
    }
 
 	int icon_offset = GFX_GUI_SCALE * 16;
@@ -615,7 +640,7 @@ static void screen_ingame_render2D(struct screen* s, int width, int height) {
 	else if (gstate.camera_hit.hit) {
 		struct item_data item;
 		struct block_data bd
-			= world_get_block(&gstate.world, gstate.camera_hit.x,
+			= world_get_block(gstate_player_world(gstate_active_player()), gstate.camera_hit.x,
 							  gstate.camera_hit.y, gstate.camera_hit.z);
 		if(blocks[bd.type] && blocks[bd.type]->onRightClick) {
 			icon_offset += gutil_control_icon(icon_offset, IB_ACTION2, "Use");

@@ -52,6 +52,7 @@ enum client_rpc_type {
 	CRPC_SPAWN_POINT,    /* world/player spawn coordinates for compass */
 	CRPC_WORLD_LOADED, /* spawn area chunks loaded + hotbar sent -> start game */
 	CRPC_GAMEMODE,
+	CRPC_PORTAL_LOADING, /* Ladescreen für diesen Spieler zeigen (Portal-Wechsel) */
 };
 
 #ifdef SPLITSCREEN
@@ -73,9 +74,11 @@ struct client_rpc {
 			uint8_t* metadata;
 			uint8_t* lighting_sky;
 			uint8_t* lighting_torch;
+			enum world_dim dimension;
 		} chunk;
 		struct {
 			w_coord_t x, z;
+			enum world_dim dimension;
 		} unload_chunk;
 		struct {
 			uint8_t window;
@@ -85,6 +88,8 @@ struct client_rpc {
 		struct {
 			vec3 position;
 			vec2 rotation;
+			enum world_dim dimension;
+			bool teleport; /* true nur bei Dimensions-Wechsel */
 		} player_pos;
 		uint64_t time_set;
 		struct {
@@ -94,6 +99,7 @@ struct client_rpc {
 		struct {
 			w_coord_t x, y, z;
 			struct block_data block;
+			enum world_dim dimension;
 		} set_block;
 		struct {
 			uint8_t window;
@@ -117,11 +123,13 @@ struct client_rpc {
 			struct item_data item;
 			vec3 pos;
 			vec3 vel;
+			enum world_dim dimension;
 		} spawn_item;
 		struct {
 			uint32_t entity_id;
 			int monster_id;
 			vec3 pos;
+			enum world_dim dimension;
 		} spawn_monster;
 		struct {
 		    uint32_t entity_id;

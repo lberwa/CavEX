@@ -80,8 +80,8 @@ static bool spawner_can_spawn_here(struct server_local* s, w_coord_t x,
 	struct block_data body;
 	struct block_data below;
 
-	if(!server_world_get_block(&s->world, x, y, z, &body)
-	   || !server_world_get_block(&s->world, x, y - 1, z, &below))
+	if(!server_world_get_block(AWORLD(s), x, y, z, &body)
+	   || !server_world_get_block(AWORLD(s), x, y - 1, z, &below))
 		return false;
 
 	if(body.type != BLOCK_AIR)

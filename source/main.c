@@ -378,6 +378,12 @@ int main(void) {
 	menu_screen_set(&screen_mainmenu);
 
 	world_create(&gstate.world);
+	world_create(&gstate.world_nether);
+	gstate.world_nether.dimension = WORLD_DIM_NETHER;
+#ifdef SPLITSCREEN
+	for(int _pi = 0; _pi < 4; _pi++)
+		gstate.player_dims[_pi] = WORLD_DIM_OVERWORLD;
+#endif
 
 	gstate.windows = gstate.windows_by_player[0];
 #ifdef SPLITSCREEN
@@ -495,7 +501,10 @@ int main(void) {
 						% DAY_LENGTH_TICKS)
 			/ (float)DAY_LENGTH_TICKS;
 
+			ptime_t _prof_t0 = time_get();
 			clin_update();
+			gstate.stats.prof_clin_ms = gstate.stats.prof_clin_ms * 0.9f
+				+ time_diff_s(_prof_t0, time_get()) * 1000.0f * 0.1f;
 
 #ifdef TEST_MULTIPLAYER_INPUT
 #ifdef PLATFORM_PC
@@ -522,13 +531,18 @@ int main(void) {
 
 			tick_delta = time_diff_s(last_tick, time_get()) / 0.05F;
 
-		while(tick_delta >= 1.0F) {
-			last_tick = time_add_ms(last_tick, 50);
-			tick_delta -= 1.0F;
-			if(!gstate.paused) {
-				particle_update();
-				entities_client_tick(gstate.entities);
+		{
+			ptime_t _prof_tick0 = time_get();
+			while(tick_delta >= 1.0F) {
+				last_tick = time_add_ms(last_tick, 50);
+				tick_delta -= 1.0F;
+				if(!gstate.paused) {
+					particle_update();
+					entities_client_tick(gstate.entities);
+				}
 			}
+			gstate.stats.prof_tick_ms = gstate.stats.prof_tick_ms * 0.9f
+				+ time_diff_s(_prof_tick0, time_get()) * 1000.0f * 0.1f;
 		}
 
 		render_world
@@ -539,6 +553,7 @@ int main(void) {
 			int player_count = splitscreen_player_count();
 			for(int p = 0; p < player_count; p++) {
 				splitscreen_load_player(p);
+				struct world* upw = gstate_player_world(p); /* Spieler-Welt für Update */
 				#ifdef CAMERA_DEBUG
 				// Debug: verify that camera rotation persists across frames and
 				// doesn't get reset somewhere else.
@@ -562,7 +577,7 @@ int main(void) {
 
 				bool in_water_new = false;
 				struct block_data blk = world_get_block(
-					&gstate.world, floorf(gstate.camera.x),
+					upw, floorf(gstate.camera.x),
 					floorf(gstate.camera.y + 0.1F),
 					floorf(gstate.camera.z));
 				in_water_new = blk.type == BLOCK_WATER_FLOW
@@ -572,7 +587,7 @@ int main(void) {
 				#endif
 					gstate.in_water = in_water_new;
 				#ifndef GFX_FANCY_LIQUIDS
-					world_redraw_chunks(&gstate.world);
+					world_redraw_chunks(upw);
 				}
 				#endif
 
@@ -586,8 +601,12 @@ int main(void) {
 															 gstate.local_player,
 															 4.5f,
 															 &tHit);
-						// Ignore floating item pickups for block interactions.
 						if(hitE && hitE->type == ENTITY_ITEM)
+							hitE = NULL;
+						/* Spieler in anderer Dimension nicht treffbar */
+						if(hitE && hitE->type == ENTITY_LOCAL_PLAYER
+						   && gstate.player_dims[hitE->data.local_player.player_index]
+						      != gstate.player_dims[p])
 							hitE = NULL;
 
 						if(hitE) {
@@ -598,7 +617,7 @@ int main(void) {
 						gstate.camera_hit.entity_hit = false;
 						gstate.camera_hit.entity_id  = 0;
 
-						camera_ray_pick(&gstate.world,
+						camera_ray_pick(upw,
 										gstate.camera.x, gstate.camera.y,
 										gstate.camera.z,
 										gstate.camera.x
@@ -632,6 +651,8 @@ int main(void) {
 			splitscreen_load_player(0);
 		} else {
 #endif
+			{
+			struct world* upw = gstate_player_world(0);
 			if(gstate.local_player)
 				camera_attach(&gstate.camera, gstate.local_player, tick_delta,
 								gstate.stats.dt);
@@ -646,7 +667,7 @@ int main(void) {
 
 			if(render_world) {
 				struct block_data blk = world_get_block(
-					&gstate.world, floorf(gstate.camera.x),
+					upw, floorf(gstate.camera.x),
 					floorf(gstate.camera.y + 0.1F), floorf(gstate.camera.z));
 				in_water_new		
 					= blk.type == BLOCK_WATER_FLOW || blk.type == BLOCK_WATER_STILL;
@@ -655,7 +676,7 @@ int main(void) {
 				#endif
 					gstate.in_water = in_water_new;	
 				#ifndef GFX_FANCY_LIQUIDS
-					world_redraw_chunks(&gstate.world);
+					world_redraw_chunks(upw);
 				}
 				#endif
 			}
@@ -663,8 +684,9 @@ int main(void) {
 			camera_update(&gstate.camera, gstate.in_water);
 
 			if(render_world) {
-				world_pre_render(&gstate.world, &gstate.camera, gstate.camera.view);
-
+				/* world_pre_render wird jetzt erst im Render-Pfad aufgerufen,
+				 * damit world_pre_render_clear() vor world_build_chunks() sicher
+				 * alle Welten leeren kann. */
 				{
 					// 1) Bereken eerst de ray‐origin en direction uit de camera
 					vec3 origin, dir;
@@ -677,9 +699,15 @@ int main(void) {
 															 gstate.local_player,
 															 4.5f,
 															 &tHit);
-						// Ignore floating item pickups for block interactions.
 						if(hitE && hitE->type == ENTITY_ITEM)
 							hitE = NULL;
+						/* Spieler in anderer Dimension nicht treffbar */
+#ifdef SPLITSCREEN
+						if(hitE && hitE->type == ENTITY_LOCAL_PLAYER
+						   && gstate.player_dims[hitE->data.local_player.player_index]
+						      != gstate.player_dims[gstate_active_player()])
+							hitE = NULL;
+#endif
 
 						if (hitE) {
 							gstate.camera_hit.entity_hit = true;
@@ -690,7 +718,7 @@ int main(void) {
 						gstate.camera_hit.entity_hit = false;
 						gstate.camera_hit.entity_id  = 0;
 
-						camera_ray_pick(&gstate.world,
+						camera_ray_pick(upw,
 										gstate.camera.x, gstate.camera.y, gstate.camera.z,
 										gstate.camera.x + sinf(gstate.camera.rx) * sinf(gstate.camera.ry) * 4.5F,
 										gstate.camera.y +            cosf(gstate.camera.ry) * 4.5F,
@@ -706,18 +734,37 @@ int main(void) {
 					}
 				}
 			} else {
-			    world_pre_render_clear(&gstate.world);
+			    world_pre_render_clear(upw);
 			    gstate.camera_hit.hit        = false;
 			    gstate.camera_hit.entity_hit = false;
 			    gstate.camera_hit.entity_id  = 0;
 			}
+			} /* upw block */
 #ifdef SPLITSCREEN
 		}
 #endif
 
 		sdlog("loop: top");
+#ifdef SPLITSCREEN
+		/* Nether-Welt nur verarbeiten wenn ein Spieler darin ist */
+		bool _has_nether = false;
+		for(int _np = 0; _np < splitscreen_player_count(); _np++)
+			if(gstate.player_dims[_np] == WORLD_DIM_NETHER) { _has_nether = true; break; }
+#else
+		bool _has_nether = false;
+#endif
+		/* render-ilist ALLER Welten leeren bevor world_build_chunks iteriert:
+		 * world_pre_render wird erst im Render-Loop aufgerufen. Bis dahin kann
+		 * die ilist Zeiger auf freigegene Chunks enthalten (z.B. nach retire
+		 * wenn kein Spieler mehr in dieser Dimension ist). */
+		world_pre_render_clear(&gstate.world);
 		world_update_lighting(&gstate.world);
 		world_build_chunks(&gstate.world, CHUNK_MESHER_QLENGTH);
+		if(_has_nether) {
+			world_pre_render_clear(&gstate.world_nether);
+			world_update_lighting(&gstate.world_nether);
+			world_build_chunks(&gstate.world_nether, CHUNK_MESHER_QLENGTH);
+		}
 
 		sdlog("loop: vor screen->update");
 		if(gstate.current_screen->update)
@@ -749,6 +796,7 @@ int main(void) {
 		gfx_flip_buffers(&gstate.stats.dt_gpu, &gstate.stats.dt_vsync);
 		sdlog("loop: nach gfx_flip_buffers");
 
+		ptime_t _prof_render0 = time_get();
 		bool rendered_2d = false;
 		if(!gstate.paused) {
 			// must not modify displaylists while still rendering!
@@ -760,8 +808,21 @@ int main(void) {
 			 * player's render set was adopted, so every other player's visible
 			 * chunks leaked a ref each frame and could never be freed. */
 			world_render_retire(&gstate.world);
+			/* Nether retire nur wenn letzten Frame ein adopt stattfand */
+			static bool s_nether_adopted = false;
+			if(s_nether_adopted) {
+				world_render_retire(&gstate.world_nether);
+				/* render-ilist sofort leeren: retire befreit die Chunks via
+				 * chunk_unref, aber die Zeiger in world_nether.render bleiben
+				 * sonst stehen (dangling). Nächstes world_build_chunks würde
+				 * die ilist iterieren und die Assertion auslösen. */
+				world_pre_render_clear(&gstate.world_nether);
+				s_nether_adopted = false;
+			}
 
 			vec3 top_plane_color, bottom_plane_color, atmosphere_color;
+			/* Vorberechnung für non-splitscreen; in SPLITSCREEN wird
+			 * daytime_sky_colors pro Spieler neu berechnet. */
 			daytime_sky_colors(daytime, top_plane_color, bottom_plane_color,
 								 atmosphere_color);
 
@@ -779,6 +840,39 @@ int main(void) {
 					splitscreen_viewport_rect(p, player_count, &vp_x, &vp_y,
 											  &vp_w, &vp_h);
 					splitscreen_load_player(p);
+
+					/* Portal-Ladescreen: 3D komplett überspringen. */
+					if(gstate.portal_loading[p]) {
+						int _vx, _vy, _vw, _vh;
+						splitscreen_viewport_rect(p, player_count, &_vx, &_vy, &_vw, &_vh);
+						gfx_viewport(_vx, _vy, _vw, _vh);
+						gfx_scissor(true, _vx, _vy, _vw, _vh);
+						gfx_mode_gui_viewport(_vw, _vh);
+						gfx_blending(MODE_OFF);
+						gfx_texture(false);
+						gfx_alpha_test(false);
+						gfx_draw_quads(4,
+							(int16_t[]){0,0,0, _vw,0,0, _vw,_vh,0, 0,_vh,0},
+							(uint8_t[]){0,0,0,255, 0,0,0,255, 0,0,0,255, 0,0,0,255},
+							(uint16_t[]){0,0, 0,0, 0,0, 0,0});
+						gfx_texture(true);
+						if(gstate.player_dims[p] == WORLD_DIM_OVERWORLD)
+							gutil_bg_block(TEXAT_NETHERRACK);
+						else
+							gutil_bg();
+						gutil_text(_vw / 2 - 100, _vh / 2 - 8,
+						           "Loading World ...",
+						           GFX_GUI_SCALE * 8, true);
+						gfx_scissor(false, 0, 0, 0, 0);
+						splitscreen_store_player(p);
+						continue;
+					}
+
+					struct world* pw = gstate_player_world(p);
+					/* Himmelsfarben pro Spieler basierend auf seiner Dimension */
+					daytime_render_dim = pw->dimension;
+					daytime_sky_colors(daytime, top_plane_color, bottom_plane_color,
+									   atmosphere_color);
 					struct screen* active_screen
 						= gstate.current_screen == &screen_ingame ?
 							  screen_get_player(p) :
@@ -792,15 +886,16 @@ int main(void) {
 					 * The centering gives a negative origin for the top player;
 					 * gfx_viewport takes signed coords, so this works on both PC
 					 * (GL) and Wii (GX) -- the scissor below does the cropping. */
-					{
-						int fw = gfx_width(), fh = gfx_height();
-						float cover
-							= fmaxf((float)vp_w / fw, (float)vp_h / fh);
-						int pw = (int)roundf(fw * cover);
-						int ph = (int)roundf(fh * cover);
-						gfx_viewport(vp_x + vp_w / 2 - pw / 2,
-									 vp_y + vp_h / 2 - ph / 2, pw, ph);
-					}
+					/* Cover-Viewport-Koordinaten berechnen und speichern
+					 * (werden unten für den Wii-Hintergrund-Quad wiederverwendet). */
+					int cvp_fw = gfx_width(), cvp_fh = gfx_height();
+					float cvp_cover = fmaxf((float)vp_w / cvp_fw,
+					                        (float)vp_h / cvp_fh);
+					int cvp_pw = (int)roundf(cvp_fw * cvp_cover);
+					int cvp_ph = (int)roundf(cvp_fh * cvp_cover);
+					int cvp_ox = vp_x + vp_w / 2 - cvp_pw / 2;
+					int cvp_oy = vp_y + vp_h / 2 - cvp_ph / 2;
+					gfx_viewport(cvp_ox, cvp_oy, cvp_pw, cvp_ph);
 					gfx_scissor(true, vp_x, vp_y, vp_w, vp_h);
 
 					if(render_world) {
@@ -819,7 +914,7 @@ int main(void) {
 						camera_update_viewport(&gstate.camera, gstate.in_water,
 											   (float)gfx_width()
 												   / (float)gfx_height());
-						world_pre_render(&gstate.world, &gstate.camera,
+						world_pre_render(pw, &gstate.camera,
 										 gstate.camera.view);
 
 					gfx_mode_world();
@@ -827,15 +922,48 @@ int main(void) {
 
 					if(render_world) {
 						gfx_update_light(daytime_brightness(daytime),
-										 world_dimension_light(&gstate.world));
+										 world_dimension_light(pw));
 
-						if(gstate.world.dimension == WORLD_DIM_OVERWORLD)
-							gutil_sky_box(gstate.camera.view,
-											daytime_celestial_angle(daytime),
-											top_plane_color, bottom_plane_color);
+#ifndef PLATFORM_PC
+						/* Wii: GX_SetCopyClear ist global und löscht beim
+						 * Frame-Ende das gesamte EFB mit der letzten gesetzten
+						 * Farbe (= Spieler 2). Daher füllen wir den Hintergrund
+						 * für jeden Spieler explizit mit einem 2D-Quad. */
+						{
+							uint8_t _br = (uint8_t)atmosphere_color[0];
+							uint8_t _bg = (uint8_t)atmosphere_color[1];
+							uint8_t _bb = (uint8_t)atmosphere_color[2];
+							gfx_viewport(vp_x, vp_y, vp_w, vp_h);
+							gfx_mode_gui_viewport(vp_w, vp_h);
+							gfx_texture(false);
+							gfx_blending(MODE_OFF);
+							gfx_alpha_test(false);
+							gfx_draw_quads(4,
+								(int16_t[]){0,0,0, vp_w,0,0,
+								            vp_w,vp_h,0, 0,vp_h,0},
+								(uint8_t[]){_br,_bg,_bb,0xFF,
+								            _br,_bg,_bb,0xFF,
+								            _br,_bg,_bb,0xFF,
+								            _br,_bg,_bb,0xFF},
+								(uint16_t[]){0,0, 0,0, 0,0, 0,0});
+							gfx_viewport(cvp_ox, cvp_oy, cvp_pw, cvp_ph);
+							gfx_scissor(true, vp_x, vp_y, vp_w, vp_h);
+							gfx_mode_world();
+							gfx_matrix_projection(gstate.camera.projection, true);
+						}
+#endif
+
+						/* Sky-Box immer rendern: scissor-aware Quads setzen den
+					 * Hintergrund korrekt pro Spieler-Viewport. Im Nether
+					 * sind die Farben dunkelrot; Sonne/Sterne werden vom
+					 * Bedrock-Deckel und dem Nether-Nebel verdeckt. */
+					gutil_sky_box(gstate.camera.view,
+									daytime_celestial_angle(daytime),
+									atmosphere_color,
+									top_plane_color, bottom_plane_color);
 
 						gstate.stats.chunks_rendered
-							= world_render(&gstate.world, &gstate.camera, false);
+							= world_render(pw, &gstate.camera, false);
 					} else {
 						gstate.stats.chunks_rendered = 0;
 					}
@@ -858,15 +986,15 @@ int main(void) {
 									gstate.camera.z},
 							tick_delta);
 						entities_client_render(gstate.entities, &gstate.camera,
-											   tick_delta);
+											   pw, tick_delta);
 						gfx_fog(true);
 
 						#ifdef GFX_FANCY_LIQUIDS
-						world_render(&gstate.world, &gstate.camera, true);
+						world_render(pw, &gstate.camera, true);
 						#endif
 
 						#ifdef GFX_CLOUDS
-						if(gstate.world.dimension == WORLD_DIM_OVERWORLD)
+						if(pw->dimension == WORLD_DIM_OVERWORLD)
 							gutil_clouds(gstate.camera.view,
 							daytime_brightness(daytime));
 						#endif
@@ -921,8 +1049,11 @@ int main(void) {
 					/* Adopt this player's rendered set (both world_render passes
 					 * above used it) so its reference survives to next frame's
 					 * retire. Must run once per world_pre_render / per player. */
-					if(render_world)
-						world_render_adopt(&gstate.world);
+					if(render_world) {
+						world_render_adopt(pw);
+						if(pw == &gstate.world_nether)
+							s_nether_adopted = true;
+					}
 
 					splitscreen_store_player(p);
 				}
@@ -931,6 +1062,13 @@ int main(void) {
 				rendered_2d = true;
 			} else {
 #endif
+				{
+				/* Einzel-Spieler: aktuelle Spieler-Welt bestimmen */
+				struct world* spw = gstate_player_world(0);
+				daytime_render_dim = spw->dimension;
+				daytime_sky_colors(daytime, top_plane_color, bottom_plane_color,
+								   atmosphere_color);
+
 				if(render_world) {
 					gfx_clear_buffers(atmosphere_color[0], atmosphere_color[1],
 										atmosphere_color[2]);
@@ -945,16 +1083,18 @@ int main(void) {
 				gfx_matrix_projection(gstate.camera.projection, true);
 
 				if(render_world) {
-					gfx_update_light(daytime_brightness(daytime),
-									 world_dimension_light(&gstate.world));
+					world_pre_render(spw, &gstate.camera, gstate.camera.view);
 
-					if(gstate.world.dimension == WORLD_DIM_OVERWORLD)
-						gutil_sky_box(gstate.camera.view,
-										daytime_celestial_angle(daytime),
-										top_plane_color, bottom_plane_color);
+					gfx_update_light(daytime_brightness(daytime),
+									 world_dimension_light(spw));
+
+					gutil_sky_box(gstate.camera.view,
+									daytime_celestial_angle(daytime),
+									atmosphere_color,
+									top_plane_color, bottom_plane_color);
 
 					gstate.stats.chunks_rendered
-						= world_render(&gstate.world, &gstate.camera, false);
+						= world_render(spw, &gstate.camera, false);
 				} else {
 					gstate.stats.chunks_rendered = 0;
 				}
@@ -976,25 +1116,25 @@ int main(void) {
 						(vec3) {gstate.camera.x, gstate.camera.y, gstate.camera.z},
 						tick_delta);
 					entities_client_render(gstate.entities, &gstate.camera,
-										   tick_delta);
+										   spw, tick_delta);
 					gfx_fog(true);
 
 					#ifdef GFX_FANCY_LIQUIDS
-					world_render(&gstate.world, &gstate.camera, true);
+					world_render(spw, &gstate.camera, true);
 					#endif
 
 					#ifdef GFX_CLOUDS
-					if(gstate.world.dimension == WORLD_DIM_OVERWORLD)
+					if(spw->dimension == WORLD_DIM_OVERWORLD)
 						gutil_clouds(gstate.camera.view,
 						daytime_brightness(daytime));
 					#endif
 
-					/* Single-view path: adopt the set built by world_pre_render
-					 * (update phase) and rendered above, so its reference
-					 * survives to next frame's world_render_retire. */
-					world_render_adopt(&gstate.world);
+					world_render_adopt(spw);
+					if(spw == &gstate.world_nether)
+						s_nether_adopted = true;
 				}
 
+				} /* spw block */
 				gfx_mode_gui();
 
 				if(gstate.in_water) {
@@ -1012,13 +1152,37 @@ int main(void) {
 #endif // SPLITSCREEN
 		}
 
+		gstate.stats.prof_render_ms = gstate.stats.prof_render_ms * 0.9f
+			+ time_diff_s(_prof_render0, time_get()) * 1000.0f * 0.1f;
+
+		ptime_t _prof_gui0 = time_get();
 		if(!rendered_2d) {
 			struct screen* active_screen = gstate.current_screen == &screen_ingame ?
 				screen_get_player(0) :
 				gstate.current_screen;
-			if(active_screen->render2D)
+			if(gstate.portal_loading[0]) {
+				/* Single-Player Portal-Ladescreen */
+				int gw = gfx_width(), gh = gfx_height();
+				gfx_mode_gui();
+				gfx_blending(MODE_OFF);
+				gfx_texture(false);
+				gfx_alpha_test(false);
+				gfx_draw_quads(
+					4,
+					(int16_t[]){0, 0, 0, gw, 0, 0, gw, gh, 0, 0, gh, 0},
+					(uint8_t[]){0,0,0,255, 0,0,0,255, 0,0,0,255, 0,0,0,255},
+					(uint16_t[]){0,0, 0,0, 0,0, 0,0});
+				gfx_texture(true);
+				if(gstate.player_dims[0] == WORLD_DIM_OVERWORLD)
+					gutil_bg_block(TEXAT_NETHERRACK);
+				else
+					gutil_bg();
+				gutil_text(gw / 2 - 100, gh / 2 - 8, "Loading World ...",
+				           GFX_GUI_SCALE * 8, true);
+			} else if(active_screen->render2D) {
 				active_screen->render2D(active_screen, gfx_width(),
 										gfx_height());
+			}
 		}
 
 #ifdef SPLITSCREEN
@@ -1058,29 +1222,22 @@ int main(void) {
 #ifdef PLATFORM_PC
 		pc_update();
 #endif
+		gstate.stats.prof_gui_ms = gstate.stats.prof_gui_ms * 0.9f
+			+ time_diff_s(_prof_gui0, time_get()) * 1000.0f * 0.1f;
+
 		sdlog("loop: vor sound_update");
 		sound_update();
 		sdlog("loop: vor input_poll");
 		input_poll();
 		sdlog("loop: vor gfx_finish");
+		ptime_t _prof_finish0 = time_get();
 		gfx_finish(true);
+		gstate.stats.prof_finish_ms = gstate.stats.prof_finish_ms * 0.9f
+			+ time_diff_s(_prof_finish0, time_get()) * 1000.0f * 0.1f;
 		sdlog("loop: nach gfx_finish (Frame-Ende)");
 
 //--------------------------------------------------------------------
-	#ifdef DEBUGSEND
-		/*
-		char text1[64];
-		char text2[64];
-
-		snprintf(text1, sizeof(text1),
-        		 "MEM1 free: %u bytes",
-        		 (unsigned int)((u8*)__Arena1Hi - (u8*)__Arena1Lo));
-
-		snprintf(text2, sizeof(text2),
-        		 "MEM2 free: %u bytes",
-        		 (unsigned int)((u8*)__Arena2Hi - (u8*)__Arena2Lo));
-
-*/
+	#if 0
 /*
 		u32 mem1_free = (u32)((u8*)__Arena1Hi - (u8*)__Arena1Lo);
 		u32 mem2_free = (u32)((u8*)__Arena2Hi - (u8*)__Arena2Lo);

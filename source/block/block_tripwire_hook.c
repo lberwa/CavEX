@@ -27,7 +27,7 @@ static bool hook_has_support(struct server_local* s, struct block_info* this) {
 	struct block_data support;
 
 	blocks_side_offset(blocks_side_opposite(hook_side(this->block)), &ox, &oy, &oz);
-	if(!server_world_get_block(&s->world, this->x + ox, this->y + oy,
+	if(!server_world_get_block(AWORLD(s), this->x + ox, this->y + oy,
 							   this->z + oz, &support))
 		return false;
 	return blocks[support.type] && !blocks[support.type]->can_see_through;
@@ -95,7 +95,7 @@ static void hook_sync_line(struct server_local* s, struct block_info* info) {
 		w_coord_t y = info->y + oy * step;
 		w_coord_t z = info->z + oz * step;
 
-		if(!server_world_get_block(&s->world, x, y, z, &blk))
+		if(!server_world_get_block(AWORLD(s), x, y, z, &blk))
 			break;
 
 		if(blk.type == BLOCK_TRIPWIRE) {
@@ -135,7 +135,7 @@ static void hook_sync_line(struct server_local* s, struct block_info* info) {
 
 	for(size_t i = 0; i < line_len; i++) {
 		struct block_data blk;
-		if(!server_world_get_block(&s->world, line_x[i], line_y[i], line_z[i], &blk)
+		if(!server_world_get_block(AWORLD(s), line_x[i], line_y[i], line_z[i], &blk)
 		   || blk.type != BLOCK_TRIPWIRE)
 			continue;
 		if((blk.metadata & 0x04) == (attached ? 0x04 : 0x00))

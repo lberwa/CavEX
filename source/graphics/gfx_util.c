@@ -235,9 +235,9 @@ void gutil_clouds(mat4 view_matrix, float brightness) {
 	gfx_fog(false);
 }
 
-void gutil_sky_box(mat4 view_matrix, float celestial_angle, vec3 color_top,
-				   vec3 color_bottom) {
-	assert(view_matrix && color_top && color_bottom);
+void gutil_sky_box(mat4 view_matrix, float celestial_angle, vec3 color_atmosphere,
+				   vec3 color_top, vec3 color_bottom) {
+	assert(view_matrix && color_atmosphere && color_top && color_bottom);
 
 	gfx_alpha_test(false);
 	gfx_write_buffers(true, false, false);
@@ -255,6 +255,38 @@ void gutil_sky_box(mat4 view_matrix, float celestial_angle, vec3 color_top,
 
 	// render a bit larger for possible inaccuracy
 	float size = gstate.config.fog_distance + 4;
+
+	/* Vier Seitenwände: füllen den horizontalen Mittelbereich mit der
+	 * Atmosphärenfarbe. Ohne diese Wände wird der Bereich zwischen den
+	 * Top- und Bottom-Ebenen vom Hintergrund-Clear abgedeckt — was auf
+	 * der Wii (GX_SetCopyClear = global) im Split-Screen die falsche
+	 * Farbe des zuletzt gerenderten Spielers zeigt. */
+	uint8_t ar = color_atmosphere[0], ag = color_atmosphere[1],
+	        ab = color_atmosphere[2];
+	/* -Z Wand */
+	gfx_draw_quads(4,
+		(int16_t[]){-size, -32, -size,  size, -32, -size,
+		             size,  16, -size, -size,  16, -size},
+		(uint8_t[]){ar,ag,ab,0xFF, ar,ag,ab,0xFF, ar,ag,ab,0xFF, ar,ag,ab,0xFF},
+		(uint16_t[]){0,0, 0,0, 0,0, 0,0});
+	/* +Z Wand */
+	gfx_draw_quads(4,
+		(int16_t[]){ size, -32,  size, -size, -32,  size,
+		            -size,  16,  size,  size,  16,  size},
+		(uint8_t[]){ar,ag,ab,0xFF, ar,ag,ab,0xFF, ar,ag,ab,0xFF, ar,ag,ab,0xFF},
+		(uint16_t[]){0,0, 0,0, 0,0, 0,0});
+	/* -X Wand */
+	gfx_draw_quads(4,
+		(int16_t[]){-size, -32,  size, -size, -32, -size,
+		            -size,  16, -size, -size,  16,  size},
+		(uint8_t[]){ar,ag,ab,0xFF, ar,ag,ab,0xFF, ar,ag,ab,0xFF, ar,ag,ab,0xFF},
+		(uint16_t[]){0,0, 0,0, 0,0, 0,0});
+	/* +X Wand */
+	gfx_draw_quads(4,
+		(int16_t[]){ size, -32, -size,  size, -32,  size,
+		             size,  16,  size,  size,  16, -size},
+		(uint8_t[]){ar,ag,ab,0xFF, ar,ag,ab,0xFF, ar,ag,ab,0xFF, ar,ag,ab,0xFF},
+		(uint16_t[]){0,0, 0,0, 0,0, 0,0});
 
 	gfx_draw_quads(4,
 				   (int16_t[]) {-size, 16, -size, -size, 16, size, size, 16,
@@ -278,31 +310,34 @@ void gutil_sky_box(mat4 view_matrix, float celestial_angle, vec3 color_top,
 	gfx_fog(false);
 	gfx_texture(true);
 
-	gutil_render_stars(view_matrix, daytime_get_time());
+	if(daytime_render_dim == WORLD_DIM_OVERWORLD)
+		gutil_render_stars(view_matrix, daytime_get_time());
 
-	gfx_blending(MODE_BLEND2);
+	if(daytime_render_dim == WORLD_DIM_OVERWORLD) {
+		gfx_blending(MODE_BLEND2);
 
-	mat4 tmp;
-	glm_translate_to(view_matrix,
-					 (vec3) {gstate.camera.x, gstate.camera.y, gstate.camera.z},
-					 tmp);
-	glm_rotate_x(tmp, glm_rad(celestial_angle * 360.0F), model_view);
-	gfx_matrix_modelview(model_view);
+		mat4 tmp;
+		glm_translate_to(view_matrix,
+						 (vec3) {gstate.camera.x, gstate.camera.y, gstate.camera.z},
+						 tmp);
+		glm_rotate_x(tmp, glm_rad(celestial_angle * 360.0F), model_view);
+		gfx_matrix_modelview(model_view);
 
-	gfx_bind_texture(&texture_sun);
-	gfx_draw_quads(
-		4, (int16_t[]) {-30, 100, -30, -30, 100, 30, 30, 100, 30, 30, 100, -30},
-		(uint8_t[]) {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-					 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
-		(uint16_t[]) {0, 0, 0, 256, 256, 256, 256, 0});
+		gfx_bind_texture(&texture_sun);
+		gfx_draw_quads(
+			4, (int16_t[]) {-30, 100, -30, -30, 100, 30, 30, 100, 30, 30, 100, -30},
+			(uint8_t[]) {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+						 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
+			(uint16_t[]) {0, 0, 0, 256, 256, 256, 256, 0});
 
-	gfx_bind_texture(&texture_moon);
-	gfx_draw_quads(4,
-				   (int16_t[]) {-20, -100, -20, 20, -100, -20, 20, -100, 20,
-								-20, -100, 20},
-				   (uint8_t[]) {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-								0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
-				   (uint16_t[]) {0, 0, 0, 256, 256, 256, 256, 0});
+		gfx_bind_texture(&texture_moon);
+		gfx_draw_quads(4,
+					   (int16_t[]) {-20, -100, -20, 20, -100, -20, 20, -100, 20,
+									-20, -100, 20},
+					   (uint8_t[]) {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+									0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
+					   (uint16_t[]) {0, 0, 0, 256, 256, 256, 256, 0});
+	}
 
 	gfx_blending(MODE_OFF);
 	gfx_write_buffers(true, true, true);

@@ -33,6 +33,7 @@
 #include "../gfx.h"
 #include "../input.h"
 #include "../texture.h"
+#include "../thread.h"
 #include "shaders_fallback.h"
 
 #include <sys/stat.h>
@@ -194,6 +195,10 @@ int gfx_gui_height(void) {
 	return gui_logical_h;
 }
 
+int gfx_window_width(void)  { return window_width;  }
+int gfx_window_height(void) { return window_height; }
+
+
 void gfx_pointer_to_gui(float* x, float* y) {
 	/* window pixels -> logical GUI coordinates (the GUI is rendered at
 	 * gui_logical_* and scaled onto the window) */
@@ -287,13 +292,27 @@ static void gfx_resize_gui_fbo(int win_w, int win_h) {
 	glBindTexture(GL_TEXTURE_2D, 0);
 }
 
+void gfx_apply_render_scale(int pct) {
+	if(pct < 0)   pct = 0;
+	if(pct > 100) pct = 100;
+
+	int min_w = (window_width  < GFX_PC_WINDOW_WIDTH)  ? window_width  : GFX_PC_WINDOW_WIDTH;
+	int min_h = (window_height < GFX_PC_WINDOW_HEIGHT) ? window_height : GFX_PC_WINDOW_HEIGHT;
+
+	int new_w = min_w + (window_width  - min_w) * pct / 100;
+	int new_h = min_h + (window_height - min_h) * pct / 100;
+
+	if(new_w < 1) new_w = 1;
+	if(new_h < 1) new_h = 1;
+
+	gfx_resize_fbo(new_w, new_h);
+}
+
 static void framebuffer_size_callback(GLFWwindow* window, int width,
 									  int height) {
 	window_width = width;
 	window_height = height;
-	/* 3D renders at the native window resolution (crisp). */
-	gfx_resize_fbo(width, height);
-	/* GUI uses uniform scaling: recompute its logical resolution. */
+	gfx_apply_render_scale(gstate.settings.render_scale_pct);
 	gfx_resize_gui_fbo(width, height);
 }
 
@@ -327,6 +346,7 @@ void gfx_setup() {
 	window
 		= glfwCreateWindow(window_width, window_height, GAME_NAME, NULL, NULL);
 	glfwMakeContextCurrent(window);
+	glfwSwapInterval(1);
 
 	glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
 	// glfwSetScrollCallback(window, scroll_callback);
@@ -495,6 +515,11 @@ void gfx_clear_buffers(uint8_t r, uint8_t g, uint8_t b) {
 	clear_g = g / 255.0F;
 	clear_b = b / 255.0F;
 	glClearColor(clear_r, clear_g, clear_b, 1.0F);
+	/* Sofort clearen (Scissor-aware): im Split-Screen liegt der Scissor auf dem
+	 * Spieler-Streifen, sodass jeder Spieler seinen eigenen Hintergrund bekommt.
+	 * Im Einzel-Spieler-Modus ist kein Scissor aktiv → gesamter FBO wird gecleart. */
+	gfx_write_buffers(true, true, true);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 }
 
 void gfx_crosshair(struct tex_gfx* tex, int x, int y, int tx, int ty, int sx,
@@ -592,7 +617,7 @@ void gfx_finish(bool vsync) {
 	gfx_composite_to_default();
 	xhair_show = false;
 
-	glfwSwapBuffers(window);
+	glfwSwapBuffers(window); /* blockiert bis VSync → exakt 60 fps wenn Frame < 16 ms */
 
 	/* clear the GUI FBO transparent for the next frame */
 	glBindFramebuffer(GL_FRAMEBUFFER, fbo_gui);
@@ -611,8 +636,10 @@ void gfx_finish(bool vsync) {
 }
 
 void gfx_flip_buffers(float* gpu_wait, float* vsync_wait) {
-	*gpu_wait = 0;
-	*vsync_wait = 0;
+	/* glFinish() würde CPU/GPU vollständig serialisieren und 10-30ms Overhead
+	 * pro Frame erzeugen — nicht verwenden. Frame-Cap läuft über gfx_finish. */
+	*gpu_wait   = 0.0F;
+	*vsync_wait = 0.0F;
 }
 
 void gfx_bind_texture(struct tex_gfx* tex) {

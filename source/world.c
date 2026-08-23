@@ -1336,9 +1336,12 @@ static const float light_lookup_overworld[16] = {
 	0.261F, 0.309F, 0.367F, 0.437F, 0.525F, 0.638F, 0.789F, 1.0F,
 };
 
+/* Nether-Helligkeitstabelle: Level 0 entspricht visuell Overworld-Level 8
+ * (0.261F), da der Nether niemals völlig finster ist (Ambient-Licht).
+ * Die Kurve ist exponentiell bis 1.0 bei Level 15. */
 static const float light_lookup_nether[16] = {
-	0.1F, 0.116F, 0.133F, 0.153F, 0.175F, 0.2F,	  0.229F, 0.262F,
-	0.3F, 0.345F, 0.4F,	  0.467F, 0.55F,  0.657F, 0.8F,	  1.0F,
+	0.261F, 0.285F, 0.312F, 0.342F, 0.373F, 0.408F, 0.446F, 0.488F,
+	0.534F, 0.584F, 0.639F, 0.698F, 0.764F, 0.835F, 0.914F, 1.0F,
 };
 
 const float* world_dimension_light(struct world* w) {

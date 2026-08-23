@@ -27,6 +27,7 @@
 #include "../cglm/cglm.h"
 
 #include "../item/window_container.h"
+#include "../particle.h"
 #include "../platform/thread.h"
 #include "../daytime.h"
 #ifdef SPLITSCREEN
@@ -38,10 +39,15 @@
 #include "server_local.h"
 #include "server_world.h"
 #include "complex_block_archive.h"
+#include "../parson/parson.h"
 #include "../entity/entity_monster.h"
 #ifdef PLATFORM_WII
 #include <malloc.h>
 #include <ogc/system.h>
+#endif
+
+#ifdef PLATFORM_PC
+// #define PORTAL_DEBUG
 #endif
 
 volatile int g_effective_view_distance = MAX_VIEW_DISTANCE;
@@ -262,9 +268,9 @@ static bool server_local_find_animal_spawn(struct server_local* s, float px,
 
 		struct block_data ground, body, head;
 		for(int y = WORLD_HEIGHT - 2; y >= 1; y--) {
-			if(!server_world_get_block(&s->world, sx, y - 1, sz, &ground)
-			   || !server_world_get_block(&s->world, sx, y, sz, &body)
-			   || !server_world_get_block(&s->world, sx, y + 1, sz, &head))
+			if(!server_world_get_block(AWORLD(s), sx, y - 1, sz, &ground)
+			   || !server_world_get_block(AWORLD(s), sx, y, sz, &body)
+			   || !server_world_get_block(AWORLD(s), sx, y + 1, sz, &head))
 				break;
 
 			if((ground.type == BLOCK_GRASS || ground.type == BLOCK_DIRT)
@@ -301,9 +307,9 @@ static bool server_local_find_dark_monster_spawn(struct server_local* s, float p
 
 		struct block_data ground, body, head;
 		for(int y = WORLD_HEIGHT - 2; y >= 1; y--) {
-			if(!server_world_get_block(&s->world, sx, y - 1, sz, &ground)
-			   || !server_world_get_block(&s->world, sx, y, sz, &body)
-			   || !server_world_get_block(&s->world, sx, y + 1, sz, &head))
+			if(!server_world_get_block(AWORLD(s), sx, y - 1, sz, &ground)
+			   || !server_world_get_block(AWORLD(s), sx, y, sz, &body)
+			   || !server_world_get_block(AWORLD(s), sx, y + 1, sz, &head))
 				break;
 
 			if((ground.type == BLOCK_GRASS || ground.type == BLOCK_DIRT)
@@ -324,7 +330,7 @@ static void server_local_try_spawn_nearby_animal(struct server_local* s, float p
 												 float py, float pz) {
 	assert(s);
 
-	if(!s->world.generator.finisher_animals)
+	if(!s->worlds[0].generator.finisher_animals)
 		return;
 
 	if(!server_local_is_daytime(s))
@@ -375,14 +381,14 @@ static bool portal_scan_axis(struct server_local* s,
 	/* find vertical bounds (y) starting from sy */
 	int y_min = sy, y_max = sy;
 	while(y_min > 0) {
-		if(!server_world_get_block(&s->world, sx, y_min - 1, sz, &blk)
+		if(!server_world_get_block(AWORLD(s), sx, y_min - 1, sz, &blk)
 		   || blk.type != BLOCK_AIR)
 			break;
 		if(sy - (--y_min) > PORTAL_MAX_SIDE)
 			return false;
 	}
 	while(y_max < WORLD_HEIGHT - 1) {
-		if(!server_world_get_block(&s->world, sx, y_max + 1, sz, &blk)
+		if(!server_world_get_block(AWORLD(s), sx, y_max + 1, sz, &blk)
 		   || blk.type != BLOCK_AIR)
 			break;
 		if((++y_max) - sy > PORTAL_MAX_SIDE)
@@ -393,7 +399,7 @@ static bool portal_scan_axis(struct server_local* s,
 	int h_min = 0, h_max = 0;
 	while(true) {
 		int nh = h_min - 1;
-		if(!server_world_get_block(&s->world, sx + hdx * nh, sy, sz + hdz * nh, &blk)
+		if(!server_world_get_block(AWORLD(s), sx + hdx * nh, sy, sz + hdz * nh, &blk)
 		   || blk.type != BLOCK_AIR)
 			break;
 		h_min = nh;
@@ -402,7 +408,7 @@ static bool portal_scan_axis(struct server_local* s,
 	}
 	while(true) {
 		int nh = h_max + 1;
-		if(!server_world_get_block(&s->world, sx + hdx * nh, sy, sz + hdz * nh, &blk)
+		if(!server_world_get_block(AWORLD(s), sx + hdx * nh, sy, sz + hdz * nh, &blk)
 		   || blk.type != BLOCK_AIR)
 			break;
 		h_max = nh;
@@ -418,26 +424,26 @@ static bool portal_scan_axis(struct server_local* s,
 	/* verify top/bottom border = obsidian */
 	for(int h = h_min; h <= h_max; h++) {
 		int nx = sx + hdx * h, nz = sz + hdz * h;
-		if(!server_world_get_block(&s->world, nx, y_min - 1, nz, &blk)
+		if(!server_world_get_block(AWORLD(s), nx, y_min - 1, nz, &blk)
 		   || blk.type != BLOCK_OBSIDIAN)
 			return false;
-		if(!server_world_get_block(&s->world, nx, y_max + 1, nz, &blk)
+		if(!server_world_get_block(AWORLD(s), nx, y_max + 1, nz, &blk)
 		   || blk.type != BLOCK_OBSIDIAN)
 			return false;
 	}
 
 	/* verify left/right border = obsidian, interior = air */
 	for(int y = y_min; y <= y_max; y++) {
-		if(!server_world_get_block(&s->world, sx + hdx * (h_min - 1), y,
+		if(!server_world_get_block(AWORLD(s), sx + hdx * (h_min - 1), y,
 		                           sz + hdz * (h_min - 1), &blk)
 		   || blk.type != BLOCK_OBSIDIAN)
 			return false;
-		if(!server_world_get_block(&s->world, sx + hdx * (h_max + 1), y,
+		if(!server_world_get_block(AWORLD(s), sx + hdx * (h_max + 1), y,
 		                           sz + hdz * (h_max + 1), &blk)
 		   || blk.type != BLOCK_OBSIDIAN)
 			return false;
 		for(int h = h_min; h <= h_max; h++) {
-			if(!server_world_get_block(&s->world, sx + hdx * h, y,
+			if(!server_world_get_block(AWORLD(s), sx + hdx * h, y,
 			                           sz + hdz * h, &blk)
 			   || blk.type != BLOCK_AIR)
 				return false;
@@ -457,6 +463,13 @@ static bool portal_scan_axis(struct server_local* s,
 			                       });
 		}
 	}
+
+	/* Portal im aktuellen Spieler-Dimension registrieren.
+	 * Eintragspunkt: linke untere Ecke des Innenraums (h_min, y_min). */
+	int reg_x = sx + hdx * h_min;
+	int reg_z = sz + hdz * h_min;
+	server_local_register_portal(s, reg_x, y_min, reg_z,
+	                              s->players[s->active_player_id].dimension);
 	return true;
 }
 
@@ -471,9 +484,14 @@ void server_local_collapse_portal(struct server_local* s, int x, int y, int z) {
 	int top = 0;
 
 	struct block_data blk;
-	if(!server_world_get_block(&s->world, x, y, z, &blk)
+	if(!server_world_get_block(AWORLD(s), x, y, z, &blk)
 	   || blk.type != BLOCK_PORTAL)
 		return;
+
+	/* Bounding-Box der tatsächlich kollabierten Portal-Blöcke mitführen,
+	 * damit nur DIESES Portal aus der Registry entfernt wird (und nicht
+	 * benachbarte, eigenständige Portale im pauschalen 8-Block-Radius). */
+	int min_x = x, max_x = x, min_z = z, max_z = z;
 
 	sx[top] = x; sy[top] = y; sz[top] = z; top++;
 	server_world_set_block(s, x, y, z,
@@ -489,17 +507,487 @@ void server_local_collapse_portal(struct server_local* s, int x, int y, int z) {
 			int nx = cx + dirs[d][0];
 			int ny = cy + dirs[d][1];
 			int nz = cz + dirs[d][2];
-			if(!server_world_get_block(&s->world, nx, ny, nz, &blk)
+			if(!server_world_get_block(AWORLD(s), nx, ny, nz, &blk)
 			   || blk.type != BLOCK_PORTAL)
 				continue;
 			if(top >= MAX_PORTAL_BLOCKS)
 				continue;
+			if(nx < min_x) min_x = nx;
+			if(nx > max_x) max_x = nx;
+			if(nz < min_z) min_z = nz;
+			if(nz > max_z) max_z = nz;
 			sx[top] = nx; sy[top] = ny; sz[top] = nz; top++;
 			server_world_set_block(s, nx, ny, nz,
 			                       (struct block_data) {.type = BLOCK_AIR});
 		}
 	}
+
+	/* Nur registrierte Portale löschen, deren Position INNERHALB der
+	 * kollabierten Region liegt (±1 Block Toleranz für die Frame-Kante).
+	 * Ein separates Portal daneben bleibt erhalten. */
+	enum world_dim dim = s->players[s->active_player_id].dimension;
+	int di = WDIM_IDX(dim);
+	for(int i = 0; i < MAX_PORTAL_ENTRIES; i++) {
+		if(!s->portal_registry[di][i].valid) continue;
+		int rx = s->portal_registry[di][i].x;
+		int rz = s->portal_registry[di][i].z;
+		if(rx >= min_x - 1 && rx <= max_x + 1
+		   && rz >= min_z - 1 && rz <= max_z + 1) {
+#ifdef PORTAL_DEBUG
+			printf("[PORTAL] collapse: entferne slot=%d x=%d y=%d z=%d dim=%s "
+			       "(in kollabierter Region x[%d..%d] z[%d..%d])\n",
+			       i, rx, s->portal_registry[di][i].y, rz, di ? "NETHER" : "OW",
+			       min_x, max_x, min_z, max_z);
+#endif
+			s->portal_registry[di][i].valid = false;
+		}
+	}
 #undef MAX_PORTAL_BLOCKS
+}
+
+/* ---- Portal-Registrierung ---- */
+
+/* Registriert ein Portal an (x, y, z) in der gegebenen Dimension.
+ * Doppeleinträge im Umkreis von 4 Blöcken werden übersprungen. */
+/* Debug: gesamte Portal-Registry beider Dimensionen ausgeben. */
+void server_local_dump_portal_registry(struct server_local* s, const char* tag) {
+	const char* dim_name[2] = {"OW    ", "NETHER"};
+
+#ifdef PORTAL_DEBUG
+	printf("[PORTAL] ===== Registry-Dump (%s) =====\n", tag ? tag : "");
+#endif
+
+	for(int di = 0; di < 2; di++) {
+		int count = 0;
+		for(int i = 0; i < MAX_PORTAL_ENTRIES; i++) {
+			if(!s->portal_registry[di][i].valid) continue;
+#ifdef PORTAL_DEBUG
+			printf("[PORTAL]   %s [%d] x=%d y=%d z=%d\n",
+			       dim_name[di], i,
+			       s->portal_registry[di][i].x,
+			       s->portal_registry[di][i].y,
+			       s->portal_registry[di][i].z);
+#endif
+			count++;
+		}
+#ifdef PORTAL_DEBUG
+		if(count == 0)
+			printf("[PORTAL]   %s (leer)\n", dim_name[di]);
+#endif
+	}
+#ifdef PORTAL_DEBUG
+	printf("[PORTAL] ================================\n");
+#endif
+}
+
+void server_local_register_portal(struct server_local* s,
+                                   int x, int y, int z,
+                                   enum world_dim dim) {
+	int di = WDIM_IDX(dim);
+	/* Duplikat-Check */
+	for(int i = 0; i < MAX_PORTAL_ENTRIES; i++) {
+		if(!s->portal_registry[di][i].valid) continue;
+		if(abs(s->portal_registry[di][i].x - x) <= 4
+		   && abs(s->portal_registry[di][i].z - z) <= 4) {
+#ifdef PORTAL_DEBUG
+			printf("[PORTAL] register SKIP (Duplikat von x=%d z=%d) "
+			       "neu x=%d y=%d z=%d dim=%s\n",
+			       s->portal_registry[di][i].x, s->portal_registry[di][i].z,
+			       x, y, z, di ? "NETHER" : "OW");
+#endif
+			return;
+		}
+	}
+	/* Freien Slot suchen */
+	for(int i = 0; i < MAX_PORTAL_ENTRIES; i++) {
+		if(!s->portal_registry[di][i].valid) {
+			s->portal_registry[di][i].x     = x;
+			s->portal_registry[di][i].y     = y;
+			s->portal_registry[di][i].z     = z;
+			s->portal_registry[di][i].valid = true;
+#ifdef PORTAL_DEBUG
+			printf("[PORTAL] register OK slot=%d x=%d y=%d z=%d dim=%s\n",
+			       i, x, y, z, di ? "NETHER" : "OW");
+#endif
+			return;
+		}
+	}
+#ifdef PORTAL_DEBUG
+	printf("[PORTAL] register FEHLGESCHLAGEN (kein freier Slot) "
+	       "x=%d y=%d z=%d dim=%s\n", x, y, z, di ? "NETHER" : "OW");
+#endif
+}
+
+/* Entfernt alle Portaleinträge innerhalb von 8 Blöcken XZ um (x, z). */
+void server_local_unregister_portal(struct server_local* s,
+                                     int x, int y, int z,
+                                     enum world_dim dim) {
+	(void)y;
+	int di = WDIM_IDX(dim);
+	for(int i = 0; i < MAX_PORTAL_ENTRIES; i++) {
+		if(!s->portal_registry[di][i].valid) continue;
+		if(abs(s->portal_registry[di][i].x - x) <= 8
+		   && abs(s->portal_registry[di][i].z - z) <= 8) {
+#ifdef PORTAL_DEBUG
+			printf("[PORTAL] unregister slot=%d x=%d y=%d z=%d dim=%s "
+			       "(nahe x=%d z=%d)\n",
+			       i, s->portal_registry[di][i].x, s->portal_registry[di][i].y,
+			       s->portal_registry[di][i].z, di ? "NETHER" : "OW", x, z);
+#endif
+
+			s->portal_registry[di][i].valid = false;
+		}
+	}
+}
+
+/* Sucht das nächste registrierte Portal in der Zieldimension
+ * im Umkreis 'radius' Blöcke (XZ) um (dest_x, dest_z).
+ * Gibt 1 zurück und setzt *out_x/*out_y/*out_z wenn gefunden. */
+static int server_local_find_registered_portal(struct server_local* s,
+                                                int dest_x, int dest_z,
+                                                enum world_dim dim,
+                                                int radius,
+                                                int* out_x, int* out_y,
+                                                int* out_z) {
+	int di = WDIM_IDX(dim);
+	int best_dist2 = -1;
+
+	for(int i = 0; i < MAX_PORTAL_ENTRIES; i++) {
+		if(!s->portal_registry[di][i].valid) continue;
+		int dx = s->portal_registry[di][i].x - dest_x;
+		int dz = s->portal_registry[di][i].z - dest_z;
+		int d2 = dx * dx + dz * dz;
+		if(d2 > radius * radius) continue;
+		if(best_dist2 < 0 || d2 < best_dist2) {
+			best_dist2 = d2;
+			*out_x = s->portal_registry[di][i].x;
+			*out_y = s->portal_registry[di][i].y;
+			*out_z = s->portal_registry[di][i].z;
+		}
+	}
+	return best_dist2 >= 0;
+}
+
+/* Speichert die Portal-Registry in <level>/portals.json. */
+void server_local_save_portal_registry(struct server_local* s) {
+	JSON_Value* root = json_value_init_object();
+	JSON_Object* obj = json_value_get_object(root);
+
+	const char* dim_keys[2] = {"overworld", "nether"};
+	for(int di = 0; di < 2; di++) {
+		JSON_Value* arr_val = json_value_init_array();
+		JSON_Array* arr     = json_value_get_array(arr_val);
+		for(int i = 0; i < MAX_PORTAL_ENTRIES; i++) {
+			if(!s->portal_registry[di][i].valid) continue;
+			JSON_Value*  ev = json_value_init_object();
+			JSON_Object* eo = json_value_get_object(ev);
+			json_object_set_number(eo, "x", s->portal_registry[di][i].x);
+			json_object_set_number(eo, "y", s->portal_registry[di][i].y);
+			json_object_set_number(eo, "z", s->portal_registry[di][i].z);
+			json_array_append_value(arr, ev);
+		}
+		json_object_set_value(obj, dim_keys[di], arr_val);
+	}
+
+	char path[512];
+	snprintf(path, sizeof(path), "%s/portals.json",
+	         string_get_cstr(s->level_name));
+	json_serialize_to_file(root, path);
+	json_value_free(root);
+}
+
+/* Lädt die Portal-Registry aus <level>/portals.json. */
+void server_local_load_portal_registry(struct server_local* s) {
+	char path[512];
+	snprintf(path, sizeof(path), "%s/portals.json",
+	         string_get_cstr(s->level_name));
+
+	JSON_Value* root = json_parse_file(path);
+	if(!root) return;
+	JSON_Object* obj = json_value_get_object(root);
+	if(!obj) { json_value_free(root); return; }
+
+	const char* dim_keys[2] = {"overworld", "nether"};
+	for(int di = 0; di < 2; di++) {
+		JSON_Array* arr = json_object_get_array(obj, dim_keys[di]);
+		if(!arr) continue;
+		size_t n = json_array_get_count(arr);
+		for(size_t k = 0; k < n; k++) {
+			JSON_Object* eo = json_array_get_object(arr, k);
+			if(!eo) continue;
+			int x = (int)json_object_get_number(eo, "x");
+			int y = (int)json_object_get_number(eo, "y");
+			int z = (int)json_object_get_number(eo, "z");
+			enum world_dim d = (di == 1) ? WORLD_DIM_NETHER : WORLD_DIM_OVERWORLD;
+			server_local_register_portal(s, x, y, z, d);
+		}
+	}
+	json_value_free(root);
+}
+
+/* ---- Nether-Portal Teleportation ---- */
+
+/* Prüft ob ein Block ein geeigneter fester Untergrund ist
+ * (nicht Luft, kein Wasser, keine Lava, kein Portal). */
+/* Echte feste Untergrund-Blöcke: Vegetation, Flüssigkeiten und transparente
+ * Blöcke sind kein Untergrund für ein Portal. */
+static bool server_local_is_solid_ground(uint8_t type) {
+	switch(type) {
+	/* Luft / Transparentes */
+	case BLOCK_AIR:
+	case BLOCK_PORTAL:
+	case BLOCK_WATER_STILL: case BLOCK_WATER_FLOW:
+	case BLOCK_LAVA_STILL:  case BLOCK_LAVA_FLOW:
+	/* Vegetation / nicht-solide Blöcke */
+	case BLOCK_TALL_GRASS:
+	case BLOCK_SAPLING:
+	case BLOCK_FLOWER: case BLOCK_ROSE:
+	case BLOCK_BROWM_MUSHROOM: case BLOCK_RED_MUSHROOM:
+	case BLOCK_FIRE:
+	case BLOCK_SNOW:
+	case BLOCK_REED:
+	case BLOCK_CACTUS:
+	case BLOCK_LADDER:
+	case BLOCK_VINE:
+	case BLOCK_TORCH:
+		return false;
+	default:
+		return true;
+	}
+}
+
+/* Sucht in geladenen Chunks nach dem nächsten BLOCK_PORTAL im Umkreis
+ * 'radius' Blöcke (XZ-Euklid) um (dest_x, ?, dest_z).
+ * Gibt 1 zurück und setzt *out_x/*out_y/*out_z wenn ein Portal gefunden. */
+static int server_local_find_portal_near(struct server_world* w,
+                                          int dest_x, int dest_z,
+                                          int radius,
+                                          int* out_x, int* out_y, int* out_z) {
+	int best_dist2 = -1;
+	int chunk_r = radius / CHUNK_SIZE + 2;
+	int dest_cx = WCOORD_CHUNK_OFFSET(dest_x);
+	int dest_cz = WCOORD_CHUNK_OFFSET(dest_z);
+
+	for(int dcx = -chunk_r; dcx <= chunk_r; dcx++) {
+		for(int dcz = -chunk_r; dcz <= chunk_r; dcz++) {
+			int cx = dest_cx + dcx;
+			int cz = dest_cz + dcz;
+
+			/* Schnell-Check: Chunk geladen? */
+			struct block_data probe;
+			if(!server_world_get_block(w,
+			       cx * CHUNK_SIZE + 8, 64, cz * CHUNK_SIZE + 8, &probe))
+				continue;
+
+			/* Spaltenweise nach Portal-Blöcken suchen */
+			for(int lx = 0; lx < CHUNK_SIZE; lx++) {
+				for(int lz = 0; lz < CHUNK_SIZE; lz++) {
+					int wx = cx * CHUNK_SIZE + lx;
+					int wz = cz * CHUNK_SIZE + lz;
+					int ddx = wx - dest_x, ddz = wz - dest_z;
+					int d2  = ddx * ddx + ddz * ddz;
+					if(d2 > radius * radius) continue;
+
+					/* Untersten Portal-Block mit festem Untergrund finden */
+					for(int y = 1; y < WORLD_HEIGHT - 1; y++) {
+						struct block_data blk;
+						if(!server_world_get_block(w, wx, y, wz, &blk)) break;
+						if(blk.type != BLOCK_PORTAL) continue;
+
+						struct block_data below;
+						server_world_get_block(w, wx, y - 1, wz, &below);
+						if(!server_local_is_solid_ground(below.type)) continue;
+
+						if(best_dist2 < 0 || d2 < best_dist2) {
+							best_dist2 = d2;
+							*out_x = wx;
+							*out_y = y;
+							*out_z = wz;
+						}
+						break;
+					}
+				}
+			}
+		}
+	}
+	return best_dist2 >= 0;
+}
+
+/* Baut ein Obsidian-Portal an der günstigsten Landposition nahe (*px_io, *pz_io).
+ * Sucht zuerst einen 16-Block-XZ-Radius nach der nächsten gültigen Spalte.
+ * Wenn nirgends Untergrund gefunden wird, baut es eine Netherrack/Erde-Plattform.
+ * Gibt die Y-Koordinate der untersten Portal-Blöcke zurück.
+ * *px_io/*pz_io werden auf die tatsächliche Bauposition aktualisiert. */
+#define PORTAL_PLACE_RADIUS 16
+static int server_local_place_destination_portal(struct server_local* s,
+                                                  int* px_io, int* pz_io,
+                                                  enum world_dim dim) {
+	struct server_world* dw = &s->worlds[WDIM_IDX(dim)];
+	int origin_x = *px_io, origin_z = *pz_io;
+
+	int py       = -1;
+	int best_x   = origin_x, best_z = origin_z;
+	int best_dist2 = PORTAL_PLACE_RADIUS * PORTAL_PLACE_RADIUS + 1;
+
+	/* Im Nether von Y=10 aufwärts, in der Oberwelt von oben abwärts suchen.
+	 * So werden Portale an der Nether-Decke vermieden. */
+	int y_start = (dim == WORLD_DIM_NETHER) ? 10 : (WORLD_HEIGHT - 3);
+	int y_end   = (dim == WORLD_DIM_NETHER) ? 108 : 5;
+	int y_inc   = (dim == WORLD_DIM_NETHER) ? 1 : -1;
+
+	for(int dx = -PORTAL_PLACE_RADIUS; dx <= PORTAL_PLACE_RADIUS; dx++) {
+		for(int dz = -PORTAL_PLACE_RADIUS; dz <= PORTAL_PLACE_RADIUS; dz++) {
+			int d2 = dx * dx + dz * dz;
+			if(d2 > PORTAL_PLACE_RADIUS * PORTAL_PLACE_RADIUS) continue;
+			if(d2 >= best_dist2) continue; /* bereits bessere Spalte bekannt */
+
+			int cx = origin_x + dx, cz = origin_z + dz;
+
+			for(int y = y_start;
+			    (y_inc > 0) ? (y < y_end) : (y >= y_end);
+			    y += y_inc) {
+				struct block_data here;
+				if(!server_world_get_block(dw, cx, y, cz, &here)) break;
+				if(!server_local_is_solid_ground(here.type)) continue;
+				bool ok = true;
+				for(int k = 1; k <= 4 && ok; k++) {
+					struct block_data a;
+					if(!server_world_get_block(dw, cx, y + k, cz, &a)) {
+						ok = false; break;
+					}
+					if(k <= 3 && a.type != BLOCK_AIR) ok = false;
+				}
+				if(ok) {
+					best_dist2 = d2;
+					best_x = cx; best_z = cz;
+					py = y + 1;
+					break;
+				}
+			}
+		}
+	}
+
+	/* Kein gültiger Untergrund im Radius: Plattform aus Terrain-Block bauen */
+	if(py < 0) {
+		py = 64;
+		uint8_t fill_type = (dim == WORLD_DIM_NETHER) ? BLOCK_NETHERRACK : BLOCK_DIRT;
+		struct block_data platform = {.type = fill_type};
+		for(int fy = py - 1; fy >= 5; fy--) {
+			struct block_data blk;
+			if(server_world_get_block(dw, best_x, fy, best_z, &blk)
+			   && server_local_is_solid_ground(blk.type))
+				break;
+			server_world_set_block(s, best_x, fy, best_z, platform);
+		}
+		printf("[PORTAL] kein Untergrund bei x=%d z=%d (r=%d) — Plattform bei y=%d\n",
+		       origin_x, origin_z, PORTAL_PLACE_RADIUS, py);
+	}
+
+	*px_io = best_x;
+	*pz_io = best_z;
+
+	struct block_data obs    = {.type = BLOCK_OBSIDIAN};
+	struct block_data portal = {.type = BLOCK_PORTAL};
+	struct block_data air    = {.type = BLOCK_AIR};
+
+	/* Innenraum freimachen (2 breit × 3 hoch) */
+	for(int dx = 0; dx <= 1; dx++)
+		for(int dy = 0; dy < 3; dy++)
+			server_world_set_block(s, best_x + dx, py + dy, best_z, air);
+
+	/* Obsidian-Rahmen: unten, oben, links, rechts */
+	for(int dx = -1; dx <= 2; dx++) {
+		server_world_set_block(s, best_x + dx, py - 1, best_z, obs);
+		server_world_set_block(s, best_x + dx, py + 3, best_z, obs);
+	}
+	for(int dy = 0; dy < 3; dy++) {
+		server_world_set_block(s, best_x - 1, py + dy, best_z, obs);
+		server_world_set_block(s, best_x + 2, py + dy, best_z, obs);
+	}
+
+	/* Portal-Blöcke */
+	for(int dx = 0; dx <= 1; dx++)
+		for(int dy = 0; dy < 3; dy++)
+			server_world_set_block(s, best_x + dx, py + dy, best_z, portal);
+
+	/* Neues Portal in Registry eintragen */
+	server_local_register_portal(s, best_x, py, best_z, dim);
+
+	return py; /* unterste Portal-Block-Ebene = Spieler-Füße */
+}
+
+/* Suchradius OW→Nether: 128 Nether-Blöcke
+ * Suchradius Nether→OW: 1024 OW-Blöcke (= 128 × 8) */
+#define PORTAL_SEARCH_RADIUS_NETHER   128
+#define PORTAL_SEARCH_RADIUS_OVERWORLD 1024
+
+static void server_local_switch_dimension(struct server_local* s, int player_id) {
+	struct server_player* sp = &s->players[player_id];
+	enum world_dim dest_dim = (sp->dimension == WORLD_DIM_OVERWORLD)
+	                          ? WORLD_DIM_NETHER : WORLD_DIM_OVERWORLD;
+	double scale = (dest_dim == WORLD_DIM_NETHER) ? (1.0 / 8.0) : 8.0;
+	int search_radius = (dest_dim == WORLD_DIM_NETHER)
+	                    ? PORTAL_SEARCH_RADIUS_NETHER
+	                    : PORTAL_SEARCH_RADIUS_OVERWORLD;
+
+	int dest_x = (int)floor(sp->x * scale);
+	int dest_z = (int)floor(sp->z * scale);
+
+	struct server_world* dw = &s->worlds[WDIM_IDX(dest_dim)];
+
+	sp->dimension = dest_dim;
+	sp->portal_ticks = 0;
+	sp->vel_y = 0;
+	sp->old_vel_y = 0;
+	sp->fall_distance = 0.0f;
+
+	/* Registry-Suche: wenn ein Portal gefunden wird, als Pending-Ziel setzen
+	 * damit die Verifizierung (Chunk geladen?) beim Auflösen stattfindet.
+	 * So wird niemals blind auf ein evtl. kaputtes Portal teleportiert, und
+	 * falls das gefundene Portal fehlt, wird ein anderes in der Nähe gesucht
+	 * (z.B. N2 wenn N1 kaputt), bevor ein neues gebaut wird. */
+#ifdef PORTAL_DEBUG
+	printf("[PORTAL] switch_dimension p%d: von=(%.1f,%.1f,%.1f) dim=%s -> "
+	       "dest=(%d,%d) dim=%s radius=%d\n",
+	       player_id, sp->x, sp->y, sp->z,
+	       (dest_dim == WORLD_DIM_NETHER) ? "OW" : "NETHER",
+	       dest_x, dest_z, (dest_dim == WORLD_DIM_NETHER) ? "NETHER" : "OW",
+	       search_radius);
+#endif
+	server_local_dump_portal_registry(s, "vor Teleport");
+
+	int found_x, found_y, found_z;
+	bool reg_found = server_local_find_registered_portal(s, dest_x, dest_z,
+	                                                      dest_dim, search_radius,
+	                                                      &found_x, &found_y, &found_z);
+
+#ifdef PORTAL_DEBUG
+	if(reg_found)
+		printf("[PORTAL] Registry-Treffer bei x=%d y=%d z=%d "
+		       "(wird beim Ankommen verifiziert)\n", found_x, found_y, found_z);
+	else
+		printf("[PORTAL] kein registriertes Portal im Radius -> "
+		       "neues wird am Zielpunkt (%d,%d) gebaut\n", dest_x, dest_z);
+#endif
+
+	/* WICHTIG: Spieler AN die Pending-Zielposition setzen (nicht an den
+	 * berechneten Punkt), damit der Chunk-Loader die Chunks um das gesuchte
+	 * Portal lädt. Sonst wartet die 5x5-Prüfung um ein Portal das nie geladen
+	 * wird (Loader lädt um den Spieler, nicht um portal_pending) → Hänger. */
+	int target_x = reg_found ? found_x : dest_x;
+	int target_z = reg_found ? found_z : dest_z;
+	sp->x = target_x + 0.5;
+	sp->y = reg_found ? (found_y + 1.62) : 68.0;
+	sp->z = target_z + 0.5;
+	sp->portal_pending_active = true;
+	sp->portal_pending_ticks = 0;
+	sp->portal_pending_x = target_x;
+	sp->portal_pending_z = target_z;
+
+	clin_rpc_send(&(struct client_rpc) {
+		CRPC_PLAYER_ID(player_id)
+		.type = CRPC_PORTAL_LOADING,
+	});
 }
 
 /* ----------------------------------------------------------------------- */
@@ -511,7 +999,7 @@ struct entity* server_local_spawn_minecart(vec3 pos, struct server_local* s) {
     struct entity* e = *e_ptr;
     assert(e);
 
-    entity_minecart(entity_id, e, true, &s->world);
+    entity_minecart(entity_id, e, true, AWORLD(s));
     e->teleport(e, pos);
 
     glm_vec3_copy(
@@ -545,7 +1033,7 @@ struct entity* server_local_spawn_fishing_hook(vec3 pos, float rx, float ry,
     struct entity* e = *e_ptr;
     assert(e);
 
-    entity_fishing_hook(entity_id, e, true, &s->world);
+    entity_fishing_hook(entity_id, e, true, AWORLD(s));
     e->teleport(e, pos);
 
     // Throw in the direction the player is looking. rx = pitch (degrees,
@@ -580,7 +1068,7 @@ struct entity* server_local_spawn_boat(vec3 pos, float yaw,
     struct entity* e = *e_ptr;
     assert(e);
 
-    entity_boat(entity_id, e, true, &s->world);
+    entity_boat(entity_id, e, true, AWORLD(s));
     e->teleport(e, pos);
     e->data.boat.yaw = yaw;
     e->orient[0] = yaw;
@@ -605,7 +1093,7 @@ struct entity* server_local_spawn_item(vec3 pos, struct item_data* it,
 	struct entity* e = *e_ptr;
 	assert(e);
 
-	entity_item(entity_id, e, true, &s->world, *it);
+	entity_item(entity_id, e, true, AWORLD(s), *it);
 	e->teleport(e, pos);
 
 	if(throw) {
@@ -640,6 +1128,7 @@ struct entity* server_local_spawn_item(vec3 pos, struct item_data* it,
 		.payload.spawn_item.item = e->data.item.item,
 		.payload.spawn_item.pos = {e->pos[0], e->pos[1], e->pos[2]},
 		.payload.spawn_item.vel = {e->vel[0], e->vel[1], e->vel[2]},
+		.payload.spawn_item.dimension = s->players[s->active_player_id].dimension,
 	});
 
 	return e;
@@ -655,7 +1144,7 @@ struct entity* server_local_spawn_monster(vec3 pos, int monster_id,
 	assert(e);
 
 
-	entity_monster(entity_id, e, true, &s->world, monster_id);
+	entity_monster(entity_id, e, true, AWORLD(s), monster_id);
 
 	pos[0] = floorf(pos[0]) + 0.5f;
 	pos[2] = floorf(pos[2]) + 0.5f;
@@ -675,6 +1164,7 @@ struct entity* server_local_spawn_monster(vec3 pos, int monster_id,
 		.payload.spawn_monster.entity_id = e->id,
 		.payload.spawn_monster.monster_id = monster_id,
 		.payload.spawn_monster.pos = {e->pos[0], e->pos[1], e->pos[2]},
+		.payload.spawn_monster.dimension = s->players[s->active_player_id].dimension,
 	});
 
 	return e;
@@ -766,17 +1256,41 @@ void server_local_set_player_health(struct server_local* s, int player_id, short
 			}
 		}
 
-		//respawn with full health
+		/* Respawn: volle Gesundheit, Spieler zum Spawnpunkt in der Oberwelt. */
 		player->health = MAX_PLAYER_HEALTH;
-		player->x = player->spawn_x;
+		player->portal_ticks = 0;
+		player->portal_cooldown = true;
+		player->vel_y = 0;
+		player->old_vel_y = 0;
+		player->fall_distance = 0.0f;
+
+		player->x = player->spawn_x + 0.5;
 		player->y = player->spawn_y;
-		player->z = player->spawn_z;
-		clin_rpc_send(&(struct client_rpc) {
-			CRPC_PLAYER_ID(player_id)
-			.type = CRPC_PLAYER_POS,
-			.payload.player_pos.position = {player->x, player->y, player->z},
-			.payload.player_pos.rotation = {0, 0}
-		});
+		player->z = player->spawn_z + 0.5;
+
+		if(player->dimension == WORLD_DIM_NETHER) {
+			/* Aus dem Nether → Ladescreen + auf OW-Chunks warten. */
+			player->dimension = WORLD_DIM_OVERWORLD;
+			player->portal_pending_active  = true;
+			player->portal_pending_ticks   = 0;
+			player->portal_pending_respawn = true;
+			player->portal_pending_x = player->spawn_x;
+			player->portal_pending_z = player->spawn_z;
+			clin_rpc_send(&(struct client_rpc) {
+				CRPC_PLAYER_ID(player_id)
+				.type = CRPC_PORTAL_LOADING,
+			});
+		} else {
+			/* In der Oberwelt gestorben → direkt respawnen, kein Ladescreen. */
+			clin_rpc_send(&(struct client_rpc) {
+				CRPC_PLAYER_ID(player_id)
+				.type = CRPC_PLAYER_POS,
+				.payload.player_pos.position = {player->x, player->y, player->z},
+				.payload.player_pos.rotation = {0, 0},
+				.payload.player_pos.dimension = WORLD_DIM_OVERWORLD,
+				.payload.player_pos.teleport  = false,
+			});
+		}
 	}
 
 	//send updated health to client
@@ -845,7 +1359,7 @@ void server_local_tick_fluids(struct server_local* s) {
 
 	for(int i = 0; i < n; i++) {
 		struct block_data bd;
-		if(!server_world_get_block(&s->world, work[i].x, work[i].y, work[i].z,
+		if(!server_world_get_block(AWORLD(s), work[i].x, work[i].y, work[i].z,
 								   &bd))
 			continue;
 		if(bd.type != BLOCK_WATER_STILL && bd.type != BLOCK_WATER_FLOW)
@@ -888,6 +1402,12 @@ static void server_local_process(struct server_rpc* call, void* user) {
 			});
 			break;
 		case SRPC_PLAYER_POS:
+			/* Während eines laufenden Portal-Teleports (Ladescreen) sendet der
+			 * Client noch seine ALTE Position/Dimension. Diese Updates würden
+			 * die server-seitige Ziel-Position überschreiben → Teleport
+			 * scheitert. Daher ignorieren bis der Teleport abgeschlossen ist. */
+			if(player->portal_pending_active)
+				break;
 			// Accept position updates as soon as the player slot exists.
 			player->x = call->payload.player_pos.x;
 			player->y = call->payload.player_pos.y;
@@ -994,9 +1514,19 @@ static void server_local_process(struct server_rpc* call, void* user) {
 			   && call->payload.block_dig.y < WORLD_HEIGHT
 			   && call->payload.block_dig.finished) {
 				struct block_data blk;
-				if(server_world_get_block(&s->world, call->payload.block_dig.x,
+				if(server_world_get_block(AWORLD(s), call->payload.block_dig.x,
 										  call->payload.block_dig.y,
 										  call->payload.block_dig.z, &blk)) {
+					/* Portal-Block direkt abgebaut → gesamtes Portal entfernen
+					 * und aus Registry löschen, BEVOR server_world_set_block
+					 * den Block überschreibt. */
+					if(blk.type == BLOCK_PORTAL) {
+						server_local_collapse_portal(
+						    s, call->payload.block_dig.x,
+						    call->payload.block_dig.y,
+						    call->payload.block_dig.z);
+					}
+
 					server_world_set_block(s, call->payload.block_dig.x,
 										   call->payload.block_dig.y,
 										   call->payload.block_dig.z,
@@ -1050,11 +1580,11 @@ static void server_local_process(struct server_rpc* call, void* user) {
 
 				struct block_data blk_where, blk_on;
 				if(server_world_get_block(
-					   &s->world, call->payload.block_place.x + x,
+					   AWORLD(s), call->payload.block_place.x + x,
 					   call->payload.block_place.y + y,
 					   call->payload.block_place.z + z, &blk_where)
 				   && server_world_get_block(
-					   &s->world, call->payload.block_place.x,
+					   AWORLD(s), call->payload.block_place.x,
 					   call->payload.block_place.y, call->payload.block_place.z,
 					   &blk_on)) {
 					//printf("true 1");
@@ -1152,6 +1682,7 @@ static void server_local_process(struct server_rpc* call, void* user) {
 			chest_archive_write(s->chest_pos, s->chest_items[0], s->level_name);
 			furnace_archive_write(s->furnaces, s->level_name);
 			sign_archive_write(s->sign_pos, s->sign_texts[0], s->level_name);
+			server_local_save_portal_registry(s);
 
 			dict_entity_it_t it;
 			dict_entity_it(it, s->entities);
@@ -1161,7 +1692,8 @@ static void server_local_process(struct server_rpc* call, void* user) {
 				dict_entity_next(it);
 			}
 			dict_entity_reset(s->entities);
-			server_world_destroy(&s->world);
+			server_world_destroy(&s->worlds[0]);
+			server_world_destroy(&s->worlds[1]);
 			s->world_initialized = false;
 			level_archive_destroy(&s->level);
 
@@ -1312,7 +1844,8 @@ static void server_local_process(struct server_rpc* call, void* user) {
 		     && call->payload.player_attack.target_player_id != pid) {
 			uint8_t target_pid = call->payload.player_attack.target_player_id;
 			struct server_player* target = &s->players[target_pid];
-			if(target->has_pos) {
+			if(target->has_pos
+			   && target->dimension == player->dimension) {
 				server_local_set_player_health(
 					s, target_pid, target->health - HEALTH_PER_HEART);
 			}
@@ -1351,7 +1884,10 @@ static void server_local_process(struct server_rpc* call, void* user) {
 				// Load base player state (single-player format). If missing, keep defaults.
 				level_archive_read_player(&s->level, base_pos, base_rot, NULL, &dim);
 
-				server_world_create(&s->world, s->level_name, dim);
+				/* Beide Dimensionen gleichzeitig aufbauen; Spieler starten
+				 * immer in der Oberwelt (Spawn-Punkt ist immer Overworld). */
+				server_world_create(&s->worlds[0], s->level_name, WORLD_DIM_OVERWORLD);
+				server_world_create(&s->worlds[1], s->level_name, WORLD_DIM_NETHER);
 				{
 					int64_t world_seed = 0;
 					if(!level_archive_read(&s->level, LEVEL_RANDOM_SEED, &world_seed, 0)
@@ -1360,7 +1896,8 @@ static void server_local_process(struct server_rpc* call, void* user) {
 							string_get_cstr(s->level_name));
 						level_archive_write(&s->level, LEVEL_RANDOM_SEED, &world_seed);
 					}
-					server_world_set_seed(&s->world, world_seed);
+					server_world_set_seed(&s->worlds[0], world_seed);
+					server_world_set_seed(&s->worlds[1], world_seed);
 				}
 				s->world_initialized = true;
 
@@ -1393,7 +1930,10 @@ static void server_local_process(struct server_rpc* call, void* user) {
 						int player_count = splitscreen_player_count();
 						for(int i = 0; i < player_count; i++) {
 							struct server_player* sp = &s->players[i];
-						sp->dimension = dim;
+						/* Neue Welt (find_spawn) oder Spieler ≥1: immer Oberwelt.
+						 * Bestehende Welt, Spieler 0: gespeicherte Dimension laden. */
+						sp->dimension = (s->find_spawn || i > 0)
+						                ? WORLD_DIM_OVERWORLD : dim;
 						sp->x = base_pos[0] + (float)(i * 2);
 						sp->y = base_pos[1];
 						sp->z = base_pos[2] + (float)(i * 2);
@@ -1409,6 +1949,7 @@ static void server_local_process(struct server_rpc* call, void* user) {
 							sp->spawn_z = spawn_z;
 							sp->active_inventory = &sp->inventory;
 							sp->finished_loading = false;
+							sp->portal_ticks = 0;
 						}
 
 					// Load only the primary inventory from `level.dat` (vanilla format).
@@ -1438,6 +1979,7 @@ static void server_local_process(struct server_rpc* call, void* user) {
 				chest_archive_read(s->chest_pos, s->chest_items[0], s->level_name);
 				furnace_archive_read(s->furnaces, s->level_name);
 				sign_archive_read(s->sign_pos, s->sign_texts[0], s->level_name);
+				server_local_load_portal_registry(s);
 
 				dict_entity_reset(s->entities);
 
@@ -1530,8 +2072,8 @@ static void server_local_update(struct server_local* s) {
 	// World might not be loaded yet (or just got unloaded). Avoid touching the
 	// server_world / chunk dict in that case (m-dict iterators assert when the
 	// dict isn't initialized).
-	if(!s->world_initialized || !s->world.initialized
-	   || s->world.chunks->index == NULL)
+	if(!s->world_initialized || !s->worlds[0].initialized
+	   || s->worlds[0].chunks->index == NULL)
 		return;
 
 	s->world_time++;
@@ -1610,9 +2152,64 @@ static void server_local_update(struct server_local* s) {
 
 	int vd = g_effective_view_distance;
 
-	server_world_random_tick(&s->world, &s->rand_src, s, px, pz,
-							 vd > 2 ? vd - 2 : 0);
-	server_world_tick(&s->world, s);
+	/* Beide Welten ticken.
+	 * WICHTIG: server_world_set_block() in Block-Callbacks nutzt AWORLD(s),
+	 * das von s->active_player_id abhängt. Wir setzen active_player_id
+	 * temporär auf einen Spieler in der jeweiligen Dimension, damit
+	 * AWORLD(s) korrekt auf die zu tickende Welt zeigt — sonst schreibt
+	 * z.B. der Overworld-Gras-Tick in die Nether-Welt. */
+	{
+		uint8_t _saved_pid = s->active_player_id;
+		int _pc = splitscreen_player_count();
+
+		/* Overworld nur ticken wenn ein Spieler dort ist.
+		 * Ohne diese Prüfung würde AWORLD(s) auf die Nether-Welt zeigen
+		 * und alle Tick-Callbacks (Gras, Blätter, Flüssigkeiten) würden
+		 * Blöcke in die falsche Welt schreiben → Dirt/Setzlinge im Nether,
+		 * kontinuierliche Chunk-Rebuilds (snt/fail/blt/rcv steigen). */
+		{
+			bool _ow_tick_player = false;
+			for(int _i = 0; _i < _pc; _i++) {
+				if(s->players[_i].dimension == WORLD_DIM_OVERWORLD) {
+					s->active_player_id = (uint8_t)_i;
+					_ow_tick_player = true;
+					break;
+				}
+			}
+			if(_ow_tick_player) {
+				particle_spawn_dim = WORLD_DIM_OVERWORLD;
+			server_world_random_tick(&s->worlds[0], &s->rand_src, s, px, pz,
+				                         vd > 2 ? vd - 2 : 0);
+				server_world_tick(&s->worlds[0], s);
+			}
+		}
+
+		/* Nether ticken: nur wenn ein Spieler darin ist */
+		if(s->worlds[1].initialized) {
+			bool _nether_has_player = false;
+			for(int _i = 0; _i < _pc; _i++) {
+				if(s->players[_i].dimension == WORLD_DIM_NETHER) {
+					s->active_player_id = (uint8_t)_i;
+					_nether_has_player = true;
+					break;
+				}
+			}
+			if(_nether_has_player) {
+				/* Nether-Spieler-Chunk-Position für den Tick verwenden */
+				w_coord_t _npx = WCOORD_CHUNK_OFFSET(
+				    floor(s->players[s->active_player_id].x));
+				w_coord_t _npz = WCOORD_CHUNK_OFFSET(
+				    floor(s->players[s->active_player_id].z));
+				particle_spawn_dim = WORLD_DIM_NETHER;
+			server_world_random_tick(&s->worlds[1], &s->rand_src, s,
+				                         _npx, _npz, vd > 2 ? vd - 2 : 0);
+				server_world_tick(&s->worlds[1], s);
+			particle_spawn_dim = WORLD_DIM_OVERWORLD;
+			}
+		}
+
+		s->active_player_id = _saved_pid;
+	}
 	/* Water flow: every 5th tick, process the cells woken by recent block
 	 * changes (Minecraft's fluid tick rate). Static/generated water that nobody
 	 * disturbed is never scheduled, so it stays put and doesn't churn. */
@@ -1644,7 +2241,8 @@ static void server_local_update(struct server_local* s) {
 	if(++ram_check_counter >= 20) {
 		ram_check_counter = 0;
 
-		size_t lc = dict_server_chunks_size(s->world.chunks);
+		size_t lc = dict_server_chunks_size(s->worlds[0].chunks)
+		          + dict_server_chunks_size(s->worlds[1].chunks);
 		int vd = g_effective_view_distance;
 
 		/* Freigegebenen Heap-Top an die MEM2-Arena zurueckgeben (falls dieser
@@ -1731,7 +2329,8 @@ static void server_local_update(struct server_local* s) {
 		 * belegte Heap-Bytes (KB). Steigt cchunks/uord bei konstantem chunks,
 		 * leakt der Client-Load/Unload-Pfad. */
 		extern volatile long chunk_live_count;
-		size_t nc = dict_server_chunks_size(s->world.chunks);
+		size_t nc = dict_server_chunks_size(s->worlds[0].chunks)
+		          + dict_server_chunks_size(s->worlds[1].chunks);
 		unsigned mem2f = 0, mem1f = 0, uordk = 0;
 #ifdef PLATFORM_WII
 		mem2f = (unsigned)(((u32)SYS_GetArena2Hi() - (u32)SYS_GetArena2Lo()) / 1024);
@@ -1761,7 +2360,7 @@ static void server_local_update(struct server_local* s) {
 				for(w_coord_t cx = ppx - vd; cx <= ppx + vd; cx++) {
 					if(CHUNK_DIST2(ppx, cx, ppz, cz) > vd * vd)
 						continue;
-					if(server_world_is_chunk_loaded(&s->world, cx, cz))
+					if(server_world_is_chunk_loaded(&s->worlds[0], cx, cz))
 						loaded++;
 					else
 						missing++;
@@ -1772,10 +2371,29 @@ static void server_local_update(struct server_local* s) {
 		}
 	}
 
+	/* Overworld-Chunks nur laden/generieren wenn ein Spieler dort ist.
+	 * Wenn alle Spieler im Nether sind, wird keine Overworld-Generation
+	 * ausgelöst und keine Nether-Blöcke entstehen durch Overworld-Ticks. */
+#ifdef SPLITSCREEN
+	{
+		bool _ow_has_player = false;
+		int _pc2 = splitscreen_player_count();
+		for(int _i = 0; _i < _pc2; _i++) {
+			if(s->players[_i].has_pos
+			   && s->players[_i].dimension == WORLD_DIM_OVERWORLD) {
+				_ow_has_player = true;
+				break;
+			}
+		}
+		if(!_ow_has_player && !s->find_spawn)
+			goto unload_done;
+	}
+#endif
+
 	/* O(1): m-lib keeps the element count, so don't walk the whole dictionary
 	 * every tick (that made each tick O(N) and the whole generation O(N^2) --
 	 * the more chunks were loaded, the slower generation got). */
-	size_t loaded_chunks = dict_server_chunks_size(s->world.chunks);
+	size_t loaded_chunks = dict_server_chunks_size(s->worlds[0].chunks);
 #ifdef SPLITSCREEN
 	{
 		size_t max_allowed = (size_t)(2 * vd + 1) * (size_t)(2 * vd + 1);
@@ -1811,7 +2429,7 @@ static void server_local_update(struct server_local* s) {
 		int evict_count = 0;
 
 		dict_server_chunks_it_t u_it;
-		dict_server_chunks_it(u_it, s->world.chunks);
+		dict_server_chunks_it(u_it, s->worlds[0].chunks);
 		while(!dict_server_chunks_end_p(u_it)
 			  && evict_count < evict_limit && evict_count < MAX_CHUNKS) {
 			int64_t id = dict_server_chunks_ref(u_it)->key;
@@ -1843,20 +2461,21 @@ static void server_local_update(struct server_local* s) {
 			if(i < 2)
 				CDBG("[EVICT]   -> chunk (%d,%d)\n",
 					 (int)evict_x[i], (int)evict_z[i]);
-			server_world_save_chunk(&s->world, true, evict_x[i], evict_z[i]);
+			server_world_save_chunk(&s->worlds[0], true, evict_x[i], evict_z[i]);
 			clin_rpc_send(&(struct client_rpc) {
 				.type = CRPC_UNLOAD_CHUNK,
 				.payload.unload_chunk.x = evict_x[i],
 				.payload.unload_chunk.z = evict_z[i],
+				.payload.unload_chunk.dimension = WORLD_DIM_OVERWORLD,
 			});
 		}
 	}
 unload_done:
 #else
-	if(server_world_furthest_chunk(&s->world, vd, px, pz, &cx, &cz)) {
+	if(server_world_furthest_chunk(&s->worlds[0], vd, px, pz, &cx, &cz)) {
 		CDBG("[EVICT] chunk (%d,%d) loaded=%zu vd=%d\n",
 			 (int)cx, (int)cz, loaded_chunks, g_effective_view_distance);
-		server_world_save_chunk(&s->world, true, cx, cz);
+		server_world_save_chunk(&s->worlds[0], true, cx, cz);
 		clin_rpc_send(&(struct client_rpc) {
 			.type = CRPC_UNLOAD_CHUNK,
 			.payload.unload_chunk.x = cx,
@@ -1893,7 +2512,7 @@ unload_done:
 #endif
 			if(d > vd * vd)
 				continue;
-			if(!server_world_is_chunk_loaded(&s->world, x, z)
+			if(!server_world_is_chunk_loaded(&s->worlds[0], x, z)
 			   && (d < c_nearest_dist2 || !c_nearest)) {
 				c_nearest_dist2 = d;
 				c_nearest_x = x;
@@ -1976,7 +2595,7 @@ unload_done:
 		 * (nur sekündlich laufende) Governor gerade als vd gesetzt hat. Ohne
 		 * das könnte die Chunk-Zahl zwischen zwei Governor-Ticks über die
 		 * Grenze schießen und den Speicher erschöpfen. */
-		if(dict_server_chunks_size(s->world.chunks)
+		if(dict_server_chunks_size(s->worlds[0].chunks)
 		   >= (size_t)g_chunk_cap)
 			break;
 #endif
@@ -1995,7 +2614,7 @@ unload_done:
 		bool c_found = false;
 		w_coord_t cand_x = 0, cand_z = 0;
 		w_coord_t cand_dist2 = 0;
-		if(server_world_pending_chunk(&s->world, &cand_x, &cand_z)) {
+		if(server_world_pending_chunk(&s->worlds[0], &cand_x, &cand_z)) {
 			c_found = true;
 		}
 		if(!c_found) {
@@ -2011,7 +2630,7 @@ unload_done:
 #endif
 				if(d > vd * vd)
 					continue;
-				if(!server_world_is_chunk_loaded(&s->world, x, z)
+				if(!server_world_is_chunk_loaded(&s->worlds[0], x, z)
 				   && (d < cand_dist2 || !c_found)) {
 					cand_dist2 = d;
 					cand_x = x;
@@ -2027,20 +2646,20 @@ unload_done:
 			break;
 		}
 
-		struct server_chunk* sc;
-		if(server_world_load_chunk(&s->world, cand_x, cand_z, &sc)) {
-			size_t sz = CHUNK_SIZE * CHUNK_SIZE * WORLD_HEIGHT;
+		/* Transfer-Puffer ZUERST holen. Nur mit freiem Puffer den Chunk laden
+		 * UND senden — sonst würde der Chunk server-seitig als geladen markiert,
+		 * aber nie gesendet und nie erneut versucht (fehlender Chunk bis Reload). */
+		uint8_t* block = clin_chunk_buf_take();
+		if(!block) {
+			/* Pool momentan leer (Client hat Puffer noch nicht zurückgegeben) —
+			 * Chunk NICHT laden, nächster Tick erneut. Kein vd-- hier: der
+			 * RAM-Governor regelt die Sichtweite. */
+			break;
+		}
 
-			/* Transfer-Puffer aus dem festen Pool statt malloc (kein Heap-Churn
-			 * -> keine MEM2-Fragmentierung beim Streamen). Ein Block: ids(sz) |
-			 * metadata(sz/2) | sky(sz/2) | torch(sz/2). */
-			uint8_t* block = clin_chunk_buf_take();
-			if(!block) {
-				/* Pool momentan leer (Client hat Puffer noch nicht
-				 * zurueckgegeben) — Server-Chunk bleibt geladen, naechster Tick.
-				 * Kein vd-- hier: der RAM-Governor regelt die Sichtweite. */
-				break;
-			}
+		struct server_chunk* sc;
+		if(server_world_load_chunk(&s->worlds[0], cand_x, cand_z, &sc)) {
+			size_t sz = CHUNK_SIZE * CHUNK_SIZE * WORLD_HEIGHT;
 
 			uint8_t* ids           = block;
 			uint8_t* metadata      = block + sz;
@@ -2064,10 +2683,13 @@ unload_done:
 				.payload.chunk.metadata = metadata,
 				.payload.chunk.lighting_sky = lighting_sky,
 				.payload.chunk.lighting_torch = lighting_torch,
+			.payload.chunk.dimension = WORLD_DIM_OVERWORLD,
 			});
 
 			loaded_this_tick++;
-		} else if(server_world_pending_chunk(&s->world, NULL, NULL)) {
+		} else if(server_world_pending_chunk(&s->worlds[0], NULL, NULL)) {
+			/* Generierung läuft noch (mehrstufig) → Puffer zurückgeben */
+			clin_chunk_buf_return(block);
 			/* KEIN Fehler: die Chunk-Generierung ist mehrstufig (Terrain ->
 			 * Features -> Deko -> Finalize) und liefert pro Schritt false, bis
 			 * der Chunk fertig ist. Das ist Fortschritt, NICHT OOM — die Grenze
@@ -2082,7 +2704,8 @@ unload_done:
 			 * Archiv-Fehler OHNE laufende Generierung. Die Grenze auf die
 			 * aktuell geladene Zahl minus Reserve absenken — so hört das Spiel
 			 * auf, gegen eine zu hohe (fest verdrahtete) Grenze anzurennen. */
-			size_t now_loaded = dict_server_chunks_size(s->world.chunks);
+			clin_chunk_buf_return(block); /* Puffer ungenutzt → zurückgeben */
+			size_t now_loaded = dict_server_chunks_size(s->worlds[0].chunks);
 			int real_cap = (int)now_loaded - 4;
 			if(real_cap < 8) real_cap = 8;
 			if(real_cap < g_chunk_cap) {
@@ -2096,10 +2719,10 @@ unload_done:
 
 	/* debug overlay: report current chunk generation progress */
 	{
-		int prog = server_world_pending_progress(&s->world);
+		int prog = server_world_pending_progress(&s->worlds[0]);
 		if(prog >= 0) {
 			w_coord_t pcx = 0, pcz = 0;
-			server_world_pending_chunk(&s->world, &pcx, &pcz);
+			server_world_pending_chunk(&s->worlds[0], &pcx, &pcz);
 			gstate.gen_debug.active = true;
 			gstate.gen_debug.percent = prog;
 			gstate.gen_debug.chunk_x = (int)pcx;
@@ -2137,7 +2760,7 @@ unload_done:
 				w_coord_t sz = (w_coord_t)floor(player->z);
 				w_coord_t fx, fz;
 				int fy;
-				if(server_world_find_spawn(&s->world, sx, sz,
+				if(server_world_find_spawn(&s->worlds[0], sx, sz,
 										   (vd > 1 ? vd - 1 : 1) * CHUNK_SIZE,
 										   &fx, &fy, &fz)) {
 					/* player Y is the eye position (feet + ~1.62) */
@@ -2155,6 +2778,10 @@ unload_done:
 				.type = CRPC_PLAYER_POS,
 				.payload.player_pos.position = {player->x, player->y, player->z},
 				.payload.player_pos.rotation = {player->rx, player->ry},
+				.payload.player_pos.dimension = player->dimension,
+				/* teleport=true damit Client player_dims und Entity-Welt
+				 * korrekt auf die geladene Dimension setzt. */
+				.payload.player_pos.teleport  = true,
 			});
 
 #ifdef SRPC_LOAD_WORLD_DEBUG
@@ -2206,7 +2833,7 @@ unload_done:
 			w_coord_t sz = (w_coord_t)floor(s->player.z);
 			w_coord_t fx, fz;
 			int fy;
-			if(server_world_find_spawn(&s->world, sx, sz,
+			if(server_world_find_spawn(&s->worlds[0], sx, sz,
 									   (vd > 1 ? vd - 1 : 1) * CHUNK_SIZE, &fx,
 									   &fy, &fz)) {
 				/* player Y is the eye position (feet + ~1.62) */
@@ -2280,18 +2907,21 @@ for (int i = 0; i < 4; i++) {
 
 		// check if player is underwater
 		// server side X off by one?
+		/* Welt von Spieler i (PWORLD), nicht die des aktiven Spielers (AWORLD),
+		 * sonst werden Wasser/Lava/Leiter für Spieler in anderer Dimension
+		 * im falschen Welt-Objekt geprüft. */
 		struct block_data blk;
-		server_world_get_block(&s->world, player->x-1, player->y, player->z, &blk);
+		server_world_get_block(PWORLD(s, i), player->x-1, player->y, player->z, &blk);
 		bool in_water = (blk.type == BLOCK_WATER_STILL || blk.type == BLOCK_WATER_FLOW);
 		bool in_lava = (blk.type == BLOCK_LAVA_STILL || blk.type == BLOCK_LAVA_FLOW);
 		int feet_y = (int)floor(player->y - 1.62);
 		struct block_data blk_climb, blk_climb2;
-		server_world_get_block(&s->world, player->x, feet_y,     player->z, &blk_climb);
-		server_world_get_block(&s->world, player->x, feet_y + 1, player->z, &blk_climb2);
+		server_world_get_block(PWORLD(s, i), player->x, feet_y,     player->z, &blk_climb);
+		server_world_get_block(PWORLD(s, i), player->x, feet_y + 1, player->z, &blk_climb2);
 		bool on_climbable = (blk_climb.type  == BLOCK_LADDER || blk_climb.type  == BLOCK_VINE
 		                  || blk_climb2.type == BLOCK_LADDER || blk_climb2.type == BLOCK_VINE);
 		if(player->y != 0) {
-			server_world_get_block(&s->world, player->x-1, player->y-1, player->z, &blk);
+			server_world_get_block(PWORLD(s, i), player->x-1, player->y-1, player->z, &blk);
 			if(blk.type == BLOCK_LAVA_STILL || blk.type == BLOCK_LAVA_FLOW) in_lava = true;
 		}
 
@@ -2299,7 +2929,7 @@ for (int i = 0; i < 4; i++) {
 		bool falling = player->vel_y < -0.079f;
 		if(player->old_vel_y < -0.079f && player->vel_y >= -0.079f) {
 			struct block_data blk_below;
-			server_world_get_block(&s->world, player->x-1, player->y-1, player->z, &blk_below);
+			server_world_get_block(PWORLD(s, i), player->x-1, player->y-1, player->z, &blk_below);
 			bool landed_in_water = in_water
 				|| blk_below.type == BLOCK_WATER_STILL
 				|| blk_below.type == BLOCK_WATER_FLOW;
@@ -2351,22 +2981,66 @@ for (int i = 0; i < 4; i++) {
 			}
 			player->oxygen--;
 		} else player->oxygen = MAX_OXYGEN;
+
+		/* Nether-Portal-Timer.
+		 * NICHT während eines laufenden Teleports (portal_pending_active) zählen:
+		 * dann sitzt der Spieler bereits auf dem Ziel-Portal-Block während die
+		 * Chunks laden (Ladescreen), der Cooldown ist noch nicht gesetzt, und der
+		 * Timer würde hochzählen und ihn sofort wieder zurück-teleportieren. */
+		if(player->has_pos && player->finished_loading
+		   && !player->portal_pending_active) {
+			struct block_data blk_pt;
+			int bpx = (int)floor(player->x);
+			int bpy = (int)floor(player->y);
+			int bpz = (int)floor(player->z);
+			/* WICHTIG: die Welt von Spieler i verwenden (PWORLD), nicht die des
+			 * aktiven Spielers (AWORLD) — sonst wird für Spieler im Nether im
+			 * Overworld-Block gesucht und der Timer läuft nur zufällig. */
+			if(server_world_get_block(PWORLD(s, i), bpx, bpy, bpz, &blk_pt)
+			   && blk_pt.type == BLOCK_PORTAL) {
+				/* Nach Teleport steht der Spieler im Ziel-Portal: erst wieder
+				 * zählen, wenn er einmal draußen war (Cooldown). */
+				if(!player->portal_cooldown) {
+					player->portal_ticks++;
+					if(i < 4)
+						gstate.portal_ticks_display[i] = player->portal_ticks;
+#ifdef PORTAL_DEBUG
+					/* Jede volle Sekunde (20 Ticks) hochzählen: 1,2,3,4 */
+					if(player->portal_ticks % 20 == 0)
+						printf("[PORTAL] p%d Teleport-Zähler: %d/4 s\n",
+						       i, player->portal_ticks / 20);
+#endif
+					if(player->portal_ticks >= 80) {
+#ifdef PORTAL_DEBUG
+						printf("[PORTAL] p%d -> teleportiert!\n", i);
+#endif
+						server_local_switch_dimension(s, i);
+						break;
+					}
+				}
+			} else {
+				player->portal_ticks = 0;
+				player->portal_cooldown = false; /* draußen → Cooldown aufheben */
+				if(i < 4)
+					gstate.portal_ticks_display[i] = 0;
+			}
+		}
 	}
 #else
 	// check if player is underwater
 	// server side X off by one?
 	struct block_data blk;
-	server_world_get_block(&s->world, s->player.x-1, s->player.y, s->player.z, &blk);
+	server_world_get_block(AWORLD(s), s->player.x-1, s->player.y, s->player.z, &blk);
 	bool in_water = (blk.type == BLOCK_WATER_STILL || blk.type == BLOCK_WATER_FLOW);
 	bool in_lava = (blk.type == BLOCK_LAVA_STILL || blk.type == BLOCK_LAVA_FLOW);
 	int feet_y = (int)floor(s->player.y - 1.62);
 	struct block_data blk_climb, blk_climb2;
-	server_world_get_block(&s->world, s->player.x, feet_y,     s->player.z, &blk_climb);
-	server_world_get_block(&s->world, s->player.x, feet_y + 1, s->player.z, &blk_climb2);
+	server_world_get_block(AWORLD(s), s->player.x, feet_y,     s->player.z, &blk_climb);
+	server_world_get_block(AWORLD(s), s->player.x, feet_y + 1, s->player.z, &blk_climb2);
 	bool on_climbable = (blk_climb.type  == BLOCK_LADDER || blk_climb.type  == BLOCK_VINE
 	                  || blk_climb2.type == BLOCK_LADDER || blk_climb2.type == BLOCK_VINE);
 	if(s->player.y != 0) {
-		server_world_get_block(&s->world, s->player.x-1, s->player.y-1, s->player.z, &blk);
+		server_world_get_block(AWORLD(s), s->player.x-1, s->player.y-1, s->player.z, &blk);
 		if(blk.type == BLOCK_LAVA_STILL || blk.type == BLOCK_LAVA_FLOW) in_lava = true;
 	}
 
@@ -2374,7 +3048,7 @@ for (int i = 0; i < 4; i++) {
 	bool falling = s->player.vel_y < -0.079f;
 	if(s->player.old_vel_y < -0.079f && s->player.vel_y >= -0.079f) {
 		struct block_data blk_below;
-		server_world_get_block(&s->world, s->player.x-1, s->player.y-1, s->player.z, &blk_below);
+		server_world_get_block(AWORLD(s), s->player.x-1, s->player.y-1, s->player.z, &blk_below);
 		bool landed_in_water = in_water
 			|| blk_below.type == BLOCK_WATER_STILL
 			|| blk_below.type == BLOCK_WATER_FLOW;
@@ -2427,6 +3101,260 @@ for (int i = 0; i < 4; i++) {
 		s->player.oxygen--;
 	} else s->player.oxygen = MAX_OXYGEN;
 #endif
+
+	/* Portal am Ziel platzieren, sobald der Chunk generiert ist (pro Spieler).
+	 * Danach Spieler ins Portal setzen und nochmals bestehendes Portal suchen
+	 * (könnte in Nachbar-Chunks kurz vorher generiert worden sein). */
+#ifdef SPLITSCREEN
+	if(s->world_initialized) {
+		for(int _pi = 0; _pi < splitscreen_player_count(); _pi++) {
+			struct server_player* _pp = &s->players[_pi];
+			if(!_pp->portal_pending_active) continue;
+			struct server_world* _pw = &s->worlds[WDIM_IDX(_pp->dimension)];
+
+			/* Mindest-Anzeigedauer des Ladescreens (~1s bei 20 TPS), damit er
+			 * auch bei bereits geladenen Ziel-Chunks sichtbar ist. */
+			_pp->portal_pending_ticks++;
+			if(_pp->portal_pending_ticks < 20)
+				continue;
+
+			/* Mindest-Umkreis um Zielposition geladen?
+			 * 2-Chunk-Radius (5x5 = 25 Chunks) damit der Spieler
+			 * nicht auf 1 isolierten Chunk erscheint. */
+			{
+				bool _ready = true;
+				struct block_data _blk;
+				for(int _dx = -2; _dx <= 2 && _ready; _dx++) {
+					for(int _dz = -2; _dz <= 2 && _ready; _dz++) {
+						int _cx = _pp->portal_pending_x + _dx * CHUNK_SIZE;
+						int _cz = _pp->portal_pending_z + _dz * CHUNK_SIZE;
+						if(!server_world_get_block(_pw, _cx, 64, _cz, &_blk))
+							_ready = false;
+					}
+				}
+				if(!_ready) continue;
+			}
+
+			/* Respawn-Pfad: kein Portal suchen/bauen, direkt zum Spawnpunkt. */
+			if(_pp->portal_pending_respawn) {
+				_pp->portal_pending_respawn = false;
+#ifdef PORTAL_DEBUG
+				printf("[RESPAWN] p%d -> Spawnpunkt x=%.1f y=%.1f z=%.1f dim=OW\n",
+				       _pi, _pp->x, _pp->y, _pp->z);
+#endif
+				goto portal_pending_send_pos;
+			}
+
+			/* Registry-Suche mit Validierung: kaputte Einträge löschen und
+			 * erneut suchen bis ein gültiges Portal oder keines mehr gefunden
+			 * wird. Verhindert das Reparieren von kaputten Portalen wenn
+			 * noch andere in der Nähe existieren (z.B. N2 statt N1). */
+			int search_radius = (_pp->dimension == WORLD_DIM_NETHER)
+			                    ? PORTAL_SEARCH_RADIUS_NETHER
+			                    : PORTAL_SEARCH_RADIUS_OVERWORLD;
+			int found_x = 0, found_y = 0, found_z = 0;
+			bool _reg = false;
+			/* Maximal 32 Iterationen um stale Einträge aufzuräumen */
+			for(int _iter = 0; _iter < 32; _iter++) {
+				int _fx, _fy, _fz;
+				if(!server_local_find_registered_portal(s,
+				       _pp->portal_pending_x, _pp->portal_pending_z,
+				       _pp->dimension, search_radius, &_fx, &_fy, &_fz))
+					break; /* kein Portal in Registry */
+
+				struct block_data _cv;
+				bool _loaded = server_world_get_block(_pw, _fx, _fy, _fz, &_cv);
+				if(_loaded && _cv.type == BLOCK_PORTAL) {
+					/* Gültiges Portal gefunden */
+#ifdef PORTAL_DEBUG
+					printf("[PORTAL] verify OK: Portal-Block bei x=%d y=%d z=%d "
+					       "vorhanden -> ausgewählt\n", _fx, _fy, _fz);
+#endif
+					found_x = _fx; found_y = _fy; found_z = _fz;
+					_reg = true;
+					break;
+				}
+				if(_loaded) {
+					/* Chunk geladen, aber KEIN Portal-Block → wirklich kaputt.
+					 * NUR den exakten Registry-Eintrag löschen (nicht per Radius,
+					 * sonst würden benachbarte gültige Portale mit entfernt). */
+#ifdef PORTAL_DEBUG
+					printf("[PORTAL] verify KAPUTT: x=%d y=%d z=%d ist block=%d "
+					       "(kein Portal) -> exakten Eintrag löschen, weitersuchen\n",
+					       _fx, _fy, _fz, _cv.type);
+#endif
+					int _di = WDIM_IDX(_pp->dimension);
+					for(int _k = 0; _k < MAX_PORTAL_ENTRIES; _k++) {
+						if(s->portal_registry[_di][_k].valid
+						   && s->portal_registry[_di][_k].x == _fx
+						   && s->portal_registry[_di][_k].z == _fz) {
+							s->portal_registry[_di][_k].valid = false;
+							break;
+						}
+					}
+				} else {
+					/* Chunk (noch) nicht geladen → nicht löschen. Koordinaten
+					 * trotzdem verwenden; Chunks streamen beim Ankommen nach. */
+#ifdef PORTAL_DEBUG
+					printf("[PORTAL] verify WARTE: Chunk bei x=%d y=%d z=%d nicht "
+					       "geladen -> Koordinaten trotzdem verwenden\n",
+					       _fx, _fy, _fz);
+#endif
+					found_x = _fx; found_y = _fy; found_z = _fz;
+					_reg = true;
+					break;
+				}
+			}
+
+			if(_reg) {
+				/* Gültiges registriertes Portal gefunden */
+#ifdef PORTAL_DEBUG
+				printf("[PORTAL] ENTSCHEIDUNG p%d: benutze bestehendes Portal "
+				       "x=%d y=%d z=%d\n", _pi, found_x, found_y, found_z);
+#endif
+				_pp->x = found_x + 0.5;
+				_pp->y = found_y + 1.62;
+				_pp->z = found_z + 0.5;
+			} else {
+				/* Kein bekanntes Portal: neues bauen */
+#ifdef PORTAL_DEBUG
+				printf("[PORTAL] ENTSCHEIDUNG p%d: baue NEUES Portal bei "
+				       "x=%d z=%d\n", _pi,
+				       _pp->portal_pending_x, _pp->portal_pending_z);
+#endif
+				uint8_t _old_pid = s->active_player_id;
+				s->active_player_id = (uint8_t)_pi;
+				int _dest_x = _pp->portal_pending_x;
+				int _dest_z = _pp->portal_pending_z;
+				int portal_y = server_local_place_destination_portal(
+				    s, &_dest_x, &_dest_z, _pp->dimension);
+				s->active_player_id = _old_pid;
+
+				_pp->x = _dest_x + 0.5;
+				_pp->y = portal_y + 1.62;
+				_pp->z = _dest_z + 0.5;
+#ifdef PORTAL_DEBUG
+				printf("[PORTAL] neues Portal gebaut, Spieler bei "
+				       "x=%.1f y=%.1f z=%.1f\n", _pp->x, _pp->y, _pp->z);
+#endif
+			}
+
+			/* Portal steht / Respawn bereit → jetzt wirklich teleportieren.
+			 * teleport=true damit Client Dimension wechselt und Ladescreen
+			 * (portal_loading) beendet. */
+			portal_pending_send_pos:
+			clin_rpc_send(&(struct client_rpc) {
+				CRPC_PLAYER_ID(_pi)
+				.type = CRPC_PLAYER_POS,
+				.payload.player_pos.position = {_pp->x, _pp->y, _pp->z},
+				.payload.player_pos.rotation  = {_pp->rx, _pp->ry},
+				.payload.player_pos.dimension = _pp->dimension,
+				.payload.player_pos.teleport  = true,
+			});
+
+			_pp->portal_pending_active = false;
+			_pp->portal_ticks = 0;
+			/* Spieler steht jetzt im Ziel-Portal → Cooldown setzen, damit er
+			 * nicht sofort wieder zurück-teleportiert wird. */
+			_pp->portal_cooldown = true;
+		}
+	}
+
+	/* Nether-Chunk-Loading: einfache Schleife für Spieler im Nether */
+	if(s->world_initialized && s->worlds[1].initialized) {
+		for(int _pi = 0; _pi < splitscreen_player_count(); _pi++) {
+			struct server_player* _np = &s->players[_pi];
+			if(!_np->has_pos || _np->dimension != WORLD_DIM_NETHER) continue;
+			w_coord_t ncx = WCOORD_CHUNK_OFFSET(floor(_np->x));
+			w_coord_t ncz = WCOORD_CHUNK_OFFSET(floor(_np->z));
+			int nvd = g_effective_view_distance;
+			/* Portal-Pending: Mindestradius 2 damit die 5x5-Chunk-Prüfung erfüllt
+			 * werden kann (braucht Offset ±2 = 5 Chunks pro Achse). */
+			if(_np->portal_pending_active && nvd < 2)
+				nvd = 2;
+			/* Nächsten fehlenden Chunk im Nether finden und laden */
+			w_coord_t best_x = 0, best_z = 0, best_d = 0;
+			bool n_found = false;
+			if(server_world_pending_chunk(&s->worlds[1], &best_x, &best_z))
+				n_found = true;
+			if(!n_found) {
+				for(w_coord_t nz = ncz - nvd; nz <= ncz + nvd; nz++) {
+					for(w_coord_t nx = ncx - nvd; nx <= ncx + nvd; nx++) {
+						w_coord_t nd = CHUNK_DIST2(ncx, nx, ncz, nz);
+						if(nd > (w_coord_t)(nvd * nvd)) continue;
+						if(!server_world_is_chunk_loaded(&s->worlds[1], nx, nz)
+						   && (!n_found || nd < best_d)) {
+							best_d = nd; best_x = nx; best_z = nz;
+							n_found = true;
+						}
+					}
+				}
+			}
+			if(n_found) {
+				/* Transfer-Puffer ZUERST holen. Nur wenn einer frei ist, den
+				 * Chunk server-seitig laden UND senden — sonst bliebe der Chunk
+				 * server-seitig als "geladen" markiert (is_chunk_loaded=true),
+				 * würde aber nie an den Client gesendet und nie erneut versucht
+				 * → im Nether fehlender Chunk bis zum Welt-Reload. */
+				uint8_t* nb = clin_chunk_buf_take();
+				if(nb) {
+					struct server_chunk* nsc;
+					if(server_world_load_chunk(&s->worlds[1], best_x, best_z, &nsc)) {
+						size_t nsz = CHUNK_SIZE * CHUNK_SIZE * WORLD_HEIGHT;
+						memcpy(nb,            nsc->ids,           nsz);
+						memcpy(nb+nsz,        nsc->metadata,      nsz/2);
+						memcpy(nb+nsz+nsz/2,  nsc->lighting_sky,  nsz/2);
+						memcpy(nb+nsz+nsz,    nsc->lighting_torch, nsz/2);
+						clin_rpc_send(&(struct client_rpc) {
+							.type = CRPC_CHUNK,
+							.payload.chunk.x = best_x * CHUNK_SIZE,
+							.payload.chunk.y = 0,
+							.payload.chunk.z = best_z * CHUNK_SIZE,
+							.payload.chunk.sx = CHUNK_SIZE,
+							.payload.chunk.sy = WORLD_HEIGHT,
+							.payload.chunk.sz = CHUNK_SIZE,
+							.payload.chunk.ids = nb,
+							.payload.chunk.metadata = nb + nsz,
+							.payload.chunk.lighting_sky = nb + nsz + nsz/2,
+							.payload.chunk.lighting_torch = nb + nsz + nsz,
+							.payload.chunk.dimension = WORLD_DIM_NETHER,
+						});
+					} else {
+						/* Laden fehlgeschlagen/noch nicht fertig → Puffer zurück */
+						clin_chunk_buf_return(nb);
+					}
+				}
+				/* Nether-Eviction: zu weit entfernte Chunks entladen */
+				static w_coord_t nevict_x[MAX_CHUNKS], nevict_z[MAX_CHUNKS];
+				int nevict_count = 0;
+				dict_server_chunks_it_t nit;
+				dict_server_chunks_it(nit, s->worlds[1].chunks);
+				while(!dict_server_chunks_end_p(nit) && nevict_count < 8) {
+					int64_t nid = dict_server_chunks_ref(nit)->key;
+					w_coord_t ucx = S_CHUNK_X(nid), ucz = S_CHUNK_Z(nid);
+					if(CHUNK_DIST2(ncx, ucx, ncz, ucz) > (w_coord_t)(nvd * nvd)) {
+						nevict_x[nevict_count] = ucx;
+						nevict_z[nevict_count] = ucz;
+						nevict_count++;
+					}
+					dict_server_chunks_next(nit);
+				}
+				for(int _ei = 0; _ei < nevict_count; _ei++) {
+					server_world_save_chunk(&s->worlds[1], true,
+					                        nevict_x[_ei], nevict_z[_ei]);
+					clin_rpc_send(&(struct client_rpc) {
+						.type = CRPC_UNLOAD_CHUNK,
+						.payload.unload_chunk.x = nevict_x[_ei],
+						.payload.unload_chunk.z = nevict_z[_ei],
+						.payload.unload_chunk.dimension = WORLD_DIM_NETHER,
+					});
+				}
+				break; /* 1 Chunk pro Tick: erst hier abbrechen wenn was geladen */
+			}
+			/* n_found=false: für diesen Spieler nichts zu laden → nächsten prüfen */
+		}
+	}
+#endif
 }
 
 static void* server_local_thread(void* user) {
@@ -2470,10 +3398,8 @@ static void* server_local_thread(void* user) {
 
 void server_local_create(struct server_local* s) {
 	assert(s);
-	// Ensure `s->world` starts in a known safe state. Some m-lib dict iterators
-	// assert when used on uninitialized dicts; we guard with `world.initialized`
-	// but also zero-init to avoid garbage state.
-	memset(&s->world, 0, sizeof(s->world));
+	memset(&s->worlds[0], 0, sizeof(s->worlds[0]));
+	memset(&s->worlds[1], 0, sizeof(s->worlds[1]));
 	rand_gen_seed(&s->rand_src);
 	s->paused = false;
 	s->world_time = 0;
@@ -2523,6 +3449,12 @@ void server_local_create(struct server_local* s) {
 		s->players[i].fall_distance = 0.0f;
 		s->players[i].oxygen = MAX_OXYGEN;
 		s->players[i].health = MAX_PLAYER_HEALTH;
+		s->players[i].portal_ticks = 0;
+		s->players[i].portal_pending_active = false;
+		s->players[i].portal_pending_x = 0;
+		s->players[i].portal_pending_z = 0;
+		s->players[i].portal_pending_respawn = false;
+		s->players[i].portal_cooldown = false;
 		s->players[i].spawn_x = 0;
 		s->players[i].spawn_y = 80;
 		s->players[i].spawn_z = 0;

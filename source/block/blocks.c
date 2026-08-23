@@ -347,7 +347,7 @@ void notifyNeighbours(struct server_local* s,
         w_coord_t nz = z + dz[i];
 
         struct block_data nb;
-        if (!server_world_get_block(&s->world, nx, ny, nz, &nb))
+        if (!server_world_get_block(AWORLD(s), nx, ny, nz, &nb))
             continue;
 
         const struct block* b = blocks[nb.type];

@@ -21,10 +21,12 @@
 #define DAYTIME_H
 
 #include "cglm/cglm.h"
+#include "world.h"
 
 #define DAY_TICK_MS 50
 #define DAY_LENGTH_TICKS 24000
 
+extern enum world_dim daytime_render_dim;
 float daytime_brightness(float time);
 float daytime_celestial_angle(float time);
 void daytime_sky_colors(float time, vec3 top_plane, vec3 bottom_plane,

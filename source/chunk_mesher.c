@@ -20,7 +20,7 @@
 /* #define SIMULATE_OOM 150 */ /* auskommentiert = deaktiviert */
 
 /* ---- CHUNK DEBUG ---- Auf 1 setzen, nur diese Datei neu kompilieren ---- */
-#define CHUNK_MESHER_DEBUG 1
+#define CHUNK_MESHER_DEBUG 0
 /* ----------------------------------------------------------------------- */
 #if CHUNK_MESHER_DEBUG
 #include <stdarg.h>
@@ -94,6 +94,12 @@ volatile unsigned long chunk_mesher_dbg_sent = 0;
 volatile unsigned long chunk_mesher_dbg_failed = 0;
 volatile unsigned long chunk_mesher_dbg_recv = 0;
 volatile unsigned long chunk_mesher_dbg_built = 0;
+
+/* Mesher-Thread-Stats für die Debug-Anzeige (geschrieben vom Mesher-Thread,
+ * gelesen vom Main-Thread – volatile reicht für einfache floats/ints). */
+volatile float chunk_mesher_stat_ms_per_build = 0.0f;
+volatile float chunk_mesher_stat_builds_per_sec = 0.0f;
+volatile int   chunk_mesher_stat_queue_depth = 0;
 
 static int chunk_test_side(enum side* on_sides, c_coord_t x, c_coord_t y,
 						   c_coord_t z) {
@@ -576,10 +582,35 @@ static void chunk_mesher_build(struct chunk_mesher_rpc* req) {
 }
 
 static void* chunk_mesher_local_thread(void* user) {
+	ptime_t last_build_time = time_get();
+
 	while(1) {
 		struct chunk_mesher_rpc* request;
 		tchannel_receive(&mesher_requests, (void**)&request, true);
-		chunk_mesher_build(request); // fixed crash
+
+		/* Queue-Tiefe = belegte Slots = Kapazität minus freie Empty-Slots.
+		 * Nur auf PC verfügbar (pthreads-Channel hat .count); auf Wii bleibt
+		 * der Wert auf 0. */
+#ifdef PLATFORM_PC
+		chunk_mesher_stat_queue_depth
+			= (int)CHUNK_MESHER_QLENGTH - (int)mesher_empty_msg.count;
+#endif
+
+		ptime_t t0 = time_get();
+		chunk_mesher_build(request);
+		ptime_t t1 = time_get();
+
+		float ms = (float)time_diff_ms(t0, t1);
+		/* Vergangene Zeit seit letztem Build für builds/s */
+		float period_ms = (float)time_diff_ms(last_build_time, t1);
+		last_build_time = t1;
+
+		chunk_mesher_stat_ms_per_build
+			= chunk_mesher_stat_ms_per_build * 0.9f + ms * 0.1f;
+		float inst_bps = (period_ms > 0.0f) ? (1000.0f / period_ms) : 0.0f;
+		chunk_mesher_stat_builds_per_sec
+			= chunk_mesher_stat_builds_per_sec * 0.9f + inst_bps * 0.1f;
+
 		tchannel_send(&mesher_results, request, true);
 	}
 

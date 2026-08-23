@@ -184,7 +184,7 @@ void camera_physics(struct camera* c, float dt) {
 
 	aabb_setsize_centered(&bbox, 0.6F, 0.6F, 0.6F);
 	aabb_translate(&bbox, c->x + c->controller.vx * dt, c->y, c->z);
-	if(!world_aabb_intersection(&gstate.world, &bbox)) {
+	if(!world_aabb_intersection(gstate_player_world(gstate_active_player()), &bbox)) {
 		c->x += c->controller.vx * dt;
 	} else {
 		c->controller.vx = 0;
@@ -192,7 +192,7 @@ void camera_physics(struct camera* c, float dt) {
 
 	aabb_setsize_centered(&bbox, 0.6F, 0.6F, 0.6F);
 	aabb_translate(&bbox, c->x, c->y + c->controller.vy * dt, c->z);
-	if(!world_aabb_intersection(&gstate.world, &bbox)) {
+	if(!world_aabb_intersection(gstate_player_world(gstate_active_player()), &bbox)) {
 		c->y += c->controller.vy * dt;
 	} else {
 		c->controller.vy = 0;
@@ -200,7 +200,7 @@ void camera_physics(struct camera* c, float dt) {
 
 	aabb_setsize_centered(&bbox, 0.6F, 0.6F, 0.6F);
 	aabb_translate(&bbox, c->x, c->y, c->z + c->controller.vz * dt);
-	if(!world_aabb_intersection(&gstate.world, &bbox)) {
+	if(!world_aabb_intersection(gstate_player_world(gstate_active_player()), &bbox)) {
 		c->z += c->controller.vz * dt;
 	} else {
 		c->controller.vz = 0;

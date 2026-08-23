@@ -342,12 +342,16 @@ void entities_client_tick(dict_entity_t dict) {
 }
 
 void entities_client_render(dict_entity_t dict, struct camera* c,
-							float tick_delta) {
+							struct world* world_filter, float tick_delta) {
 	dict_entity_it_t it;
 	dict_entity_it(it, dict);
 
 	while(!dict_entity_end_p(it)) {
 		struct entity* e = dict_entity_ref(it)->value;
+		if(world_filter && e->world && e->world != world_filter) {
+			dict_entity_next(it);
+			continue;
+		}
 		if(e->render
 		   && glm_vec3_distance2(e->pos, (vec3) {c->x, c->y, c->z})
 			   < glm_pow2(32.0F))
