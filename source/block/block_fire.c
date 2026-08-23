@@ -66,7 +66,7 @@ static void onRandomTick(struct server_local* s, struct block_info* blk) {
 		int nz = blk->z + dz[i];
 
 		struct block_data neighbor;
-		if (server_world_get_block(&s->world, nx, ny, nz, &neighbor)) {
+		if (server_world_get_block(AWORLD(s), nx, ny, nz, &neighbor)) {
 			// Check if the neighbor block is flammable
 			if (blocks[neighbor.type] && blocks[neighbor.type]->flammable) {
 				// Replace it with fire

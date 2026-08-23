@@ -44,7 +44,7 @@ static bool onItemPlace(struct server_local* s, struct item_data* it,
 
     // Only place into AIR to keep logic simple and cheap
     struct block_data bd;
-    if (!server_world_get_block(&s->world, x, y, z, &bd)) return false;
+    if (!server_world_get_block(AWORLD(s), x, y, z, &bd)) return false;
     if (bd.type != BLOCK_AIR) return false;
 
     // Place still water (reuse current light values from the AIR cell)

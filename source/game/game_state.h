@@ -60,6 +60,9 @@ struct game_state {
 		 * den RAM-Governor: er hebt vd nur bis hierher (und nie ueber die harte
 		 * MAX_VIEW_DISTANCE) und senkt unter Speicherdruck darunter. */
 		int view_distance;
+		/* Render-Auflösung als Prozent zwischen Minimum (0 = GFX_PC_WINDOW_WIDTH×
+		 * GFX_PC_WINDOW_HEIGHT) und Maximum (100 = native Fenstergröße). */
+		int render_scale_pct;
 	} settings;
 	/* live chunk generation status, updated by the server thread for the debug
 	 * overlay (screen_ingame). */
@@ -80,6 +83,16 @@ struct game_state {
 		 * smoothed effective tick rate. On the Wii a tick > 50ms drops below the
 		 * 20 TPS target -> water/mobs run slow. Written from server_local_thread. */
 		float server_tick_ms, server_tps;
+		/* chunk-mesher-thread stats (debug). Written from chunk_mesher_local_thread. */
+		float mesher_ms_per_build;   /* geglättete ms pro Mesh-Build */
+		float mesher_builds_per_sec; /* geglättete Builds/s */
+		int   mesher_queue_depth;    /* aktuell belegte Slots (0..QLENGTH) */
+		/* Frame-Profiling: Laufzeit der Haupt-Loop-Abschnitte in ms (EMA). */
+		float prof_clin_ms;    /* clin_update: RPC + Chunk-Import */
+		float prof_tick_ms;    /* Spiellogik-Ticks (Physics, Entities) */
+		float prof_render_ms;  /* world_render aller Spieler (3D) */
+		float prof_gui_ms;     /* render2D + GUI */
+		float prof_finish_ms;  /* gfx_finish: Composite + VSync-Warten */
 	} stats;
 	struct {
 		float fov;
@@ -90,7 +103,8 @@ struct game_state {
 	struct screen* player_screens[4];
 	struct camera camera;
 	struct camera_ray_result camera_hit;
-	struct world world;
+	struct world world;        /* Overworld */
+	struct world world_nether; /* Nether */
 	struct entity* local_player;
 	dict_entity_t entities;
 	uint64_t world_time;
@@ -120,6 +134,11 @@ struct game_state {
 		} switch_item;
 	} held_item_animation;
 	bool world_loaded;
+	/* true solange ein Portal-Dimensionswechsel auf Chunk-Load wartet (pro Spieler) */
+	bool portal_loading[4];
+	/* Portal-Timer pro Spieler (Ticks im Portal, 0..80). Vom Server-Thread für
+	 * die Debug-Anzeige geschrieben. Bei 80 erfolgt der Teleport. */
+	int portal_ticks_display[4];
 	int spawn_x, spawn_z;
 	bool in_water;
 	bool paused;
@@ -133,6 +152,8 @@ struct game_state {
 	struct held_anim held_item_animations[4];
 	bool in_water_arr[4];
 	int oxygen_arr[4];
+	/* Dimension, in der sich jeder Spieler aktuell befindet. */
+	enum world_dim player_dims[4];
 #else
 #endif
 };
@@ -154,6 +175,12 @@ static inline int splitscreen_player_count(void) {
 
 static inline bool splitscreen_enabled(void) {
 	return gstate.num_players > 1;
+}
+
+/* Gibt die Welt des Spielers p zurück (Overworld oder Nether). */
+static inline struct world* gstate_player_world(int p) {
+	return (gstate.player_dims[p] == WORLD_DIM_NETHER)
+	       ? &gstate.world_nether : &gstate.world;
 }
 
 static inline void splitscreen_load_player(int idx) {

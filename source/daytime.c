@@ -23,8 +23,11 @@
 #include "game/game_state.h"
 #include "util.h"
 
+/* Wird vor jedem Spieler-Render auf seine aktuelle Dimension gesetzt. */
+enum world_dim daytime_render_dim = WORLD_DIM_OVERWORLD;
+
 float daytime_brightness(float time) {
-	return (gstate.world.dimension == WORLD_DIM_OVERWORLD) ? glm_clamp(
+	return (daytime_render_dim == WORLD_DIM_OVERWORLD) ? glm_clamp(
 			   cos(daytime_celestial_angle(time) * 2.0F * GLM_PI) * 2.0F + 0.5F,
 			   0.0F, 1.0F) :
 															 0.0F;
@@ -48,7 +51,7 @@ void daytime_sky_colors(float time, vec3 top_plane, vec3 bottom_plane,
 						vec3 atmosphere) {
 	assert(top_plane && bottom_plane && atmosphere);
 
-	if(gstate.world.dimension == WORLD_DIM_OVERWORLD) {
+	if(daytime_render_dim == WORLD_DIM_OVERWORLD) {
 		float brightness_mul = daytime_brightness(time);
 
 		vec3 world_sky_color = {

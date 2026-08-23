@@ -80,7 +80,7 @@ static void repeater_state_clear(struct server_local* s, w_coord_t x, w_coord_t 
 static bool repeater_supports(struct server_local* s, struct block_info* this) {
 	struct block_data below;
 
-	if(!server_world_get_block(&s->world, this->x, this->y - 1, this->z, &below))
+	if(!server_world_get_block(AWORLD(s), this->x, this->y - 1, this->z, &below))
 		return false;
 	return blocks[below.type] && !blocks[below.type]->can_see_through;
 }
@@ -104,7 +104,7 @@ static bool repeater_has_input(struct server_local* s, struct block_info* this) 
 	int ox, oy, oz;
 
 	blocks_side_offset(repeater_input_side(this->block), &ox, &oy, &oz);
-	if(!server_world_get_block(&s->world, this->x + ox, this->y + oy,
+	if(!server_world_get_block(AWORLD(s), this->x + ox, this->y + oy,
 							   this->z + oz, &src))
 		return false;
 
@@ -165,7 +165,7 @@ static bool onItemPlace(struct server_local* s, struct item_data* it,
 	(void)on;
 	(void)on_side;
 
-	if(!server_world_get_block(&s->world, where->x, where->y - 1, where->z, &below)
+	if(!server_world_get_block(AWORLD(s), where->x, where->y - 1, where->z, &below)
 	   || !blocks[below.type] || blocks[below.type]->can_see_through)
 		return false;
 

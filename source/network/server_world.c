@@ -2172,6 +2172,10 @@ static void gen_set_nibble(uint8_t* data, size_t idx, uint8_t value) {
 	nibble_write(data, idx, value & 0xF);
 }
 
+static uint8_t gen_get_nibble(const uint8_t* data, size_t idx) {
+	return nibble_read(data, idx);
+}
+
 static void gen_set_ore_if_stone(struct server_chunk* sc, int x, int y, int z,
 								 uint8_t ore, uint32_t seed, float threshold) {
 	size_t idx = S_CHUNK_IDX(x, y, z);
@@ -3132,6 +3136,95 @@ static void gen_place_lava_sources(struct server_chunk* sc, uint32_t seed,
 			solid++;
 		if(solid >= 4)
 			gen_set_block(sc, x, y, z, BLOCK_LAVA_STILL);
+	}
+}
+
+/* BFS-Lichtausbreitung innerhalb eines frisch generierten Chunks.
+ *
+ * Zwei Probleme mit gen_recompute_height_and_skylight allein:
+ *   1. Fackelllicht (Lava, Glowstone, Fackeln) wird überhaupt nicht gesetzt.
+ *   2. Himmelslicht breitet sich nicht seitlich in Höhlenöffnungen aus.
+ *
+ * Diese Funktion arbeitet direkt auf den Roh-Nibble-Arrays des Chunk-Buffers
+ * (vor dict_server_chunks_set_at) und benötigt keine World-API.
+ * Repeated-Sweep-BFS: maximal 15 Durchläufe, bricht früh ab sobald sich
+ * nichts mehr ändert (in der Praxis 1–3 Durchläufe). */
+static void gen_propagate_lighting(struct server_chunk* sc, bool is_nether) {
+	static const int8_t nbx[6] = {1,-1,0,0,0,0};
+	static const int8_t nby[6] = {0,0,1,-1,0,0};
+	static const int8_t nbz[6] = {0,0,0,0,1,-1};
+
+	/* ---- Fackelllicht: Seed ---- */
+	for(int lx = 0; lx < CHUNK_SIZE; lx++)
+		for(int lz = 0; lz < CHUNK_SIZE; lz++)
+			for(int y = 0; y < WORLD_HEIGHT; y++) {
+				size_t idx = S_CHUNK_IDX(lx, y, lz);
+				uint8_t type = sc->ids[idx];
+				uint8_t lum  = (blocks[type] && blocks[type]->luminance)
+				               ? blocks[type]->luminance : 0;
+				if(lum)
+					gen_set_nibble(sc->lighting_torch, idx, lum);
+			}
+
+	/* ---- Fackelllicht: Ausbreitung (Repeated Sweep) ---- */
+	for(int pass = 0; pass < 15; pass++) {
+		bool changed = false;
+		for(int lx = 0; lx < CHUNK_SIZE; lx++)
+			for(int lz = 0; lz < CHUNK_SIZE; lz++)
+				for(int y = 0; y < WORLD_HEIGHT; y++) {
+					size_t idx   = S_CHUNK_IDX(lx, y, lz);
+					uint8_t type = sc->ids[idx];
+					/* Undurchsichtige Blöcke empfangen/senden kein Licht */
+					if(blocks[type] && !blocks[type]->can_see_through) continue;
+
+					uint8_t opc  = (blocks[type] && blocks[type]->opacity > 1)
+					               ? (uint8_t)blocks[type]->opacity : 1;
+					uint8_t best = gen_get_nibble(sc->lighting_torch, idx);
+
+					for(int d = 0; d < 6; d++) {
+						int nx = lx + nbx[d], ny = y + nby[d], nz = lz + nbz[d];
+						if(!gen_inside_chunk(nx, ny, nz)) continue;
+						uint8_t nt = gen_get_nibble(
+						    sc->lighting_torch, S_CHUNK_IDX(nx, ny, nz));
+						if(nt > opc && nt - opc > best) best = nt - opc;
+					}
+					if(best != gen_get_nibble(sc->lighting_torch, idx)) {
+						gen_set_nibble(sc->lighting_torch, idx, best);
+						changed = true;
+					}
+				}
+		if(!changed) break;
+	}
+
+	if(is_nether) return; /* Nether: kein Himmelslicht */
+
+	/* ---- Himmelslicht: seitliche Ausbreitung ---- */
+	for(int pass = 0; pass < 15; pass++) {
+		bool changed = false;
+		for(int lx = 0; lx < CHUNK_SIZE; lx++)
+			for(int lz = 0; lz < CHUNK_SIZE; lz++)
+				for(int y = 0; y < WORLD_HEIGHT; y++) {
+					size_t idx   = S_CHUNK_IDX(lx, y, lz);
+					uint8_t type = sc->ids[idx];
+					if(blocks[type] && !blocks[type]->can_see_through) continue;
+
+					uint8_t opc  = (blocks[type] && blocks[type]->opacity > 1)
+					               ? (uint8_t)blocks[type]->opacity : 1;
+					uint8_t best = gen_get_nibble(sc->lighting_sky, idx);
+
+					for(int d = 0; d < 6; d++) {
+						int nx = lx + nbx[d], ny = y + nby[d], nz = lz + nbz[d];
+						if(!gen_inside_chunk(nx, ny, nz)) continue;
+						uint8_t ns = gen_get_nibble(
+						    sc->lighting_sky, S_CHUNK_IDX(nx, ny, nz));
+						if(ns > opc && ns - opc > best) best = ns - opc;
+					}
+					if(best != gen_get_nibble(sc->lighting_sky, idx)) {
+						gen_set_nibble(sc->lighting_sky, idx, best);
+						changed = true;
+					}
+				}
+		if(!changed) break;
 	}
 }
 
@@ -4097,6 +4190,7 @@ static bool gen_finalize_chunk_step(struct server_world* w, struct server_chunk*
 		return false;
 	case 2:
 		gen_recompute_height_and_skylight(sc);
+		gen_propagate_lighting(sc, w->dimension == WORLD_DIM_NETHER);
 		dict_server_chunks_set_at(w->chunks, S_CHUNK_ID(x, z), *sc);
 		*out = dict_server_chunks_get(w->chunks, S_CHUNK_ID(x, z));
 		return *out != NULL;
@@ -4117,6 +4211,111 @@ static bool gen_finalize_chunk(struct server_world* w, struct server_chunk* sc,
 	}
 	return false;
 }
+
+/* ─────────── Nether-Chunk-Generierung (B1.7.3-inspiriert) ─────────── */
+
+static void gen_generate_nether_chunk(struct server_world* w,
+                                       struct server_chunk* sc,
+                                       w_coord_t cx, w_coord_t cz) {
+	uint32_t seed = (uint32_t)w->world_seed;
+	int32_t wx0   = cx * CHUNK_SIZE;
+	int32_t wz0   = cz * CHUNK_SIZE;
+
+	/*
+	 * Zwei unabhängige großskalige Noises:
+	 *   pn1 — sehr große Hohlräume (Periode ~500 Blöcke horizontal)
+	 *   pn2 — mittlere Säulen/Plattformen (Periode ~80 Blöcke)
+	 *   pn3 — Feindetail für Oberflächen (Periode ~25 Blöcke)
+	 *
+	 * Solid-Schwellenwert 0.22: nur die obersten ~38% der Dichteverteilung
+	 * sind solid → mind. 62% der mittleren Zone ist Hohlraum.
+	 * Boden (y<22) und Decke (y>105) werden per Bias hart auf solid gezogen.
+	 */
+	PerlinNoise pn1, pn2, pn3;
+	uint64_t s1 = (uint64_t)seed * 0x9C3FAB17ULL ^ 0x5A2D8E4CULL;
+	uint64_t s2 = (uint64_t)seed * 0x7BE3C491ULL ^ 0xD8F2A063ULL;
+	uint64_t s3 = (uint64_t)seed * 0x3DA5F921ULL ^ 0xF0E1D2C3ULL;
+	perlinInit(&pn1, &s1);
+	perlinInit(&pn2, &s2);
+	perlinInit(&pn3, &s3);
+
+	/* Pass 1: Terrain */
+	for(int lx = 0; lx < CHUNK_SIZE; lx++) {
+		for(int lz = 0; lz < CHUNK_SIZE; lz++) {
+			double wx = wx0 + lx, wz = wz0 + lz;
+			for(int y = 0; y < WORLD_HEIGHT; y++) {
+				/* Bedrock-Boden und -Decke */
+				if(y == 0 || y == WORLD_HEIGHT - 1) {
+					gen_set_block(sc, lx, y, lz, BLOCK_BEDROCK);
+					continue;
+				}
+				/* Probabilistisches Bedrock (Boden Y=1-4, Decke Y=123-126) */
+				if(y <= 4 || y >= WORLD_HEIGHT - 5) {
+					float t = (y <= 4) ? (4.0f - y) / 4.0f
+					                   : (y - (WORLD_HEIGHT - 6)) / 5.0f;
+					float p = gen_rand01_from_hash(
+					    gen_hash3i((int)wx, y, (int)wz, seed ^ 0xFACE0000U));
+					if(p < t) {
+						gen_set_block(sc, lx, y, lz, BLOCK_BEDROCK);
+						continue;
+					}
+				}
+
+				/* Großer Hohlraum-Noise (dominiert den Gesamtcharakter) */
+				double n1 = samplePerlin(&pn1, wx / 500.0, (double)y / 120.0,
+				                         wz / 500.0, 0.0, 0.0);
+				/* Säulen-/Plattformen-Noise */
+				double n2 = samplePerlin(&pn2, wx / 80.0,  (double)y / 40.0,
+				                         wz / 80.0,  0.0, 0.0);
+				/* Feindetail für rauere Oberflächen */
+				double n3 = samplePerlin(&pn3, wx / 25.0,  (double)y / 12.0,
+				                         wz / 25.0,  0.0, 0.0);
+
+				/* Dichte: Großraum dominiert, Säulen addieren Struktur */
+				double density = n1 * 0.55 + n2 * 0.32 + n3 * 0.13;
+
+				/* Harter Bias für Boden- und Deckenzone */
+				if(y < 22)               density += (22.0 - y) / 22.0 * 2.5;
+				if(y > WORLD_HEIGHT - 23) density += (y - (WORLD_HEIGHT - 23.0)) / 22.0 * 2.5;
+
+				/* Schwellenwert: solid nur wo density > 0.22 */
+				if(density > 0.22) {
+					gen_set_block(sc, lx, y, lz, BLOCK_NETHERRACK);
+				} else if(y < 32) {
+					gen_set_block(sc, lx, y, lz, BLOCK_LAVA_STILL);
+				}
+				/* sonst: BLOCK_AIR */
+			}
+		}
+	}
+
+	/* Pass 2: Oberflächenfeatures */
+	for(int lx = 0; lx < CHUNK_SIZE; lx++) {
+		for(int lz = 0; lz < CHUNK_SIZE; lz++) {
+			int wx = wx0 + lx, wz = wz0 + lz;
+			for(int y = 2; y < WORLD_HEIGHT - 5; y++) {
+				if(gen_get_block(sc, lx, y, lz) != BLOCK_NETHERRACK) continue;
+				uint8_t above = gen_get_block(sc, lx, y + 1, lz);
+				uint8_t below = gen_get_block(sc, lx, y - 1, lz);
+				/* Boden-Oberfläche → Soul Sand oder Kies */
+				if(above == BLOCK_AIR || above == BLOCK_LAVA_STILL) {
+					uint32_t h = gen_hash3i(wx, y, wz, seed ^ 0x1B2C3D4EU);
+					uint8_t r  = h & 0xFF;
+					if(r < 48)      gen_set_block(sc, lx, y, lz, BLOCK_SOULSAND);
+					else if(r < 62) gen_set_block(sc, lx, y, lz, BLOCK_GRAVEL);
+				}
+				/* Decken-Oberfläche → Glowstone */
+				else if(below == BLOCK_AIR) {
+					uint32_t h = gen_hash3i(wx, y, wz, seed ^ 0xE5F6A7B8U);
+					if((h & 0xFF) < 24)
+						gen_set_block(sc, lx, y, lz, BLOCK_GLOWSTONE);
+				}
+			}
+		}
+	}
+}
+
+/* ─────────────────────────────────────────────────────────────────────── */
 
 /* Build the biome generator once per seed and reuse it. setupGenerator() and
  * applySeed() are expensive; doing them on every generation step was the real
@@ -4143,9 +4342,6 @@ static Generator* server_world_biome_gen(struct server_world* w) {
 static bool server_world_generate_chunk(struct server_world* w, w_coord_t x,
 										w_coord_t z, struct server_chunk** out) {
 	assert(w && out);
-	struct gen_cuberite_runtime_args gen_args = gen_runtime_args(w);
-	int choice_octaves = (w->generator.biomal_noise3d_num_choice_octaves > 0)
-		? w->generator.biomal_noise3d_num_choice_octaves : 4;
 
 	if(server_world_is_chunk_loaded(w, x, z)) {
 		*out = dict_server_chunks_get(w->chunks, S_CHUNK_ID(x, z));
@@ -4155,6 +4351,17 @@ static bool server_world_generate_chunk(struct server_world* w, w_coord_t x,
 	if(!gen_alloc_chunk_buffers(&sc))
 		return false;
 
+	/* Nether: eigener Generator, nur Lighting/Dict-Finalisierung */
+	if(w->dimension == WORLD_DIM_NETHER) {
+		gen_generate_nether_chunk(w, &sc, x, z);
+		return gen_finalize_chunk_step(w, &sc, NULL, NULL, 0,
+		                               x * CHUNK_SIZE, z * CHUNK_SIZE,
+		                               x, z, out, 2);
+	}
+
+	struct gen_cuberite_runtime_args gen_args = gen_runtime_args(w);
+	int choice_octaves = (w->generator.biomal_noise3d_num_choice_octaves > 0)
+		? w->generator.biomal_noise3d_num_choice_octaves : 4;
 	uint32_t seed = (uint32_t)w->world_seed;
 	Generator* biome_gen = server_world_biome_gen(w);
 	int32_t world_x0 = x * CHUNK_SIZE;
@@ -4230,6 +4437,30 @@ static bool server_world_advance_pending(struct server_world* w,
 	assert(w && out);
 	if(!w->pending_chunk.active)
 		return false;
+
+	/* Nether: gesamten Chunk in TERRAIN-Phase generieren, direkt finalisieren */
+	if(w->dimension == WORLD_DIM_NETHER) {
+		switch(w->pending_chunk.phase) {
+		case SERVER_WORLD_PENDING_TERRAIN:
+			gen_generate_nether_chunk(w, &w->pending_chunk.chunk,
+			                          w->pending_chunk.x, w->pending_chunk.z);
+			w->pending_chunk.phase = SERVER_WORLD_PENDING_FINALIZE;
+			w->pending_chunk.next_column = 0;
+			return false;
+		case SERVER_WORLD_PENDING_FINALIZE: {
+			int32_t wx0 = w->pending_chunk.x * CHUNK_SIZE;
+			int32_t wz0 = w->pending_chunk.z * CHUNK_SIZE;
+			bool ok = gen_finalize_chunk_step(w, &w->pending_chunk.chunk,
+			                                  NULL, NULL, 0, wx0, wz0,
+			                                  w->pending_chunk.x,
+			                                  w->pending_chunk.z, out, 2);
+			if(ok) memset(&w->pending_chunk, 0, sizeof(w->pending_chunk));
+			return ok;
+		}
+		default:
+			return false;
+		}
+	}
 
 	struct gen_cuberite_runtime_args gen_args = gen_runtime_args(w);
 	int choice_octaves = (w->generator.biomal_noise3d_num_choice_octaves > 0)
@@ -4645,7 +4876,7 @@ bool server_world_find_spawn(struct server_world* w, w_coord_t x0, w_coord_t z0,
 }
 
 bool server_world_set_block(struct server_local* s, w_coord_t x, w_coord_t y, w_coord_t z, struct block_data blk) {
-    struct server_world* w = &s->world;
+    struct server_world* w = AWORLD(s);
 	assert(w);
 	if(y < 0 || y >= WORLD_HEIGHT)
 		return false;
@@ -4682,6 +4913,7 @@ bool server_world_set_block(struct server_local* s, w_coord_t x, w_coord_t y, w_
 			.payload.set_block.y = y,
 			.payload.set_block.z = z,
 			.payload.set_block.block = blk,
+			.payload.set_block.dimension = w->dimension,
 		});
 	}
 
@@ -4970,7 +5202,7 @@ void server_world_tick(struct server_world* w, struct server_local* s) {
 							w_coord_t ny = y        + oy;
 							w_coord_t nz = baseZ + cz + oz;
 
-                            if (!server_world_get_block(&s->world,
+                            if (!server_world_get_block(AWORLD(s),
                                                         nx, ny, nz,
                                                         &neighbour_data[side]))
 							{
@@ -5068,7 +5300,7 @@ void server_world_explode(struct server_local *s, vec3 center, float power) {
             int bz = (int)floorf(pos[2]);
 
             struct block_data blk;
-            if (!server_world_get_block(&s->world, bx, by, bz, &blk))
+            if (!server_world_get_block(AWORLD(s), bx, by, bz, &blk))
                 break;
 
             if (blk.type == 0 || blk.type == BLOCK_BEDROCK) {
@@ -5101,7 +5333,7 @@ void server_world_explode(struct server_local *s, vec3 center, float power) {
     for (int i = 0; i < bc; i++) {
         int bx = broken[i].x, by = broken[i].y, bz = broken[i].z;
         struct block_data old;
-        server_world_get_block(&s->world, bx, by, bz, &old);
+        server_world_get_block(AWORLD(s), bx, by, bz, &old);
         server_world_set_block(s, bx, by, bz, (struct block_data){0});
         if (old.type != BLOCK_TNT
             && rand()/(float)RAND_MAX < 0.33f) {

@@ -45,7 +45,7 @@ static bool onItemPlace(struct server_local* s, struct item_data* it,
         int tx = where->x + dir[i][0];
         int ty = where->y + dir[i][1];
         int tz = where->z + dir[i][2];
-        if (!server_world_get_block(&s->world, tx, ty, tz, &blk)) continue;
+        if (!server_world_get_block(AWORLD(s), tx, ty, tz, &blk)) continue;
         if (blk.type == 0) {
             metadata = i * 2;
             dx = dir[i][0];

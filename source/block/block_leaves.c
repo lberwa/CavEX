@@ -82,7 +82,7 @@ static void onRandomTick(struct server_local* s, struct block_info* this) {
 			for(int z = -4; z <= 4; z++) {
 				struct block_data log;
 				if((x != 0 || y != 0 || z != 0)
-				   && server_world_get_block(&s->world, this->x + x,
+				   && server_world_get_block(AWORLD(s), this->x + x,
 											 this->y + y, this->z + z, &log)
 				   && log.type == BLOCK_LOG) {
 					//printf("BLOCK: %d %d %d\n", this->x + x, this->y + y, this->z + z);

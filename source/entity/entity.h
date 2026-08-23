@@ -204,8 +204,9 @@ void entity_boat_throttle(float yaw, vec3 vel, bool powered);
 
 uint32_t entity_gen_id(dict_entity_t dict);
 void entities_client_tick(dict_entity_t dict);
+/* world_filter: NULL = alle Entities; sonst nur Entities in dieser Welt */
 void entities_client_render(dict_entity_t dict, struct camera* c,
-							float tick_delta);
+							struct world* world_filter, float tick_delta);
 
 void entity_default_init(struct entity* e, bool server, void* world);
 void entity_default_teleport(struct entity* e, vec3 pos);

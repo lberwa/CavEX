@@ -60,13 +60,13 @@ static int compass_frame(void) {
 	float relative = bearing - gstate.camera.rx;
 
 	/* normalize to [0, 2π) */
-	float two_pi = 2.0f * (float)M_PI;
+	float two_pi = 2.0f * GLM_PIf;
 	relative = fmodf(relative, two_pi);
 	if(relative < 0.0f)
 		relative += two_pi;
 
 	/* shift so that relative=π (spawn behind) → frame 0 */
-	float shifted = relative - (float)M_PI;
+	float shifted = relative - GLM_PIf;
 	if(shifted < 0.0f)
 		shifted += two_pi;
 

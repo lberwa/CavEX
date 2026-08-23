@@ -57,7 +57,7 @@ static void onRightClick(struct server_local* s, struct item_data* it,
 	// Same as grass: hoe turns into farmland if above is air.
 	if(it && items[it->id] && items[it->id]->tool.type == TOOL_TYPE_HOE) {
 		struct block_data above;
-		if(server_world_get_block(&s->world, on->x, on->y + 1, on->z, &above)
+		if(server_world_get_block(AWORLD(s), on->x, on->y + 1, on->z, &above)
 		   && above.type == BLOCK_AIR) {
 			server_world_set_block(s, on->x, on->y, on->z,
 								   (struct block_data) {.type = BLOCK_FARMLAND,
@@ -77,7 +77,7 @@ static void onRightClick(struct server_local* s, struct item_data* it,
 static void onRandomTick(struct server_local* s, struct block_info* this) {
 	// Copy of grass behavior, but spreading mycelium.
 	struct block_data top;
-	if(server_world_get_block(&s->world, this->x, this->y + 1, this->z, &top)) {
+	if(server_world_get_block(AWORLD(s), this->x, this->y + 1, this->z, &top)) {
 		if(top.sky_light < 5 && top.torch_light < 5) {
 			server_world_set_block(s, this->x, this->y, this->z,
 								   (struct block_data) {.type = BLOCK_DIRT,
@@ -90,11 +90,11 @@ static void onRandomTick(struct server_local* s, struct block_info* this) {
 
 				struct block_data neighbour, neighbour_top;
 				if((x != 0 || y != 0 || z != 0)
-				   && server_world_get_block(&s->world, this->x + x,
+				   && server_world_get_block(AWORLD(s), this->x + x,
 											 this->y + y, this->z + z,
 											 &neighbour)
 				   && neighbour.type == BLOCK_DIRT
-				   && server_world_get_block(&s->world, this->x + x,
+				   && server_world_get_block(AWORLD(s), this->x + x,
 											 this->y + y + 1, this->z + z,
 											 &neighbour_top)
 				   && (!blocks[neighbour_top.type]

@@ -99,7 +99,6 @@ static void ext_netdbg(const char *msg) {
 	char line[192];
 	snprintf(line, sizeof(line), "%s\n", msg ? msg : "(null)");
 	printf("%s", line);
-	debug_send(line);
 }
 
 static void ext_log_cb(const char *msg) {

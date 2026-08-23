@@ -29,19 +29,19 @@ static uint8_t vine_filter_supported_meta(struct server_local* s, w_coord_t x,
 	struct block_data nb;
 
 	if((meta & VINE_LEFT)
-	   && (!server_world_get_block(&s->world, x - 1, y, z, &nb)
+	   && (!server_world_get_block(AWORLD(s), x - 1, y, z, &nb)
 		   || !vine_can_attach_to(nb)))
 		meta &= ~VINE_LEFT;
 	if((meta & VINE_RIGHT)
-	   && (!server_world_get_block(&s->world, x + 1, y, z, &nb)
+	   && (!server_world_get_block(AWORLD(s), x + 1, y, z, &nb)
 		   || !vine_can_attach_to(nb)))
 		meta &= ~VINE_RIGHT;
 	if((meta & VINE_FRONT)
-	   && (!server_world_get_block(&s->world, x, y, z - 1, &nb)
+	   && (!server_world_get_block(AWORLD(s), x, y, z - 1, &nb)
 		   || !vine_can_attach_to(nb)))
 		meta &= ~VINE_FRONT;
 	if((meta & VINE_BACK)
-	   && (!server_world_get_block(&s->world, x, y, z + 1, &nb)
+	   && (!server_world_get_block(AWORLD(s), x, y, z + 1, &nb)
 		   || !vine_can_attach_to(nb)))
 		meta &= ~VINE_BACK;
 
@@ -142,7 +142,7 @@ static bool onItemPlace(struct server_local* s, struct item_data* it,
 
 	// Allow multiple vine faces on the same block position by OR-ing metadata.
 	struct block_data existing;
-	if(!server_world_get_block(&s->world, where->x, where->y, where->z, &existing))
+	if(!server_world_get_block(AWORLD(s), where->x, where->y, where->z, &existing))
 		return false;
 
 	if(existing.type == BLOCK_VINE) {
@@ -224,7 +224,7 @@ static void onRandomTick(struct server_local* s, struct block_info* this) {
 
 	// Try to grow down (most common): if below is air, 50% chance.
 	struct block_data below;
-	if(server_world_get_block(&s->world, this->x, this->y - 1, this->z, &below)
+	if(server_world_get_block(AWORLD(s), this->x, this->y - 1, this->z, &below)
 	   && below.type == BLOCK_AIR) {
 		if((rand() & 1) == 0) {
 			// Special case requested: when growing downward, the new vine may
@@ -244,7 +244,7 @@ static void onRandomTick(struct server_local* s, struct block_info* this) {
 
 	// Try to grow to the side in the chosen direction (attach to neighbour block).
 	struct block_data target;
-	if(server_world_get_block(&s->world, this->x + dx, this->y, this->z + dz, &target)
+	if(server_world_get_block(AWORLD(s), this->x + dx, this->y, this->z + dz, &target)
 	   && (target.type == BLOCK_AIR || target.type == BLOCK_VINE)) {
 		// Prefer growing "along the wall": keep the same attachment direction(s)
 		// as the vine that caused the growth.
@@ -281,11 +281,11 @@ static void onRandomTick(struct server_local* s, struct block_info* this) {
 			blocks_side_offset(perps[i], &pdx, &pdy, &pdz);
 			struct block_data corner_air;
 			struct block_data corner_support;
-			if(!server_world_get_block(&s->world, this->x + pdx, this->y, this->z + pdz, &corner_air))
+			if(!server_world_get_block(AWORLD(s), this->x + pdx, this->y, this->z + pdz, &corner_air))
 				continue;
 			if(corner_air.type != BLOCK_AIR)
 				continue;
-			if(!server_world_get_block(&s->world, this->x + pdx + dx, this->y, this->z + pdz + dz, &corner_support))
+			if(!server_world_get_block(AWORLD(s), this->x + pdx + dx, this->y, this->z + pdz + dz, &corner_support))
 				continue;
 			if(!vine_can_attach_to(corner_support))
 				continue;
@@ -313,9 +313,9 @@ static void onRandomTick(struct server_local* s, struct block_info* this) {
 	// Try to grow up only if there is a solid support on the chosen side above.
 	struct block_data above;
 	struct block_data above_support;
-	if(server_world_get_block(&s->world, this->x, this->y + 1, this->z, &above)
+	if(server_world_get_block(AWORLD(s), this->x, this->y + 1, this->z, &above)
 	   && above.type == BLOCK_AIR
-	   && server_world_get_block(&s->world, this->x + dx, this->y + 1, this->z + dz, &above_support)
+	   && server_world_get_block(AWORLD(s), this->x + dx, this->y + 1, this->z + dz, &above_support)
 	   && vine_can_attach_to(above_support)
 	   && dir_bit) {
 		server_world_set_block(s, this->x, this->y + 1, this->z,

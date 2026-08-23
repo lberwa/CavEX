@@ -64,3 +64,28 @@
 * implement a minecraft terminal
 
 * the moon and sun are too little
+
+* in creative inventory add:
+  - search function
+  - save function
+  - move to other screen with IB_INVENTORY_LEFT/RIGHT
+
+* the menu of creative inventory of player 1 is the same like of player 2
+
+* compass and clock can't tell anything in the nether
+
+* the player doesn't move his arms if he places a block
+
+* you should be able to destroy blocks with destroy number -1 if you are in creative mode
+
+* IB_ANY doesn't ask all buttons
+
+* shadow bugs on the wii
+
+* gpu on the pc is too slowly so it runs with 20-55fps on fullscreen
+
+* world generator needs too much cpu
+
+* you don't see the cracks on the blocks on the wii
+
+* if player 2 goes into the nether portal he can't go out of the loading screen while player 1 doesn't go to the nether portal too

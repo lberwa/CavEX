@@ -78,13 +78,19 @@ static void clin_windows_destroy_table(struct window_container** table) {
 }
 
 
+static struct world* world_for_dim(enum world_dim dim) {
+	return (dim == WORLD_DIM_NETHER) ? &gstate.world_nether : &gstate.world;
+}
+
 void clin_chunk(w_coord_t x, w_coord_t y, w_coord_t z, w_coord_t sx,
 				w_coord_t sy, w_coord_t sz, uint8_t* ids, uint8_t* metadata,
-				uint8_t* lighting_sky, uint8_t* lighting_torch) {
+				uint8_t* lighting_sky, uint8_t* lighting_torch,
+				enum world_dim dim) {
 	assert(sx > 0 && sz > 0 && y >= 0 && y + sy <= WORLD_HEIGHT);
 	assert(ids && metadata && lighting_sky && lighting_torch);
+	struct world* tw = world_for_dim(dim);
 
-	if(world_import_chunk_column(&gstate.world, x, y, z, sx, sy, sz, ids,
+	if(world_import_chunk_column(tw, x, y, z, sx, sy, sz, ids,
 								 metadata, lighting_sky, lighting_torch)) {
 		/* ids == Blockanfang des Transfer-Puffers -> in den Pool zurueck. */
 		clin_chunk_buf_return(ids);
@@ -106,7 +112,7 @@ void clin_chunk(w_coord_t x, w_coord_t y, w_coord_t z, w_coord_t sx,
 				uint8_t torch
 					= flip ? (*lighting_t_t) & 0xF : (*lighting_t_t) >> 4;
 
-				world_set_block(&gstate.world, ox, oy, oz,
+				world_set_block(tw, ox, oy, oz,
 								(struct block_data) {
 									.type = *ids_t,
 									.metadata = md,
@@ -146,10 +152,12 @@ void clin_process(struct client_rpc* call) {
 					   call->payload.chunk.sy, call->payload.chunk.sz,
 					   call->payload.chunk.ids, call->payload.chunk.metadata,
 					   call->payload.chunk.lighting_sky,
-					   call->payload.chunk.lighting_torch);
+					   call->payload.chunk.lighting_torch,
+					   call->payload.chunk.dimension);
 			break;
 		case CRPC_UNLOAD_CHUNK:
-			world_unload_section(&gstate.world, call->payload.unload_chunk.x,
+			world_unload_section(world_for_dim(call->payload.unload_chunk.dimension),
+								 call->payload.unload_chunk.x,
 								 call->payload.unload_chunk.z);
 			break;
 		case CRPC_PLAYER_POS:
@@ -215,6 +223,19 @@ void clin_process(struct client_rpc* call) {
 				splitscreen_p2_spawned = true;
 			}
 #endif
+			/* Dimensions-Wechsel: nur wenn der Server teleport=true setzt.
+			 * Normale Positions-Updates haben teleport=false und ändern
+			 * die Welt nicht (sonst würde das nächste Tick-Update die
+			 * Dimension wieder auf Overworld zurücksetzen). */
+#ifdef SPLITSCREEN
+			if(call->payload.player_pos.teleport) {
+				gstate.player_dims[pid] = call->payload.player_pos.dimension;
+				if(lp)
+					lp->world = gstate_player_world(pid);
+				/* Portal-Ladescreen beenden: Chunks sind geladen, Portal steht */
+				gstate.portal_loading[pid] = false;
+			}
+#endif
 			/* world_loaded is NOT set here: the initial spawn pos arrives before
 			 * the terrain is ready. We only start once the server signals
 			 * CRPC_WORLD_LOADED (spawn area chunks loaded + hotbar sent). */
@@ -223,8 +244,12 @@ void clin_process(struct client_rpc* call) {
 		case CRPC_WORLD_LOADED:
 			gstate.world_loaded = true;
 			break;
+		case CRPC_PORTAL_LOADING:
+			gstate.portal_loading[pid] = true;
+			break;
 		case CRPC_WORLD_RESET:
 			world_unload_all(&gstate.world);
+			world_unload_all(&gstate.world_nether);
 
 		{
 #ifdef SPLITSCREEN
@@ -268,7 +293,12 @@ void clin_process(struct client_rpc* call) {
 #endif
 
 			gstate.world_loaded = false;
-			gstate.world.dimension = call->payload.world_reset.dimension;
+			gstate.world.dimension = WORLD_DIM_OVERWORLD;
+			gstate.world_nether.dimension = WORLD_DIM_NETHER;
+#ifdef SPLITSCREEN
+			for(int _pi = 0; _pi < 4; _pi++)
+				gstate.player_dims[_pi] = WORLD_DIM_OVERWORLD;
+#endif
 
 			struct entity** local_player_ptr = dict_entity_safe_get(
 				gstate.entities, call->payload.world_reset.local_entity);
@@ -396,9 +426,11 @@ void clin_process(struct client_rpc* call) {
 			gstate.world_time_start = time_get();
 			break;
 		case CRPC_SET_BLOCK:
+		{
+			struct world* sbw = world_for_dim(call->payload.set_block.dimension);
 			if(call->payload.set_block.block.type == BLOCK_AIR) {
 				struct block_data blk = world_get_block(
-					&gstate.world, call->payload.set_block.x,
+					sbw, call->payload.set_block.x,
 					call->payload.set_block.y, call->payload.set_block.z);
 				struct block_data neighbours[6];
 
@@ -407,12 +439,13 @@ void clin_process(struct client_rpc* call) {
 					blocks_side_offset((enum side)k, &ox, &oy, &oz);
 
 					neighbours[k] = world_get_block(
-						&gstate.world, call->payload.set_block.x + ox,
+						sbw, call->payload.set_block.x + ox,
 						call->payload.set_block.y + oy,
 						call->payload.set_block.z + oz);
 				}
 
-				particle_generate_block(&(struct block_info) {
+				particle_spawn_dim = call->payload.set_block.dimension;
+			particle_generate_block(&(struct block_info) {
 					.block = &blk,
 					.neighbours = neighbours,
 					.x = call->payload.set_block.x,
@@ -421,11 +454,11 @@ void clin_process(struct client_rpc* call) {
 				});
 			}
 
-			world_set_block(&gstate.world, call->payload.set_block.x,
+			world_set_block(sbw, call->payload.set_block.x,
 							call->payload.set_block.y,
 							call->payload.set_block.z,
 							call->payload.set_block.block, true);
-
+		}
 			break;
 		case CRPC_SPAWN_ITEM: {
 			struct entity** e_ptr = dict_entity_safe_get(
@@ -434,7 +467,8 @@ void clin_process(struct client_rpc* call) {
 			struct entity* e = *e_ptr;
 			assert(e);
 			entity_item(call->payload.spawn_item.entity_id, e, false,
-						&gstate.world, call->payload.spawn_item.item);
+						world_for_dim(call->payload.spawn_item.dimension),
+						call->payload.spawn_item.item);
 			e->teleport(e, call->payload.spawn_item.pos);
 			glm_vec3_copy(call->payload.spawn_item.vel, e->vel);
 		} break;
@@ -445,7 +479,8 @@ void clin_process(struct client_rpc* call) {
 			struct entity* e = *e_ptr;
 			assert(e);
 			entity_monster(call->payload.spawn_monster.entity_id, e, false,
-						&gstate.world, call->payload.spawn_monster.monster_id);
+						world_for_dim(call->payload.spawn_monster.dimension),
+						call->payload.spawn_monster.monster_id);
 			e->teleport(e, call->payload.spawn_monster.pos);
 		} break;
 

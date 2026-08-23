@@ -37,7 +37,7 @@ static bool onItemPlace(struct server_local* s, struct item_data* it,
 
     // check if there's air above the crop
     struct block_data blk;
-    if (!server_world_get_block(&s->world, tx, ty, tz, &blk))
+    if (!server_world_get_block(AWORLD(s), tx, ty, tz, &blk))
         return false;
 
     if (blk.type != BLOCK_AIR)

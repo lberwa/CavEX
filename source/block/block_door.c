@@ -112,7 +112,7 @@ static void toggleDoor(struct server_local* s,
                        uint8_t doorType)
 {
     struct block_data bd;
-    if (!server_world_get_block(&s->world, x, y, z, &bd)) return;
+    if (!server_world_get_block(AWORLD(s), x, y, z, &bd)) return;
 
     // flip the manual-open bit, preserve redstone bit
     uint8_t manual = bd.metadata & 0x01;
@@ -191,7 +191,7 @@ static void onNeighbourBlockChange(struct server_local* s,
         w_coord_t nz = info->z + dz[i];
 
         struct block_data nb;
-        if (!server_world_get_block(&s->world, nx, ny, nz, &nb))
+        if (!server_world_get_block(AWORLD(s), nx, ny, nz, &nb))
             continue;
 
         uint8_t m = nb.metadata & 0x0F;

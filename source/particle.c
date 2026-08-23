@@ -40,6 +40,8 @@ ARRAY_DEF(array_particle, struct particle, M_POD_OPLIST)
 
 array_particle_t particles;
 
+enum world_dim particle_spawn_dim = WORLD_DIM_OVERWORLD;
+
 static vec3 s_cameraPos;
 static const float SPAWN_CULL_RADIUS = 64.0f;
 static const float SPAWN_CULL_RADIUS2 = SPAWN_CULL_RADIUS * SPAWN_CULL_RADIUS;
@@ -108,6 +110,7 @@ void particle_add(vec3 pos,
     p->r = r;  p->g = g;  p->b = b;
     p->ignore_light = ignore_light;
     p->atlas    = atlas;
+    p->dim      = particle_spawn_dim;
 
     if (atlas == TEXTURE_ATLAS_TERRAIN) {
         float fx = (TEX_OFFSET(TEXTURE_X(tex)) + rnd() * 12.0f)
@@ -463,8 +466,10 @@ static void render_single(struct particle* p, vec3 camera, float delta) {
     if (p->ignore_light) {
         light = 255;  // full brightness
     } else {
+        struct world* lw = (p->dim == WORLD_DIM_NETHER)
+            ? &gstate.world_nether : &gstate.world;
         struct block_data in_block = world_get_block(
-            &gstate.world,
+            lw,
             floorf(pos_lerp[0]),
             floorf(pos_lerp[1]),
             floorf(pos_lerp[2])
@@ -531,7 +536,9 @@ void particle_update() {
 		w_coord_t bx = floorf(new_pos[0]);
 		w_coord_t by = floorf(new_pos[1]);
 		w_coord_t bz = floorf(new_pos[2]);
-		struct block_data in_block = world_get_block(&gstate.world, bx, by, bz);
+		struct world* pw = (p->dim == WORLD_DIM_NETHER)
+		    ? &gstate.world_nether : &gstate.world;
+		struct block_data in_block = world_get_block(pw, bx, by, bz);
 
 		bool intersect = false;
 		if(blocks[in_block.type]) {
@@ -680,6 +687,12 @@ void particle_generate_torch(vec3 pos) {
 }
 
 void particle_render(mat4 view, vec3 camera, float delta) {
+#ifdef SPLITSCREEN
+    enum world_dim render_dim = gstate.player_dims[gstate.active_player];
+#else
+    enum world_dim render_dim = WORLD_DIM_OVERWORLD;
+#endif
+
     gfx_matrix_modelview(view);
     gfx_lighting(false);
 
@@ -689,7 +702,7 @@ void particle_render(mat4 view, vec3 camera, float delta) {
     array_particle_it(it, particles);
     while(!array_particle_end_p(it)) {
         struct particle* p = array_particle_ref(it);
-        if(p->atlas == TEXTURE_ATLAS_TERRAIN)
+        if(p->atlas == TEXTURE_ATLAS_TERRAIN && p->dim == render_dim)
             render_single(p, camera, delta);
         array_particle_next(it);
     }
@@ -699,8 +712,8 @@ void particle_render(mat4 view, vec3 camera, float delta) {
     array_particle_it(it, particles);
     while(!array_particle_end_p(it)) {
         struct particle* p = array_particle_ref(it);
-        if(p->atlas == TEXTURE_ATLAS_PARTICLES)
-        	render_single(p, camera, delta);
+        if(p->atlas == TEXTURE_ATLAS_PARTICLES && p->dim == render_dim)
+            render_single(p, camera, delta);
         array_particle_next(it);
     }
 

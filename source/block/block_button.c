@@ -78,7 +78,7 @@ static bool button_has_support(struct server_local* s, struct block_info* this) 
 
 	if(!button_support_pos(this, &sx, &sy, &sz))
 		return false;
-	if(!server_world_get_block(&s->world, sx, sy, sz, &support))
+	if(!server_world_get_block(AWORLD(s), sx, sy, sz, &support))
 		return false;
 	return blocks[support.type] && !blocks[support.type]->can_see_through;
 }

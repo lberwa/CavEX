@@ -33,18 +33,19 @@ typedef enum {
 
 
 struct particle {
-    vec3             pos;        // current position
-    vec3             pos_old;    // previous position for interpolation
-    vec3             vel;        // velocity
-    vec2             tex_uv;     // only for terrain‐atlas random offset
-    float            size;       // half‐quad size
-    int              age;        // remaining life in ticks
-    int              lifetime;   // initial life in ticks, for animating smoke
-    uint16_t         tex;        // base tile index
-    bool             gravity;    // apply gravity?
-    uint8_t     	 r, g, b;	 // rgb colorisation of a particle
-    bool             ignore_light;    // apply gravity?
-    particle_atlas_t atlas;      // which atlas to sample
+    vec3             pos;
+    vec3             pos_old;
+    vec3             vel;
+    vec2             tex_uv;
+    float            size;
+    int              age;
+    int              lifetime;
+    uint16_t         tex;
+    bool             gravity;
+    uint8_t          r, g, b;
+    bool             ignore_light;
+    particle_atlas_t atlas;
+    enum world_dim   dim;        /* Dimension in der das Partikel lebt */
 };
 
 void particle_add(vec3 pos,
@@ -66,6 +67,10 @@ void particle_add(vec3 pos,
   M_ARRAY_DEF_AS(name, M_F(name,_t), M_F(name,_it_t), __VA_ARGS__)
 M_ARRAY_DEF(array_particle, struct particle, M_POD_OPLIST)
 #endif
+
+/* Muss vor particle_add()-Aufrufen auf die aktive Dimension gesetzt werden,
+ * damit Partikel korrekt ihrer Dimension zugeordnet werden. */
+extern enum world_dim particle_spawn_dim;
 
 void particle_init(void);
 void particle_set_camera(vec3 p);

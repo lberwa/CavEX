@@ -62,7 +62,7 @@ static bool onItemPlace(struct server_local* s, struct item_data* it,
 
 	// 'where' is the air cell above the water.
 	struct block_data cur;
-	if(!server_world_get_block(&s->world, where->x, where->y, where->z, &cur))
+	if(!server_world_get_block(AWORLD(s), where->x, where->y, where->z, &cur))
 		return false;
 	if(cur.type != BLOCK_AIR)
 		return false;

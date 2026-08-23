@@ -43,7 +43,7 @@ static int enchanting_count_bookshelves(struct server_world* w, w_coord_t x,
 static void enchanting_set_options(struct inventory* inv) {
 	struct server_local* s = inv->user;
 	const int shelves
-		= enchanting_count_bookshelves(&s->world, inv->x, inv->y, inv->z);
+		= enchanting_count_bookshelves(AWORLD(s), inv->x, inv->y, inv->z);
 
 	// Option "buttons" represented as book items; level encodes cost.
 	// (Real MC 1.7.x uses an RNG/seed + enchantability; this is a simplified stand-in.)

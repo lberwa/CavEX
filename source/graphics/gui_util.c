@@ -102,15 +102,16 @@ void gutil_texquad_rt_any(int x, int y, float angle, int tx, int ty, int sx,
 		(uint16_t[]) {tx, ty, tx + sx, ty, tx + sx, ty + sy, tx, ty + sy});
 }
 
-void gutil_bg() {
+void gutil_bg_block(int texat_id) {
 	gfx_bind_texture_pixels(&texture_terrain);
 
 	int scale = 16 * 4;
-	int cx = (gfx_width() + scale - 1) / scale;
-	int cy = (gfx_height() + scale - 1) / scale;
+	int w = gfx_width();
+	int h = gfx_height();
+	int cx = (w + scale - 1) / scale;
+	int cy = (h + scale - 1) / scale;
 
-	uint16_t tex = tex_atlas_lookup(TEXAT_DIRT);
-
+	uint16_t tex = tex_atlas_lookup(texat_id);
 	uint16_t s = TEX_OFFSET(TEXTURE_X(tex));
 	uint16_t t = TEX_OFFSET(TEXTURE_Y(tex));
 
@@ -120,6 +121,11 @@ void gutil_bg() {
 							  0x40, 0x40, 0x40, 0xFF);
 		}
 	}
+
+}
+
+void gutil_bg() {
+	gutil_bg_block(TEXAT_DIRT);
 }
 
 static uint8_t font_char_width[256];

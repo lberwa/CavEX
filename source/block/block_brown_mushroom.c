@@ -44,7 +44,7 @@ static bool onItemPlace(struct server_local* s, struct item_data* it,
 						struct block_info* where, struct block_info* on,
 						enum side on_side) {
 	struct block_data blk;
-	if (!server_world_get_block(&s->world, where->x, where->y - 1, where->z, &blk))
+	if (!server_world_get_block(AWORLD(s), where->x, where->y - 1, where->z, &blk))
 		return false;
 
 	// Check if the block is suitable for planting mushrooms (grass or dirt)
@@ -65,7 +65,7 @@ static void onRandomTick(struct server_local* s, struct block_info* blk) {
 		for (int dy = -1; dy <= 1; dy++) {
 			for (int dz = -4; dz <= 4; dz++) {
 				struct block_data nearby;
-				if (server_world_get_block(&s->world, blk->x + dx, blk->y + dy, blk->z + dz, &nearby)) {
+				if (server_world_get_block(AWORLD(s), blk->x + dx, blk->y + dy, blk->z + dz, &nearby)) {
 					if (nearby.type == blk->block->type)
 						count++;
 				}
@@ -84,12 +84,12 @@ static void onRandomTick(struct server_local* s, struct block_info* blk) {
 
 	// Check if the chosen block is air
 	struct block_data dest;
-	if (!server_world_get_block(&s->world, ox, oy, oz, &dest)) return;
+	if (!server_world_get_block(AWORLD(s), ox, oy, oz, &dest)) return;
 	if (dest.type != BLOCK_AIR) return;
 
 	// Check the block below to see if it is dirt, grass
 	struct block_data below;
-	if (server_world_get_block(&s->world, ox, oy - 1, oz, &below)) {
+	if (server_world_get_block(AWORLD(s), ox, oy - 1, oz, &below)) {
 		// Ensure the block below is suitable for mushrooms to grow on (dirt, grass)
 		if (below.type == BLOCK_DIRT || below.type == BLOCK_GRASS) {
 			// Ensure the block above is not transparent

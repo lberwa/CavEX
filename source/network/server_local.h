@@ -153,7 +153,27 @@ struct server_player {
 	float vel_y, old_vel_y;
 	float fall_distance;
 	bool creative;
+	int portal_ticks;
+	bool portal_pending_active;
+	int portal_pending_x, portal_pending_z;
+	/* Ticks seit Beginn des Ladescreens; garantiert eine Mindest-Anzeigedauer
+	 * damit der Ladescreen auch bei bereits geladenen Ziel-Chunks sichtbar ist
+	 * (z.B. Rückweg Nether→Oberwelt). */
+	int portal_pending_ticks;
+	/* true = Ladescreen ist ein Respawn (kein Portal-Bau, direkt zum Spawnpunkt). */
+	bool portal_pending_respawn;
+	/* Portal-Cooldown: true wenn der Spieler nach einem Teleport im Portal
+	 * steht. Verhindert sofortiges Zurück-Teleportieren; wird gelöscht sobald
+	 * der Spieler einmal außerhalb eines Portal-Blocks war. */
+	bool portal_cooldown;
 };
+
+/* Dimension-Index: 0 = Overworld, 1 = Nether */
+#define WDIM_IDX(dim) ((dim) == WORLD_DIM_NETHER ? 1 : 0)
+/* Welt des Spielers pid */
+#define PWORLD(s, pid) (&(s)->worlds[WDIM_IDX((s)->players[pid].dimension)])
+/* Welt des aktuell verarbeiteten Spielers */
+#define AWORLD(s) PWORLD(s, (s)->active_player_id)
 
 struct server_local {
 	struct random_gen rand_src;
@@ -162,7 +182,7 @@ struct server_local {
 	// Player id of the RPC currently being processed (used by block/inventory
 	// callbacks that don't carry player context yet).
 	uint8_t active_player_id;
-	struct server_world world;
+	struct server_world worlds[2]; /* [0]=Overworld, [1]=Nether */
 	bool world_initialized;
 	/* set for a freshly created world: snap the spawn/player onto solid ground
 	 * once the spawn area has been generated */
@@ -184,6 +204,15 @@ struct server_local {
 	string_t level_name;
 	struct level_archive level;
 	bool paused;
+
+	/* Portal-Registrierung: bekannte Portale in Overworld [0] und Nether [1].
+	 * Ermöglicht effiziente Portalsuche ohne Chunk-Scan. */
+#define MAX_PORTAL_ENTRIES 256
+	struct {
+		int x, y, z;
+		bool valid;
+	} portal_registry[2][MAX_PORTAL_ENTRIES];
+
 	ptime_t last_tick;
 	/* pending fluid changes for this tick (see MAX_FLUID_CHANGES) */
 	struct fluid_change fluid_changes[MAX_FLUID_CHANGES];
@@ -198,6 +227,10 @@ struct server_local {
 void server_local_create(struct server_local* s);
 bool server_local_try_portal(struct server_local* s, int x, int y, int z);
 void server_local_collapse_portal(struct server_local* s, int x, int y, int z);
+void server_local_register_portal(struct server_local* s, int x, int y, int z, enum world_dim dim);
+void server_local_unregister_portal(struct server_local* s, int x, int y, int z, enum world_dim dim);
+void server_local_save_portal_registry(struct server_local* s);
+void server_local_load_portal_registry(struct server_local* s);
 struct entity* server_local_spawn_minecart(vec3 pos, struct server_local* s);
 struct entity* server_local_spawn_boat(vec3 pos, float yaw,
                                        struct server_local* s);

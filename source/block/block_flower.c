@@ -44,7 +44,7 @@ static bool onItemPlace(struct server_local* s, struct item_data* it,
 						struct block_info* where, struct block_info* on,
 						enum side on_side) {
 	struct block_data blk;
-	if(!server_world_get_block(&s->world, where->x, where->y - 1, where->z,
+	if(!server_world_get_block(AWORLD(s), where->x, where->y - 1, where->z,
 							   &blk))
 		return false;
 

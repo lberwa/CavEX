@@ -88,7 +88,7 @@ static bool water_search_passable(uint8_t type) {
 static void water_try_set(struct server_local* s, w_coord_t x, w_coord_t y,
 						  w_coord_t z, uint8_t type, uint8_t meta) {
 	struct block_data cur;
-	if(!server_world_get_block(&s->world, x, y, z, &cur))
+	if(!server_world_get_block(AWORLD(s), x, y, z, &cur))
 		return; // chunk not loaded: skip
 	if(cur.type == type && cur.metadata == meta)
 		return; // already in the desired state
@@ -113,12 +113,12 @@ static int water_drop_search(struct server_local* s, w_coord_t x, w_coord_t y,
 			continue;
 		w_coord_t nx = x + hx[i], nz = z + hz[i];
 		struct block_data n;
-		if(!server_world_get_block(&s->world, nx, y, nz, &n))
+		if(!server_world_get_block(AWORLD(s), nx, y, nz, &n))
 			continue;
 		if(!water_search_passable(n.type))
 			continue; // stop at solids and full source blocks
 		struct block_data nb;
-		if(server_world_get_block(&s->world, nx, y - 1, nz, &nb)
+		if(server_world_get_block(AWORLD(s), nx, y - 1, nz, &nb)
 		   && water_below_is_hole(nb.type)) {
 			if(1 < best)
 				best = 1; // hole one step further away
@@ -148,8 +148,8 @@ void block_water_flow_update(struct server_local* s, struct block_info* info) {
 	bool receding = false;
 
 	struct block_data below, above;
-	bool has_below = server_world_get_block(&s->world, x, y - 1, z, &below);
-	bool has_above = server_world_get_block(&s->world, x, y + 1, z, &above);
+	bool has_below = server_world_get_block(AWORLD(s), x, y - 1, z, &below);
+	bool has_above = server_world_get_block(AWORLD(s), x, y + 1, z, &above);
 	bool water_above = has_above && water_is_water(above.type);
 
 	// --- infinite source formation ---------------------------------------
@@ -159,7 +159,7 @@ void block_water_flow_update(struct server_local* s, struct block_info* info) {
 		int src_neighbors = 0;
 		for(int i = 0; i < 4; i++) {
 			struct block_data n;
-			if(server_world_get_block(&s->world, x + hx[i], y, z + hz[i], &n)
+			if(server_world_get_block(AWORLD(s), x + hx[i], y, z + hz[i], &n)
 			   && n.type == BLOCK_WATER_STILL)
 				src_neighbors++;
 		}
@@ -185,7 +185,7 @@ void block_water_flow_update(struct server_local* s, struct block_info* info) {
 			int best = 8; // 8 == out of range / no feeder
 			for(int i = 0; i < 4; i++) {
 				struct block_data n;
-				if(!server_world_get_block(&s->world, x + hx[i], y, z + hz[i], &n))
+				if(!server_world_get_block(AWORLD(s), x + hx[i], y, z + hz[i], &n))
 					continue;
 				if(n.type == BLOCK_WATER_STILL) {
 					if(1 < best)
@@ -243,12 +243,12 @@ void block_water_flow_update(struct server_local* s, struct block_info* info) {
 	bool nb_ok[4];
 	for(int i = 0; i < 4; i++) {
 		cost[i] = WATER_COST_NONE;
-		nb_ok[i] = server_world_get_block(&s->world, x + hx[i], y, z + hz[i],
+		nb_ok[i] = server_world_get_block(AWORLD(s), x + hx[i], y, z + hz[i],
 										  &nb_data[i]);
 		if(!nb_ok[i] || !water_search_passable(nb_data[i].type))
 			continue;
 		struct block_data nb;
-		if(server_world_get_block(&s->world, x + hx[i], y - 1, z + hz[i], &nb)
+		if(server_world_get_block(AWORLD(s), x + hx[i], y - 1, z + hz[i], &nb)
 		   && water_below_is_hole(nb.type)) {
 			cost[i] = 0; // hole directly below this neighbour
 		} else {

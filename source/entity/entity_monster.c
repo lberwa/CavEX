@@ -92,8 +92,8 @@ static bool client_tick_creeper(struct entity* e) {
     if (e->health <= 0 && e->data.monster.fuse > 0) {
         vec3 interp;
         glm_vec3_lerp(e->pos_old, e->pos, 1.0f, interp);
+        particle_spawn_dim = gstate.player_dims[gstate_active_player()];
         particle_generate_explosion_smoke(interp, 1.0f);
-
     }
 
     return false;
@@ -442,7 +442,7 @@ void server_explode(struct server_local *s, vec3 center, float radius) {
           // eventueel ook x/z check binnen chunk-limieten,
           // maar server_world_get_block doet dat vaak al intern.
 
-          if (server_world_get_block(&s->world, bx, by, bz, NULL)) {
+          if (server_world_get_block(AWORLD(s), bx, by, bz, NULL)) {
             server_world_set_block(s, bx, by, bz,
               (struct block_data){ .type = BLOCK_AIR, .metadata = 0 });
           }

@@ -53,7 +53,7 @@ static bool onItemPlace(struct server_local* s, struct item_data* it,
 	}
 
 	struct block_data blk;
-	if (!server_world_get_block(&s->world, tx, ty, tz, &blk))
+	if (!server_world_get_block(AWORLD(s), tx, ty, tz, &blk))
 		return false;
 
 	// Only if the target block is air

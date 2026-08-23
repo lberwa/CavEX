@@ -85,6 +85,8 @@ void chunk_init(struct chunk* c, struct world* world, w_coord_t x, w_coord_t y,
 				w_coord_t z) {
 	assert(c && world);
 
+	memset(c->mesh, 0, sizeof(c->mesh));
+
 	c->blocks = cc_pool_take();
 	if(c->blocks) {
 		c->blocks_pooled = true;

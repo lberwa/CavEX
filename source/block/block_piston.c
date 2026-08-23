@@ -45,7 +45,7 @@ static void piston_front_pos(const struct block_data* blk, w_coord_t x,
 
 static void piston_get_block(struct server_local* s, w_coord_t x, w_coord_t y,
 							 w_coord_t z, struct block_data* out) {
-	if(!server_world_get_block(&s->world, x, y, z, out)) {
+	if(!server_world_get_block(AWORLD(s), x, y, z, out)) {
 		out->type = BLOCK_AIR;
 		out->metadata = 0;
 		out->sky_light = 0;
@@ -141,7 +141,7 @@ static bool piston_try_extend(struct server_local* s, struct block_info* info) {
 		w_coord_t y = info->y + oy * step;
 		w_coord_t z = info->z + oz * step;
 
-		if(!server_world_get_block(&s->world, x, y, z, &blk))
+		if(!server_world_get_block(AWORLD(s), x, y, z, &blk))
 			return false;
 
 		if(blk.type == BLOCK_AIR)
@@ -156,7 +156,7 @@ static bool piston_try_extend(struct server_local* s, struct block_info* info) {
 
 	if(count == PISTON_MAX_PUSH) {
 		struct block_data end_blk;
-		if(server_world_get_block(&s->world, info->x + ox * (PISTON_MAX_PUSH + 1),
+		if(server_world_get_block(AWORLD(s), info->x + ox * (PISTON_MAX_PUSH + 1),
 								  info->y + oy * (PISTON_MAX_PUSH + 1),
 								  info->z + oz * (PISTON_MAX_PUSH + 1), &end_blk)
 		   && end_blk.type != BLOCK_AIR)

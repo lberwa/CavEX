@@ -73,7 +73,7 @@ static bool redstone_lamp_is_powered(struct server_local* s,
 		uint8_t m;
 
 		blocks_side_offset((enum side) side, &ox, &oy, &oz);
-		if(!server_world_get_block(&s->world, info->x + ox, info->y + oy,
+		if(!server_world_get_block(AWORLD(s), info->x + ox, info->y + oy,
 								   info->z + oz, &nb))
 			continue;
 

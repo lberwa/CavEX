@@ -46,6 +46,10 @@ enum cull_func {
 };
 
 void gfx_setup(void);
+void gfx_apply_render_scale(int pct);
+/* Tatsächliche Fenstergröße (unabhängig von der Render-Auflösung). */
+int gfx_window_width(void);
+int gfx_window_height(void);
 void gfx_update_light(float daytime, const float* light_lookup);
 float gfx_lookup_light(uint8_t light);
 void gfx_finish(bool vsync);

@@ -36,4 +36,9 @@ extern volatile unsigned long chunk_mesher_dbg_failed;
 extern volatile unsigned long chunk_mesher_dbg_recv;
 extern volatile unsigned long chunk_mesher_dbg_built;
 
+/* Mesher-Thread-Stats für die Debug-Anzeige */
+extern volatile float chunk_mesher_stat_ms_per_build;
+extern volatile float chunk_mesher_stat_builds_per_sec;
+extern volatile int   chunk_mesher_stat_queue_depth;
+
 #endif

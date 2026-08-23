@@ -45,7 +45,7 @@ static uint8_t melon_stem_metadata_from_side(enum side side) {
 
 static bool stem_has_support(struct server_local* s, struct block_info* this) {
 	struct block_data below;
-	if(!server_world_get_block(&s->world, this->x, this->y - 1, this->z, &below))
+	if(!server_world_get_block(AWORLD(s), this->x, this->y - 1, this->z, &below))
 		return false;
 	return below.type == BLOCK_FARMLAND;
 }
@@ -55,8 +55,8 @@ static bool stem_can_spawn_melon_here(struct server_local* s, w_coord_t x,
 	struct block_data target;
 	struct block_data below;
 
-	if(!server_world_get_block(&s->world, x, y, z, &target)
-	   || !server_world_get_block(&s->world, x, y - 1, z, &below))
+	if(!server_world_get_block(AWORLD(s), x, y, z, &target)
+	   || !server_world_get_block(AWORLD(s), x, y - 1, z, &below))
 		return false;
 
 	return target.type == BLOCK_AIR && is_melon_ground(below.type);
@@ -78,7 +78,7 @@ static bool stem_has_stored_melon(struct server_local* s, struct block_info* thi
 		default: return false;
 	}
 
-	return server_world_get_block(&s->world, this->x + dx, this->y, this->z + dz, &blk)
+	return server_world_get_block(AWORLD(s), this->x + dx, this->y, this->z + dz, &blk)
 		&& blk.type == BLOCK_MELON;
 }
 
@@ -144,7 +144,7 @@ static void onRandomTick(struct server_local* s, struct block_info* this) {
 							   (struct block_data) {.type = BLOCK_AIR});
 		return;
 	}
-	if(!server_world_get_block(&s->world, this->x, this->y + 1, this->z, &above))
+	if(!server_world_get_block(AWORLD(s), this->x, this->y + 1, this->z, &above))
 		return;
 	if(above.type != BLOCK_AIR
 	   && (!blocks[above.type] || !blocks[above.type]->can_see_through))
@@ -181,7 +181,7 @@ static void onNeighbourBlockChange(struct server_local* s, struct block_info* in
 
 	if(stem_has_support(s, info))
 	{
-		if(!server_world_get_block(&s->world, info->x, info->y, info->z, &stem_block))
+		if(!server_world_get_block(AWORLD(s), info->x, info->y, info->z, &stem_block))
 			return;
 
 		if(melon_stem_is_attached(stem_block.metadata)) {
