@@ -39,6 +39,7 @@ enum { // Buttons
     VIEW_DISTANCE_INC,
 	RENDER_SCALE_DEC,
 	RENDER_SCALE_INC,
+	VIEW_BOB_TOGGLE,
 };
 
 static int8_t menu;
@@ -111,6 +112,10 @@ static void set(int s) {
 			gfx_apply_render_scale(gstate.settings.render_scale_pct);
 		}
 		break;
+
+		case VIEW_BOB_TOGGLE:
+		gstate.settings.view_bob = !gstate.settings.view_bob;
+		break;
 	}
 }
 
@@ -147,8 +152,10 @@ static void screen_gsettings_render2D(struct screen* s, int width, int height) {
 			gutil_button(width/2 + 20, height/2 - 80, 50, 50, "+", &set, VIEW_DISTANCE_INC, 1, 0);
 			gutil_button(width/2 - 70, height/2 + 15, 50, 50, "-", &set, RENDER_SCALE_DEC, 0, 1);
 			gutil_button(width/2 + 20, height/2 + 15, 50, 50, "+", &set, RENDER_SCALE_INC, 1, 1);
-			gutil_button(width/2 - 350, height/2 + 100, 300, 50, "Game mode", &choose, GAMEMODE, 0, 2);
-			gutil_button(width/2 + 50,  height/2 + 100, 300, 50, "Back", &set, QUIT, 1, 2);
+			gutil_button_toggle(width/2 - 25, height/2 + 70, gstate.settings.view_bob,
+								&set, VIEW_BOB_TOGGLE, 0, 2);
+			gutil_button(width/2 - 350, height/2 + 130, 300, 50, "Game mode", &choose, GAMEMODE, 0, 3);
+			gutil_button(width/2 + 50,  height/2 + 130, 300, 50, "Back", &set, QUIT, 1, 3);
         }
     }
 	gutil_button_update();
@@ -170,6 +177,7 @@ static void screen_gsettings_render2D(struct screen* s, int width, int height) {
 		char rs_str[48];
 		snprintf(rs_str, sizeof(rs_str), "Render: %d%% (%dx%d)", rs, rw, rh);
 		gutil_text(width/2 - 200, height/2 - 15, rs_str, 20, true);
+		gutil_text(width/2 - 200, height/2 + 40, "Camera Bob:", 20, true);
 	}
 
 	if(avaiable) {

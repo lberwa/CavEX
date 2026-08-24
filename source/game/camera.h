@@ -28,6 +28,8 @@
 struct camera {
 	float x, y, z;
 	float rx, ry;
+	float walk_bob_phase;
+	float walk_bob_amp;
 	mat4 view, projection;
 	vec4 frustum_planes[6];
 	struct camera_controller {

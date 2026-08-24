@@ -95,6 +95,9 @@ struct entity {
 			bool creative;
 			int jump_tap_window;
 			bool jump_held_prev;
+			float walk_bob;
+			float walk_bob_old;
+			float walk_bob_speed;
 #ifdef SPLITSCREEN
 			uint8_t player_index;
 #endif
