@@ -132,6 +132,9 @@ void screen_ingame_render3D(struct screen* s, mat4 view) {
 
 	gfx_depth_range(0.0F, 0.1F);
 
+	float walk_bob_x = sinf(gstate.camera.walk_bob_phase) * gstate.camera.walk_bob_amp * 0.14F;
+	float walk_bob_y = -fabsf(sinf(gstate.camera.walk_bob_phase)) * gstate.camera.walk_bob_amp * 0.08F;
+
 	mat4 model;
 	struct item_data item;
 
@@ -139,10 +142,11 @@ void screen_ingame_render3D(struct screen* s, mat4 view) {
 						  slot + INVENTORY_SLOT_HOTBAR, &item)
 	   && item_get(&item)) {
 		glm_translate_make(model,
-						   (vec3) {0.56F - sinf(sqrtLerpPI) * 0.4F,
+						   (vec3) {0.56F - sinf(sqrtLerpPI) * 0.4F + walk_bob_x,
 								   -0.52F + sinf(sqrtLerpPI * 2.0F) * 0.2F
 									   - 0.6F * place_lerp
-									   - 0.4F * sinf(swing_lerp * GLM_PI),
+									   - 0.4F * sinf(swing_lerp * GLM_PI)
+									   + walk_bob_y,
 								   -0.72F - sinHalfCircle * 0.2F});
 		glm_rotate_y(model, glm_rad(45.0F), model);
 		glm_rotate_y(model, glm_rad(-sinHalfCircleWeird * 20.0F), model);
@@ -158,9 +162,10 @@ void screen_ingame_render3D(struct screen* s, mat4 view) {
 								   R_ITEM_ENV_FIRSTPERSON);
 	} else {
 		glm_translate_make(model,
-						   (vec3) {0.64F - sinf(sqrtLerpPI) * 0.3F,
+						   (vec3) {0.64F - sinf(sqrtLerpPI) * 0.3F + walk_bob_x,
 								   -0.6F + sinf(sqrtLerpPI * 2.0F) * 0.4F
-									   - 0.4F * sinf(swing_lerp * GLM_PI),
+									   - 0.4F * sinf(swing_lerp * GLM_PI)
+									   + walk_bob_y,
 								   -0.72F - sinHalfCircle * 0.4F});
 		glm_rotate_y(model, glm_rad(45.0F), model);
 		glm_rotate_y(model, glm_rad(sinf(sqrtLerpPI) * 70.0F), model);

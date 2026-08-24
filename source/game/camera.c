@@ -224,10 +224,18 @@ void camera_update_viewport(struct camera* c, bool in_water, float aspect) {
 					aspect, 0.075F, gstate.config.render_distance,
 					c->projection);
 
+	vec3 _fwd = {sinf(c->rx) * sinf(c->ry), cosf(c->ry),
+	             cosf(c->rx) * sinf(c->ry)};
 	glm_lookat((vec3) {c->x, c->y, c->z},
-			   (vec3) {c->x + sinf(c->rx) * sinf(c->ry), c->y + cosf(c->ry),
-					   c->z + cosf(c->rx) * sinf(c->ry)},
+			   (vec3) {c->x + _fwd[0], c->y + _fwd[1], c->z + _fwd[2]},
 			   (vec3) {0, 1, 0}, c->view);
+	/* View-Bob als View-Space-Post-Transform: T_bob * V.
+	 * Verschiebt ALLES (Geometrie, Himmel, Wolken) gleichmäßig im View-Space. */
+	float _bob_h = sinf(c->walk_bob_phase) * c->walk_bob_amp * 0.08f;
+	float _bob_v = -fabsf(cosf(c->walk_bob_phase)) * c->walk_bob_amp * 0.2f; // * 0.06f
+	mat4 _bob_mat;
+	glm_translate_make(_bob_mat, (vec3) {_bob_h, _bob_v, 0.0f});
+	glm_mat4_mul(_bob_mat, c->view, c->view);
 
 	mat4 view_proj;
 	glm_mat4_mul(c->projection, c->view, view_proj);
@@ -303,6 +311,11 @@ void camera_attach(struct camera* c, struct entity* e, float tick_delta,
 
 	e->orient[0] = c->rx;
 	e->orient[1] = c->ry;
+
+	c->walk_bob_phase = glm_lerp(e->data.local_player.walk_bob_old,
+	                             e->data.local_player.walk_bob, tick_delta);
+	c->walk_bob_amp   = gstate.settings.view_bob
+		? e->data.local_player.walk_bob_speed : 0.0f;
 }
 
 

@@ -63,6 +63,7 @@ struct game_state {
 		/* Render-Auflösung als Prozent zwischen Minimum (0 = GFX_PC_WINDOW_WIDTH×
 		 * GFX_PC_WINDOW_HEIGHT) und Maximum (100 = native Fenstergröße). */
 		int render_scale_pct;
+		bool view_bob;
 	} settings;
 	/* live chunk generation status, updated by the server thread for the debug
 	 * overlay (screen_ingame). */

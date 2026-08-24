@@ -356,6 +356,7 @@ static bool entity_tick(struct entity* e) {
 	// ---------- normal player physics ----------
 	glm_vec3_copy(e->pos, e->pos_old);
 	glm_vec2_copy(e->orient, e->orient_old);
+	e->data.local_player.walk_bob_old = e->data.local_player.walk_bob;
 
 	for(int k = 0; k < 3; k++)
 		if(fabsf(e->vel[k]) < 0.005F)
@@ -558,6 +559,10 @@ static bool entity_tick(struct entity* e) {
 	entity_get_delta(e, movement_delta);
 	float walk_speed = sqrtf(movement_delta[0] * movement_delta[0]
 	                         + movement_delta[2] * movement_delta[2]);
+
+	float bob_target = (walk_speed > 0.001f && e->on_ground) ? 1.0f : 0.0f;
+	e->data.local_player.walk_bob_speed += (bob_target - e->data.local_player.walk_bob_speed) * 0.1f;
+	e->data.local_player.walk_bob += walk_speed * GLM_PI;
 	float head_world_yaw = e->orient[0];
 	float yaw_diff
 		= angle_normalize(head_world_yaw - e->data.local_player.body_yaw);
