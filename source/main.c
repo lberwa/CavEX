@@ -22,6 +22,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <time.h>
 
 #ifdef PLATFORM_WII
@@ -83,6 +84,151 @@
 bool g_sdtrace = false;
 volatile bool g_python_running = false;
 volatile const char *g_cp = "init";
+static char g_pictures_dir[256] = ".";
+static char g_panorama_capture_dir[512];
+
+static void make_dirs(const char* path) {
+	char tmp[512];
+	size_t n = strlen(path);
+	if(n == 0 || n >= sizeof(tmp))
+		return;
+	memcpy(tmp, path, n + 1);
+
+	for(char* p = tmp + 1; *p; p++) {
+		if(*p == '/') {
+			*p = '\0';
+			mkdir(tmp, 0755);
+			*p = '/';
+		}
+	}
+	mkdir(tmp, 0755);
+}
+
+static void panorama_capture_apply_camera(struct camera* cam) {
+	static const vec3 dirs[6] = {
+		{ 0.0F,  0.0F, -1.0F},
+		{ 1.0F,  0.0F,  0.0F},
+		{ 0.0F,  0.0F,  1.0F},
+		{-1.0F,  0.0F,  0.0F},
+		{ 0.0F, -1.0F,  0.0F},
+		{ 0.0F,  1.0F,  0.0F},
+	};
+	static const vec3 ups[6] = {
+		{0.0F, 1.0F,  0.0F},
+		{0.0F, 1.0F,  0.0F},
+		{0.0F, 1.0F,  0.0F},
+		{0.0F, 1.0F,  0.0F},
+		{0.0F, 0.0F,  1.0F},
+		{0.0F, 0.0F, -1.0F},
+	};
+
+	int face = gstate.panorama_capture.face;
+	if(face < 0 || face >= 6)
+		return;
+
+	vec3 eye = {cam->x, cam->y, cam->z};
+	vec3 center = {cam->x + dirs[face][0],
+				   cam->y + dirs[face][1],
+				   cam->z + dirs[face][2]};
+
+	glm_perspective(glm_rad(90.0F), 1.0F, 0.075F,
+					gstate.config.render_distance, cam->projection);
+	glm_lookat(eye, center, (float*)ups[face], cam->view);
+
+	mat4 view_proj;
+	glm_mat4_mul(cam->projection, cam->view, view_proj);
+	glm_frustum_planes(view_proj, cam->frustum_planes);
+}
+
+static uint8_t lerp_u8(uint8_t a, uint8_t b, uint32_t t) {
+	return (uint8_t)((a * (65536U - t) + b * t + 32768U) >> 16);
+}
+
+static void* resize_rgba(void* src_image, size_t src_w, size_t src_h,
+						 size_t dst_w, size_t dst_h) {
+	if(src_w == dst_w && src_h == dst_h)
+		return src_image;
+
+	uint8_t* src = src_image;
+	uint8_t* dst = malloc(dst_w * dst_h * 4);
+	if(!dst)
+		return src_image;
+
+	for(size_t y = 0; y < dst_h; y++) {
+		uint32_t sy_fixed = dst_h > 1 ?
+			(uint32_t)((uint64_t)y * (src_h - 1) * 65536U / (dst_h - 1)) : 0;
+		size_t sy0 = sy_fixed >> 16;
+		size_t sy1 = sy0 + 1 < src_h ? sy0 + 1 : sy0;
+		uint32_t fy = sy_fixed & 0xFFFFU;
+
+		for(size_t x = 0; x < dst_w; x++) {
+			uint32_t sx_fixed = dst_w > 1 ?
+				(uint32_t)((uint64_t)x * (src_w - 1) * 65536U / (dst_w - 1)) : 0;
+			size_t sx0 = sx_fixed >> 16;
+			size_t sx1 = sx0 + 1 < src_w ? sx0 + 1 : sx0;
+			uint32_t fx = sx_fixed & 0xFFFFU;
+
+			uint8_t* out = dst + (x + y * dst_w) * 4;
+			uint8_t* p00 = src + (sx0 + sy0 * src_w) * 4;
+			uint8_t* p10 = src + (sx1 + sy0 * src_w) * 4;
+			uint8_t* p01 = src + (sx0 + sy1 * src_w) * 4;
+			uint8_t* p11 = src + (sx1 + sy1 * src_w) * 4;
+
+			for(int c = 0; c < 4; c++) {
+				uint8_t top = lerp_u8(p00[c], p10[c], fx);
+				uint8_t bot = lerp_u8(p01[c], p11[c], fx);
+				out[c] = lerp_u8(top, bot, fy);
+			}
+		}
+	}
+
+	free(src_image);
+	return dst;
+}
+
+static void panorama_capture_save_face(void) {
+	int face = gstate.panorama_capture.face;
+	if(face < 0 || face >= 6)
+		return;
+
+	size_t width, height;
+	gfx_copy_world_framebuffer(NULL, &width, &height);
+
+	void* image = malloc(width * height * 4);
+	if(!image)
+		return;
+
+	gfx_copy_world_framebuffer(image, &width, &height);
+	uint8_t* px = image;
+	for(size_t i = 0; i < width * height; i++)
+		px[i * 4 + 3] = 0xFF;
+
+	bool resized_needed = width != 1024 || height != 1024;
+	void* resized = resize_rgba(image, width, height, 1024, 1024);
+	if(!resized_needed || resized != image) {
+		image = resized;
+		width = 1024;
+		height = 1024;
+	}
+
+	char dir[512];
+	if(face == 0 || !g_panorama_capture_dir[0]) {
+		snprintf(g_panorama_capture_dir, sizeof(g_panorama_capture_dir),
+				 "%s/%ld", g_pictures_dir, (long)time(NULL));
+	}
+	snprintf(dir, sizeof(dir), "%s", g_panorama_capture_dir);
+	make_dirs(dir);
+
+	char name[640];
+	snprintf(name, sizeof(name), "%s/panorama_%d.png", dir, face);
+	lodepng_encode32_file(name, image, width, height);
+
+	free(image);
+
+	gstate.panorama_capture.face++;
+	if(gstate.panorama_capture.face >= 6)
+		gstate.panorama_capture.active = false;
+}
 
 #if defined(PLATFORM_WII) && defined(CP_TRACE)
 #include "platform/thread.h"
@@ -290,6 +436,7 @@ int main(void) {
     pclose(fp);
 
     pictures[strcspn(pictures, "\n")] = 0;
+	snprintf(g_pictures_dir, sizeof(g_pictures_dir), "%s", pictures);
 #endif
 
 	//video_init_custom();
@@ -697,6 +844,8 @@ int main(void) {
 			}
 
 			camera_update(&gstate.camera, gstate.in_water);
+			if(gstate.panorama_capture.active)
+				panorama_capture_apply_camera(&gstate.camera);
 
 			if(render_world) {
 				/* world_pre_render wird jetzt erst im Render-Pfad aufgerufen,
@@ -913,6 +1062,9 @@ int main(void) {
 					gfx_viewport(cvp_ox, cvp_oy, cvp_pw, cvp_ph);
 					gfx_scissor(true, vp_x, vp_y, vp_w, vp_h);
 
+					if(gstate.panorama_capture.active)
+						gfx_begin_panorama_capture(1024);
+
 					if(render_world) {
 						gfx_clear_buffers(atmosphere_color[0], atmosphere_color[1],
 											atmosphere_color[2]);
@@ -1091,11 +1243,16 @@ int main(void) {
 					gfx_clear_buffers(128, 128, 128);
 				}
 
-				gfx_fog_color(atmosphere_color[0], atmosphere_color[1],
-								atmosphere_color[2]);
+					gfx_fog_color(atmosphere_color[0], atmosphere_color[1],
+									atmosphere_color[2]);
 
-				gfx_mode_world();
-				gfx_matrix_projection(gstate.camera.projection, true);
+					gfx_mode_world();
+					if(gstate.panorama_capture.active) {
+						int size = gfx_width() < gfx_height() ? gfx_width() : gfx_height();
+						gfx_viewport((gfx_width() - size) / 2,
+									 (gfx_height() - size) / 2, size, size);
+					}
+					gfx_matrix_projection(gstate.camera.projection, true);
 
 				if(render_world) {
 					world_pre_render(spw, &gstate.camera, gstate.camera.view);
@@ -1147,7 +1304,13 @@ int main(void) {
 					world_render_adopt(spw);
 					if(spw == &gstate.world_nether)
 						s_nether_adopted = true;
-				}
+
+					if(gstate.panorama_capture.active) {
+						panorama_capture_save_face();
+						gfx_viewport_reset();
+						gfx_end_panorama_capture();
+					}
+					}
 
 				} /* spw block */
 				gfx_mode_gui();

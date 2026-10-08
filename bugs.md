@@ -96,6 +96,18 @@
 
 * may load ogg files insead of pcm/wav
 
+* config.json in ~/.cavex
+
+* Window Quit (x) don't work in the server menu
+
+* ~~bg in the menu -> real VR~~
+
+* loading chunks is broken on the Wii because the RAM problem-fixes
+
+* the world generator is too slowly
+
+
+
 * diff metadata:
   - torch
   - chest
@@ -135,6 +147,4 @@
 
 
 
-* config.json in ~/.cavex
 
-* Window Quit (x) don't work in the server menu

@@ -99,7 +99,7 @@ extern struct tex_gfx texture_armor_iron2;
 extern struct tex_gfx texture_armor_diamond1;
 extern struct tex_gfx texture_armor_diamond2;
 
-extern struct tex_gfx texture_bg[12];
+extern struct tex_gfx texture_bg[6];
 extern struct tex_gfx texture_server[12];
 
 void tex_init_pre(void);

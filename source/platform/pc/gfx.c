@@ -695,6 +695,86 @@ void gfx_copy_framebuffer(uint8_t* dest, size_t* width, size_t* height) {
 	free(tmp);
 }
 
+void gfx_copy_world_framebuffer(uint8_t* dest, size_t* width, size_t* height) {
+	assert(width && height);
+
+	int x = last_vp_x;
+	int y = last_vp_y;
+	int w = last_vp_w;
+	int h = last_vp_h;
+
+	if(w <= 0 || h <= 0) {
+		x = 0;
+		y = 0;
+		w = fb_width;
+		h = fb_height;
+	}
+	if(x < 0) {
+		w += x;
+		x = 0;
+	}
+	if(y < 0) {
+		h += y;
+		y = 0;
+	}
+	if(x + w > fb_width)
+		w = fb_width - x;
+	if(y + h > fb_height)
+		h = fb_height - y;
+	if(w < 0)
+		w = 0;
+	if(h < 0)
+		h = 0;
+
+	*width = (size_t)w;
+	*height = (size_t)h;
+
+	if(!dest)
+		return;
+
+	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+
+	void* tmp = malloc((size_t)w * 4);
+
+	if(!tmp)
+		return;
+
+	glReadPixels(x, fb_height - y - h, w, h, GL_RGBA, GL_UNSIGNED_BYTE, dest);
+
+	for(size_t y = 0; y < *height / 2; y++) {
+		memcpy(tmp, dest + y * (*width) * 4, *width * 4);
+		memcpy(dest + y * (*width) * 4, dest + (*height - 1 - y) * (*width) * 4,
+			   *width * 4);
+		memcpy(dest + (*height - 1 - y) * (*width) * 4, tmp, *width * 4);
+	}
+
+	free(tmp);
+}
+
+void gfx_begin_panorama_capture(int size) {
+	if(size < 1)
+		size = 1;
+
+	GLint max_tex = 0, max_rbo = 0;
+	glGetIntegerv(GL_MAX_TEXTURE_SIZE, &max_tex);
+	glGetIntegerv(GL_MAX_RENDERBUFFER_SIZE, &max_rbo);
+	if(max_tex > 0 && size > max_tex)
+		size = max_tex;
+	if(max_rbo > 0 && size > max_rbo)
+		size = max_rbo;
+	if(size > 4096)
+		size = 4096;
+	if(size < 1)
+		size = 1;
+
+	if(fb_width != size || fb_height != size)
+		gfx_resize_fbo(size, size);
+}
+
+void gfx_end_panorama_capture(void) {
+	gfx_apply_render_scale(gstate.settings.render_scale_pct);
+}
+
 void gfx_mode_world() {
 	/* render the 3D scene into the native-resolution FBO */
 	gui_pass = false;
