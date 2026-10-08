@@ -17,14 +17,23 @@ endif
 
 include $(DEVKITPPC)/wii_rules
 
-# MY=1 → libogc-eigenes (stabil, original, funktioniert)
-# MY=0 → libogc 3.1.0  (experimentell, Startup-Patch)
-MY ?= 0
+# Welche libogc 3.1.0 wird benutzt?
+#   OLD_BUILD=0 (Default): installierte libogc unter $(DEVKITPRO)/libogc
+#   OLD_BUILD=1          : selbst gebaute libogc unter ../libogc (Entwicklung,
+#                          wenn man libogc lokal patcht). Beide sind 3.1.0.
+OLD_BUILD ?= 0
 
-ifeq ($(MY), 1)
-export LIBOGC_INC := $(DEVKITPRO)/libogc-eigenes/gc
-export LIBOGC_LIB := $(DEVKITPRO)/libogc-eigenes/lib/wii
+ifeq ($(OLD_BUILD), 1)
+MYLIBOGC          := $(dir $(abspath $(firstword $(MAKEFILE_LIST))))../libogc
+LIBOGC_INCFLAGS   := -I$(MYLIBOGC)/gc -I$(MYLIBOGC)/external/bsd/include
+export LIBOGC_INC := $(MYLIBOGC)/gc
+export LIBOGC_LIB := $(MYLIBOGC)/lib/wii
+else
+LIBOGC_INCFLAGS   := -I$(DEVKITPRO)/libogc/include
+export LIBOGC_INC := $(DEVKITPRO)/libogc/include
+export LIBOGC_LIB := $(DEVKITPRO)/libogc/lib/wii
 endif
+LIBOGC_LIBDIR     := $(LIBOGC_LIB)
 endif
 #---------------------------------------------------------------------------------
 # TARGET is the name of the output
@@ -46,19 +55,17 @@ CAVEX_DIR   :=  $(PC_BUILD)/$(CAVEX)
 nropt       ?=  $(shell nproc)
 SOURCES		:=	source source/block source/entity source/graphics source/network \
 				source/game source/game/gui source/platform source/item source/item/items \
-				source/cNBT source/parson source/cubiomes source/boot #source/lodepng
+				source/cNBT source/parson source/cubiomes source/boot \
+				source/sound source/sound/mp3 source/sound/mp3/FileOperations \
+				source/sound/mp3/Tools #source/lodepng
 DATA		:=  
 TEXTURES	:=	textures
-INCLUDES	:=
+INCLUDES	:=	source source/sound/mp3
 
 CPPFLAGS += -D__WII__ -DPLATFORM_WII
 CFLAGS   += -D__WII__ -DPLATFORM_WII
 
-ifeq ($(MY), 1)
-CFLAGS += -I$(DEVKITPRO)/libogc-eigenes/gc
-else
-CFLAGS += -I$(DEVKITPRO)/libogc-eigenes/gc -DBUILD_LIBOGC31
-endif
+CFLAGS += $(LIBOGC_INCFLAGS) -DBUILD_LIBOGC31
 
 # SD-Trace-Log nach sd:/cavexlog.txt (Debug, synchron -> kann Races verstecken).
 #CFLAGS += -DSD_LOG
@@ -88,22 +95,20 @@ endif
 # noetig, damit Python.h unter -std=c99 die pthread-Typen kennt.
 CPYTHON_DIR ?= $(DEVKITPRO)/extras/cpython/3.15.0a7
 PY_INCLUDE  := -I$(CPYTHON_DIR)/build-wii -I$(CPYTHON_DIR)/Include
-ifeq ($(MY), 1)
-PY_LIBDIRS  := -L$(DEVKITPRO)/libogc-eigenes/lib/wii \
+PY_LIBDIRS  := -L$(LIBOGC_LIBDIR) \
                -L$(CPYTHON_DIR)/libs -L$(CPYTHON_DIR)/gdbm/install-wii/lib \
                -L$(CPYTHON_DIR)/xz/install-wii/lib \
                -L$(CPYTHON_DIR)/uuid/install-wii/lib \
+               -L$(DEVKITPRO)/libogc/lib/wii \
                -L$(DEVKITPRO)/portlibs/ppc/lib
-else
-PY_LIBDIRS  := -L$(DEVKITPRO)/libogc/lib/wii \
-               -L$(CPYTHON_DIR)/libs -L$(CPYTHON_DIR)/gdbm/install-wii/lib \
-               -L$(CPYTHON_DIR)/xz/install-wii/lib \
-               -L$(CPYTHON_DIR)/uuid/install-wii/lib \
-               -L$(DEVKITPRO)/portlibs/ppc/lib
-endif
 
+# libogc1-Variante (PPCDCacheFlushAsync/tuxedo) -- passt zu libogc 3.1.0 unter
+# ../libogc: NICHT-suffigierte Libs (python, curl, fatpy, bitmap, wiidl) plus
+# -lwiidl (wii_dlopen/dlsym/dlerror/dl_load_symbol_map) und -lwiikeyboard
+# (KEYBOARD_Init/GetEvent/Deinit fuer das wiitools-Modul; aus ../libogc).
 PY_LIBS     := -lpython3.15 -lcurl -lmbedtls -lmbedx509 -lmbedcrypto -ltfpsacrypto \
-               -lz -lgdbm_compat -lgdbm -llzma -lbz2 -luuid -lfatpy -lbitmap
+               -lz -lgdbm_compat -lgdbm -llzma -lbz2 -luuid -lfatpy -lbitmap \
+               -lwiidl -lwiikeyboard
 
 CXXFLAGS	+=	$(CFLAGS)
 CPPFLAGS	+=	-Ofast -DSPLITSCREEN=2 -g
@@ -116,21 +121,15 @@ LDFLAGS	+=	$(MACHDEP) -Wl,-Map,$(notdir $@).map
 LDFLAGS += -L$(MAKEFILE_DIR)
 LDFLAGS += -Wl,--allow-multiple-definition
 
-ifeq ($(MY), 1)
-# MY=1: libogc-eigenes — original, kein Patch nötig
-LDFLAGS += -L$(DEVKITPRO)/libogc-eigenes/lib/wii
-LIBS    :=  $(PY_LIBS) -lwiiuse -lbte -lmad -lasnd -lfat -logc -lm
-else
-# MY=0: Startup + Basis-Libs aus lib/wii/ (HBC-kompatibel, im Repo enthalten)
-# Nutzer braucht nur libogc 3.1.0 — libogc-eigenes ist nicht mehr nötig.
-LDFLAGS += -L$(MAKEFILE_DIR)lib/wii
+# libogc 3.1.0: $(LIBOGC_LIBDIR) ist je nach OLD_BUILD ../libogc/lib/wii oder
+# $(DEVKITPRO)/libogc/lib/wii. Standard-Boot (crtmain.o / default rvl.ld), KEINE
+# 2.12.0-Altlasten (ogc_crt0.o/system.o/system_asm.o) und KEIN eigenes
+# Linkerskript -- 3.1.0 braucht __gxregs/__stack_*/__intrstack_* nicht.
+# $(DEVKITPRO)/libogc/lib/wii zusaetzlich als Fallback (u.a. -lfat).
+LDFLAGS += -L$(LIBOGC_LIBDIR)
 LDFLAGS += -L$(DEVKITPRO)/libogc/lib/wii
-LDFLAGS += $(MAKEFILE_DIR)source/boot/ogc_crt0.o \
-           $(MAKEFILE_DIR)source/boot/system_asm.o \
-           $(MAKEFILE_DIR)source/boot/system.o
-LIBS    :=  $(PY_LIBS) -lwiiuse -lbte -lmad -lasnd -lfat \
-            $(MAKEFILE_DIR)lib/wii/libogc.a -logc -lm
-endif
+# --start-group fuer die wechselseitigen Abhaengigkeiten der Python-/libogc-Libs.
+LIBS    :=  -Wl,--start-group $(PY_LIBS) -lwiiuse -lbte -lmad -lasnd -lfat -logc -Wl,--end-group -lm
 
 #CAVEXFAT_LIB := $(abspath $(MAKEFILE_DIR)/libcavexfat.a)
 
@@ -226,7 +225,7 @@ pc-just-make:
 
 config:
 	@jq --arg home "$(HOME_PATH)" \
-	'.paths = {texturepack: ($$home+"/assets"), worlds: ($$home+"/saves"), bg: ($$home+"/bg"), MP3: ($$home+"/mp32"), sounds: ($$home+"/mp32/sound"), tmp: ($$home+"/tmp")}' \
+	'.paths = {texturepack: ($$home+"/assets"), worlds: ($$home+"/saves"), bg: ($$home+"/bg"), MP3: ($$home+"/assets/sound"), sounds: ($$home+"/assets/sound/sound"), tmp: ($$home+"/tmp")}' \
 	install_config_pc.json > $(PC_BUILD)/install_config_pc.json
 
 

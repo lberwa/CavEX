@@ -143,4 +143,8 @@ void settings_init() {
 	gstate.settings.view_distance = 3;
 	gstate.settings.render_scale_pct = 0; /* Standard: Minimum-Auflösung (802×480) */
 	gstate.settings.view_bob = true;
+	gstate.settings.max_volume  = 2.0f;
+	gstate.settings.step_volume = 0.3f;
+	gstate.settings.dig_volume  = 0.3f;
+	gstate.settings.bg_music_enabled = true;
 }

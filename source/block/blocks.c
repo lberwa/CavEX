@@ -187,6 +187,9 @@ void blocks_init() {
 	blocks[92] = &block_cake;
 	blocks[93] = &block_repeater_off;
 	blocks[94] = &block_repeater_on;
+
+	blocks[96] = &block_trapdoor;
+	
 	blocks[99] = &block_brown_mushroom_block;
 	blocks[100] = &block_red_mushroom_block;
 	blocks[101] = &block_iron_bars;
@@ -220,7 +223,7 @@ void blocks_init() {
 	blocks[132] = &block_tripwire;
 	blocks[137] = &block_command_block;
 	blocks[253] = &block_iron_chest;
-	blocks[96] = &block_trapdoor;
+	
 	blocks[98] = &block_stonebrick;
 	blocks[254] = &block_tree2d;
 	blocks[255] = &block_record_cat;

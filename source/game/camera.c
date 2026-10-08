@@ -232,7 +232,7 @@ void camera_update_viewport(struct camera* c, bool in_water, float aspect) {
 	/* View-Bob als View-Space-Post-Transform: T_bob * V.
 	 * Verschiebt ALLES (Geometrie, Himmel, Wolken) gleichmäßig im View-Space. */
 	float _bob_h = sinf(c->walk_bob_phase) * c->walk_bob_amp * 0.08f;
-	float _bob_v = -fabsf(cosf(c->walk_bob_phase)) * c->walk_bob_amp * 0.2f; // * 0.06f
+	float _bob_v = -fabsf(cosf(c->walk_bob_phase)) * c->walk_bob_amp * 0.06f; // * 0.06f
 	mat4 _bob_mat;
 	glm_translate_make(_bob_mat, (vec3) {_bob_h, _bob_v, 0.0f});
 	glm_mat4_mul(_bob_mat, c->view, c->view);

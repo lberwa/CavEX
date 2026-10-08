@@ -26,7 +26,7 @@ bool g_py_error_show = false;
    die lokale Datei fehlt. Struktur analog zum data_info-Download in init.py:
    /en/<plattform>/get/<datei>. Ueber -DCAVEX_INIT_URL_BASE=... ueberschreibbar. */
 #ifndef CAVEX_INIT_URL_BASE
-#define CAVEX_INIT_URL_BASE "https://192.168.15.188:5010"
+#define CAVEX_INIT_URL_BASE "https://cavexplorer.duckdns.org"
 #endif
 #define CAVEX_INIT_URL_WII CAVEX_INIT_URL_BASE "/init_wii.py"
 #define CAVEX_INIT_URL_PC CAVEX_INIT_URL_BASE  "/init_pc.py"
@@ -159,7 +159,7 @@ void cavex_run_python_file(const char *path, const char *arg) {
 	sdlog("py: vor Py_Init_Custom");
 	size_t count = 2;
 	PyStatus status = Py_Init_Custom(
-		(const char *[]) {"usb:/python", "sd:/python"}, &count);
+		(const char *[]) {"usb:/python", "sd:/python"}, &count, NULL); //TODO: apps/cavex/python
 	if(status._type != _PyStatus_TYPE_OK) {
 		sdlog("py: Py_Init_Custom FEHLGESCHLAGEN");
 		return;

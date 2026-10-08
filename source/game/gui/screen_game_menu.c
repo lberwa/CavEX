@@ -26,7 +26,7 @@
 #include "../../util.h"
 #include "../game_state.h"
 #include "screen.h"
-#include "../../sound.h"
+#include "../../sound/sound.h"
 
 #include <assert.h>
 #include <dirent.h>
@@ -45,20 +45,7 @@ static const char* menu_options[4] = {
 static size_t gui_selection[4];
 static bool server_failed = false;
 
-static enum mp3_sound bg_playlist[16] = {
-	mp3_bg1,
-	mp3_bg2,
-	mp3_bg3,
-	mp3_bg4,
-	mp3_bg5,
-	mp3_bg6,
-	mp3_bg7,
-	mp3_bg8,
-	mp3_bg9,
-	mp3_bg10,
-};
-
-static void screen_gmenu_reset(struct screen* s, int width, int height) { 
+static void screen_gmenu_reset(struct screen* s, int width, int height) {
 	int player = gstate_active_player();
 	gstate.game_run = false;
 #ifndef SPLITSCREEN
@@ -69,9 +56,6 @@ static void screen_gmenu_reset(struct screen* s, int width, int height) {
 
 	gstate_set_capture_input_player(player, false);
 	gui_selection[player] = 0;
-
-	//sound_init();
-	sound_play_bg(bg_playlist);
 }
 
 static void screen_gmenu_update(struct screen* s, float dt) { 

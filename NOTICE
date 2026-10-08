@@ -1,0 +1,82 @@
+NOTICE — Third-Party Code and Attributions
+===========================================
+
+CavEX as a whole is distributed under the GNU General Public License
+version 3 (see the LICENSE file). It incorporates code from third parties
+whose original copyright notices and licenses are preserved in the
+respective source files and summarized here, as required by those licenses
+and by the GPL.
+
+
+1. Wii bootloader / chainloader (source/boot/)
+----------------------------------------------
+
+The following files are derived from the Homebrew Channel ("HBC") by
+Team Twiizers / fail0verflow:
+
+    source/boot/boot.c
+    source/boot/boot.h
+    source/boot/loader_reloc.c
+    source/boot/loader_reloc.h
+    source/boot/panic.c
+    source/boot/panic.h
+
+    Upstream: https://github.com/fail0verflow/hbc  (archived)
+    Copyright (C) 2008-2009 Team Twiizers / Hector Martin "marcan" et al.
+    Original license: GNU General Public License, version 2 or (at your
+    option) any later version.
+
+    These portions have been relicensed to GPLv3 within CavEX, as
+    explicitly permitted by the upstream "or later" clause.
+
+ELF ABI header:
+
+    source/boot/elf_abi.h
+    Copyright (c) 1995, 1996, 2001, 2002 Erik Theisen. All rights reserved.
+    License: BSD 3-Clause (retained verbatim in the file header).
+    Obtained via the Homebrew Channel source tree.
+
+Assembly macros:
+
+    source/boot/asm.h
+    Taken from libogc (see http://www.devkitpro.org/).
+    Copyright (C) 2004-2009 Michael Wiedenbauer (shagkur),
+    Dave Murphy (WinterMute).
+    License: zlib-style / modified BSD (retained verbatim in the file
+    header). The CavEX modifications are under GPLv3, which is compatible.
+
+libogc references:
+
+    source/boot/panic.c references the console_font_8x16 glyph table
+    provided by libogc (zlib-style license, see above).
+
+Compiled objects shipped in the tree:
+
+    source/boot/ogc_crt0.o
+    source/boot/system_asm.o
+    source/boot/system.o
+    These are compiled binary objects originating from libogc / the
+    devkitPPC toolchain. libogc's license permits binary redistribution
+    provided this notice is reproduced in the accompanying documentation
+    (this file satisfies that requirement).
+
+
+2. Bundled libraries (source/)
+-------------------------------
+
+The repository bundles the following third-party libraries, each under
+its own license (see the LICENSE/README/source headers in each folder):
+
+    source/cglm/     — cglm, MIT License, Copyright (c) Recep Aslantas
+    source/m-lib/    — M*LIB, BSD 2-Clause, Copyright (c) 2017-2025 Patrick Pelissier
+    source/cubiomes/ — cubiomes, MIT License, Copyright (c) 2020 Cubitect
+    source/cNBT/     — cNBT, "THE BEER-WARE LICENSE" (Revision 42)
+    source/parson/   — parson, MIT License, Copyright (c) 2012-2023 Krzysztof Gabis
+    source/lodepng/  — LodePNG, zlib-style license, Copyright (c) 2005-2025 Lode Vandevenne
+
+The repository may contain additional third-party code (e.g. under
+source/third_party/) governed by its own license terms; refer to the
+headers within those files.
+
+All of the above licenses are compatible with the GNU General Public
+License version 3, under which the combined work CavEX is distributed.

@@ -31,9 +31,13 @@
  */
 
 /*
+	Modifications for CavEX:
 	Copyright (c) 2022-2026 ByteBit/xtreme8000, lberwa
 
-	This file is part of CavEX. (based on the original HBC code)
+	The original content of this file is licensed under the BSD 3-Clause
+	license above (Copyright (c) Erik Theisen) and was obtained via the
+	Homebrew Channel (fail0verflow/hbc). That license is retained in full;
+	the BSD license is compatible with CavEX's GPLv3. See the NOTICE file.
 */
 
 #ifndef _ELF_ABI_H

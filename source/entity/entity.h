@@ -98,6 +98,7 @@ struct entity {
 			float walk_bob;
 			float walk_bob_old;
 			float walk_bob_speed;
+			float step_bob_next;
 #ifdef SPLITSCREEN
 			uint8_t player_index;
 #endif

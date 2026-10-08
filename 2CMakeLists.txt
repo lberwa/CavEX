@@ -269,7 +269,7 @@ add_executable(cavex
 				source/world.c
 				source/config.c
 				source/particle.c
-				source/sound.c
+				source/sound/sound.c
 				source/run_python.c
 				source/boot/boot.c
 
@@ -277,21 +277,21 @@ add_executable(cavex
 
 				source/parson/parson.c
 
-				source/pc_sound/src/common/pa_allocation.c
-				source/pc_sound/src/common/pa_converters.c
-				source/pc_sound/src/common/pa_cpuload.c
-				source/pc_sound/src/common/pa_debugprint.c
-				source/pc_sound/src/common/pa_dither.c
-				source/pc_sound/src/common/pa_process.c
-				source/pc_sound/src/common/pa_ringbuffer.c
-				source/pc_sound/src/common/pa_stream.c
-				source/pc_sound/src/common/pa_trace.c
-				source/pc_sound/src/common/pa_front.c
+				source/sound/pc_sound/src/common/pa_allocation.c
+				source/sound/pc_sound/src/common/pa_converters.c
+				source/sound/pc_sound/src/common/pa_cpuload.c
+				source/sound/pc_sound/src/common/pa_debugprint.c
+				source/sound/pc_sound/src/common/pa_dither.c
+				source/sound/pc_sound/src/common/pa_process.c
+				source/sound/pc_sound/src/common/pa_ringbuffer.c
+				source/sound/pc_sound/src/common/pa_stream.c
+				source/sound/pc_sound/src/common/pa_trace.c
+				source/sound/pc_sound/src/common/pa_front.c
 
-				source/pc_sound/src/hostapi/alsa/pa_linux_alsa.c
-				source/pc_sound/src/os/unix/pa_unix_hostapis.c
-				source/pc_sound/src/os/unix/pa_pthread_util.c
-				source/pc_sound/src/os/unix/pa_unix_util.c
+				source/sound/pc_sound/src/hostapi/alsa/pa_linux_alsa.c
+				source/sound/pc_sound/src/os/unix/pa_unix_hostapis.c
+				source/sound/pc_sound/src/os/unix/pa_pthread_util.c
+				source/sound/pc_sound/src/os/unix/pa_unix_util.c
 			)
 
 # PA_USE_ALSA=1 ist noetig, damit PortAudio das ALSA-Backend registriert
@@ -299,7 +299,7 @@ add_executable(cavex
 # Initializer-Liste auf). Ohne das Makro gibt es 0 Host-APIs -> 0 Geraete ->
 # Pa_GetDefaultOutputDevice() == -1 -> "Device unavailable".
 target_compile_definitions(cavex PRIVATE PLATFORM_PC CGLM_ALL_UNALIGNED PA_USE_ALSA=1)
-target_include_directories(cavex PRIVATE source/cubiomes)
+target_include_directories(cavex PRIVATE source source/cubiomes)
 target_compile_options(cavex PRIVATE -fwrapv)
 
 set_target_properties(
@@ -309,7 +309,10 @@ set_target_properties(
 
 set_property(TARGET cavex PROPERTY INTERPROCEDURAL_OPTIMIZATION False)
 
-target_link_libraries(cavex ${CMAKE_THREAD_LIBS_INIT} ZLIB::ZLIB ${ALSA_LIBRARIES} glfw GLEW::GLEW OpenGL::GL m)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(MPG123 REQUIRED libmpg123)
+target_include_directories(cavex PRIVATE ${MPG123_INCLUDE_DIRS})
+target_link_libraries(cavex ${CMAKE_THREAD_LIBS_INIT} ZLIB::ZLIB ${ALSA_LIBRARIES} glfw GLEW::GLEW OpenGL::GL m ${MPG123_LIBRARIES})
 
 # CPython einbetten (nur wenn gefunden). init_pc.py ruft CavEX-Funktionen ueber
 # ctypes anhand der aus run_python.c uebergebenen Adressen auf.

@@ -1,14 +1,6 @@
 ________________________________________________________________________________
 	https://quicksounds.com/sound/22004/minecraft-click
-		click.pcm
-	https://quicksounds.com/sound/24792/minecraft-chest-sound-effect
-		chest_open.pcm, chest_close.pcm
-	https://quicksounds.com/sound/24392/minecraft-sheep
-		sheep.pcm
-	https://quicksounds.com/sound/24002/minecraft-hit-sound
-		hit1.pcm, hit2.pcm
-	https://quicksounds.com/sound/23207/minecraft-train-whistle
-		train_whistle.pcm
+		click.mp3
 	https://quicksounds.com/sound/23142/minecraft-door-meme
 		door_open.pcm, door_close.pcm
 	https://quicksounds.com/sound/22759/minecraft-villager-sound
@@ -20,18 +12,200 @@ ________________________________________________________________________________
 	https://quicksounds.com/sound/22300/minecraft-drinking-sound
 		drink.pcm
 	https://quicksounds.com/sound/22292/minecraft-enderman-teleport-sound
-		teleport.pcm
+		endermen/portal.pcm
+	https://pixabay.com/de/sound-effects/search/pop/
+		pop.mp3
+	https://pixabay.com/de/sound-effects/search/minecraft%20wooden%20click/
+		wood_click.ogg
 	
 license:
 	https://quicksounds.com/page/license-agreement
-________________________________________________________________________________
-	https://pixabay.com/en/music/search/minecraft/
-		bg1.mp3, bg2.mp3, bg3.mp3, bg4.mp3, bg5.mp3, bg6.mp3,
-		bg7.mp3, bg8.mp3, bg9.mp3
-lizense
-	https://pixabay.com/service/license-summary/
-	https://creativecommons.org/publicdomain/zero/1.0/deed.en
+	
 ________________________________________________________________________________
 	https://pixabay.com/en/sound-effects/search/minecraft/
-		fuse.pcm, stone3.pcm, wood2.pcm, dig/sand1.pcm
+		dig/sand1.pcm
+license:
+	https://pixabay.com/service/license-summary/
+	https://creativecommons.org/publicdomain/zero/1.0/deed.en
+	
+________________________________________________________________________________
+	https://sounddino.com/en/effects/minecraft/
+		./ambient/cave/cave10.mp3
+		./ambient/cave/cave11.mp3
+		./ambient/cave/cave12.mp3
+		./ambient/cave/cave13.mp3
+		./ambient/cave/cave1.mp3
+		./ambient/cave/cave2.mp3
+		./ambient/cave/cave3.mp3
+		./ambient/cave/cave4.mp3
+		./ambient/cave/cave5.mp3
+		./ambient/cave/cave6.mp3
+		./ambient/cave/cave7.mp3
+		./ambient/cave/cave8.mp3
+		./ambient/cave/cave9.mp3
+		./ambient/weather/rain1.mp3
+		./ambient/weather/rain2.mp3
+		./ambient/weather/rain3.mp3
+		./ambient/weather/rain4.mp3
+		./ambient/weather/thunder1.mp3
+		./ambient/weather/thunder2.mp3
+		./ambient/weather/thunder3.mp3
+		./damage/hit1.mp3
+		./damage/hit2.mp3
+		./damage/hit3.mp3
+		./dig/cloth1.mp3
+		./dig/cloth2.mp3
+		./dig/cloth3.mp3
+		./dig/cloth4.mp3
+		./dig/grass1.mp3
+		./dig/grass2.mp3
+		./dig/grass3.mp3
+		./dig/grass4.mp3
+		./dig/gravel1.mp3
+		./dig/gravel2.mp3
+		./dig/gravel3.mp3
+		./dig/gravel4.mp3
+		./dig/stone1.mp3
+		./dig/stone2.mp3
+		./dig/stone3.mp3
+		./dig/stone4.mp3
+		./dig/wood1.mp3
+		./dig/wood2.mp3
+		./dig/wood3.mp3
+		./dig/wood4.mp3
+		./fire/fire.mp3
+		./liquid/splash2.mp3
+		./liquid/splash.mp3
+		./liquid/water.mp3
+		./mob/creeper/death.mp3
+		./mob/sheep/say1.mp3
+		./mob/sheep/say2.mp3
+		./mob/sheep/say3.mp3
+		./note/bass.mp3
+		./note/harp.mp3
+		./note/pling.mp3
+		./portal/portal.mp3
+		./portal/travel.mp3
+		./portal/trigger.mp3
+		./random/bowhit1.mp3
+		./random/bowhit2.mp3
+		./random/bowhit3.mp3
+		./random/bowhit4.mp3
+		./random/chestclosed.mp3
+		./random/chestopen.mp3
+		./random/classic_hurt.mp3
+		./random/explode1.mp3
+		./random/explode2.mp3
+		./random/explode3.mp3
+		./random/explode4.mp3
+		./random/fizz.mp3
+		./random/fuse.mp3
+		./random/glass1.mp3
+		./random/glass2.mp3
+		./random/glass3.mp3
+		./random/levelup.mp3
+		./random/orb.mp3
+		./random/pop.mp3
+		./random/successful_hit.mp3
+		./random/wood_click.mp3
+		./tile/piston/in.mp3
+		./tile/piston/out.mp3
+
+
+license:
+	https://sounddino.com/
+	https://creativecommons.org/publicdomain/zero/1.0/deed.de
+	
+________________________________________________________________________________
+	https://opengameart.org/content/41-snow-shoe-steps
+		snow1.mp3, snow2.mp3, snow3.mp3, snow4.mp3
+
+license:
+	https://creativecommons.org/publicdomain/zero/1.0/
+________________________________________________________________________________
+	https://modrinth.com/resourcepack/1.0.0-1.3.2-damage-sounds?version=26.1&loader=minecraft
+	fallbig.mp3 (drown1.ogg)
+	fallsmall.mp3 (fallsmall.ogg)
+	
+license:
+	https://creativecommons.org/publicdomain/zero/1.0/deed.de
+
+ /###################################################################\
+~#####################################################################~
+ \###################################################################/
+
+________________________________________________________________________________
+https://breakingcopyright.com/de/minecraft
+		bg1.mp3
+	Song: Another Feeling
+	Composer: Aftertune
+	Website: https://soundcloud.com/itsaftertune
+	License: Creative Commons (BY 3.0) http://creativecommons.org/licenses/by/3.0/
+	Music powered by BreakingCopyright: https://breakingcopyright.com
+
+		bg2.mp3
+	Song: Pacific
+	Composer: Riyhsal
+	Website: https://open.spotify.com/artist/2UgXTpXlHjf8Vs5B7GV7d1
+	License: Creative Commons (BY 3.0) https://creativecommons.org/licenses/by/3.0/
+	Music powered by BreakingCopyright: https://breakingcopyright.com
+	
+		bg3.mp3
+	Song: Adrift
+	Composer: Hayden Folker
+	Website: https://soundcloud.com/hayden-folker
+	License: Free To Use YouTube license youtube-free
+	Music powered by BreakingCopyright: https://breakingcopyright.com
+
+		bg4.mp3
+	Song: A Few Jumps Away
+	Composer: Arthur Vyncke
+	Website: https://soundcloud.com/arthurvost
+	License: Creative Commons (BY-SA 3.0) https://creativecommons.org/licenses/by-sa/3.0/
+	Music powered by BreakingCopyright: https://breakingcopyright.com
+	
+		bg5.mp3
+	Song: A Few Jumps Away
+	Composer: Arthur Vyncke
+	Website: https://soundcloud.com/arthurvost
+	License: Creative Commons (BY-SA 3.0) https://creativecommons.org/licenses/by-sa/3.0/
+	Music powered by BreakingCopyright: https://breakingcopyright.com
+
+
+
+
+https://uppbeat.io/music/collection/minecraft
+		bg6.mp3
+	Music: 'Impressionist Sky' by AVBE on #Uppbeat https://uppbeat.io/c/avbe
+	License code: AOMRMRYJ8KPKRGGD
+	
+		bg7.mp3
+	Music: 'Only You' by Danijel Zambo on #Uppbeat https://uppbeat.io/c/danijel-zambo
+	License code: QGZMYJNQJHSDMWN1
 		
+		bg8.mp3
+	Music from #Uppbeat (free for Creators!):
+	https://uppbeat.io/t/kevin-macleod/perspectives
+	License code: 3HRRYKCDTLBLLYMP
+
+ /###################################################################\
+~#####################################################################~
+ \###################################################################/
+
+
+
+
+
+
+there are missing:
+_________________________________________
+- fire       | ignite
+- liquid     | swim 1-4
+- liquid     | lava, lavapop
+- minecart   | base, inside
+- mob/creeper| say 1-4
+- mob/pig    | death, say 1-3, step 1-5
+- mob/sheep  | shear, step 1-5
+- note       | bassattack, bd, hat, snare
+- random     | bow, break, burp, splash
+- step       | grass 5-6, ladder 1-5, sand5, stone 5-6, wood 5-6

@@ -13,7 +13,6 @@
 * Added sheep and pigs and fixed a crash related to the auto-jump feature.
 
 * Added local split-screen and multiplayer support
-
   (in the PC version, you can change the inputs in config_pc.json or, if installed, in /usr/local/bin/Cavex/input_pc.json)
 
 * Added a main menu with audio.
@@ -37,7 +36,7 @@
 * Sounds in the game
 * Server multiplayer
 * Block gravity: sand and gravel drop down when there's nothing underneath them to support
-* ~~Water/~~lava flow: once a block has been removed next to, or underneath a liquid, it will flow there
+* ~~Water/~~ lava flow: once a block has been removed next to, or underneath a liquid, it will flow there
 * Sneaking mechanic (A button on Wii / Shift on PC)
 * Additional controller support
 * add more mobs
@@ -60,6 +59,7 @@
 * If you jump into a block, you will get stuck and won't be able to move.
 * All bugs from [bugs.md](./bugs.md)
 
+Feel free to report a bug, but read the bugs.md before!
 
 
 ## License
@@ -67,7 +67,45 @@
 This project is licensed under the GNU General Public License v3.0 (GPLv3).  
 See the `LICENSE` file for full details.
 
+It also contains third-party components under GPLv2-or-later (the Homebrew
+Channel boot code) and BSD-/zlib-/MIT-style licenses (libogc, LodePNG, cglm,
+M\*LIB, cubiomes, parson, cNBT, …). These are all GPLv3-compatible; their
+original copyright notices are retained in the respective source files and
+are summarized in the `NOTICE` file.
 
+
+
+## Audio Credits
+
+Sound assets are **not** covered by the project's GPLv3 license.
+Their individual licenses are listed below.
+
+### Sound Effects
+
+| Source | Files | License |
+|--------|-------|---------|
+| [quicksounds.com](https://quicksounds.com/) | click, door\_open/close, villager, eat1-3, zombie, drink, endermen/portal | [QuickSounds License Agreement](https://quicksounds.com/page/license-agreement) |
+| [pixabay.com](https://pixabay.com/) | dig/sand1, pop, wood\_click | [Pixabay License](https://pixabay.com/service/license-summary/) / [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
+| [sounddino.com](https://sounddino.com/) | ambient/cave/\*, ambient/weather/\*, damage/\*, dig/\*, fire/\*, liquid/\*, mob/\*, note/\*, portal/\*, random/\*, tile/\* | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
+| [opengameart.org](https://opengameart.org/content/41-snow-shoe-steps) | step/snow1-4 | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
+| [modrinth.com](https://modrinth.com/resourcepack/1.0.0-1.3.2-damage-sounds) | damage/fallbig, damage/fallsmall | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
+
+### Background Music
+
+| File | Title | Composer | License |
+|------|-------|----------|---------|
+| bg1.mp3 | Another Feeling | Aftertune | [CC BY 3.0](http://creativecommons.org/licenses/by/3.0/) via [BreakingCopyright](https://breakingcopyright.com) |
+| bg2.mp3 | Pacific | Riyhsal | [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) via [BreakingCopyright](https://breakingcopyright.com) |
+| bg3.mp3 | Adrift | Hayden Folker | Free To Use (YouTube) via [BreakingCopyright](https://breakingcopyright.com) |
+| bg4.mp3 | A Few Jumps Away | Arthur Vyncke | [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/) via [BreakingCopyright](https://breakingcopyright.com) |
+| bg5.mp3 | A Few Jumps Away | Arthur Vyncke | [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/) via [BreakingCopyright](https://breakingcopyright.com) |
+| bg6.mp3 | Impressionist Sky | AVBE | [Uppbeat](https://uppbeat.io/c/avbe) · License code: `AOMRMRYJ8KPKRGGD` |
+| bg7.mp3 | Only You | Danijel Zambo | [Uppbeat](https://uppbeat.io/c/danijel-zambo) · License code: `QGZMYJNQJHSDMWN1` |
+| bg8.mp3 | Perspectives | Kevin MacLeod | [Uppbeat](https://uppbeat.io/t/kevin-macleod/perspectives) · License code: `3HRRYKCDTLBLLYMP` |
+
+The full source list with per-file URLs is in [`assets/sound/README`](assets/sound/README).
+
+---
 
 ## Screenshots
 
@@ -121,7 +159,7 @@ make clean IS_PC_BUILD=0
 __first install the libarys:__
 
 ```bash
-sudo apt install cmake zlib1g-dev libasound2-dev libglfw3-dev libglew-dev
+sudo apt install cmake zlib1g-dev libasound2-dev libglfw3-dev libglew-dev libmpg123-dev
 ```
 
 ----------------
@@ -181,8 +219,6 @@ cavex
 │   └── ...
 ├── saves
 │   ├── world
-│   └── ...
-├── mp32
 │   └── ...
 ├── boot.dol
 ├── config_wii.json

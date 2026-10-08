@@ -29,8 +29,13 @@
 	#include <gccore.h>
 	#include <network.h>
 	#include <unistd.h>
-	uint32_t __ppc_excpt_buf[8] __attribute__((aligned(32)));
-	void (*__ppc_excpt_table[20])(void);
+	/* NICHT __ppc_excpt_buf/__ppc_excpt_table hier definieren! Das sind
+	   libogc-reservierte Symbole, die das Linkerskript (libogc_common.ld) auf
+	   feste Low-Memory-Adressen (0x800000d0 / 0x80003000) legt. Eine eigene
+	   Definition hier ueberschreibt diese via PROVIDE_HIDDEN und verschiebt die
+	   Exception-Vektor-Tabelle ins BSS -> libogcs Exception-Dispatch nutzt dann
+	   eine kaputte Tabelle -> Crash ganz frueh im Boot (nur in grossen Projekten
+	   sichtbar, da die Symbole dort hoch im BSS landen). */
 #endif
 
 #include "item/recipe.h"
@@ -52,7 +57,7 @@
 #include "platform/gfx.h"
 #include "platform/input.h"
 #include "world.h"
-#include "sound.h"
+#include "sound/sound.h"
 #include "network/server_comunication.h"
 #include "boot/boot.h"
 
@@ -434,6 +439,16 @@ int main(void) {
 	#endif /*PLATFORM_WII*/
 
 	sound_init();
+
+	{
+		static enum mp3_sound bg_playlist[16] = {
+			mp3_bg1, mp3_bg2, mp3_bg3,  mp3_bg4,  mp3_bg5,
+			mp3_bg6, mp3_bg7, mp3_bg8,  mp3_bg9,  mp3_bg10,
+			mp3_bg1, mp3_bg2, mp3_bg3,  mp3_bg4,  mp3_bg5,
+			mp3_bg6,
+		};
+		sound_play_bg(bg_playlist);
+	}
 
 #ifdef PLATFORM_PC
 	pc_init();

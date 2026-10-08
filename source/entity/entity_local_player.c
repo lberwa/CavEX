@@ -563,6 +563,22 @@ static bool entity_tick(struct entity* e) {
 	float bob_target = (walk_speed > 0.001f && e->on_ground) ? 1.0f : 0.0f;
 	e->data.local_player.walk_bob_speed += (bob_target - e->data.local_player.walk_bob_speed) * 0.1f;
 	e->data.local_player.walk_bob += walk_speed * GLM_PI;
+
+	if(e->on_ground
+	   && e->data.local_player.walk_bob >= e->data.local_player.step_bob_next) {
+		struct block_data step_blk;
+		if(entity_get_block(e, floorf(e->pos[0]),
+		                    floorf(e->pos[1] - EYE_HEIGHT) - 1,
+		                    floorf(e->pos[2]), &step_blk)
+		   && step_blk.type != BLOCK_AIR) {
+			play_step_sound_at(step_blk.type, e->pos[0],
+			                   e->pos[1] - EYE_HEIGHT, e->pos[2],
+			                   gstate.settings.step_volume);
+		}
+		e->data.local_player.step_bob_next
+			= e->data.local_player.walk_bob + GLM_PI;
+	}
+
 	float head_world_yaw = e->orient[0];
 	float yaw_diff
 		= angle_normalize(head_world_yaw - e->data.local_player.body_yaw);
