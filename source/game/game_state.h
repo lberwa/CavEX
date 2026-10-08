@@ -104,6 +104,10 @@ struct game_state {
 		float render_distance;
 		float fog_distance;
 	} config;
+	struct {
+		bool active;
+		int face;
+	} panorama_capture;
 	struct screen* current_screen;
 	struct screen* player_screens[4];
 	struct camera camera;

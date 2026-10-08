@@ -47,6 +47,7 @@ enum { // Buttons
     RENDER_SCALE_DEC,
     RENDER_SCALE_INC,
     VIEW_BOB_TOGGLE,
+    CAPTURE_PANORAMA,
     // sound
     MASTER_VOL_DEC,
     MASTER_VOL_INC,
@@ -110,6 +111,10 @@ static void set(int s) {
 			break;
 		case VIEW_BOB_TOGGLE:
 			gstate.settings.view_bob = !gstate.settings.view_bob;
+			break;
+		case CAPTURE_PANORAMA:
+			gstate.panorama_capture.active = true;
+			gstate.panorama_capture.face = 0;
 			break;
 
 		/* sound */
@@ -185,7 +190,9 @@ static void screen_gsettings_render2D(struct screen* s, int width, int height) {
 			gutil_button(cx + 20, cy + 15, 50, 50, "+", &set, RENDER_SCALE_INC,  1, 1);
 			gutil_button_toggle(cx - 25, cy + 70, gstate.settings.view_bob,
 								&set, VIEW_BOB_TOGGLE, 0, 2);
-			gutil_button(cx - 75, cy + 130, 150, 50, "Back", &choose, MAIN, 0, 3);
+			gutil_button(cx - 125, cy + 130, 250, 50, "Capture panorama",
+						 &set, CAPTURE_PANORAMA, 0, 3);
+			gutil_button(cx - 75, cy + 190, 150, 50, "Back", &choose, MAIN, 0, 4);
 
 			char vd[48];
 			snprintf(vd, sizeof(vd), "View distance: %d", gstate.settings.view_distance);
@@ -198,6 +205,8 @@ static void screen_gsettings_render2D(struct screen* s, int width, int height) {
 			snprintf(rs_str, sizeof(rs_str), "Render: %d%% (%dx%d)", rs, rw, rh);
 			gutil_text(cx - 200, cy - 15, rs_str, 20, true);
 			gutil_text(cx - 200, cy + 40, "Camera Bob:", 20, true);
+			if(gstate.panorama_capture.active)
+				gutil_text(cx - 200, cy + 105, "Capturing panorama ...", 16, true);
 		}
 		break;
 

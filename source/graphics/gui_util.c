@@ -128,6 +128,88 @@ void gutil_bg() {
 	gutil_bg_block(TEXAT_DIRT);
 }
 
+static void gutil_bg_restore_gui_projection(int width, int height) {
+	mat4 proj;
+	glm_ortho(0.0F, (float)width, (float)height, 0.0F, -256.0F, 256.0F, proj);
+	gfx_matrix_projection(proj, false);
+	gfx_matrix_modelview(GLM_MAT4_IDENTITY);
+	gfx_alpha_test(true);
+	gfx_blending(MODE_BLEND);
+	gfx_cull_func(MODE_BACK);
+	gfx_write_buffers(true, false, false);
+}
+
+static void gutil_bg_cube_face(int tex_id, const float* vertices) {
+	static const uint8_t colors[16] = {
+		0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+		0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	};
+	static const float texcoords[8] = {
+		0.0F, 0.0F, 1.0F, 0.0F, 1.0F, 1.0F, 0.0F, 1.0F,
+	};
+
+	gfx_bind_texture(&texture_bg[tex_id]);
+	gfx_draw_quads_flt(4, vertices, colors, texcoords);
+}
+
+static void gutil_bg_panorama_cubemap() {
+	static float yaw = 0.0F;
+
+	int width = gfx_width();
+	int height = gfx_height();
+	if(width <= 0 || height <= 0)
+		return;
+
+	const float size = 2.0F;
+	mat4 proj;
+	mat4 mv;
+
+	glm_perspective(glm_rad(90.0F), (float)width / (float)height, 0.1F, 10.0F,
+					proj);
+	gfx_matrix_projection(proj, true);
+
+	glm_mat4_identity(mv);
+	glm_rotate_y(mv, yaw, mv);
+	glm_rotate_x(mv, glm_rad(-4.0F), mv);
+	gfx_matrix_modelview(mv);
+
+	gfx_alpha_test(false);
+	gfx_blending(MODE_OFF);
+	gfx_cull_func(MODE_NONE);
+	gfx_write_buffers(true, false, false);
+
+	gutil_bg_cube_face(0, (float[]) {
+		-size,  size, -size,  size,  size, -size,
+		 size, -size, -size, -size, -size, -size,
+	});
+	gutil_bg_cube_face(1, (float[]) {
+		 size,  size, -size,  size,  size,  size,
+		 size, -size,  size,  size, -size, -size,
+	});
+	gutil_bg_cube_face(2, (float[]) {
+		 size,  size,  size, -size,  size,  size,
+		-size, -size,  size,  size, -size,  size,
+	});
+	gutil_bg_cube_face(3, (float[]) {
+		-size,  size,  size, -size,  size, -size,
+		-size, -size, -size, -size, -size,  size,
+	});
+	gutil_bg_cube_face(4, (float[]) {
+		-size, -size, -size,  size, -size, -size,
+		 size, -size,  size, -size, -size,  size,
+	});
+	gutil_bg_cube_face(5, (float[]) {
+		-size,  size,  size,  size,  size,  size,
+		 size,  size, -size, -size,  size, -size,
+	});
+
+	yaw += 0.0005F;
+	if(yaw >= glm_rad(360.0F))
+		yaw -= glm_rad(360.0F);
+
+	gutil_bg_restore_gui_projection(width, height);
+}
+
 static uint8_t font_char_width[256];
 
 void gutil_reset_font(struct tex_gfx* tex) {
@@ -357,86 +439,8 @@ void gutil_window(int x, int y, int width, int height, char title[]) {
 	gutil_text_col(bfor_collor);
 }
 
-float scroll_x = 0.0f;
-float speed = 0.2f;
-
-int w[12] = {256,256,256,256,256,59,
-             256,256,256,256,256,59};
-
-int h[12] = {256,256,256,256,256,256,
-             194,194,194,194,194,194};
-
-int total_width;
-
-
 void gutil_bg_panorama() {
-	total_width = 0;
-	//			-------1------
-	for (int i=0; i<6; i++) {
-		total_width += w[i];
-	}
-
-    float x = -scroll_x;
-
-	int hp = 20;
-    
-	for(int i=0; i<6; i++) {
-        gfx_bind_texture(&texture_bg[i]);
-
-        gutil_texquad(
-            (int)x, 0,      		// Position auf dem Bildschirm
-            0, 0,           		// Texture-Start
-            w[i], h[i],     		// Texture-Dimension
-            w[i], h[i] + hp 		// Quad-Dimension
-        );
-
-        // Wrap-Kopie:
-        gutil_texquad(
-            (int)(x + total_width), 0,
-            0, 0,
-            w[i], h[i],
-            w[i], h[i] + hp
-        );
-
-        x += w[i];
-    }
-
-	//		--------2---------
-	total_width = 0;
-	for (int i=0; i<6; i++) {
-		total_width += w[i+6];
-	}
-
-    x = -scroll_x;
-
-	int hp2 = 12;
-
-    for(int i=0; i<6; i++) {
-		int i6 = i + 6;
-        gfx_bind_texture(&texture_bg[i6]);
-
-        gutil_texquad(
-            (int)x, h[1] + hp,      // Position auf dem Bildschirm
-            0, 0,           		// Texture-Start
-            w[i6], h[i6],     		// Texture-Dimension
-            w[i6], h[i6] + hp2     	// Quad-Dimension
-        );
-
-        // Wrap-Kopie:
-        gutil_texquad(
-            (int)(x + total_width), h[1] + hp,
-            0, 0,
-            w[i6], h[i6],
-            w[i6], h[i6] + hp2
-        );
-
-        x += w[i6];
-    }
-
-    scroll_x += speed;
-
-    if(scroll_x >= total_width)
-        scroll_x -= total_width;
+	gutil_bg_panorama_cubemap();
 }
 
 void gutil_license(int width, int height) {

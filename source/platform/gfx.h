@@ -77,6 +77,9 @@ void gfx_crosshair(struct tex_gfx* tex, int x, int y, int tx, int ty, int sx,
 				   int sy, int width, int height);
 
 void gfx_copy_framebuffer(uint8_t* dest, size_t* width, size_t* height);
+void gfx_copy_world_framebuffer(uint8_t* dest, size_t* width, size_t* height);
+void gfx_begin_panorama_capture(int scale);
+void gfx_end_panorama_capture(void);
 
 void gfx_matrix_projection(mat4 proj, bool is_perspective);
 void gfx_matrix_modelview(mat4 mv);

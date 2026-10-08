@@ -78,7 +78,7 @@ struct tex_gfx texture_armor_iron1;
 struct tex_gfx texture_armor_iron2;
 struct tex_gfx texture_armor_diamond1;
 struct tex_gfx texture_armor_diamond2;
-struct tex_gfx texture_bg[12];
+struct tex_gfx texture_bg[6];
 struct tex_gfx texture_server[12];
 
 //struct tex_gfx texture_button;
@@ -289,18 +289,12 @@ void tex_init() {
 
 	tex_gfx_load_file(&texture_mob_char, "mob/char.png", TEX_FMT_RGBA16, false);
 	
-	tex_gfx_load_file(&texture_bg[0],  "bg/bg1.png",  TEX_FMT_RGB16, false);
-	tex_gfx_load_file(&texture_bg[1],  "bg/bg2.png",  TEX_FMT_RGB16, false);
-	tex_gfx_load_file(&texture_bg[2],  "bg/bg3.png",  TEX_FMT_RGB16, false);
-	tex_gfx_load_file(&texture_bg[3],  "bg/bg4.png",  TEX_FMT_RGB16, false);
-	tex_gfx_load_file(&texture_bg[4],  "bg/bg5.png",  TEX_FMT_RGB16, false);
-	tex_gfx_load_file(&texture_bg[5],  "bg/bg6.png",  TEX_FMT_RGB16, false);
-	tex_gfx_load_file(&texture_bg[6],  "bg/bg7.png",  TEX_FMT_RGB16, false);
-	tex_gfx_load_file(&texture_bg[7],  "bg/bg8.png",  TEX_FMT_RGB16, false);
-	tex_gfx_load_file(&texture_bg[8],  "bg/bg9.png",  TEX_FMT_RGB16, false);
-	tex_gfx_load_file(&texture_bg[9],  "bg/bg10.png", TEX_FMT_RGB16, false);
-	tex_gfx_load_file(&texture_bg[10], "bg/bg11.png", TEX_FMT_RGB16, false);
-	tex_gfx_load_file(&texture_bg[11], "bg/bg12.png", TEX_FMT_RGB16, false);
+	tex_gfx_load_file(&texture_bg[0], "bg/panorama_0.png", TEX_FMT_RGB16, false);
+	tex_gfx_load_file(&texture_bg[1], "bg/panorama_1.png", TEX_FMT_RGB16, false);
+	tex_gfx_load_file(&texture_bg[2], "bg/panorama_2.png", TEX_FMT_RGB16, false);
+	tex_gfx_load_file(&texture_bg[3], "bg/panorama_3.png", TEX_FMT_RGB16, false);
+	tex_gfx_load_file(&texture_bg[4], "bg/panorama_4.png", TEX_FMT_RGB16, false);
+	tex_gfx_load_file(&texture_bg[5], "bg/panorama_5.png", TEX_FMT_RGB16, false);
 
 
 
