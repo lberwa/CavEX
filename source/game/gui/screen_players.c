@@ -27,7 +27,7 @@
 #include "../../platform/gfx.h"
 #include "../../graphics/gfx_util.h"
 
-#include "../../sound.h"
+#include "../../sound/sound.h"
 #include "../../network/server_comunication.h"
 
 #define MAX_WIIMOTES 4

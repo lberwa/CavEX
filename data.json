@@ -340,16 +340,16 @@
       "../assets/sound/sound/random/door_close.wav"
     ],
     [
-      "assets/sound/sound/random/chest_close.wav",
-      "../assets/sound/sound/random/chest_close.wav"
+      "assets/sound/sound/random/chestclosed.wav",
+      "../assets/sound/sound/random/chestclosed.wav"
     ],
     [
       "assets/sound/sound/random/eat3.wav",
       "../assets/sound/sound/random/eat3.wav"
     ],
     [
-      "assets/sound/sound/random/chest_open.wav",
-      "../assets/sound/sound/random/chest_open.wav"
+      "assets/sound/sound/random/chestopen.wav",
+      "../assets/sound/sound/random/chestopen.wav"
     ],
     [
       "assets/sound/sound/random/click.wav",
@@ -360,6 +360,414 @@
       "../assets/sound/sound/random/door_open.wav"
     ],
     [
+      "assets/sound/sound/tile/piston/out.wav",
+      "../assets/sound/sound/tile/piston/out.wav"
+    ],
+    [
+      "assets/sound/sound/tile/piston/in.wav",
+      "../assets/sound/sound/tile/piston/in.wav"
+    ],
+    [
+      "assets/sound/sound/note/harp.wav",
+      "../assets/sound/sound/note/harp.wav"
+    ],
+    [
+      "assets/sound/sound/note/pling.wav",
+      "../assets/sound/sound/note/pling.wav"
+    ],
+    [
+      "assets/sound/sound/note/bass.wav",
+      "../assets/sound/sound/note/bass.wav"
+    ],
+    [
+      "assets/sound/sound/damage/hit1.wav",
+      "../assets/sound/sound/damage/hit1.wav"
+    ],
+    [
+      "assets/sound/sound/damage/hit3.wav",
+      "../assets/sound/sound/damage/hit3.wav"
+    ],
+    [
+      "assets/sound/sound/damage/fallbig.wav",
+      "../assets/sound/sound/damage/fallbig.wav"
+    ],
+    [
+      "assets/sound/sound/damage/fallsmall.wav",
+      "../assets/sound/sound/damage/fallsmall.wav"
+    ],
+    [
+      "assets/sound/sound/dig/grass1.wav",
+      "../assets/sound/sound/dig/grass1.wav"
+    ],
+    [
+      "assets/sound/sound/dig/grass2.wav",
+      "../assets/sound/sound/dig/grass2.wav"
+    ],
+    [
+      "assets/sound/sound/dig/grass3.wav",
+      "../assets/sound/sound/dig/grass3.wav"
+    ],
+    [
+      "assets/sound/sound/dig/grass4.wav",
+      "../assets/sound/sound/dig/grass4.wav"
+    ],
+    [
+      "assets/sound/sound/dig/cloth1.wav",
+      "../assets/sound/sound/dig/cloth1.wav"
+    ],
+    [
+      "assets/sound/sound/dig/cloth2.wav",
+      "../assets/sound/sound/dig/cloth2.wav"
+    ],
+    [
+      "assets/sound/sound/dig/cloth3.wav",
+      "../assets/sound/sound/dig/cloth3.wav"
+    ],
+    [
+      "assets/sound/sound/dig/cloth4.wav",
+      "../assets/sound/sound/dig/cloth4.wav"
+    ],
+    [
+      "assets/sound/sound/dig/gravel1.wav",
+      "../assets/sound/sound/dig/gravel1.wav"
+    ],
+    [
+      "assets/sound/sound/dig/gravel2.wav",
+      "../assets/sound/sound/dig/gravel2.wav"
+    ],
+    [
+      "assets/sound/sound/dig/gravel3.wav",
+      "../assets/sound/sound/dig/gravel3.wav"
+    ],
+    [
+      "assets/sound/sound/dig/gravel4.wav",
+      "../assets/sound/sound/dig/gravel4.wav"
+    ],
+    [
+      "assets/sound/sound/dig/wood1.wav",
+      "../assets/sound/sound/dig/wood1.wav"
+    ],
+    [
+      "assets/sound/sound/dig/wood3.wav",
+      "../assets/sound/sound/dig/wood3.wav"
+    ],
+    [
+      "assets/sound/sound/dig/wood4.wav",
+      "../assets/sound/sound/dig/wood4.wav"
+    ],
+    [
+      "assets/sound/sound/dig/stone1.wav",
+      "../assets/sound/sound/dig/stone1.wav"
+    ],
+    [
+      "assets/sound/sound/dig/stone2.wav",
+      "../assets/sound/sound/dig/stone2.wav"
+    ],
+    [
+      "assets/sound/sound/dig/stone4.wav",
+      "../assets/sound/sound/dig/stone4.wav"
+    ],
+    [
+      "assets/sound/sound/step/grass1.wav",
+      "../assets/sound/sound/step/grass1.wav"
+    ],
+    [
+      "assets/sound/sound/step/grass2.wav",
+      "../assets/sound/sound/step/grass2.wav"
+    ],
+    [
+      "assets/sound/sound/step/grass3.wav",
+      "../assets/sound/sound/step/grass3.wav"
+    ],
+    [
+      "assets/sound/sound/step/grass4.wav",
+      "../assets/sound/sound/step/grass4.wav"
+    ],
+    [
+      "assets/sound/sound/step/cloth1.wav",
+      "../assets/sound/sound/step/cloth1.wav"
+    ],
+    [
+      "assets/sound/sound/step/cloth2.wav",
+      "../assets/sound/sound/step/cloth2.wav"
+    ],
+    [
+      "assets/sound/sound/step/cloth3.wav",
+      "../assets/sound/sound/step/cloth3.wav"
+    ],
+    [
+      "assets/sound/sound/step/cloth4.wav",
+      "../assets/sound/sound/step/cloth4.wav"
+    ],
+    [
+      "assets/sound/sound/step/gravel1.wav",
+      "../assets/sound/sound/step/gravel1.wav"
+    ],
+    [
+      "assets/sound/sound/step/gravel2.wav",
+      "../assets/sound/sound/step/gravel2.wav"
+    ],
+    [
+      "assets/sound/sound/step/gravel3.wav",
+      "../assets/sound/sound/step/gravel3.wav"
+    ],
+    [
+      "assets/sound/sound/step/gravel4.wav",
+      "../assets/sound/sound/step/gravel4.wav"
+    ],
+    [
+      "assets/sound/sound/step/sand1.wav",
+      "../assets/sound/sound/step/sand1.wav"
+    ],
+    [
+      "assets/sound/sound/step/sand2.wav",
+      "../assets/sound/sound/step/sand2.wav"
+    ],
+    [
+      "assets/sound/sound/step/sand3.wav",
+      "../assets/sound/sound/step/sand3.wav"
+    ],
+    [
+      "assets/sound/sound/step/sand4.wav",
+      "../assets/sound/sound/step/sand4.wav"
+    ],
+    [
+      "assets/sound/sound/step/stone1.wav",
+      "../assets/sound/sound/step/stone1.wav"
+    ],
+    [
+      "assets/sound/sound/step/stone2.wav",
+      "../assets/sound/sound/step/stone2.wav"
+    ],
+    [
+      "assets/sound/sound/step/stone3.wav",
+      "../assets/sound/sound/step/stone3.wav"
+    ],
+    [
+      "assets/sound/sound/step/stone4.wav",
+      "../assets/sound/sound/step/stone4.wav"
+    ],
+    [
+      "assets/sound/sound/step/snow1.wav",
+      "../assets/sound/sound/step/snow1.wav"
+    ],
+    [
+      "assets/sound/sound/step/snow2.wav",
+      "../assets/sound/sound/step/snow2.wav"
+    ],
+    [
+      "assets/sound/sound/step/snow3.wav",
+      "../assets/sound/sound/step/snow3.wav"
+    ],
+    [
+      "assets/sound/sound/step/snow4.wav",
+      "../assets/sound/sound/step/snow4.wav"
+    ],
+    [
+      "assets/sound/sound/step/wood1.wav",
+      "../assets/sound/sound/step/wood1.wav"
+    ],
+    [
+      "assets/sound/sound/step/wood2.wav",
+      "../assets/sound/sound/step/wood2.wav"
+    ],
+    [
+      "assets/sound/sound/step/wood3.wav",
+      "../assets/sound/sound/step/wood3.wav"
+    ],
+    [
+      "assets/sound/sound/step/wood4.wav",
+      "../assets/sound/sound/step/wood4.wav"
+    ],
+    [
+      "assets/sound/sound/fire/fire.wav",
+      "../assets/sound/sound/fire/fire.wav"
+    ],
+    [
+      "assets/sound/sound/mob/sheep/say1.wav",
+      "../assets/sound/sound/mob/sheep/say1.wav"
+    ],
+    [
+      "assets/sound/sound/mob/sheep/say3.wav",
+      "../assets/sound/sound/mob/sheep/say3.wav"
+    ],
+    [
+      "assets/sound/sound/mob/creeper/death.wav",
+      "../assets/sound/sound/mob/creeper/death.wav"
+    ],
+    [
+      "assets/sound/sound/portal/portal.wav",
+      "../assets/sound/sound/portal/portal.wav"
+    ],
+    [
+      "assets/sound/sound/portal/trigger.wav",
+      "../assets/sound/sound/portal/trigger.wav"
+    ],
+    [
+      "assets/sound/sound/portal/travel.wav",
+      "../assets/sound/sound/portal/travel.wav"
+    ],
+    [
+      "assets/sound/sound/ambient/cave/cave2.wav",
+      "../assets/sound/sound/ambient/cave/cave2.wav"
+    ],
+    [
+      "assets/sound/sound/ambient/cave/cave3.wav",
+      "../assets/sound/sound/ambient/cave/cave3.wav"
+    ],
+    [
+      "assets/sound/sound/ambient/cave/cave4.wav",
+      "../assets/sound/sound/ambient/cave/cave4.wav"
+    ],
+    [
+      "assets/sound/sound/ambient/cave/cave5.wav",
+      "../assets/sound/sound/ambient/cave/cave5.wav"
+    ],
+    [
+      "assets/sound/sound/ambient/cave/cave6.wav",
+      "../assets/sound/sound/ambient/cave/cave6.wav"
+    ],
+    [
+      "assets/sound/sound/ambient/cave/cave7.wav",
+      "../assets/sound/sound/ambient/cave/cave7.wav"
+    ],
+    [
+      "assets/sound/sound/ambient/cave/cave8.wav",
+      "../assets/sound/sound/ambient/cave/cave8.wav"
+    ],
+    [
+      "assets/sound/sound/ambient/cave/cave9.wav",
+      "../assets/sound/sound/ambient/cave/cave9.wav"
+    ],
+    [
+      "assets/sound/sound/ambient/cave/cave10.wav",
+      "../assets/sound/sound/ambient/cave/cave10.wav"
+    ],
+    [
+      "assets/sound/sound/ambient/cave/cave11.wav",
+      "../assets/sound/sound/ambient/cave/cave11.wav"
+    ],
+    [
+      "assets/sound/sound/ambient/cave/cave12.wav",
+      "../assets/sound/sound/ambient/cave/cave12.wav"
+    ],
+    [
+      "assets/sound/sound/ambient/cave/cave13.wav",
+      "../assets/sound/sound/ambient/cave/cave13.wav"
+    ],
+    [
+      "assets/sound/sound/ambient/weather/rain1.wav",
+      "../assets/sound/sound/ambient/weather/rain1.wav"
+    ],
+    [
+      "assets/sound/sound/ambient/weather/rain2.wav",
+      "../assets/sound/sound/ambient/weather/rain2.wav"
+    ],
+    [
+      "assets/sound/sound/ambient/weather/rain3.wav",
+      "../assets/sound/sound/ambient/weather/rain3.wav"
+    ],
+    [
+      "assets/sound/sound/ambient/weather/rain4.wav",
+      "../assets/sound/sound/ambient/weather/rain4.wav"
+    ],
+    [
+      "assets/sound/sound/ambient/weather/thunder1.wav",
+      "../assets/sound/sound/ambient/weather/thunder1.wav"
+    ],
+    [
+      "assets/sound/sound/ambient/weather/thunder2.wav",
+      "../assets/sound/sound/ambient/weather/thunder2.wav"
+    ],
+    [
+      "assets/sound/sound/ambient/weather/thunder3.wav",
+      "../assets/sound/sound/ambient/weather/thunder3.wav"
+    ],
+    [
+      "assets/sound/sound/liquid/splash.wav",
+      "../assets/sound/sound/liquid/splash.wav"
+    ],
+    [
+      "assets/sound/sound/liquid/splash2.wav",
+      "../assets/sound/sound/liquid/splash2.wav"
+    ],
+    [
+      "assets/sound/sound/liquid/water.wav",
+      "../assets/sound/sound/liquid/water.wav"
+    ],
+    [
+      "assets/sound/sound/random/explode1.wav",
+      "../assets/sound/sound/random/explode1.wav"
+    ],
+    [
+      "assets/sound/sound/random/explode2.wav",
+      "../assets/sound/sound/random/explode2.wav"
+    ],
+    [
+      "assets/sound/sound/random/explode3.wav",
+      "../assets/sound/sound/random/explode3.wav"
+    ],
+    [
+      "assets/sound/sound/random/explode4.wav",
+      "../assets/sound/sound/random/explode4.wav"
+    ],
+    [
+      "assets/sound/sound/random/bowhit1.wav",
+      "../assets/sound/sound/random/bowhit1.wav"
+    ],
+    [
+      "assets/sound/sound/random/bowhit2.wav",
+      "../assets/sound/sound/random/bowhit2.wav"
+    ],
+    [
+      "assets/sound/sound/random/bowhit3.wav",
+      "../assets/sound/sound/random/bowhit3.wav"
+    ],
+    [
+      "assets/sound/sound/random/bowhit4.wav",
+      "../assets/sound/sound/random/bowhit4.wav"
+    ],
+    [
+      "assets/sound/sound/random/pop.wav",
+      "../assets/sound/sound/random/pop.wav"
+    ],
+    [
+      "assets/sound/sound/random/levelup.wav",
+      "../assets/sound/sound/random/levelup.wav"
+    ],
+    [
+      "assets/sound/sound/random/glass1.wav",
+      "../assets/sound/sound/random/glass1.wav"
+    ],
+    [
+      "assets/sound/sound/random/glass2.wav",
+      "../assets/sound/sound/random/glass2.wav"
+    ],
+    [
+      "assets/sound/sound/random/glass3.wav",
+      "../assets/sound/sound/random/glass3.wav"
+    ],
+    [
+      "assets/sound/sound/random/successful_hit.wav",
+      "../assets/sound/sound/random/successful_hit.wav"
+    ],
+    [
+      "assets/sound/sound/random/classic_hurt.wav",
+      "../assets/sound/sound/random/classic_hurt.wav"
+    ],
+    [
+      "assets/sound/sound/random/wood_click.wav",
+      "../assets/sound/sound/random/wood_click.wav"
+    ],
+    [
+      "assets/sound/sound/random/fizz.wav",
+      "../assets/sound/sound/random/fizz.wav"
+    ],
+    [
+      "assets/sound/sound/random/orb.wav",
+      "../assets/sound/sound/random/orb.wav"
+    ],
+    [
       "source/chunk_mesher.c",
       "source/chunk_mesher.c"
     ],
@@ -368,8 +776,8 @@
       "source/util.c"
     ],
     [
-      "source/sound.c",
-      "source/sound.c"
+      "source/sound/sound.c",
+      "source/sound/sound.c"
     ],
     [
       "source/main.c",
@@ -416,8 +824,8 @@
       "source/config.h"
     ],
     [
-      "source/sound.h",
-      "source/sound.h"
+      "source/sound/sound.h",
+      "source/sound/sound.h"
     ],
     [
       "source/particle.h",
@@ -1080,1456 +1488,460 @@
       "source/parson/tests/test_1_3.txt"
     ],
     [
-      "source/pc_sound/configure.ac",
-      "source/pc_sound/configure.ac"
+      "source/sound/pc_sound/LICENSE.txt",
+      "source/sound/pc_sound/LICENSE.txt"
     ],
     [
-      "source/pc_sound/vcpkg.json",
-      "source/pc_sound/vcpkg.json"
+      "source/sound/pc_sound/CMakeLists.txt",
+      "source/sound/pc_sound/CMakeLists.txt"
     ],
     [
-      "source/pc_sound/pa_compare_def_files.py",
-      "source/pc_sound/pa_compare_def_files.py"
+      "source/sound/pc_sound/include/pa_win_wmme.h",
+      "source/sound/pc_sound/include/pa_win_wmme.h"
     ],
     [
-      "source/pc_sound/Makefile.in",
-      "source/pc_sound/Makefile.in"
+      "source/sound/pc_sound/include/pa_win_ds.h",
+      "source/sound/pc_sound/include/pa_win_ds.h"
     ],
     [
-      "source/pc_sound/aclocal.m4",
-      "source/pc_sound/aclocal.m4"
+      "source/sound/pc_sound/include/pa_mac_core.h",
+      "source/sound/pc_sound/include/pa_mac_core.h"
     ],
     [
-      "source/pc_sound/README.configure.txt",
-      "source/pc_sound/README.configure.txt"
+      "source/sound/pc_sound/include/pa_win_wasapi.h",
+      "source/sound/pc_sound/include/pa_win_wasapi.h"
     ],
     [
-      "source/pc_sound/portaudio-2.0.pc.in",
-      "source/pc_sound/portaudio-2.0.pc.in"
+      "source/sound/pc_sound/include/pa_win_wdmks.h",
+      "source/sound/pc_sound/include/pa_win_wdmks.h"
     ],
     [
-      "source/pc_sound/.gitattributes",
-      "source/pc_sound/.gitattributes"
+      "source/sound/pc_sound/include/pa_linux_pulseaudio.h",
+      "source/sound/pc_sound/include/pa_linux_pulseaudio.h"
     ],
     [
-      "source/pc_sound/install-sh",
-      "source/pc_sound/install-sh"
+      "source/sound/pc_sound/include/portaudio.h",
+      "source/sound/pc_sound/include/portaudio.h"
     ],
     [
-      "source/pc_sound/ltmain.sh",
-      "source/pc_sound/ltmain.sh"
+      "source/sound/pc_sound/include/pa_jack.h",
+      "source/sound/pc_sound/include/pa_jack.h"
     ],
     [
-      "source/pc_sound/filtered1.wav",
-      "source/pc_sound/filtered1.wav"
+      "source/sound/pc_sound/include/pa_win_waveformat.h",
+      "source/sound/pc_sound/include/pa_win_waveformat.h"
     ],
     [
-      "source/pc_sound/Doxyfile.developer",
-      "source/pc_sound/Doxyfile.developer"
+      "source/sound/pc_sound/include/pa_linux_alsa.h",
+      "source/sound/pc_sound/include/pa_linux_alsa.h"
     ],
     [
-      "source/pc_sound/config.sub",
-      "source/pc_sound/config.sub"
+      "source/sound/pc_sound/include/pa_asio.h",
+      "source/sound/pc_sound/include/pa_asio.h"
     ],
     [
-      "source/pc_sound/update_gitrevision.sh",
-      "source/pc_sound/update_gitrevision.sh"
+      "source/sound/pc_sound/src/os/win/pa_win_version.h",
+      "source/sound/pc_sound/src/os/win/pa_win_version.h"
     ],
     [
-      "source/pc_sound/pa_whitelint.py",
-      "source/pc_sound/pa_whitelint.py"
+      "source/sound/pc_sound/src/os/win/pa_win_waveformat.c",
+      "source/sound/pc_sound/src/os/win/pa_win_waveformat.c"
     ],
     [
-      "source/pc_sound/configure",
-      "source/pc_sound/configure"
+      "source/sound/pc_sound/src/os/win/pa_win_version.c",
+      "source/sound/pc_sound/src/os/win/pa_win_version.c"
     ],
     [
-      "source/pc_sound/Doxyfile",
-      "source/pc_sound/Doxyfile"
+      "source/sound/pc_sound/src/os/win/pa_x86_plain_converters.c",
+      "source/sound/pc_sound/src/os/win/pa_x86_plain_converters.c"
     ],
     [
-      "source/pc_sound/.gitignore",
-      "source/pc_sound/.gitignore"
+      "source/sound/pc_sound/src/os/win/pa_win_util.c",
+      "source/sound/pc_sound/src/os/win/pa_win_util.c"
     ],
     [
-      "source/pc_sound/README.md",
-      "source/pc_sound/README.md"
+      "source/sound/pc_sound/src/os/win/pa_win_hostapis.c",
+      "source/sound/pc_sound/src/os/win/pa_win_hostapis.c"
     ],
     [
-      "source/pc_sound/.editorconfig",
-      "source/pc_sound/.editorconfig"
+      "source/sound/pc_sound/src/os/win/pa_win_util.h",
+      "source/sound/pc_sound/src/os/win/pa_win_util.h"
     ],
     [
-      "source/pc_sound/config.guess",
-      "source/pc_sound/config.guess"
+      "source/sound/pc_sound/src/os/win/pa_win_coinitialize.c",
+      "source/sound/pc_sound/src/os/win/pa_win_coinitialize.c"
     ],
     [
-      "source/pc_sound/clear_gitrevision.sh",
-      "source/pc_sound/clear_gitrevision.sh"
+      "source/sound/pc_sound/src/os/win/pa_win_wdmks_utils.h",
+      "source/sound/pc_sound/src/os/win/pa_win_wdmks_utils.h"
     ],
     [
-      "source/pc_sound/LICENSE.txt",
-      "source/pc_sound/LICENSE.txt"
+      "source/sound/pc_sound/src/os/win/pa_win_wdmks_utils.c",
+      "source/sound/pc_sound/src/os/win/pa_win_wdmks_utils.c"
     ],
     [
-      "source/pc_sound/CMakeLists.txt",
-      "source/pc_sound/CMakeLists.txt"
+      "source/sound/pc_sound/src/os/win/pa_win_coinitialize.h",
+      "source/sound/pc_sound/src/os/win/pa_win_coinitialize.h"
     ],
     [
-      "source/pc_sound/.github/asiosdk-version.txt",
-      "source/pc_sound/.github/asiosdk-version.txt"
+      "source/sound/pc_sound/src/os/win/pa_x86_plain_converters.h",
+      "source/sound/pc_sound/src/os/win/pa_x86_plain_converters.h"
     ],
     [
-      "source/pc_sound/.github/ISSUE_TEMPLATE/bug_report.md",
-      "source/pc_sound/.github/ISSUE_TEMPLATE/bug_report.md"
+      "source/sound/pc_sound/src/os/unix/pa_unix_util.c",
+      "source/sound/pc_sound/src/os/unix/pa_unix_util.c"
     ],
     [
-      "source/pc_sound/.github/workflows/MSBuild.yml",
-      "source/pc_sound/.github/workflows/MSBuild.yml"
+      "source/sound/pc_sound/src/os/unix/pa_unix_util.h",
+      "source/sound/pc_sound/src/os/unix/pa_unix_util.h"
     ],
     [
-      "source/pc_sound/.github/workflows/whitelint.yml",
-      "source/pc_sound/.github/workflows/whitelint.yml"
+      "source/sound/pc_sound/src/os/unix/pa_pthread_util.h",
+      "source/sound/pc_sound/src/os/unix/pa_pthread_util.h"
     ],
     [
-      "source/pc_sound/.github/workflows/autotools.yml",
-      "source/pc_sound/.github/workflows/autotools.yml"
+      "source/sound/pc_sound/src/os/unix/pa_pthread_util.c",
+      "source/sound/pc_sound/src/os/unix/pa_pthread_util.c"
     ],
     [
-      "source/pc_sound/.github/workflows/compare_def_files.yml",
-      "source/pc_sound/.github/workflows/compare_def_files.yml"
+      "source/sound/pc_sound/src/os/unix/pa_unix_hostapis.c",
+      "source/sound/pc_sound/src/os/unix/pa_unix_hostapis.c"
     ],
     [
-      "source/pc_sound/.github/workflows/cmake.yml",
-      "source/pc_sound/.github/workflows/cmake.yml"
+      "source/sound/pc_sound/src/common/pa_process.c",
+      "source/sound/pc_sound/src/common/pa_process.c"
     ],
     [
-      "source/pc_sound/.github/workflows/autotools_msys2.yml",
-      "source/pc_sound/.github/workflows/autotools_msys2.yml"
+      "source/sound/pc_sound/src/common/pa_allocation.c",
+      "source/sound/pc_sound/src/common/pa_allocation.c"
     ],
     [
-      "source/pc_sound/msvc/readme.txt",
-      "source/pc_sound/msvc/readme.txt"
+      "source/sound/pc_sound/src/common/pa_converters.h",
+      "source/sound/pc_sound/src/common/pa_converters.h"
     ],
     [
-      "source/pc_sound/msvc/portaudio.dsw",
-      "source/pc_sound/msvc/portaudio.dsw"
+      "source/sound/pc_sound/src/common/pa_ringbuffer.h",
+      "source/sound/pc_sound/src/common/pa_ringbuffer.h"
     ],
     [
-      "source/pc_sound/msvc/portaudio.sln",
-      "source/pc_sound/msvc/portaudio.sln"
+      "source/sound/pc_sound/src/common/pa_hostapi.h",
+      "source/sound/pc_sound/src/common/pa_hostapi.h"
     ],
     [
-      "source/pc_sound/msvc/portaudio.def",
-      "source/pc_sound/msvc/portaudio.def"
+      "source/sound/pc_sound/src/common/pa_cpuload.c",
+      "source/sound/pc_sound/src/common/pa_cpuload.c"
     ],
     [
-      "source/pc_sound/msvc/portaudio.dsp",
-      "source/pc_sound/msvc/portaudio.dsp"
+      "source/sound/pc_sound/src/common/pa_cpuload.h",
+      "source/sound/pc_sound/src/common/pa_cpuload.h"
     ],
     [
-      "source/pc_sound/msvc/portaudio.vcproj",
-      "source/pc_sound/msvc/portaudio.vcproj"
+      "source/sound/pc_sound/src/common/pa_gitrevision.h",
+      "source/sound/pc_sound/src/common/pa_gitrevision.h"
     ],
     [
-      "source/pc_sound/test/patest_unplug.c",
-      "source/pc_sound/test/patest_unplug.c"
+      "source/sound/pc_sound/src/common/pa_debugprint.h",
+      "source/sound/pc_sound/src/common/pa_debugprint.h"
     ],
     [
-      "source/pc_sound/test/patest_many.c",
-      "source/pc_sound/test/patest_many.c"
+      "source/sound/pc_sound/src/common/pa_stream.c",
+      "source/sound/pc_sound/src/common/pa_stream.c"
     ],
     [
-      "source/pc_sound/test/patest_write_stop.c",
-      "source/pc_sound/test/patest_write_stop.c"
+      "source/sound/pc_sound/src/common/pa_converters.c",
+      "source/sound/pc_sound/src/common/pa_converters.c"
     ],
     [
-      "source/pc_sound/test/patest_maxsines.c",
-      "source/pc_sound/test/patest_maxsines.c"
+      "source/sound/pc_sound/src/common/pa_allocation.h",
+      "source/sound/pc_sound/src/common/pa_allocation.h"
     ],
     [
-      "source/pc_sound/test/patest_dsound_surround.c",
-      "source/pc_sound/test/patest_dsound_surround.c"
+      "source/sound/pc_sound/src/common/pa_trace.h",
+      "source/sound/pc_sound/src/common/pa_trace.h"
     ],
     [
-      "source/pc_sound/test/pa_minlat.c",
-      "source/pc_sound/test/pa_minlat.c"
+      "source/sound/pc_sound/src/common/pa_ringbuffer.c",
+      "source/sound/pc_sound/src/common/pa_ringbuffer.c"
     ],
     [
-      "source/pc_sound/test/patest_wasapi_eac3.c",
-      "source/pc_sound/test/patest_wasapi_eac3.c"
+      "source/sound/pc_sound/src/common/pa_util.h",
+      "source/sound/pc_sound/src/common/pa_util.h"
     ],
     [
-      "source/pc_sound/test/patest_sine_srate.c",
-      "source/pc_sound/test/patest_sine_srate.c"
+      "source/sound/pc_sound/src/common/pa_dither.h",
+      "source/sound/pc_sound/src/common/pa_dither.h"
     ],
     [
-      "source/pc_sound/test/patest_init.c",
-      "source/pc_sound/test/patest_init.c"
+      "source/sound/pc_sound/src/common/pa_debugprint.c",
+      "source/sound/pc_sound/src/common/pa_debugprint.c"
     ],
     [
-      "source/pc_sound/test/patest_converters.c",
-      "source/pc_sound/test/patest_converters.c"
+      "source/sound/pc_sound/src/common/pa_front.c",
+      "source/sound/pc_sound/src/common/pa_front.c"
     ],
     [
-      "source/pc_sound/test/patest_jack_wasapi.c",
-      "source/pc_sound/test/patest_jack_wasapi.c"
+      "source/sound/pc_sound/src/common/pa_endianness.h",
+      "source/sound/pc_sound/src/common/pa_endianness.h"
     ],
     [
-      "source/pc_sound/test/patest_multi_sine.c",
-      "source/pc_sound/test/patest_multi_sine.c"
+      "source/sound/pc_sound/src/common/pa_dither.c",
+      "source/sound/pc_sound/src/common/pa_dither.c"
     ],
     [
-      "source/pc_sound/test/patest_read_record_wasapi.c",
-      "source/pc_sound/test/patest_read_record_wasapi.c"
+      "source/sound/pc_sound/src/common/pa_trace.c",
+      "source/sound/pc_sound/src/common/pa_trace.c"
     ],
     [
-      "source/pc_sound/test/patest_sine_formats.c",
-      "source/pc_sound/test/patest_sine_formats.c"
+      "source/sound/pc_sound/src/common/pa_process.h",
+      "source/sound/pc_sound/src/common/pa_process.h"
     ],
     [
-      "source/pc_sound/test/patest_toomanysines.c",
-      "source/pc_sound/test/patest_toomanysines.c"
+      "source/sound/pc_sound/src/common/pa_memorybarrier.h",
+      "source/sound/pc_sound/src/common/pa_memorybarrier.h"
     ],
     [
-      "source/pc_sound/test/patest_long_record.c",
-      "source/pc_sound/test/patest_long_record.c"
+      "source/sound/pc_sound/src/common/pa_stream.h",
+      "source/sound/pc_sound/src/common/pa_stream.h"
     ],
     [
-      "source/pc_sound/test/patest_timing.c",
-      "source/pc_sound/test/patest_timing.c"
+      "source/sound/pc_sound/src/common/pa_types.h",
+      "source/sound/pc_sound/src/common/pa_types.h"
     ],
     [
-      "source/pc_sound/test/patest_write_stop_hang_illegal.c",
-      "source/pc_sound/test/patest_write_stop_hang_illegal.c"
+      "source/sound/pc_sound/src/hostapi/audioio/pa_unix_audioio.c",
+      "source/sound/pc_sound/src/hostapi/audioio/pa_unix_audioio.c"
     ],
     [
-      "source/pc_sound/test/patest_hang.c",
-      "source/pc_sound/test/patest_hang.c"
+      "source/sound/pc_sound/src/hostapi/wdmks/readme.txt",
+      "source/sound/pc_sound/src/hostapi/wdmks/readme.txt"
     ],
     [
-      "source/pc_sound/test/patest_clip.c",
-      "source/pc_sound/test/patest_clip.c"
+      "source/sound/pc_sound/src/hostapi/wdmks/pa_win_wdmks.c",
+      "source/sound/pc_sound/src/hostapi/wdmks/pa_win_wdmks.c"
     ],
     [
-      "source/pc_sound/test/patest_two_rates.c",
-      "source/pc_sound/test/patest_two_rates.c"
+      "source/sound/pc_sound/src/hostapi/jack/pa_jack.c",
+      "source/sound/pc_sound/src/hostapi/jack/pa_jack.c"
     ],
     [
-      "source/pc_sound/test/README.txt",
-      "source/pc_sound/test/README.txt"
+      "source/sound/pc_sound/src/hostapi/sndio/pa_sndio.c",
+      "source/sound/pc_sound/src/hostapi/sndio/pa_sndio.c"
     ],
     [
-      "source/pc_sound/test/patest_read_record.c",
-      "source/pc_sound/test/patest_read_record.c"
+      "source/sound/pc_sound/src/hostapi/oss/recplay.c",
+      "source/sound/pc_sound/src/hostapi/oss/recplay.c"
     ],
     [
-      "source/pc_sound/test/patest_stop.c",
-      "source/pc_sound/test/patest_stop.c"
+      "source/sound/pc_sound/src/hostapi/oss/low_latency_tip.txt",
+      "source/sound/pc_sound/src/hostapi/oss/low_latency_tip.txt"
     ],
     [
-      "source/pc_sound/test/patest_prime.c",
-      "source/pc_sound/test/patest_prime.c"
+      "source/sound/pc_sound/src/hostapi/oss/pa_unix_oss.c",
+      "source/sound/pc_sound/src/hostapi/oss/pa_unix_oss.c"
     ],
     [
-      "source/pc_sound/test/patest_suggested_vs_streaminfo_latency.py",
-      "source/pc_sound/test/patest_suggested_vs_streaminfo_latency.py"
+      "source/sound/pc_sound/src/hostapi/pulseaudio/pa_linux_pulseaudio_internal.h",
+      "source/sound/pc_sound/src/hostapi/pulseaudio/pa_linux_pulseaudio_internal.h"
     ],
     [
-      "source/pc_sound/test/patest_in_overflow.c",
-      "source/pc_sound/test/patest_in_overflow.c"
+      "source/sound/pc_sound/src/hostapi/pulseaudio/pa_linux_pulseaudio_block.c",
+      "source/sound/pc_sound/src/hostapi/pulseaudio/pa_linux_pulseaudio_block.c"
     ],
     [
-      "source/pc_sound/test/patest_wire.c",
-      "source/pc_sound/test/patest_wire.c"
+      "source/sound/pc_sound/src/hostapi/pulseaudio/pa_linux_pulseaudio_cb_internal.h",
+      "source/sound/pc_sound/src/hostapi/pulseaudio/pa_linux_pulseaudio_cb_internal.h"
     ],
     [
-      "source/pc_sound/test/patest_longsine.c",
-      "source/pc_sound/test/patest_longsine.c"
+      "source/sound/pc_sound/src/hostapi/pulseaudio/pa_linux_pulseaudio_cb.c",
+      "source/sound/pc_sound/src/hostapi/pulseaudio/pa_linux_pulseaudio_cb.c"
     ],
     [
-      "source/pc_sound/test/patest_dither.c",
-      "source/pc_sound/test/patest_dither.c"
+      "source/sound/pc_sound/src/hostapi/pulseaudio/pa_linux_pulseaudio_block_internal.h",
+      "source/sound/pc_sound/src/hostapi/pulseaudio/pa_linux_pulseaudio_block_internal.h"
     ],
     [
-      "source/pc_sound/test/patest_wmme_low_level_latency_params.c",
-      "source/pc_sound/test/patest_wmme_low_level_latency_params.c"
+      "source/sound/pc_sound/src/hostapi/pulseaudio/pa_linux_pulseaudio.c",
+      "source/sound/pc_sound/src/hostapi/pulseaudio/pa_linux_pulseaudio.c"
     ],
     [
-      "source/pc_sound/test/patest_latency.c",
-      "source/pc_sound/test/patest_latency.c"
+      "source/sound/pc_sound/src/hostapi/alsa/pa_linux_alsa.c",
+      "source/sound/pc_sound/src/hostapi/alsa/pa_linux_alsa.c"
     ],
     [
-      "source/pc_sound/test/patest_out_underflow.c",
-      "source/pc_sound/test/patest_out_underflow.c"
+      "source/sound/pc_sound/src/hostapi/skeleton/README.txt",
+      "source/sound/pc_sound/src/hostapi/skeleton/README.txt"
     ],
     [
-      "source/pc_sound/test/patest_buffer.c",
-      "source/pc_sound/test/patest_buffer.c"
+      "source/sound/pc_sound/src/hostapi/skeleton/pa_hostapi_skeleton.c",
+      "source/sound/pc_sound/src/hostapi/skeleton/pa_hostapi_skeleton.c"
     ],
     [
-      "source/pc_sound/test/patest_read_write_wire_wasapi.c",
-      "source/pc_sound/test/patest_read_write_wire_wasapi.c"
+      "source/sound/pc_sound/src/hostapi/asio/Pa_ASIO.pdf",
+      "source/sound/pc_sound/src/hostapi/asio/Pa_ASIO.pdf"
     ],
     [
-      "source/pc_sound/test/patest_suggested_vs_streaminfo_latency.c",
-      "source/pc_sound/test/patest_suggested_vs_streaminfo_latency.c"
+      "source/sound/pc_sound/src/hostapi/asio/iasiothiscallresolver.h",
+      "source/sound/pc_sound/src/hostapi/asio/iasiothiscallresolver.h"
     ],
     [
-      "source/pc_sound/test/patest_dsound_find_best_latency_params.c",
-      "source/pc_sound/test/patest_dsound_find_best_latency_params.c"
+      "source/sound/pc_sound/src/hostapi/asio/ASIO-README.txt",
+      "source/sound/pc_sound/src/hostapi/asio/ASIO-README.txt"
     ],
     [
-      "source/pc_sound/test/patest_wmme_find_best_latency_params.c",
-      "source/pc_sound/test/patest_wmme_find_best_latency_params.c"
+      "source/sound/pc_sound/src/hostapi/asio/Callback_adaptation_.pdf",
+      "source/sound/pc_sound/src/hostapi/asio/Callback_adaptation_.pdf"
     ],
     [
-      "source/pc_sound/test/patest_sync.c",
-      "source/pc_sound/test/patest_sync.c"
+      "source/sound/pc_sound/src/hostapi/asio/iasiothiscallresolver.cpp",
+      "source/sound/pc_sound/src/hostapi/asio/iasiothiscallresolver.cpp"
     ],
     [
-      "source/pc_sound/test/patest_mono.c",
-      "source/pc_sound/test/patest_mono.c"
+      "source/sound/pc_sound/src/hostapi/asio/pa_asio.cpp",
+      "source/sound/pc_sound/src/hostapi/asio/pa_asio.cpp"
     ],
     [
-      "source/pc_sound/test/patest_callbackstop.c",
-      "source/pc_sound/test/patest_callbackstop.c"
+      "source/sound/pc_sound/src/hostapi/asihpi/pa_linux_asihpi.c",
+      "source/sound/pc_sound/src/hostapi/asihpi/pa_linux_asihpi.c"
     ],
     [
-      "source/pc_sound/test/patest_enumerate_default_latency.c",
-      "source/pc_sound/test/patest_enumerate_default_latency.c"
+      "source/sound/pc_sound/src/hostapi/wmme/pa_win_wmme.c",
+      "source/sound/pc_sound/src/hostapi/wmme/pa_win_wmme.c"
     ],
     [
-      "source/pc_sound/test/patest_dsound_low_level_latency_params.c",
-      "source/pc_sound/test/patest_dsound_low_level_latency_params.c"
+      "source/sound/pc_sound/src/hostapi/wasapi/readme.txt",
+      "source/sound/pc_sound/src/hostapi/wasapi/readme.txt"
     ],
     [
-      "source/pc_sound/test/patest_underflow.c",
-      "source/pc_sound/test/patest_underflow.c"
+      "source/sound/pc_sound/src/hostapi/wasapi/pa_win_wasapi.c",
+      "source/sound/pc_sound/src/hostapi/wasapi/pa_win_wasapi.c"
     ],
     [
-      "source/pc_sound/test/patest1.c",
-      "source/pc_sound/test/patest1.c"
+      "source/sound/pc_sound/src/hostapi/wasapi/mingw-include/functiondiscoverykeys.h",
+      "source/sound/pc_sound/src/hostapi/wasapi/mingw-include/functiondiscoverykeys.h"
     ],
     [
-      "source/pc_sound/test/patest_start_stop.c",
-      "source/pc_sound/test/patest_start_stop.c"
+      "source/sound/pc_sound/src/hostapi/wasapi/mingw-include/ShTypes.h",
+      "source/sound/pc_sound/src/hostapi/wasapi/mingw-include/ShTypes.h"
     ],
     [
-      "source/pc_sound/test/patest_ringmix.c",
-      "source/pc_sound/test/patest_ringmix.c"
+      "source/sound/pc_sound/src/hostapi/wasapi/mingw-include/audioclient.h",
+      "source/sound/pc_sound/src/hostapi/wasapi/mingw-include/audioclient.h"
     ],
     [
-      "source/pc_sound/test/patest_sine_time.c",
-      "source/pc_sound/test/patest_sine_time.c"
+      "source/sound/pc_sound/src/hostapi/wasapi/mingw-include/sdkddkver.h",
+      "source/sound/pc_sound/src/hostapi/wasapi/mingw-include/sdkddkver.h"
     ],
     [
-      "source/pc_sound/test/patest_sine8.c",
-      "source/pc_sound/test/patest_sine8.c"
+      "source/sound/pc_sound/src/hostapi/wasapi/mingw-include/PropIdl.h",
+      "source/sound/pc_sound/src/hostapi/wasapi/mingw-include/PropIdl.h"
     ],
     [
-      "source/pc_sound/test/patest_stop_playout.c",
-      "source/pc_sound/test/patest_stop_playout.c"
+      "source/sound/pc_sound/src/hostapi/wasapi/mingw-include/endpointvolume.h",
+      "source/sound/pc_sound/src/hostapi/wasapi/mingw-include/endpointvolume.h"
     ],
     [
-      "source/pc_sound/test/README.md",
-      "source/pc_sound/test/README.md"
+      "source/sound/pc_sound/src/hostapi/wasapi/mingw-include/ks.h",
+      "source/sound/pc_sound/src/hostapi/wasapi/mingw-include/ks.h"
     ],
     [
-      "source/pc_sound/test/patest_leftright.c",
-      "source/pc_sound/test/patest_leftright.c"
+      "source/sound/pc_sound/src/hostapi/wasapi/mingw-include/functiondiscoverykeys_devpkey.h",
+      "source/sound/pc_sound/src/hostapi/wasapi/mingw-include/functiondiscoverykeys_devpkey.h"
     ],
     [
-      "source/pc_sound/test/patest_sine_channelmaps.c",
-      "source/pc_sound/test/patest_sine_channelmaps.c"
+      "source/sound/pc_sound/src/hostapi/wasapi/mingw-include/structuredquery.h",
+      "source/sound/pc_sound/src/hostapi/wasapi/mingw-include/structuredquery.h"
     ],
     [
-      "source/pc_sound/test/CMakeLists.txt",
-      "source/pc_sound/test/CMakeLists.txt"
+      "source/sound/pc_sound/src/hostapi/wasapi/mingw-include/propsys.h",
+      "source/sound/pc_sound/src/hostapi/wasapi/mingw-include/propsys.h"
     ],
     [
-      "source/pc_sound/test/patest_wasapi_ac3.c",
-      "source/pc_sound/test/patest_wasapi_ac3.c"
+      "source/sound/pc_sound/src/hostapi/wasapi/mingw-include/ksmedia.h",
+      "source/sound/pc_sound/src/hostapi/wasapi/mingw-include/ksmedia.h"
     ],
     [
-      "source/pc_sound/test/test_use_cmake/CMakeLists.txt",
-      "source/pc_sound/test/test_use_cmake/CMakeLists.txt"
+      "source/sound/pc_sound/src/hostapi/wasapi/mingw-include/devicetopology.h",
+      "source/sound/pc_sound/src/hostapi/wasapi/mingw-include/devicetopology.h"
     ],
     [
-      "source/pc_sound/include/pa_win_wmme.h",
-      "source/pc_sound/include/pa_win_wmme.h"
+      "source/sound/pc_sound/src/hostapi/wasapi/mingw-include/ksguid.h",
+      "source/sound/pc_sound/src/hostapi/wasapi/mingw-include/ksguid.h"
     ],
     [
-      "source/pc_sound/include/pa_win_ds.h",
-      "source/pc_sound/include/pa_win_ds.h"
+      "source/sound/pc_sound/src/hostapi/wasapi/mingw-include/propkeydef.h",
+      "source/sound/pc_sound/src/hostapi/wasapi/mingw-include/propkeydef.h"
     ],
     [
-      "source/pc_sound/include/pa_mac_core.h",
-      "source/pc_sound/include/pa_mac_core.h"
+      "source/sound/pc_sound/src/hostapi/wasapi/mingw-include/rpcsal.h",
+      "source/sound/pc_sound/src/hostapi/wasapi/mingw-include/rpcsal.h"
     ],
     [
-      "source/pc_sound/include/pa_win_wasapi.h",
-      "source/pc_sound/include/pa_win_wasapi.h"
+      "source/sound/pc_sound/src/hostapi/wasapi/mingw-include/mmdeviceapi.h",
+      "source/sound/pc_sound/src/hostapi/wasapi/mingw-include/mmdeviceapi.h"
     ],
     [
-      "source/pc_sound/include/pa_win_wdmks.h",
-      "source/pc_sound/include/pa_win_wdmks.h"
+      "source/sound/pc_sound/src/hostapi/wasapi/mingw-include/ksproxy.h",
+      "source/sound/pc_sound/src/hostapi/wasapi/mingw-include/ksproxy.h"
     ],
     [
-      "source/pc_sound/include/pa_linux_pulseaudio.h",
-      "source/pc_sound/include/pa_linux_pulseaudio.h"
+      "source/sound/pc_sound/src/hostapi/wasapi/mingw-include/sal.h",
+      "source/sound/pc_sound/src/hostapi/wasapi/mingw-include/sal.h"
     ],
     [
-      "source/pc_sound/include/portaudio.h",
-      "source/pc_sound/include/portaudio.h"
+      "source/sound/pc_sound/src/hostapi/wasapi/mingw-include/winapifamily.h",
+      "source/sound/pc_sound/src/hostapi/wasapi/mingw-include/winapifamily.h"
     ],
     [
-      "source/pc_sound/include/pa_jack.h",
-      "source/pc_sound/include/pa_jack.h"
+      "source/sound/pc_sound/src/hostapi/wasapi/mingw-include/propkey.h",
+      "source/sound/pc_sound/src/hostapi/wasapi/mingw-include/propkey.h"
     ],
     [
-      "source/pc_sound/include/pa_win_waveformat.h",
-      "source/pc_sound/include/pa_win_waveformat.h"
+      "source/sound/pc_sound/src/hostapi/wasapi/mingw-include/AudioSessionTypes.h",
+      "source/sound/pc_sound/src/hostapi/wasapi/mingw-include/AudioSessionTypes.h"
     ],
     [
-      "source/pc_sound/include/pa_linux_alsa.h",
-      "source/pc_sound/include/pa_linux_alsa.h"
+      "source/sound/pc_sound/src/hostapi/wasapi/mingw-include/ksuuids.h",
+      "source/sound/pc_sound/src/hostapi/wasapi/mingw-include/ksuuids.h"
     ],
     [
-      "source/pc_sound/include/pa_asio.h",
-      "source/pc_sound/include/pa_asio.h"
+      "source/sound/pc_sound/src/hostapi/dsound/pa_win_ds.c",
+      "source/sound/pc_sound/src/hostapi/dsound/pa_win_ds.c"
     ],
     [
-      "source/pc_sound/qa/paqa_dither.c",
-      "source/pc_sound/qa/paqa_dither.c"
+      "source/sound/pc_sound/src/hostapi/dsound/pa_win_ds_dynlink.h",
+      "source/sound/pc_sound/src/hostapi/dsound/pa_win_ds_dynlink.h"
     ],
     [
-      "source/pc_sound/qa/paqa_macros.h",
-      "source/pc_sound/qa/paqa_macros.h"
+      "source/sound/pc_sound/src/hostapi/dsound/pa_win_ds_dynlink.c",
+      "source/sound/pc_sound/src/hostapi/dsound/pa_win_ds_dynlink.c"
     ],
     [
-      "source/pc_sound/qa/paqa_devs.c",
-      "source/pc_sound/qa/paqa_devs.c"
+      "source/sound/pc_sound/src/hostapi/coreaudio/pa_mac_core_internal.h",
+      "source/sound/pc_sound/src/hostapi/coreaudio/pa_mac_core_internal.h"
     ],
     [
-      "source/pc_sound/qa/paqa_latency.c",
-      "source/pc_sound/qa/paqa_latency.c"
+      "source/sound/pc_sound/src/hostapi/coreaudio/pa_mac_core.c",
+      "source/sound/pc_sound/src/hostapi/coreaudio/pa_mac_core.c"
     ],
     [
-      "source/pc_sound/qa/paqa_errs.c",
-      "source/pc_sound/qa/paqa_errs.c"
+      "source/sound/pc_sound/src/hostapi/coreaudio/pa_mac_core_utilities.c",
+      "source/sound/pc_sound/src/hostapi/coreaudio/pa_mac_core_utilities.c"
     ],
     [
-      "source/pc_sound/qa/CMakeLists.txt",
-      "source/pc_sound/qa/CMakeLists.txt"
+      "source/sound/pc_sound/src/hostapi/coreaudio/pa_mac_core_blocking.c",
+      "source/sound/pc_sound/src/hostapi/coreaudio/pa_mac_core_blocking.c"
     ],
     [
-      "source/pc_sound/qa/loopback/README.txt",
-      "source/pc_sound/qa/loopback/README.txt"
+      "source/sound/pc_sound/src/hostapi/coreaudio/pa_mac_core_blocking.h",
+      "source/sound/pc_sound/src/hostapi/coreaudio/pa_mac_core_blocking.h"
     ],
     [
-      "source/pc_sound/qa/loopback/CMakeLists.txt",
-      "source/pc_sound/qa/loopback/CMakeLists.txt"
+      "source/sound/pc_sound/src/hostapi/coreaudio/notes.txt",
+      "source/sound/pc_sound/src/hostapi/coreaudio/notes.txt"
     ],
     [
-      "source/pc_sound/qa/loopback/src/test_audio_analyzer.h",
-      "source/pc_sound/qa/loopback/src/test_audio_analyzer.h"
-    ],
-    [
-      "source/pc_sound/qa/loopback/src/biquad_filter.h",
-      "source/pc_sound/qa/loopback/src/biquad_filter.h"
-    ],
-    [
-      "source/pc_sound/qa/loopback/src/paqa.c",
-      "source/pc_sound/qa/loopback/src/paqa.c"
-    ],
-    [
-      "source/pc_sound/qa/loopback/src/paqa_tools.c",
-      "source/pc_sound/qa/loopback/src/paqa_tools.c"
-    ],
-    [
-      "source/pc_sound/qa/loopback/src/qa_tools.h",
-      "source/pc_sound/qa/loopback/src/qa_tools.h"
-    ],
-    [
-      "source/pc_sound/qa/loopback/src/biquad_filter.c",
-      "source/pc_sound/qa/loopback/src/biquad_filter.c"
-    ],
-    [
-      "source/pc_sound/qa/loopback/src/write_wav.h",
-      "source/pc_sound/qa/loopback/src/write_wav.h"
-    ],
-    [
-      "source/pc_sound/qa/loopback/src/write_wav.c",
-      "source/pc_sound/qa/loopback/src/write_wav.c"
-    ],
-    [
-      "source/pc_sound/qa/loopback/src/audio_analyzer.h",
-      "source/pc_sound/qa/loopback/src/audio_analyzer.h"
-    ],
-    [
-      "source/pc_sound/qa/loopback/src/test_audio_analyzer.c",
-      "source/pc_sound/qa/loopback/src/test_audio_analyzer.c"
-    ],
-    [
-      "source/pc_sound/qa/loopback/src/audio_analyzer.c",
-      "source/pc_sound/qa/loopback/src/audio_analyzer.c"
-    ],
-    [
-      "source/pc_sound/qa/loopback/src/paqa_tools.h",
-      "source/pc_sound/qa/loopback/src/paqa_tools.h"
-    ],
-    [
-      "source/pc_sound/doc/utils/checkfiledocs.py",
-      "source/pc_sound/doc/utils/checkfiledocs.py"
-    ],
-    [
-      "source/pc_sound/doc/src/api_overview.dox",
-      "source/pc_sound/doc/src/api_overview.dox"
-    ],
-    [
-      "source/pc_sound/doc/src/mainpage.dox",
-      "source/pc_sound/doc/src/mainpage.dox"
-    ],
-    [
-      "source/pc_sound/doc/src/license.dox",
-      "source/pc_sound/doc/src/license.dox"
-    ],
-    [
-      "source/pc_sound/doc/src/srcguide.dox",
-      "source/pc_sound/doc/src/srcguide.dox"
-    ],
-    [
-      "source/pc_sound/doc/src/images/portaudio-external-architecture-diagram.png",
-      "source/pc_sound/doc/src/images/portaudio-external-architecture-diagram.png"
-    ],
-    [
-      "source/pc_sound/doc/src/tutorial/querying_devices.dox",
-      "source/pc_sound/doc/src/tutorial/querying_devices.dox"
-    ],
-    [
-      "source/pc_sound/doc/src/tutorial/terminating_portaudio.dox",
-      "source/pc_sound/doc/src/tutorial/terminating_portaudio.dox"
-    ],
-    [
-      "source/pc_sound/doc/src/tutorial/writing_a_callback.dox",
-      "source/pc_sound/doc/src/tutorial/writing_a_callback.dox"
-    ],
-    [
-      "source/pc_sound/doc/src/tutorial/blocking_read_write.dox",
-      "source/pc_sound/doc/src/tutorial/blocking_read_write.dox"
-    ],
-    [
-      "source/pc_sound/doc/src/tutorial/exploring.dox",
-      "source/pc_sound/doc/src/tutorial/exploring.dox"
-    ],
-    [
-      "source/pc_sound/doc/src/tutorial/compile_windows_mingw.dox",
-      "source/pc_sound/doc/src/tutorial/compile_windows_mingw.dox"
-    ],
-    [
-      "source/pc_sound/doc/src/tutorial/compile_windows_asio_msvc.dox",
-      "source/pc_sound/doc/src/tutorial/compile_windows_asio_msvc.dox"
-    ],
-    [
-      "source/pc_sound/doc/src/tutorial/compile_linux.dox",
-      "source/pc_sound/doc/src/tutorial/compile_linux.dox"
-    ],
-    [
-      "source/pc_sound/doc/src/tutorial/compile_windows.dox",
-      "source/pc_sound/doc/src/tutorial/compile_windows.dox"
-    ],
-    [
-      "source/pc_sound/doc/src/tutorial/open_default_stream.dox",
-      "source/pc_sound/doc/src/tutorial/open_default_stream.dox"
-    ],
-    [
-      "source/pc_sound/doc/src/tutorial/compile_mac_coreaudio.dox",
-      "source/pc_sound/doc/src/tutorial/compile_mac_coreaudio.dox"
-    ],
-    [
-      "source/pc_sound/doc/src/tutorial/initializing_portaudio.dox",
-      "source/pc_sound/doc/src/tutorial/initializing_portaudio.dox"
-    ],
-    [
-      "source/pc_sound/doc/src/tutorial/compile_windows_mingw-w64.dox",
-      "source/pc_sound/doc/src/tutorial/compile_windows_mingw-w64.dox"
-    ],
-    [
-      "source/pc_sound/doc/src/tutorial/start_stop_abort.dox",
-      "source/pc_sound/doc/src/tutorial/start_stop_abort.dox"
-    ],
-    [
-      "source/pc_sound/doc/src/tutorial/compile_cmake.dox",
-      "source/pc_sound/doc/src/tutorial/compile_cmake.dox"
-    ],
-    [
-      "source/pc_sound/doc/src/tutorial/utility_functions.dox",
-      "source/pc_sound/doc/src/tutorial/utility_functions.dox"
-    ],
-    [
-      "source/pc_sound/doc/src/tutorial/tutorial_start.dox",
-      "source/pc_sound/doc/src/tutorial/tutorial_start.dox"
-    ],
-    [
-      "source/pc_sound/examples/paex_sine.c",
-      "source/pc_sound/examples/paex_sine.c"
-    ],
-    [
-      "source/pc_sound/examples/pa_fuzz.c",
-      "source/pc_sound/examples/pa_fuzz.c"
-    ],
-    [
-      "source/pc_sound/examples/paex_record.c",
-      "source/pc_sound/examples/paex_record.c"
-    ],
-    [
-      "source/pc_sound/examples/paex_saw.c",
-      "source/pc_sound/examples/paex_saw.c"
-    ],
-    [
-      "source/pc_sound/examples/paex_wmme_ac3.c",
-      "source/pc_sound/examples/paex_wmme_ac3.c"
-    ],
-    [
-      "source/pc_sound/examples/paex_mono_asio_channel_select.c",
-      "source/pc_sound/examples/paex_mono_asio_channel_select.c"
-    ],
-    [
-      "source/pc_sound/examples/paex_wmme_surround.c",
-      "source/pc_sound/examples/paex_wmme_surround.c"
-    ],
-    [
-      "source/pc_sound/examples/paex_pink.c",
-      "source/pc_sound/examples/paex_pink.c"
-    ],
-    [
-      "source/pc_sound/examples/paex_ocean_shore.c",
-      "source/pc_sound/examples/paex_ocean_shore.c"
-    ],
-    [
-      "source/pc_sound/examples/paex_read_write_wire.c",
-      "source/pc_sound/examples/paex_read_write_wire.c"
-    ],
-    [
-      "source/pc_sound/examples/paex_write_sine_nonint.c",
-      "source/pc_sound/examples/paex_write_sine_nonint.c"
-    ],
-    [
-      "source/pc_sound/examples/pa_devs.c",
-      "source/pc_sound/examples/pa_devs.c"
-    ],
-    [
-      "source/pc_sound/examples/paex_record_file.c",
-      "source/pc_sound/examples/paex_record_file.c"
-    ],
-    [
-      "source/pc_sound/examples/paex_write_sine.c",
-      "source/pc_sound/examples/paex_write_sine.c"
-    ],
-    [
-      "source/pc_sound/examples/paex_sine_c++.cpp",
-      "source/pc_sound/examples/paex_sine_c++.cpp"
-    ],
-    [
-      "source/pc_sound/examples/CMakeLists.txt",
-      "source/pc_sound/examples/CMakeLists.txt"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/ChangeLog",
-      "source/pc_sound/bindings/cpp/ChangeLog"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/configure.ac",
-      "source/pc_sound/bindings/cpp/configure.ac"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/Makefile.in",
-      "source/pc_sound/bindings/cpp/Makefile.in"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/aclocal.m4",
-      "source/pc_sound/bindings/cpp/aclocal.m4"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/NEWS",
-      "source/pc_sound/bindings/cpp/NEWS"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/portaudiocpp.pc.in",
-      "source/pc_sound/bindings/cpp/portaudiocpp.pc.in"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/README",
-      "source/pc_sound/bindings/cpp/README"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/AUTHORS",
-      "source/pc_sound/bindings/cpp/AUTHORS"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/COPYING",
-      "source/pc_sound/bindings/cpp/COPYING"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/configure",
-      "source/pc_sound/bindings/cpp/configure"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/INSTALL",
-      "source/pc_sound/bindings/cpp/INSTALL"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/Makefile.am",
-      "source/pc_sound/bindings/cpp/Makefile.am"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/CMakeLists.txt",
-      "source/pc_sound/bindings/cpp/CMakeLists.txt"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/bin/Makefile.in",
-      "source/pc_sound/bindings/cpp/bin/Makefile.in"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/bin/Makefile.am",
-      "source/pc_sound/bindings/cpp/bin/Makefile.am"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/source/portaudiocpp/StreamParameters.cxx",
-      "source/pc_sound/bindings/cpp/source/portaudiocpp/StreamParameters.cxx"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/source/portaudiocpp/CallbackInterface.cxx",
-      "source/pc_sound/bindings/cpp/source/portaudiocpp/CallbackInterface.cxx"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/source/portaudiocpp/MemFunCallbackStream.cxx",
-      "source/pc_sound/bindings/cpp/source/portaudiocpp/MemFunCallbackStream.cxx"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/source/portaudiocpp/Device.cxx",
-      "source/pc_sound/bindings/cpp/source/portaudiocpp/Device.cxx"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/source/portaudiocpp/DirectionSpecificStreamParameters.cxx",
-      "source/pc_sound/bindings/cpp/source/portaudiocpp/DirectionSpecificStreamParameters.cxx"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/source/portaudiocpp/SystemHostApiIterator.cxx",
-      "source/pc_sound/bindings/cpp/source/portaudiocpp/SystemHostApiIterator.cxx"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/source/portaudiocpp/InterfaceCallbackStream.cxx",
-      "source/pc_sound/bindings/cpp/source/portaudiocpp/InterfaceCallbackStream.cxx"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/source/portaudiocpp/Exception.cxx",
-      "source/pc_sound/bindings/cpp/source/portaudiocpp/Exception.cxx"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/source/portaudiocpp/HostApi.cxx",
-      "source/pc_sound/bindings/cpp/source/portaudiocpp/HostApi.cxx"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/source/portaudiocpp/AsioDeviceAdapter.cxx",
-      "source/pc_sound/bindings/cpp/source/portaudiocpp/AsioDeviceAdapter.cxx"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/source/portaudiocpp/CallbackStream.cxx",
-      "source/pc_sound/bindings/cpp/source/portaudiocpp/CallbackStream.cxx"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/source/portaudiocpp/BlockingStream.cxx",
-      "source/pc_sound/bindings/cpp/source/portaudiocpp/BlockingStream.cxx"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/source/portaudiocpp/SystemDeviceIterator.cxx",
-      "source/pc_sound/bindings/cpp/source/portaudiocpp/SystemDeviceIterator.cxx"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/source/portaudiocpp/Stream.cxx",
-      "source/pc_sound/bindings/cpp/source/portaudiocpp/Stream.cxx"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/source/portaudiocpp/CFunCallbackStream.cxx",
-      "source/pc_sound/bindings/cpp/source/portaudiocpp/CFunCallbackStream.cxx"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/source/portaudiocpp/System.cxx",
-      "source/pc_sound/bindings/cpp/source/portaudiocpp/System.cxx"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/source/portaudiocpp/CppFunCallbackStream.cxx",
-      "source/pc_sound/bindings/cpp/source/portaudiocpp/CppFunCallbackStream.cxx"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/source/portaudiocpp/CMakeLists.txt",
-      "source/pc_sound/bindings/cpp/source/portaudiocpp/CMakeLists.txt"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/include/Makefile.in",
-      "source/pc_sound/bindings/cpp/include/Makefile.in"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/include/Makefile.am",
-      "source/pc_sound/bindings/cpp/include/Makefile.am"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/include/portaudiocpp/Device.hxx",
-      "source/pc_sound/bindings/cpp/include/portaudiocpp/Device.hxx"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/include/portaudiocpp/SystemDeviceIterator.hxx",
-      "source/pc_sound/bindings/cpp/include/portaudiocpp/SystemDeviceIterator.hxx"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/include/portaudiocpp/SystemHostApiIterator.hxx",
-      "source/pc_sound/bindings/cpp/include/portaudiocpp/SystemHostApiIterator.hxx"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/include/portaudiocpp/SampleDataFormat.hxx",
-      "source/pc_sound/bindings/cpp/include/portaudiocpp/SampleDataFormat.hxx"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/include/portaudiocpp/PortAudioCpp.hxx",
-      "source/pc_sound/bindings/cpp/include/portaudiocpp/PortAudioCpp.hxx"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/include/portaudiocpp/StreamParameters.hxx",
-      "source/pc_sound/bindings/cpp/include/portaudiocpp/StreamParameters.hxx"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/include/portaudiocpp/BlockingStream.hxx",
-      "source/pc_sound/bindings/cpp/include/portaudiocpp/BlockingStream.hxx"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/include/portaudiocpp/DirectionSpecificStreamParameters.hxx",
-      "source/pc_sound/bindings/cpp/include/portaudiocpp/DirectionSpecificStreamParameters.hxx"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/include/portaudiocpp/CppFunCallbackStream.hxx",
-      "source/pc_sound/bindings/cpp/include/portaudiocpp/CppFunCallbackStream.hxx"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/include/portaudiocpp/HostApi.hxx",
-      "source/pc_sound/bindings/cpp/include/portaudiocpp/HostApi.hxx"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/include/portaudiocpp/CFunCallbackStream.hxx",
-      "source/pc_sound/bindings/cpp/include/portaudiocpp/CFunCallbackStream.hxx"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/include/portaudiocpp/CallbackStream.hxx",
-      "source/pc_sound/bindings/cpp/include/portaudiocpp/CallbackStream.hxx"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/include/portaudiocpp/Stream.hxx",
-      "source/pc_sound/bindings/cpp/include/portaudiocpp/Stream.hxx"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/include/portaudiocpp/CallbackInterface.hxx",
-      "source/pc_sound/bindings/cpp/include/portaudiocpp/CallbackInterface.hxx"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/include/portaudiocpp/System.hxx",
-      "source/pc_sound/bindings/cpp/include/portaudiocpp/System.hxx"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/include/portaudiocpp/Exception.hxx",
-      "source/pc_sound/bindings/cpp/include/portaudiocpp/Exception.hxx"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/include/portaudiocpp/MemFunCallbackStream.hxx",
-      "source/pc_sound/bindings/cpp/include/portaudiocpp/MemFunCallbackStream.hxx"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/include/portaudiocpp/InterfaceCallbackStream.hxx",
-      "source/pc_sound/bindings/cpp/include/portaudiocpp/InterfaceCallbackStream.hxx"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/include/portaudiocpp/AsioDeviceAdapter.hxx",
-      "source/pc_sound/bindings/cpp/include/portaudiocpp/AsioDeviceAdapter.hxx"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/include/portaudiocpp/AutoSystem.hxx",
-      "source/pc_sound/bindings/cpp/include/portaudiocpp/AutoSystem.hxx"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/example/sine.cxx",
-      "source/pc_sound/bindings/cpp/example/sine.cxx"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/example/devs.cxx",
-      "source/pc_sound/bindings/cpp/example/devs.cxx"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/lib/Makefile.in",
-      "source/pc_sound/bindings/cpp/lib/Makefile.in"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/lib/Makefile.am",
-      "source/pc_sound/bindings/cpp/lib/Makefile.am"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/doc/Makefile.in",
-      "source/pc_sound/bindings/cpp/doc/Makefile.in"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/doc/README",
-      "source/pc_sound/bindings/cpp/doc/README"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/doc/config.doxy",
-      "source/pc_sound/bindings/cpp/doc/config.doxy"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/doc/config.doxy.linux",
-      "source/pc_sound/bindings/cpp/doc/config.doxy.linux"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/doc/Makefile.am",
-      "source/pc_sound/bindings/cpp/doc/Makefile.am"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/build/gnu/configure.ac",
-      "source/pc_sound/bindings/cpp/build/gnu/configure.ac"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/build/gnu/Makefile.in",
-      "source/pc_sound/bindings/cpp/build/gnu/Makefile.in"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/build/gnu/aclocal.m4",
-      "source/pc_sound/bindings/cpp/build/gnu/aclocal.m4"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/build/gnu/install-sh",
-      "source/pc_sound/bindings/cpp/build/gnu/install-sh"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/build/gnu/config.sub",
-      "source/pc_sound/bindings/cpp/build/gnu/config.sub"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/build/gnu/configure",
-      "source/pc_sound/bindings/cpp/build/gnu/configure"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/build/gnu/config.guess",
-      "source/pc_sound/bindings/cpp/build/gnu/config.guess"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/build/gnu/OUT_OF_DATE",
-      "source/pc_sound/bindings/cpp/build/gnu/OUT_OF_DATE"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/build/vc7_1/sine_example.sln",
-      "source/pc_sound/bindings/cpp/build/vc7_1/sine_example.sln"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/build/vc7_1/static_library.vcproj",
-      "source/pc_sound/bindings/cpp/build/vc7_1/static_library.vcproj"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/build/vc7_1/devs_example.sln",
-      "source/pc_sound/bindings/cpp/build/vc7_1/devs_example.sln"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/build/vc7_1/devs_example.vcproj",
-      "source/pc_sound/bindings/cpp/build/vc7_1/devs_example.vcproj"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/build/vc7_1/static_library.sln",
-      "source/pc_sound/bindings/cpp/build/vc7_1/static_library.sln"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/build/vc7_1/sine_example.vcproj",
-      "source/pc_sound/bindings/cpp/build/vc7_1/sine_example.vcproj"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/build/vc6/sine_example.dsw",
-      "source/pc_sound/bindings/cpp/build/vc6/sine_example.dsw"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/build/vc6/sine_example.dsp",
-      "source/pc_sound/bindings/cpp/build/vc6/sine_example.dsp"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/build/vc6/devs_example.dsp",
-      "source/pc_sound/bindings/cpp/build/vc6/devs_example.dsp"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/build/vc6/static_library.dsp",
-      "source/pc_sound/bindings/cpp/build/vc6/static_library.dsp"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/build/vc6/static_library.dsw",
-      "source/pc_sound/bindings/cpp/build/vc6/static_library.dsw"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/build/vc6/devs_example.dsw",
-      "source/pc_sound/bindings/cpp/build/vc6/devs_example.dsw"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/build/vc7/OUT_OF_DATE",
-      "source/pc_sound/bindings/cpp/build/vc7/OUT_OF_DATE"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/cmake/portaudiocpp.pc.in",
-      "source/pc_sound/bindings/cpp/cmake/portaudiocpp.pc.in"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/cmake/PortAudioCppConfig.cmake.in",
-      "source/pc_sound/bindings/cpp/cmake/PortAudioCppConfig.cmake.in"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/cmake/modules/FindASIO.cmake",
-      "source/pc_sound/bindings/cpp/cmake/modules/FindASIO.cmake"
-    ],
-    [
-      "source/pc_sound/bindings/cpp/cmake/modules/FindPortAudio.cmake",
-      "source/pc_sound/bindings/cpp/cmake/modules/FindPortAudio.cmake"
-    ],
-    [
-      "source/pc_sound/cmake/portaudio.def.in",
-      "source/pc_sound/cmake/portaudio.def.in"
-    ],
-    [
-      "source/pc_sound/cmake/portaudio-2.0.pc.in",
-      "source/pc_sound/cmake/portaudio-2.0.pc.in"
-    ],
-    [
-      "source/pc_sound/cmake/cmake_uninstall.cmake.in",
-      "source/pc_sound/cmake/cmake_uninstall.cmake.in"
-    ],
-    [
-      "source/pc_sound/cmake/PortAudioConfig.cmake.in",
-      "source/pc_sound/cmake/PortAudioConfig.cmake.in"
-    ],
-    [
-      "source/pc_sound/cmake/modules/FindPulseAudio.cmake",
-      "source/pc_sound/cmake/modules/FindPulseAudio.cmake"
-    ],
-    [
-      "source/pc_sound/cmake/modules/FindRegex.cmake",
-      "source/pc_sound/cmake/modules/FindRegex.cmake"
-    ],
-    [
-      "source/pc_sound/cmake/modules/FindASIO.cmake",
-      "source/pc_sound/cmake/modules/FindASIO.cmake"
-    ],
-    [
-      "source/pc_sound/cmake/modules/FindOSS.cmake",
-      "source/pc_sound/cmake/modules/FindOSS.cmake"
-    ],
-    [
-      "source/pc_sound/cmake/modules/FindJACK.cmake",
-      "source/pc_sound/cmake/modules/FindJACK.cmake"
-    ],
-    [
-      "source/pc_sound/src/os/win/pa_win_version.h",
-      "source/pc_sound/src/os/win/pa_win_version.h"
-    ],
-    [
-      "source/pc_sound/src/os/win/pa_win_waveformat.c",
-      "source/pc_sound/src/os/win/pa_win_waveformat.c"
-    ],
-    [
-      "source/pc_sound/src/os/win/pa_win_version.c",
-      "source/pc_sound/src/os/win/pa_win_version.c"
-    ],
-    [
-      "source/pc_sound/src/os/win/pa_x86_plain_converters.c",
-      "source/pc_sound/src/os/win/pa_x86_plain_converters.c"
-    ],
-    [
-      "source/pc_sound/src/os/win/pa_win_util.c",
-      "source/pc_sound/src/os/win/pa_win_util.c"
-    ],
-    [
-      "source/pc_sound/src/os/win/pa_win_hostapis.c",
-      "source/pc_sound/src/os/win/pa_win_hostapis.c"
-    ],
-    [
-      "source/pc_sound/src/os/win/pa_win_util.h",
-      "source/pc_sound/src/os/win/pa_win_util.h"
-    ],
-    [
-      "source/pc_sound/src/os/win/pa_win_coinitialize.c",
-      "source/pc_sound/src/os/win/pa_win_coinitialize.c"
-    ],
-    [
-      "source/pc_sound/src/os/win/pa_win_wdmks_utils.h",
-      "source/pc_sound/src/os/win/pa_win_wdmks_utils.h"
-    ],
-    [
-      "source/pc_sound/src/os/win/pa_win_wdmks_utils.c",
-      "source/pc_sound/src/os/win/pa_win_wdmks_utils.c"
-    ],
-    [
-      "source/pc_sound/src/os/win/pa_win_coinitialize.h",
-      "source/pc_sound/src/os/win/pa_win_coinitialize.h"
-    ],
-    [
-      "source/pc_sound/src/os/win/pa_x86_plain_converters.h",
-      "source/pc_sound/src/os/win/pa_x86_plain_converters.h"
-    ],
-    [
-      "source/pc_sound/src/os/unix/pa_unix_util.c",
-      "source/pc_sound/src/os/unix/pa_unix_util.c"
-    ],
-    [
-      "source/pc_sound/src/os/unix/pa_unix_util.h",
-      "source/pc_sound/src/os/unix/pa_unix_util.h"
-    ],
-    [
-      "source/pc_sound/src/os/unix/pa_pthread_util.h",
-      "source/pc_sound/src/os/unix/pa_pthread_util.h"
-    ],
-    [
-      "source/pc_sound/src/os/unix/pa_pthread_util.c",
-      "source/pc_sound/src/os/unix/pa_pthread_util.c"
-    ],
-    [
-      "source/pc_sound/src/os/unix/pa_unix_hostapis.c",
-      "source/pc_sound/src/os/unix/pa_unix_hostapis.c"
-    ],
-    [
-      "source/pc_sound/src/common/pa_process.c",
-      "source/pc_sound/src/common/pa_process.c"
-    ],
-    [
-      "source/pc_sound/src/common/pa_allocation.c",
-      "source/pc_sound/src/common/pa_allocation.c"
-    ],
-    [
-      "source/pc_sound/src/common/pa_converters.h",
-      "source/pc_sound/src/common/pa_converters.h"
-    ],
-    [
-      "source/pc_sound/src/common/pa_ringbuffer.h",
-      "source/pc_sound/src/common/pa_ringbuffer.h"
-    ],
-    [
-      "source/pc_sound/src/common/pa_hostapi.h",
-      "source/pc_sound/src/common/pa_hostapi.h"
-    ],
-    [
-      "source/pc_sound/src/common/pa_cpuload.c",
-      "source/pc_sound/src/common/pa_cpuload.c"
-    ],
-    [
-      "source/pc_sound/src/common/pa_cpuload.h",
-      "source/pc_sound/src/common/pa_cpuload.h"
-    ],
-    [
-      "source/pc_sound/src/common/pa_gitrevision.h",
-      "source/pc_sound/src/common/pa_gitrevision.h"
-    ],
-    [
-      "source/pc_sound/src/common/pa_debugprint.h",
-      "source/pc_sound/src/common/pa_debugprint.h"
-    ],
-    [
-      "source/pc_sound/src/common/pa_stream.c",
-      "source/pc_sound/src/common/pa_stream.c"
-    ],
-    [
-      "source/pc_sound/src/common/pa_converters.c",
-      "source/pc_sound/src/common/pa_converters.c"
-    ],
-    [
-      "source/pc_sound/src/common/pa_allocation.h",
-      "source/pc_sound/src/common/pa_allocation.h"
-    ],
-    [
-      "source/pc_sound/src/common/pa_trace.h",
-      "source/pc_sound/src/common/pa_trace.h"
-    ],
-    [
-      "source/pc_sound/src/common/pa_ringbuffer.c",
-      "source/pc_sound/src/common/pa_ringbuffer.c"
-    ],
-    [
-      "source/pc_sound/src/common/pa_util.h",
-      "source/pc_sound/src/common/pa_util.h"
-    ],
-    [
-      "source/pc_sound/src/common/pa_dither.h",
-      "source/pc_sound/src/common/pa_dither.h"
-    ],
-    [
-      "source/pc_sound/src/common/pa_debugprint.c",
-      "source/pc_sound/src/common/pa_debugprint.c"
-    ],
-    [
-      "source/pc_sound/src/common/pa_front.c",
-      "source/pc_sound/src/common/pa_front.c"
-    ],
-    [
-      "source/pc_sound/src/common/pa_endianness.h",
-      "source/pc_sound/src/common/pa_endianness.h"
-    ],
-    [
-      "source/pc_sound/src/common/pa_dither.c",
-      "source/pc_sound/src/common/pa_dither.c"
-    ],
-    [
-      "source/pc_sound/src/common/pa_trace.c",
-      "source/pc_sound/src/common/pa_trace.c"
-    ],
-    [
-      "source/pc_sound/src/common/pa_process.h",
-      "source/pc_sound/src/common/pa_process.h"
-    ],
-    [
-      "source/pc_sound/src/common/pa_memorybarrier.h",
-      "source/pc_sound/src/common/pa_memorybarrier.h"
-    ],
-    [
-      "source/pc_sound/src/common/pa_stream.h",
-      "source/pc_sound/src/common/pa_stream.h"
-    ],
-    [
-      "source/pc_sound/src/common/pa_types.h",
-      "source/pc_sound/src/common/pa_types.h"
-    ],
-    [
-      "source/pc_sound/src/hostapi/audioio/pa_unix_audioio.c",
-      "source/pc_sound/src/hostapi/audioio/pa_unix_audioio.c"
-    ],
-    [
-      "source/pc_sound/src/hostapi/wdmks/readme.txt",
-      "source/pc_sound/src/hostapi/wdmks/readme.txt"
-    ],
-    [
-      "source/pc_sound/src/hostapi/wdmks/pa_win_wdmks.c",
-      "source/pc_sound/src/hostapi/wdmks/pa_win_wdmks.c"
-    ],
-    [
-      "source/pc_sound/src/hostapi/jack/pa_jack.c",
-      "source/pc_sound/src/hostapi/jack/pa_jack.c"
-    ],
-    [
-      "source/pc_sound/src/hostapi/sndio/pa_sndio.c",
-      "source/pc_sound/src/hostapi/sndio/pa_sndio.c"
-    ],
-    [
-      "source/pc_sound/src/hostapi/oss/recplay.c",
-      "source/pc_sound/src/hostapi/oss/recplay.c"
-    ],
-    [
-      "source/pc_sound/src/hostapi/oss/low_latency_tip.txt",
-      "source/pc_sound/src/hostapi/oss/low_latency_tip.txt"
-    ],
-    [
-      "source/pc_sound/src/hostapi/oss/pa_unix_oss.c",
-      "source/pc_sound/src/hostapi/oss/pa_unix_oss.c"
-    ],
-    [
-      "source/pc_sound/src/hostapi/pulseaudio/pa_linux_pulseaudio_internal.h",
-      "source/pc_sound/src/hostapi/pulseaudio/pa_linux_pulseaudio_internal.h"
-    ],
-    [
-      "source/pc_sound/src/hostapi/pulseaudio/pa_linux_pulseaudio_block.c",
-      "source/pc_sound/src/hostapi/pulseaudio/pa_linux_pulseaudio_block.c"
-    ],
-    [
-      "source/pc_sound/src/hostapi/pulseaudio/pa_linux_pulseaudio_cb_internal.h",
-      "source/pc_sound/src/hostapi/pulseaudio/pa_linux_pulseaudio_cb_internal.h"
-    ],
-    [
-      "source/pc_sound/src/hostapi/pulseaudio/pa_linux_pulseaudio_cb.c",
-      "source/pc_sound/src/hostapi/pulseaudio/pa_linux_pulseaudio_cb.c"
-    ],
-    [
-      "source/pc_sound/src/hostapi/pulseaudio/pa_linux_pulseaudio_block_internal.h",
-      "source/pc_sound/src/hostapi/pulseaudio/pa_linux_pulseaudio_block_internal.h"
-    ],
-    [
-      "source/pc_sound/src/hostapi/pulseaudio/pa_linux_pulseaudio.c",
-      "source/pc_sound/src/hostapi/pulseaudio/pa_linux_pulseaudio.c"
-    ],
-    [
-      "source/pc_sound/src/hostapi/alsa/pa_linux_alsa.c",
-      "source/pc_sound/src/hostapi/alsa/pa_linux_alsa.c"
-    ],
-    [
-      "source/pc_sound/src/hostapi/skeleton/README.txt",
-      "source/pc_sound/src/hostapi/skeleton/README.txt"
-    ],
-    [
-      "source/pc_sound/src/hostapi/skeleton/pa_hostapi_skeleton.c",
-      "source/pc_sound/src/hostapi/skeleton/pa_hostapi_skeleton.c"
-    ],
-    [
-      "source/pc_sound/src/hostapi/asio/Pa_ASIO.pdf",
-      "source/pc_sound/src/hostapi/asio/Pa_ASIO.pdf"
-    ],
-    [
-      "source/pc_sound/src/hostapi/asio/iasiothiscallresolver.h",
-      "source/pc_sound/src/hostapi/asio/iasiothiscallresolver.h"
-    ],
-    [
-      "source/pc_sound/src/hostapi/asio/ASIO-README.txt",
-      "source/pc_sound/src/hostapi/asio/ASIO-README.txt"
-    ],
-    [
-      "source/pc_sound/src/hostapi/asio/Callback_adaptation_.pdf",
-      "source/pc_sound/src/hostapi/asio/Callback_adaptation_.pdf"
-    ],
-    [
-      "source/pc_sound/src/hostapi/asio/iasiothiscallresolver.cpp",
-      "source/pc_sound/src/hostapi/asio/iasiothiscallresolver.cpp"
-    ],
-    [
-      "source/pc_sound/src/hostapi/asio/pa_asio.cpp",
-      "source/pc_sound/src/hostapi/asio/pa_asio.cpp"
-    ],
-    [
-      "source/pc_sound/src/hostapi/asihpi/pa_linux_asihpi.c",
-      "source/pc_sound/src/hostapi/asihpi/pa_linux_asihpi.c"
-    ],
-    [
-      "source/pc_sound/src/hostapi/wmme/pa_win_wmme.c",
-      "source/pc_sound/src/hostapi/wmme/pa_win_wmme.c"
-    ],
-    [
-      "source/pc_sound/src/hostapi/wasapi/readme.txt",
-      "source/pc_sound/src/hostapi/wasapi/readme.txt"
-    ],
-    [
-      "source/pc_sound/src/hostapi/wasapi/pa_win_wasapi.c",
-      "source/pc_sound/src/hostapi/wasapi/pa_win_wasapi.c"
-    ],
-    [
-      "source/pc_sound/src/hostapi/wasapi/mingw-include/functiondiscoverykeys.h",
-      "source/pc_sound/src/hostapi/wasapi/mingw-include/functiondiscoverykeys.h"
-    ],
-    [
-      "source/pc_sound/src/hostapi/wasapi/mingw-include/ShTypes.h",
-      "source/pc_sound/src/hostapi/wasapi/mingw-include/ShTypes.h"
-    ],
-    [
-      "source/pc_sound/src/hostapi/wasapi/mingw-include/audioclient.h",
-      "source/pc_sound/src/hostapi/wasapi/mingw-include/audioclient.h"
-    ],
-    [
-      "source/pc_sound/src/hostapi/wasapi/mingw-include/sdkddkver.h",
-      "source/pc_sound/src/hostapi/wasapi/mingw-include/sdkddkver.h"
-    ],
-    [
-      "source/pc_sound/src/hostapi/wasapi/mingw-include/PropIdl.h",
-      "source/pc_sound/src/hostapi/wasapi/mingw-include/PropIdl.h"
-    ],
-    [
-      "source/pc_sound/src/hostapi/wasapi/mingw-include/endpointvolume.h",
-      "source/pc_sound/src/hostapi/wasapi/mingw-include/endpointvolume.h"
-    ],
-    [
-      "source/pc_sound/src/hostapi/wasapi/mingw-include/ks.h",
-      "source/pc_sound/src/hostapi/wasapi/mingw-include/ks.h"
-    ],
-    [
-      "source/pc_sound/src/hostapi/wasapi/mingw-include/functiondiscoverykeys_devpkey.h",
-      "source/pc_sound/src/hostapi/wasapi/mingw-include/functiondiscoverykeys_devpkey.h"
-    ],
-    [
-      "source/pc_sound/src/hostapi/wasapi/mingw-include/structuredquery.h",
-      "source/pc_sound/src/hostapi/wasapi/mingw-include/structuredquery.h"
-    ],
-    [
-      "source/pc_sound/src/hostapi/wasapi/mingw-include/propsys.h",
-      "source/pc_sound/src/hostapi/wasapi/mingw-include/propsys.h"
-    ],
-    [
-      "source/pc_sound/src/hostapi/wasapi/mingw-include/ksmedia.h",
-      "source/pc_sound/src/hostapi/wasapi/mingw-include/ksmedia.h"
-    ],
-    [
-      "source/pc_sound/src/hostapi/wasapi/mingw-include/devicetopology.h",
-      "source/pc_sound/src/hostapi/wasapi/mingw-include/devicetopology.h"
-    ],
-    [
-      "source/pc_sound/src/hostapi/wasapi/mingw-include/ksguid.h",
-      "source/pc_sound/src/hostapi/wasapi/mingw-include/ksguid.h"
-    ],
-    [
-      "source/pc_sound/src/hostapi/wasapi/mingw-include/propkeydef.h",
-      "source/pc_sound/src/hostapi/wasapi/mingw-include/propkeydef.h"
-    ],
-    [
-      "source/pc_sound/src/hostapi/wasapi/mingw-include/rpcsal.h",
-      "source/pc_sound/src/hostapi/wasapi/mingw-include/rpcsal.h"
-    ],
-    [
-      "source/pc_sound/src/hostapi/wasapi/mingw-include/mmdeviceapi.h",
-      "source/pc_sound/src/hostapi/wasapi/mingw-include/mmdeviceapi.h"
-    ],
-    [
-      "source/pc_sound/src/hostapi/wasapi/mingw-include/ksproxy.h",
-      "source/pc_sound/src/hostapi/wasapi/mingw-include/ksproxy.h"
-    ],
-    [
-      "source/pc_sound/src/hostapi/wasapi/mingw-include/sal.h",
-      "source/pc_sound/src/hostapi/wasapi/mingw-include/sal.h"
-    ],
-    [
-      "source/pc_sound/src/hostapi/wasapi/mingw-include/winapifamily.h",
-      "source/pc_sound/src/hostapi/wasapi/mingw-include/winapifamily.h"
-    ],
-    [
-      "source/pc_sound/src/hostapi/wasapi/mingw-include/propkey.h",
-      "source/pc_sound/src/hostapi/wasapi/mingw-include/propkey.h"
-    ],
-    [
-      "source/pc_sound/src/hostapi/wasapi/mingw-include/AudioSessionTypes.h",
-      "source/pc_sound/src/hostapi/wasapi/mingw-include/AudioSessionTypes.h"
-    ],
-    [
-      "source/pc_sound/src/hostapi/wasapi/mingw-include/ksuuids.h",
-      "source/pc_sound/src/hostapi/wasapi/mingw-include/ksuuids.h"
-    ],
-    [
-      "source/pc_sound/src/hostapi/dsound/pa_win_ds.c",
-      "source/pc_sound/src/hostapi/dsound/pa_win_ds.c"
-    ],
-    [
-      "source/pc_sound/src/hostapi/dsound/pa_win_ds_dynlink.h",
-      "source/pc_sound/src/hostapi/dsound/pa_win_ds_dynlink.h"
-    ],
-    [
-      "source/pc_sound/src/hostapi/dsound/pa_win_ds_dynlink.c",
-      "source/pc_sound/src/hostapi/dsound/pa_win_ds_dynlink.c"
-    ],
-    [
-      "source/pc_sound/src/hostapi/coreaudio/pa_mac_core_internal.h",
-      "source/pc_sound/src/hostapi/coreaudio/pa_mac_core_internal.h"
-    ],
-    [
-      "source/pc_sound/src/hostapi/coreaudio/pa_mac_core.c",
-      "source/pc_sound/src/hostapi/coreaudio/pa_mac_core.c"
-    ],
-    [
-      "source/pc_sound/src/hostapi/coreaudio/pa_mac_core_utilities.c",
-      "source/pc_sound/src/hostapi/coreaudio/pa_mac_core_utilities.c"
-    ],
-    [
-      "source/pc_sound/src/hostapi/coreaudio/pa_mac_core_blocking.c",
-      "source/pc_sound/src/hostapi/coreaudio/pa_mac_core_blocking.c"
-    ],
-    [
-      "source/pc_sound/src/hostapi/coreaudio/pa_mac_core_blocking.h",
-      "source/pc_sound/src/hostapi/coreaudio/pa_mac_core_blocking.h"
-    ],
-    [
-      "source/pc_sound/src/hostapi/coreaudio/notes.txt",
-      "source/pc_sound/src/hostapi/coreaudio/notes.txt"
-    ],
-    [
-      "source/pc_sound/src/hostapi/coreaudio/pa_mac_core_utilities.h",
-      "source/pc_sound/src/hostapi/coreaudio/pa_mac_core_utilities.h"
+      "source/sound/pc_sound/src/hostapi/coreaudio/pa_mac_core_utilities.h",
+      "source/sound/pc_sound/src/hostapi/coreaudio/pa_mac_core_utilities.h"
     ],
     [
       "source/m-lib/m-prioqueue.h",
@@ -3714,6 +3126,22 @@
     [
       "source/block/block_nether_wart.c",
       "source/block/block_nether_wart.c"
+    ],
+    [
+      "source/block/block_command_block.c",
+      "source/block/block_command_block.c"
+    ],
+    [
+      "source/block/block_end_portal_frame.c",
+      "source/block/block_end_portal_frame.c"
+    ],
+    [
+      "source/block/block_end_stone.c",
+      "source/block/block_end_stone.c"
+    ],
+    [
+      "source/block/block_record_cat.c",
+      "source/block/block_record_cat.c"
     ],
     [
       "source/cubiomes/makefile",
@@ -5097,8 +4525,8 @@
       "../assets/sound/sound/ambient/cave/cave1.pcm"
     ],
     [
-      "assets/sound/sound/random/chest_close.pcm",
-      "../assets/sound/sound/random/chest_close.pcm"
+      "assets/sound/sound/random/chestclosed.pcm",
+      "../assets/sound/sound/random/chestclosed.pcm"
     ],
     [
       "assets/sound/sound/random/fuse.pcm",
@@ -5129,12 +4557,420 @@
       "../assets/sound/sound/random/eat3.pcm"
     ],
     [
-      "assets/sound/sound/random/chest_open.pcm",
-      "../assets/sound/sound/random/chest_open.pcm"
+      "assets/sound/sound/random/chestopen.pcm",
+      "../assets/sound/sound/random/chestopen.pcm"
     ],
     [
       "assets/sound/sound/random/eat2.pcm",
       "../assets/sound/sound/random/eat2.pcm"
+    ],
+    [
+      "assets/sound/sound/tile/piston/out.pcm",
+      "../assets/sound/sound/tile/piston/out.pcm"
+    ],
+    [
+      "assets/sound/sound/tile/piston/in.pcm",
+      "../assets/sound/sound/tile/piston/in.pcm"
+    ],
+    [
+      "assets/sound/sound/note/harp.pcm",
+      "../assets/sound/sound/note/harp.pcm"
+    ],
+    [
+      "assets/sound/sound/note/pling.pcm",
+      "../assets/sound/sound/note/pling.pcm"
+    ],
+    [
+      "assets/sound/sound/note/bass.pcm",
+      "../assets/sound/sound/note/bass.pcm"
+    ],
+    [
+      "assets/sound/sound/damage/hit1.pcm",
+      "../assets/sound/sound/damage/hit1.pcm"
+    ],
+    [
+      "assets/sound/sound/damage/hit3.pcm",
+      "../assets/sound/sound/damage/hit3.pcm"
+    ],
+    [
+      "assets/sound/sound/damage/fallbig.pcm",
+      "../assets/sound/sound/damage/fallbig.pcm"
+    ],
+    [
+      "assets/sound/sound/damage/fallsmall.pcm",
+      "../assets/sound/sound/damage/fallsmall.pcm"
+    ],
+    [
+      "assets/sound/sound/dig/grass1.pcm",
+      "../assets/sound/sound/dig/grass1.pcm"
+    ],
+    [
+      "assets/sound/sound/dig/grass2.pcm",
+      "../assets/sound/sound/dig/grass2.pcm"
+    ],
+    [
+      "assets/sound/sound/dig/grass3.pcm",
+      "../assets/sound/sound/dig/grass3.pcm"
+    ],
+    [
+      "assets/sound/sound/dig/grass4.pcm",
+      "../assets/sound/sound/dig/grass4.pcm"
+    ],
+    [
+      "assets/sound/sound/dig/cloth1.pcm",
+      "../assets/sound/sound/dig/cloth1.pcm"
+    ],
+    [
+      "assets/sound/sound/dig/cloth2.pcm",
+      "../assets/sound/sound/dig/cloth2.pcm"
+    ],
+    [
+      "assets/sound/sound/dig/cloth3.pcm",
+      "../assets/sound/sound/dig/cloth3.pcm"
+    ],
+    [
+      "assets/sound/sound/dig/cloth4.pcm",
+      "../assets/sound/sound/dig/cloth4.pcm"
+    ],
+    [
+      "assets/sound/sound/dig/gravel1.pcm",
+      "../assets/sound/sound/dig/gravel1.pcm"
+    ],
+    [
+      "assets/sound/sound/dig/gravel2.pcm",
+      "../assets/sound/sound/dig/gravel2.pcm"
+    ],
+    [
+      "assets/sound/sound/dig/gravel3.pcm",
+      "../assets/sound/sound/dig/gravel3.pcm"
+    ],
+    [
+      "assets/sound/sound/dig/gravel4.pcm",
+      "../assets/sound/sound/dig/gravel4.pcm"
+    ],
+    [
+      "assets/sound/sound/dig/wood1.pcm",
+      "../assets/sound/sound/dig/wood1.pcm"
+    ],
+    [
+      "assets/sound/sound/dig/wood3.pcm",
+      "../assets/sound/sound/dig/wood3.pcm"
+    ],
+    [
+      "assets/sound/sound/dig/wood4.pcm",
+      "../assets/sound/sound/dig/wood4.pcm"
+    ],
+    [
+      "assets/sound/sound/dig/stone1.pcm",
+      "../assets/sound/sound/dig/stone1.pcm"
+    ],
+    [
+      "assets/sound/sound/dig/stone2.pcm",
+      "../assets/sound/sound/dig/stone2.pcm"
+    ],
+    [
+      "assets/sound/sound/dig/stone4.pcm",
+      "../assets/sound/sound/dig/stone4.pcm"
+    ],
+    [
+      "assets/sound/sound/step/grass1.pcm",
+      "../assets/sound/sound/step/grass1.pcm"
+    ],
+    [
+      "assets/sound/sound/step/grass2.pcm",
+      "../assets/sound/sound/step/grass2.pcm"
+    ],
+    [
+      "assets/sound/sound/step/grass3.pcm",
+      "../assets/sound/sound/step/grass3.pcm"
+    ],
+    [
+      "assets/sound/sound/step/grass4.pcm",
+      "../assets/sound/sound/step/grass4.pcm"
+    ],
+    [
+      "assets/sound/sound/step/cloth1.pcm",
+      "../assets/sound/sound/step/cloth1.pcm"
+    ],
+    [
+      "assets/sound/sound/step/cloth2.pcm",
+      "../assets/sound/sound/step/cloth2.pcm"
+    ],
+    [
+      "assets/sound/sound/step/cloth3.pcm",
+      "../assets/sound/sound/step/cloth3.pcm"
+    ],
+    [
+      "assets/sound/sound/step/cloth4.pcm",
+      "../assets/sound/sound/step/cloth4.pcm"
+    ],
+    [
+      "assets/sound/sound/step/gravel1.pcm",
+      "../assets/sound/sound/step/gravel1.pcm"
+    ],
+    [
+      "assets/sound/sound/step/gravel2.pcm",
+      "../assets/sound/sound/step/gravel2.pcm"
+    ],
+    [
+      "assets/sound/sound/step/gravel3.pcm",
+      "../assets/sound/sound/step/gravel3.pcm"
+    ],
+    [
+      "assets/sound/sound/step/gravel4.pcm",
+      "../assets/sound/sound/step/gravel4.pcm"
+    ],
+    [
+      "assets/sound/sound/step/sand1.pcm",
+      "../assets/sound/sound/step/sand1.pcm"
+    ],
+    [
+      "assets/sound/sound/step/sand2.pcm",
+      "../assets/sound/sound/step/sand2.pcm"
+    ],
+    [
+      "assets/sound/sound/step/sand3.pcm",
+      "../assets/sound/sound/step/sand3.pcm"
+    ],
+    [
+      "assets/sound/sound/step/sand4.pcm",
+      "../assets/sound/sound/step/sand4.pcm"
+    ],
+    [
+      "assets/sound/sound/step/stone1.pcm",
+      "../assets/sound/sound/step/stone1.pcm"
+    ],
+    [
+      "assets/sound/sound/step/stone2.pcm",
+      "../assets/sound/sound/step/stone2.pcm"
+    ],
+    [
+      "assets/sound/sound/step/stone3.pcm",
+      "../assets/sound/sound/step/stone3.pcm"
+    ],
+    [
+      "assets/sound/sound/step/stone4.pcm",
+      "../assets/sound/sound/step/stone4.pcm"
+    ],
+    [
+      "assets/sound/sound/step/snow1.pcm",
+      "../assets/sound/sound/step/snow1.pcm"
+    ],
+    [
+      "assets/sound/sound/step/snow2.pcm",
+      "../assets/sound/sound/step/snow2.pcm"
+    ],
+    [
+      "assets/sound/sound/step/snow3.pcm",
+      "../assets/sound/sound/step/snow3.pcm"
+    ],
+    [
+      "assets/sound/sound/step/snow4.pcm",
+      "../assets/sound/sound/step/snow4.pcm"
+    ],
+    [
+      "assets/sound/sound/step/wood1.pcm",
+      "../assets/sound/sound/step/wood1.pcm"
+    ],
+    [
+      "assets/sound/sound/step/wood2.pcm",
+      "../assets/sound/sound/step/wood2.pcm"
+    ],
+    [
+      "assets/sound/sound/step/wood3.pcm",
+      "../assets/sound/sound/step/wood3.pcm"
+    ],
+    [
+      "assets/sound/sound/step/wood4.pcm",
+      "../assets/sound/sound/step/wood4.pcm"
+    ],
+    [
+      "assets/sound/sound/fire/fire.pcm",
+      "../assets/sound/sound/fire/fire.pcm"
+    ],
+    [
+      "assets/sound/sound/mob/sheep/say1.pcm",
+      "../assets/sound/sound/mob/sheep/say1.pcm"
+    ],
+    [
+      "assets/sound/sound/mob/sheep/say3.pcm",
+      "../assets/sound/sound/mob/sheep/say3.pcm"
+    ],
+    [
+      "assets/sound/sound/mob/creeper/death.pcm",
+      "../assets/sound/sound/mob/creeper/death.pcm"
+    ],
+    [
+      "assets/sound/sound/portal/portal.pcm",
+      "../assets/sound/sound/portal/portal.pcm"
+    ],
+    [
+      "assets/sound/sound/portal/trigger.pcm",
+      "../assets/sound/sound/portal/trigger.pcm"
+    ],
+    [
+      "assets/sound/sound/portal/travel.pcm",
+      "../assets/sound/sound/portal/travel.pcm"
+    ],
+    [
+      "assets/sound/sound/ambient/cave/cave2.pcm",
+      "../assets/sound/sound/ambient/cave/cave2.pcm"
+    ],
+    [
+      "assets/sound/sound/ambient/cave/cave3.pcm",
+      "../assets/sound/sound/ambient/cave/cave3.pcm"
+    ],
+    [
+      "assets/sound/sound/ambient/cave/cave4.pcm",
+      "../assets/sound/sound/ambient/cave/cave4.pcm"
+    ],
+    [
+      "assets/sound/sound/ambient/cave/cave5.pcm",
+      "../assets/sound/sound/ambient/cave/cave5.pcm"
+    ],
+    [
+      "assets/sound/sound/ambient/cave/cave6.pcm",
+      "../assets/sound/sound/ambient/cave/cave6.pcm"
+    ],
+    [
+      "assets/sound/sound/ambient/cave/cave7.pcm",
+      "../assets/sound/sound/ambient/cave/cave7.pcm"
+    ],
+    [
+      "assets/sound/sound/ambient/cave/cave8.pcm",
+      "../assets/sound/sound/ambient/cave/cave8.pcm"
+    ],
+    [
+      "assets/sound/sound/ambient/cave/cave9.pcm",
+      "../assets/sound/sound/ambient/cave/cave9.pcm"
+    ],
+    [
+      "assets/sound/sound/ambient/cave/cave10.pcm",
+      "../assets/sound/sound/ambient/cave/cave10.pcm"
+    ],
+    [
+      "assets/sound/sound/ambient/cave/cave11.pcm",
+      "../assets/sound/sound/ambient/cave/cave11.pcm"
+    ],
+    [
+      "assets/sound/sound/ambient/cave/cave12.pcm",
+      "../assets/sound/sound/ambient/cave/cave12.pcm"
+    ],
+    [
+      "assets/sound/sound/ambient/cave/cave13.pcm",
+      "../assets/sound/sound/ambient/cave/cave13.pcm"
+    ],
+    [
+      "assets/sound/sound/ambient/weather/rain1.pcm",
+      "../assets/sound/sound/ambient/weather/rain1.pcm"
+    ],
+    [
+      "assets/sound/sound/ambient/weather/rain2.pcm",
+      "../assets/sound/sound/ambient/weather/rain2.pcm"
+    ],
+    [
+      "assets/sound/sound/ambient/weather/rain3.pcm",
+      "../assets/sound/sound/ambient/weather/rain3.pcm"
+    ],
+    [
+      "assets/sound/sound/ambient/weather/rain4.pcm",
+      "../assets/sound/sound/ambient/weather/rain4.pcm"
+    ],
+    [
+      "assets/sound/sound/ambient/weather/thunder1.pcm",
+      "../assets/sound/sound/ambient/weather/thunder1.pcm"
+    ],
+    [
+      "assets/sound/sound/ambient/weather/thunder2.pcm",
+      "../assets/sound/sound/ambient/weather/thunder2.pcm"
+    ],
+    [
+      "assets/sound/sound/ambient/weather/thunder3.pcm",
+      "../assets/sound/sound/ambient/weather/thunder3.pcm"
+    ],
+    [
+      "assets/sound/sound/liquid/splash.pcm",
+      "../assets/sound/sound/liquid/splash.pcm"
+    ],
+    [
+      "assets/sound/sound/liquid/splash2.pcm",
+      "../assets/sound/sound/liquid/splash2.pcm"
+    ],
+    [
+      "assets/sound/sound/liquid/water.pcm",
+      "../assets/sound/sound/liquid/water.pcm"
+    ],
+    [
+      "assets/sound/sound/random/explode1.pcm",
+      "../assets/sound/sound/random/explode1.pcm"
+    ],
+    [
+      "assets/sound/sound/random/explode2.pcm",
+      "../assets/sound/sound/random/explode2.pcm"
+    ],
+    [
+      "assets/sound/sound/random/explode3.pcm",
+      "../assets/sound/sound/random/explode3.pcm"
+    ],
+    [
+      "assets/sound/sound/random/explode4.pcm",
+      "../assets/sound/sound/random/explode4.pcm"
+    ],
+    [
+      "assets/sound/sound/random/bowhit1.pcm",
+      "../assets/sound/sound/random/bowhit1.pcm"
+    ],
+    [
+      "assets/sound/sound/random/bowhit2.pcm",
+      "../assets/sound/sound/random/bowhit2.pcm"
+    ],
+    [
+      "assets/sound/sound/random/bowhit3.pcm",
+      "../assets/sound/sound/random/bowhit3.pcm"
+    ],
+    [
+      "assets/sound/sound/random/bowhit4.pcm",
+      "../assets/sound/sound/random/bowhit4.pcm"
+    ],
+    [
+      "assets/sound/sound/random/pop.pcm",
+      "../assets/sound/sound/random/pop.pcm"
+    ],
+    [
+      "assets/sound/sound/random/levelup.pcm",
+      "../assets/sound/sound/random/levelup.pcm"
+    ],
+    [
+      "assets/sound/sound/random/glass1.pcm",
+      "../assets/sound/sound/random/glass1.pcm"
+    ],
+    [
+      "assets/sound/sound/random/glass2.pcm",
+      "../assets/sound/sound/random/glass2.pcm"
+    ],
+    [
+      "assets/sound/sound/random/glass3.pcm",
+      "../assets/sound/sound/random/glass3.pcm"
+    ],
+    [
+      "assets/sound/sound/random/successful_hit.pcm",
+      "../assets/sound/sound/random/successful_hit.pcm"
+    ],
+    [
+      "assets/sound/sound/random/classic_hurt.pcm",
+      "../assets/sound/sound/random/classic_hurt.pcm"
+    ],
+    [
+      "assets/sound/sound/random/wood_click.pcm",
+      "../assets/sound/sound/random/wood_click.pcm"
+    ],
+    [
+      "assets/sound/sound/random/fizz.pcm",
+      "../assets/sound/sound/random/fizz.pcm"
+    ],
+    [
+      "assets/sound/sound/random/orb.pcm",
+      "../assets/sound/sound/random/orb.pcm"
     ]
   ]
 }

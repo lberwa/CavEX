@@ -27,6 +27,7 @@
 #include "../cglm/cglm.h"
 
 #include "../item/window_container.h"
+#include "../sound/sound.h"
 #include "../particle.h"
 #include "../platform/thread.h"
 #include "../daytime.h"
@@ -61,7 +62,7 @@ volatile int g_effective_view_distance = MAX_VIEW_DISTANCE;
 static int g_chunk_cap = SERVER_CHUNK_HARD_CAP;
 
 /* ---- CHUNK DEBUG ---- Auf 1 setzen, nur diese Datei neu kompilieren ---- */
-#define CHUNK_MESHER_DEBUG 1
+#define CHUNK_MESHER_DEBUG 0
 /* ----------------------------------------------------------------------- */
 #if CHUNK_MESHER_DEBUG
 #include <stdio.h>
@@ -93,7 +94,7 @@ void cdbg_flush(void) {
 #define CDBG(...) _cdbg(__VA_ARGS__)
 #else
 #define CDBG(...) ((void)0)
-static inline void cdbg_flush(void) {}
+void cdbg_flush(void) {}
 #endif
 
 #define CHUNK_DIST2(x1, x2, z1, z2)                                            \
@@ -1233,6 +1234,10 @@ void server_local_set_player_health(struct server_local* s, int player_id, short
 #endif
 	if(player->creative && new_health < player->health)
 		return;
+	if(new_health < player->health) {
+		static const enum pcm_sound hits[] = {pcm_mob_hit1, pcm_mob_hit2, pcm_mob_hit3};
+		sound_play(hits[rand() % 3]);
+	}
 	player->health = new_health;
 	if (player->health > MAX_PLAYER_HEALTH) player->health = MAX_PLAYER_HEALTH;
 	if (player->health <= 0) {
@@ -1376,6 +1381,84 @@ void server_local_tick_fluids(struct server_local* s) {
 	server_local_flush_fluid_changes(s);
 }
 
+
+void play_dig_sound_at(enum block_type type, float x, float y, float z, float vol_scale) {
+    static const enum pcm_sound stone[]  = {pcm_dig_stone1, pcm_dig_stone2,
+                                             pcm_dig_stone3, pcm_dig_stone4};
+    static const enum pcm_sound wood[]   = {pcm_dig_wood1,  pcm_dig_wood2,
+                                             pcm_dig_wood3,  pcm_dig_wood4};
+    static const enum pcm_sound grass[]  = {pcm_dig_grass1, pcm_dig_grass2,
+                                             pcm_dig_grass3, pcm_dig_grass4};
+    static const enum pcm_sound cloth[]  = {pcm_dig_cloth1, pcm_dig_cloth2,
+                                             pcm_dig_cloth3, pcm_dig_cloth4};
+    static const enum pcm_sound gravel[] = {pcm_dig_gravel1, pcm_dig_gravel2,
+                                             pcm_dig_gravel3, pcm_dig_gravel4};
+
+    const enum pcm_sound *tbl = stone;
+    int cnt = 4;
+
+    if(type == BLOCK_GRAVEL) {
+        tbl = gravel; cnt = 4;
+    } else if(type == BLOCK_SNOW || type == BLOCK_SNOW_BLOCK) {
+        tbl = grass;  cnt = 4;
+    } else if(type != BLOCK_AIR && blocks[type] && blocks[type]->getMaterial) {
+        struct block_data bd = {.type = type, .metadata = 0};
+        struct block_info bi = {.block = &bd, .neighbours = NULL,
+                                .neighbours_ext = NULL, .x = 0, .y = 0, .z = 0};
+        switch(blocks[type]->getMaterial(&bi)) {
+            case MATERIAL_WOOD:    tbl = wood;   cnt = 4; break;
+            case MATERIAL_WOOL:    tbl = cloth;  cnt = 4; break;
+            case MATERIAL_ORGANIC: tbl = grass;  cnt = 4; break;
+            case MATERIAL_SAND:    tbl = stone;  cnt = 4; break;
+            case MATERIAL_GLASS:
+            case MATERIAL_STONE:
+            default:               tbl = stone;  cnt = 4; break;
+        }
+    }
+
+    sound_play_at_vol(tbl[rand() % cnt], x, y, z, vol_scale);
+}
+
+void play_step_sound_at(enum block_type type, float x, float y, float z, float vol_scale) {
+    static const enum pcm_sound stone[]  = {pcm_step_stone1, pcm_step_stone2,
+                                             pcm_step_stone3, pcm_step_stone4};
+    static const enum pcm_sound wood[]   = {pcm_step_wood1,  pcm_step_wood2,
+                                             pcm_step_wood3,  pcm_step_wood4};
+    static const enum pcm_sound grass[]  = {pcm_step_grass1, pcm_step_grass2,
+                                             pcm_step_grass3, pcm_step_grass4};
+    static const enum pcm_sound cloth[]  = {pcm_step_cloth1, pcm_step_cloth2,
+                                             pcm_step_cloth3, pcm_step_cloth4};
+    static const enum pcm_sound gravel[] = {pcm_step_gravel1, pcm_step_gravel2,
+                                             pcm_step_gravel3, pcm_step_gravel4};
+    static const enum pcm_sound sand[]   = {pcm_step_sand1,   pcm_step_sand2,
+                                             pcm_step_sand3,   pcm_step_sand4};
+    static const enum pcm_sound snow[]   = {pcm_step_snow1,   pcm_step_snow2,
+                                             pcm_step_snow3,   pcm_step_snow4};
+
+    const enum pcm_sound *tbl = stone;
+    int cnt = 4;
+
+    if(type == BLOCK_GRAVEL) {
+        tbl = gravel; cnt = 4;
+    } else if(type == BLOCK_SNOW || type == BLOCK_SNOW_BLOCK) {
+        tbl = snow;   cnt = 4;
+    } else if(type != BLOCK_AIR && blocks[type] && blocks[type]->getMaterial) {
+        struct block_data bd = {.type = type, .metadata = 0};
+        struct block_info bi = {.block = &bd, .neighbours = NULL,
+                                .neighbours_ext = NULL, .x = 0, .y = 0, .z = 0};
+        switch(blocks[type]->getMaterial(&bi)) {
+            case MATERIAL_WOOD:    tbl = wood;   cnt = 4; break;
+            case MATERIAL_WOOL:    tbl = cloth;  cnt = 4; break;
+            case MATERIAL_ORGANIC: tbl = grass;  cnt = 4; break;
+            case MATERIAL_SAND:    tbl = sand;   cnt = 4; break;
+            case MATERIAL_GLASS:
+            case MATERIAL_STONE:
+            default:               tbl = stone;  cnt = 4; break;
+        }
+    }
+
+    sound_play_at_vol(tbl[rand() % cnt], x, y, z, vol_scale);
+}
 
 bool place_block = false;
 
@@ -1535,6 +1618,12 @@ static void server_local_process(struct server_rpc* call, void* user) {
 											   .metadata = 0,
 										   });
 
+					play_dig_sound_at(blk.type,
+					                  (float)call->payload.block_dig.x,
+					                  (float)call->payload.block_dig.y,
+					                  (float)call->payload.block_dig.z,
+					                  1.0f);
+
 					/* collapse any nether portal attached to broken obsidian */
 					if(blk.type == BLOCK_OBSIDIAN) {
 						static const int ndirs[6][3] = {
@@ -1631,6 +1720,16 @@ static void server_local_process(struct server_rpc* call, void* user) {
 					}
 
 					if(placed) {
+						struct block_data placed_blk;
+						if(server_world_get_block(AWORLD(s), where.x, where.y,
+						                          where.z, &placed_blk)
+						   && placed_blk.type != BLOCK_AIR)
+							play_dig_sound_at(placed_blk.type,
+							                  (float)where.x,
+							                  (float)where.y,
+							                  (float)where.z,
+							                  1.0f);
+
 						size_t slot
 							= inventory_get_hotbar(&player->inventory);
 						if(!player->creative)
@@ -1719,6 +1818,7 @@ static void server_local_process(struct server_rpc* call, void* user) {
 		  struct entity **ptr = dict_entity_get(s->entities, id);
 		  if (ptr && *ptr) {
 		    struct entity *e = *ptr;
+		    sound_play(pcm_successful_hit);
 		    e->health -= 5;    // damage per hit
 		    if (e->health <= 0) {
 		      if (e->type == ENTITY_MINECART) {
@@ -2942,8 +3042,15 @@ for (int i = 0; i < 4; i++) {
 				(fall_blocks >= 4 && !landed_in_water) ? fall_blocks-3 : 0);
 #endif
 
-			if(fall_blocks >= 4 && server_local_damage_enabled() && !landed_in_water) {
-				server_local_set_player_health(s, i, player->health-HEALTH_PER_HEART*(fall_blocks-3));
+			if(!landed_in_water) {
+				if(fall_blocks >= 4) {
+					sound_play(pcm_fall_big);
+					if(server_local_damage_enabled())
+						server_local_set_player_health(s, i,
+						    player->health-HEALTH_PER_HEART*(fall_blocks-3));
+				} else if(fall_blocks >= 1) {
+					sound_play(pcm_fall_small);
+				}
 			}
 			player->fall_distance = 0.0f;
 		}
@@ -3061,8 +3168,15 @@ for (int i = 0; i < 4; i++) {
 			(fall_blocks >= 4 && !landed_in_water) ? fall_blocks-3 : 0);
 #endif
 
-		if(fall_blocks >= 4 && server_local_damage_enabled() && !landed_in_water) {
-			server_local_set_player_health(s, 0, s->player.health-HEALTH_PER_HEART*(fall_blocks-3));
+		if(!landed_in_water) {
+			if(fall_blocks >= 4) {
+				sound_play(pcm_fall_big);
+				if(server_local_damage_enabled())
+					server_local_set_player_health(s, 0,
+					    s->player.health-HEALTH_PER_HEART*(fall_blocks-3));
+			} else if(fall_blocks >= 1) {
+				sound_play(pcm_fall_small);
+			}
 		}
 		s->player.fall_distance = 0.0f;
 	}

@@ -34,7 +34,7 @@
 #include "../../graphics/gfx_util.h"
 #include "../../platform/gfx.h"
 #include "../../graphics/gui_util.h"
-#include "../../sound.h"
+#include "../../sound/sound.h"
 
 #define MAX_WIIMOTES 4
 

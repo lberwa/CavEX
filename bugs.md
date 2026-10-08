@@ -89,3 +89,52 @@
 * you don't see the cracks on the blocks on the wii
 
 * if player 2 goes into the nether portal he can't go out of the loading screen while player 1 doesn't go to the nether portal too
+
+* if you go throw the portal, and you wait 5 sekonds you go again to the world
+
+* the texture of the creative menu is broken on the wii
+
+* may load ogg files insead of pcm/wav
+
+* diff metadata:
+  - torch
+  - chest
+  - stairs
+  - sign
+
+* not in b1.7.3:
+  - end-portal
+  - end-stone
+  - iron_chest
+  - 2d-tree
+  - record_13
+  - block_jukebox vs block_record_cat ?
+  - spawn eggs
+
+* save:
+  - chests
+  - furnace
+  - sign
+  - entities:
+    * Mobs
+    * Items
+    * ...
+
+* ids:
+  - item motor
+  - lapis lazui -- damage number
+  - kacao       -- damage number
+
+* item metadata:
+  - diamand = uint8=255 !!
+  - stone and stole
+  - bogen
+  - fishing_hook = uint8=255 !!
+  - armor
+  - collor/dye
+
+
+
+* config.json in ~/.cavex
+
+* Window Quit (x) don't work in the server menu

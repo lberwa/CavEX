@@ -37,7 +37,7 @@
 #include "../../graphics/gui_util.h"
 #include "../../platform/gfx.h"
 #include "../../platform/input.h"
-#include "../../sound.h"
+#include "../../sound/sound.h"
 #include "../game_state.h"
 #include "screen.h"
 

@@ -231,7 +231,7 @@ try:
     os.makedirs(config["paths"]["tmp"], exist_ok=True)
 
     loading_screen("loading data info ...")
-    body = http_get("https://192.168.15.188:5010/en/pc/get/data_info.json")
+    body = http_get("https://cavexplorer.duckdns.org/en/pc/get/data_info.json")
     data_info = json.loads(body)["data"]
 
     cancelled = False

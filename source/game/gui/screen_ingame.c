@@ -26,6 +26,7 @@
 #include "../../graphics/render_model.h"
 #include "../../network/server_interface.h"
 #include "../../network/server_local.h"
+#include "../../sound/sound.h"
 #include "../../chunk_mesher.h"
 #include "../../world.h"
 #include "../../particle.h"
@@ -335,6 +336,15 @@ void screen_ingame_render3D(struct screen* s, mat4 view) {
 			gstate.digging.y = gstate.camera_hit.y;
 			gstate.digging.z = gstate.camera_hit.z;
 
+			if(gstate.camera_hit.hit) {
+				play_dig_sound_at(blk.type,
+				                  (float)gstate.digging.x,
+				                  (float)gstate.digging.y,
+				                  (float)gstate.digging.z,
+				                  gstate.settings.dig_volume);
+				gstate.digging.last_dig_sound = time_get();
+			}
+
 			svin_rpc_try_send(&(struct server_rpc) {
 				RPC_PLAYER_ID(gstate_active_player())
 				.type = SRPC_BLOCK_DIG,
@@ -344,6 +354,16 @@ void screen_ingame_render3D(struct screen* s, mat4 view) {
 				.payload.block_dig.side = gstate.camera_hit.side,
 				.payload.block_dig.finished = false,
 			});
+		}
+
+		if(gstate.camera_hit.hit
+		   && time_diff_ms(gstate.digging.last_dig_sound, time_get()) >= 250) {
+			play_dig_sound_at(blk.type,
+			                  (float)gstate.digging.x,
+			                  (float)gstate.digging.y,
+			                  (float)gstate.digging.z,
+			                  gstate.settings.dig_volume);
+			gstate.digging.last_dig_sound = time_get();
 		}
 
 		if(delay >= 0

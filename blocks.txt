@@ -1,7 +1,7 @@
-sticky_piston        ✅
+sticky_piston        
 piston               ✅
 piston_head          ✅
-moving_piston        ✅
+moving_piston        
 gobweb               ✅
 dead_bush            ✅
 mob_spawner          ✅

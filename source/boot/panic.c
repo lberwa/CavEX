@@ -1,7 +1,15 @@
 /*
 	Copyright (c) 2022-2026 ByteBit/xtreme8000, lberwa
 
-	This file is part of CavEX. (based on the original HBC code)
+	This file is part of CavEX.
+
+	Portions derived from the Homebrew Channel (fail0verflow/hbc),
+	Copyright (C) 2008-2009 Team Twiizers / Hector Martin "marcan" et al.,
+	originally licensed under the GNU General Public License version 2
+	or (at your option) any later version. Relicensed here under GPLv3
+	as permitted by the "or later" clause. The console_font_8x16 glyph
+	data referenced here originates from libogc (zlib-style license).
+	See the NOTICE file.
 
 	CavEX is free software: you can redistribute it and/or modify
 	it under the terms of the GNU General Public License as published by

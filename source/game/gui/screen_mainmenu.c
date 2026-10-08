@@ -27,7 +27,7 @@
 #include "../../util.h"
 #include "../game_state.h"
 #include "screen.h"
-#include "../../sound.h"
+#include "../../sound/sound.h"
 
 #ifdef PLATFORM_WII
 #include "../../boot/extension.h"
@@ -55,19 +55,6 @@ static bool server_failed = false;
 extern char g_py_error[160];
 extern bool g_py_error_show;
 
-static enum mp3_sound bg_playlist[16] = {
-	mp3_bg1,
-	mp3_bg2,
-	mp3_bg3,
-	mp3_bg4,
-	mp3_bg5,
-	mp3_bg6,
-	mp3_bg7,
-	mp3_bg8,
-	mp3_bg9,
-	mp3_bg10,
-};
-
 static void screen_mainmenu_reset(struct screen* s, int width, int height) {
 	gstate.game_run = false;
 #ifdef SPLITSCREEN
@@ -79,9 +66,6 @@ static void screen_mainmenu_reset(struct screen* s, int width, int height) {
 	input_pointer_enable(true);
 
 	gstate_set_capture_input_all(false);
-
-	//sound_init();
-	sound_play_bg(bg_playlist);
 }
 static void screen_mainmenu_update(struct screen* s, float dt) {
 #ifdef WITH_PYTHON

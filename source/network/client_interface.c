@@ -25,7 +25,7 @@
 #include "../game/game_state.h"
 #include "../particle.h"
 #include "../platform/thread.h"
-#include "../sound.h"
+#include "../sound/sound.h"
 #include "server_interface.h"
 #include "server_local.h"
 
@@ -585,6 +585,7 @@ void clin_process(struct client_rpc* call) {
 #endif
 			if(lp && (call->payload.pickup_item.collector_id == 0
 					  || call->payload.pickup_item.collector_id == lp->id)) {
+				sound_play(pcm_pop);
 				struct entity** eptr = dict_entity_get(
 					gstate.entities, call->payload.pickup_item.entity_id);
 				struct entity* e = eptr ? *eptr : NULL;

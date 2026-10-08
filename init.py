@@ -184,7 +184,7 @@ try:
                   txt, txt_size, True, (0, 0, 255, 255), 0)
     w.update()
 
-    resp = w.curl_get("https://192.168.15.188:5010/en/wii/get/data_info.json")
+    resp = w.curl_get("https://cavexplorer.duckdns.org/en/wii/get/data_info.json")
     if not resp["ok"]:
         raise RuntimeError("curl_get data_info failed: status=" + str(resp["status"])
                            + " error=" + str(resp["error"]) + " curl_code=" + str(resp["curl_code"]))

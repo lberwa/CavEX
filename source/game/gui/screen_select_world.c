@@ -27,7 +27,7 @@
 #include "../../util.h"
 #include "../game_state.h"
 #include "screen.h"
-#include "../../sound.h"
+#include "../../sound/sound.h"
 
 #include <assert.h>
 #include <dirent.h>
@@ -56,19 +56,6 @@ struct world_option {
 	string_t path;
 	int64_t last_access;
 	int64_t byte_size;
-};
-
-static enum mp3_sound bg_playlist[16] = {
-	mp3_bg1,
-	mp3_bg2,
-	mp3_bg3,
-	mp3_bg4,
-	mp3_bg5,
-	mp3_bg6,
-	mp3_bg7,
-	mp3_bg8,
-	mp3_bg9,
-	mp3_bg10,
 };
 
 /* recompute the list layout for the current height (must be done every frame so
@@ -157,8 +144,6 @@ static void screen_sworld_reset(struct screen* s, int width, int height) {
 	scroll_offset = side_padding;
 	sworld_layout(height);
 
-	//sound_init();
-	sound_play_bg(bg_playlist);
 }
 
 static void screen_sworld_update(struct screen* s, float dt) {

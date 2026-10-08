@@ -64,6 +64,10 @@ struct game_state {
 		 * GFX_PC_WINDOW_HEIGHT) und Maximum (100 = native Fenstergröße). */
 		int render_scale_pct;
 		bool view_bob;
+		float max_volume;
+		float step_volume;
+		float dig_volume;
+		bool bg_music_enabled;
 	} settings;
 	/* live chunk generation status, updated by the server thread for the debug
 	 * overlay (screen_ingame). */
@@ -122,6 +126,7 @@ struct game_state {
 		bool active;
 		ptime_t start;
 		ptime_t cooldown;
+		ptime_t last_dig_sound;
 		w_coord_t x, y, z;
 	} digging;
 	struct held_anim {

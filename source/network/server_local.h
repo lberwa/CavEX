@@ -224,6 +224,8 @@ struct server_local {
 	int32_t fluid_hash[FLUID_HASH_SIZE];
 };
 
+void play_dig_sound_at(enum block_type type, float x, float y, float z, float vol_scale);
+void play_step_sound_at(enum block_type type, float x, float y, float z, float vol_scale);
 void server_local_create(struct server_local* s);
 bool server_local_try_portal(struct server_local* s, int x, int y, int z);
 void server_local_collapse_portal(struct server_local* s, int x, int y, int z);
