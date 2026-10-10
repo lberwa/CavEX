@@ -59,8 +59,6 @@ static enum mp3_sound bg_playlist[16] = {
 	mp3_bg6,
 	mp3_bg7,
 	mp3_bg8,
-	mp3_bg9,
-	mp3_bg10,
 };
 */
 // Reset-Funktion: Initialisiert den Screen

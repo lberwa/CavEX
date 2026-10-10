@@ -325,7 +325,7 @@ void screen_ingame_render3D(struct screen* s, mat4 view) {
 		int delay = blocks[blk.type] ?
 			tool_dig_delay_ms(blocks[blk.type], item_get(&it)) :
 			0;
-		if(creative_mode && delay >= 0)
+		if(creative_mode)
 			delay = 0;
 
 		if(!gstate.camera_hit.hit || gstate.digging.x != gstate.camera_hit.x

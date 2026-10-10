@@ -590,9 +590,9 @@ int main(void) {
 	{
 		static enum mp3_sound bg_playlist[16] = {
 			mp3_bg1, mp3_bg2, mp3_bg3,  mp3_bg4,  mp3_bg5,
-			mp3_bg6, mp3_bg7, mp3_bg8,  mp3_bg9,  mp3_bg10,
-			mp3_bg1, mp3_bg2, mp3_bg3,  mp3_bg4,  mp3_bg5,
-			mp3_bg6,
+			mp3_bg6, mp3_bg7, mp3_bg8,  mp3_bg1,  mp3_bg2,
+			mp3_bg3, mp3_bg4, mp3_bg5,  mp3_bg6,  mp3_bg7,
+			mp3_bg8,
 		};
 		sound_play_bg(bg_playlist);
 	}

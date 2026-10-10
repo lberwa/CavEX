@@ -17,6 +17,8 @@
 	along with CavEX.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <math.h>
+
 #include "../network/server_local.h"
 #include "blocks.h"
 
@@ -30,41 +32,36 @@ static enum block_material getMaterial2(struct block_info* this) {
 
 static size_t getBoundingBox(struct block_info* this, bool entity,
 							 struct AABB* x) {
-	if(entity) {
-		if(x) {
-			aabb_setsize(x + 0, 1.0F, 0.5F, 1.0F);
+	(void)entity;
+	if(x) {
+		aabb_setsize(x + 0, 1.0F, 0.5F, 1.0F);
 
-			enum side facing
-				= (enum side[4]) {SIDE_RIGHT, SIDE_LEFT, SIDE_BACK,
-								  SIDE_FRONT}[this->block->metadata & 3];
+		enum side facing
+			= (enum side[4]) {SIDE_RIGHT, SIDE_LEFT, SIDE_BACK,
+							  SIDE_FRONT}[this->block->metadata & 3];
 
-			switch(facing) {
-				default:
-				case SIDE_FRONT:
-					aabb_setsize(x + 1, 1.0F, 0.5F, 0.5F);
-					aabb_translate(x + 1, 0, 0.5F, -0.25F);
-					break;
-				case SIDE_BACK:
-					aabb_setsize(x + 1, 1.0F, 0.5F, 0.5F);
-					aabb_translate(x + 1, 0, 0.5F, 0.25F);
-					break;
-				case SIDE_RIGHT:
-					aabb_setsize(x + 1, 0.5F, 0.5F, 1.0F);
-					aabb_translate(x + 1, 0.25F, 0.5F, 0);
-					break;
-				case SIDE_LEFT:
-					aabb_setsize(x + 1, 0.5F, 0.5F, 1.0F);
-					aabb_translate(x + 1, -0.25F, 0.5F, 0);
-					break;
-			}
+		switch(facing) {
+			default:
+			case SIDE_FRONT:
+				aabb_setsize(x + 1, 1.0F, 0.5F, 0.5F);
+				aabb_translate(x + 1, 0, 0.5F, -0.25F);
+				break;
+			case SIDE_BACK:
+				aabb_setsize(x + 1, 1.0F, 0.5F, 0.5F);
+				aabb_translate(x + 1, 0, 0.5F, 0.25F);
+				break;
+			case SIDE_RIGHT:
+				aabb_setsize(x + 1, 0.5F, 0.5F, 1.0F);
+				aabb_translate(x + 1, 0.25F, 0.5F, 0);
+				break;
+			case SIDE_LEFT:
+				aabb_setsize(x + 1, 0.5F, 0.5F, 1.0F);
+				aabb_translate(x + 1, -0.25F, 0.5F, 0);
+				break;
 		}
-
-		return 2;
-	} else {
-		if(x)
-			aabb_setsize(x, 1.0F, 1.0F, 1.0F);
-		return 1;
 	}
+
+	return 2;
 }
 
 static struct face_occlusion side_mask = {
@@ -143,9 +140,9 @@ static bool onItemPlace(struct server_local* s, struct item_data* it,
 						struct block_info* where, struct block_info* on,
 						enum side on_side) {
 	int metadata = 0;
-int player_id = 0;
-double dx = s->players[player_id].x - (where->x + 0.5);
-double dz = s->players[player_id].z - (where->z + 0.5);
+	const uint8_t player_id = s->active_player_id;
+	const double dx = s->players[player_id].x - (where->x + 0.5);
+	const double dz = s->players[player_id].z - (where->z + 0.5);
 
 	if(fabs(dx) > fabs(dz)) {
 		metadata = (dx >= 0) ? 1 : 0;

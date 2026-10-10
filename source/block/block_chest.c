@@ -17,6 +17,8 @@
 	along with CavEX.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <math.h>
+
 #include "../network/client_interface.h"
 #include "../network/inventory_logic.h"
 #include "../network/server_local.h"
@@ -81,9 +83,20 @@ player->active_inventory = inv;
 static bool onItemPlace(struct server_local* s, struct item_data* it,
 						struct block_info* where, struct block_info* on,
 						enum side on_side) {
+	const uint8_t pid = s->active_player_id;
+	const double dx = s->players[pid].x - (where->x + 0.5);
+	const double dz = s->players[pid].z - (where->z + 0.5);
+	uint8_t metadata;
+
+	if(fabs(dx) > fabs(dz)) {
+		metadata = (dx >= 0) ? 1 : 3;
+	} else {
+		metadata = (dz >= 0) ? 2 : 0;
+	}
+
 	struct block_data blk = (struct block_data) {
 		.type = it->id,
-		.metadata = it->durability,
+		.metadata = metadata,
 		.sky_light = 0,
 		.torch_light = 0,
 	};
@@ -92,9 +105,7 @@ static bool onItemPlace(struct server_local* s, struct item_data* it,
 	blk_info.block = &blk;
 
 	if(entity_local_player_block_collide(
-		   (vec3) {s->players[s->active_player_id].x,
-				   s->players[s->active_player_id].y,
-				   s->players[s->active_player_id].z},
+		   (vec3) {s->players[pid].x, s->players[pid].y, s->players[pid].z},
 		   &blk_info))
 		return false;
 
