@@ -25,9 +25,40 @@ static enum block_material getMaterial(struct block_info* this) {
 
 static size_t getBoundingBox(struct block_info* this, bool entity,
 							 struct AABB* x) {
-	if(x)
-		aabb_setsize(x, 1.0F, entity ? 1.5F : 1.0F, 1.0F);
-	return 1;
+	const float h = entity ? 1.5F : 1.0F;
+	const bool connect_pos_x = this->neighbours
+		&& (this->neighbours[SIDE_RIGHT].type == BLOCK_FENCE
+			|| this->neighbours[SIDE_RIGHT].type == BLOCK_NETHER_BRICK_FENCE
+			|| this->neighbours[SIDE_RIGHT].type == BLOCK_FENCE_GATE);
+	const bool connect_neg_x = this->neighbours
+		&& (this->neighbours[SIDE_LEFT].type == BLOCK_FENCE
+			|| this->neighbours[SIDE_LEFT].type == BLOCK_NETHER_BRICK_FENCE
+			|| this->neighbours[SIDE_LEFT].type == BLOCK_FENCE_GATE);
+	const bool connect_pos_z = this->neighbours
+		&& (this->neighbours[SIDE_BACK].type == BLOCK_FENCE
+			|| this->neighbours[SIDE_BACK].type == BLOCK_NETHER_BRICK_FENCE
+			|| this->neighbours[SIDE_BACK].type == BLOCK_FENCE_GATE);
+	const bool connect_neg_z = this->neighbours
+		&& (this->neighbours[SIDE_FRONT].type == BLOCK_FENCE
+			|| this->neighbours[SIDE_FRONT].type == BLOCK_NETHER_BRICK_FENCE
+			|| this->neighbours[SIDE_FRONT].type == BLOCK_FENCE_GATE);
+	size_t count = 1;
+
+	if(x) {
+		x[0] = (struct AABB) {0.375F, 0.0F, 0.375F, 0.625F, h, 0.625F};
+		if(connect_pos_x)
+			x[count++] = (struct AABB) {0.625F, 0.0F, 0.375F, 1.0F, h, 0.625F};
+		if(connect_neg_x)
+			x[count++] = (struct AABB) {0.0F, 0.0F, 0.375F, 0.375F, h, 0.625F};
+		if(connect_pos_z)
+			x[count++] = (struct AABB) {0.375F, 0.0F, 0.625F, 0.625F, h, 1.0F};
+		if(connect_neg_z)
+			x[count++] = (struct AABB) {0.375F, 0.0F, 0.0F, 0.625F, h, 0.375F};
+	} else {
+		count += connect_pos_x + connect_neg_x + connect_pos_z + connect_neg_z;
+	}
+
+	return count;
 }
 
 static struct face_occlusion side_top_bottom = {

@@ -49,6 +49,8 @@
 	((y) + (W2C_COORD(z) + W2C_COORD(x) * CHUNK_SIZE) * WORLD_HEIGHT)
 
 #define GEN_SEA_LEVEL 62
+#define GEN_BIOME_CACHE_MARGIN 8
+#define GEN_BIOME_CACHE_WIDTH  (CHUNK_SIZE + GEN_BIOME_CACHE_MARGIN * 2)
 
 struct gen_cuberite_runtime_args {
 	float land_frequency_x;
@@ -71,11 +73,6 @@ struct gen_cuberite_runtime_args {
 	int cave_min_y;
 	float edge_blend_weight_self;
 	float edge_blend_weight_neighbor;
-	int beach_band_low;
-	int beach_band_high;
-	float sea_floor_frequency_x;
-	float sea_floor_frequency_z;
-	float sea_floor_gravel_threshold;
 	float island_mask_frequency_x;
 	float island_mask_frequency_z;
 	float island_mask_threshold;
@@ -114,16 +111,16 @@ static float gen_inv_nonzero(float value, float fallback) {
 static struct gen_cuberite_runtime_args gen_runtime_args(const struct server_world* w) {
 	const struct server_world_cuberite_config* cfg = &w->generator;
 	struct gen_cuberite_runtime_args args = {
-		.land_frequency_x = gen_inv_nonzero(cfg->biomal_noise3d_base_frequency_x, 1.0f / 40.0f),
-		.land_frequency_z = gen_inv_nonzero(cfg->biomal_noise3d_base_frequency_z, 1.0f / 40.0f),
+		.land_frequency_x = gen_inv_nonzero(cfg->biomal_noise3d_base_frequency_x, 1.0f / 40.0f) * 0.42f,
+		.land_frequency_z = gen_inv_nonzero(cfg->biomal_noise3d_base_frequency_z, 1.0f / 40.0f) * 0.42f,
 		.land_octaves = (cfg->biomal_noise3d_num_base_octaves > 0) ?
 			cfg->biomal_noise3d_num_base_octaves : 6,
-		.detail_frequency_x = gen_inv_nonzero(cfg->biomal_noise3d_frequency_x, 1.0f / 40.0f),
-		.detail_frequency_z = gen_inv_nonzero(cfg->biomal_noise3d_frequency_z, 1.0f / 40.0f),
+		.detail_frequency_x = gen_inv_nonzero(cfg->biomal_noise3d_frequency_x, 1.0f / 40.0f) * 0.62f,
+		.detail_frequency_z = gen_inv_nonzero(cfg->biomal_noise3d_frequency_z, 1.0f / 40.0f) * 0.62f,
 		.detail_octaves = (cfg->biomal_noise3d_num_density_octaves > 0) ?
 			cfg->biomal_noise3d_num_density_octaves : 6,
-		.mountain_frequency_x = gen_inv_nonzero(cfg->biomal_noise3d_choice_frequency_x, 1.0f / 40.0f),
-		.mountain_frequency_z = gen_inv_nonzero(cfg->biomal_noise3d_choice_frequency_z, 1.0f / 40.0f),
+		.mountain_frequency_x = gen_inv_nonzero(cfg->biomal_noise3d_choice_frequency_x, 1.0f / 40.0f) * 0.34f,
+		.mountain_frequency_z = gen_inv_nonzero(cfg->biomal_noise3d_choice_frequency_z, 1.0f / 40.0f) * 0.34f,
 		.mountain_gain = 0.85f * fmaxf(0.25f, cfg->biomal_noise3d_base_amplitude),
 		.cave_frequency_xy = gen_inv_nonzero((float)cfg->worm_nest_caves_grid, 1.0f / 96.0f) * 5.8f,
 		.cave_frequency_y = gen_inv_nonzero((float)cfg->worm_nest_caves_size, 1.0f / 64.0f) * 4.8f,
@@ -136,13 +133,8 @@ static struct gen_cuberite_runtime_args gen_runtime_args(const struct server_wor
 		.cave_min_y = 9,
 		.edge_blend_weight_self = 0.70f,
 		.edge_blend_weight_neighbor = 0.30f,
-		.beach_band_low = -2,
-		.beach_band_high = 2,
-		.sea_floor_frequency_x = gen_inv_nonzero(cfg->biomal_noise3d_frequency_x, 1.0f / 40.0f) * 2.3f,
-		.sea_floor_frequency_z = gen_inv_nonzero(cfg->biomal_noise3d_frequency_z, 1.0f / 40.0f) * 2.3f,
-		.sea_floor_gravel_threshold = 0.35f,
-		.island_mask_frequency_x = gen_inv_nonzero(cfg->biomal_noise3d_choice_frequency_x, 1.0f / 40.0f) * 0.72f,
-		.island_mask_frequency_z = gen_inv_nonzero(cfg->biomal_noise3d_choice_frequency_z, 1.0f / 40.0f) * 0.72f,
+		.island_mask_frequency_x = gen_inv_nonzero(cfg->biomal_noise3d_choice_frequency_x, 1.0f / 40.0f) * 0.30f,
+		.island_mask_frequency_z = gen_inv_nonzero(cfg->biomal_noise3d_choice_frequency_z, 1.0f / 40.0f) * 0.30f,
 		.island_mask_threshold = 0.08f,
 		.island_mask_scale = 0.32f,
 		.island_max_lift = 10.0f,
@@ -208,32 +200,21 @@ static float gen_lerp(float a, float b, float t) {
 
 static int gen_chunk_surface_height(const struct server_chunk* sc, int lx, int lz);
 static int gen_chunk_actual_surface_height(const struct server_chunk* sc, int lx, int lz);
-static bool gen_is_dry_sandy_biome(int biome_id);
 static bool gen_is_water(const struct server_chunk* sc, int x, int y, int z);
+static bool gen_is_ore_block(uint8_t block);
 
-/* Terrain debug switches: turn pieces of the base generator on/off individually. */
-static const bool GEN_FORCE_LEGACY_WII_SURFACE = 				true;
-static const bool GEN_ENABLE_LEGACY_RARE_OCEANS = 				true;
 #ifdef ALL_FALSE_FINISHER
 static const bool GEN_ENABLE_RIVER_LOWERING = 					false;
 static const bool GEN_ENABLE_NEIGHBOR_EDGE_BLEND = 				false;
 static const bool GEN_ENABLE_OCEAN_ISLAND_MASK = 				false;
-static const bool GEN_ENABLE_DRY_SANDY_SEA_CLAMP = 				false;
 static const bool GEN_ENABLE_LOWLAND_NEIGHBOR_SMOOTHING = 		false;
-static const bool GEN_ENABLE_LEGACY_LOWLAND_FLOOR = 			false;
-static const bool GEN_ENABLE_BEACH_SURFACE_REPLACEMENT = 		false;
-static const bool GEN_ENABLE_SUBMERGED_SEAFLOOR_REPLACEMENT = 	false;
 static const bool GEN_ENABLE_WATER_FILL_TO_SEA_LEVEL = 			false;
 static const bool GEN_ENABLE_SNOW_SURFACE_LAYER = 				false;
 #else
 static const bool GEN_ENABLE_RIVER_LOWERING = 					true;
-static const bool GEN_ENABLE_NEIGHBOR_EDGE_BLEND = 				true;
+static const bool GEN_ENABLE_NEIGHBOR_EDGE_BLEND = 				false;
 static const bool GEN_ENABLE_OCEAN_ISLAND_MASK = 				true;
-static const bool GEN_ENABLE_DRY_SANDY_SEA_CLAMP = 				true;
-static const bool GEN_ENABLE_LOWLAND_NEIGHBOR_SMOOTHING = 		true;
-static const bool GEN_ENABLE_LEGACY_LOWLAND_FLOOR = 			true;
-static const bool GEN_ENABLE_BEACH_SURFACE_REPLACEMENT = 		true;
-static const bool GEN_ENABLE_SUBMERGED_SEAFLOOR_REPLACEMENT = 	true;
+static const bool GEN_ENABLE_LOWLAND_NEIGHBOR_SMOOTHING = 		false;
 static const bool GEN_ENABLE_WATER_FILL_TO_SEA_LEVEL = 			true;
 static const bool GEN_ENABLE_SNOW_SURFACE_LAYER = 				true;
 #endif
@@ -316,6 +297,22 @@ static float gen_fbm2d(float x, float z, uint32_t seed, int octaves,
 	return (norm > 0.0f) ? (sum / norm) : 0.0f;
 }
 
+static float gen_fbm3d(float x, float y, float z, uint32_t seed, int octaves,
+					   float lacunarity, float gain) {
+	float amp = 1.0f;
+	float freq = 1.0f;
+	float sum = 0.0f;
+	float norm = 0.0f;
+	for(int i = 0; i < octaves; i++) {
+		sum += gen_value_noise3d(x * freq, y * freq, z * freq,
+								 seed + (uint32_t)i * 1301U) * amp;
+		norm += amp;
+		amp *= gain;
+		freq *= lacunarity;
+	}
+	return (norm > 0.0f) ? (sum / norm) : 0.0f;
+}
+
 static bool gen_is_opaque(uint8_t block_id) {
 	switch(block_id) {
 		case BLOCK_AIR:
@@ -326,6 +323,14 @@ static bool gen_is_opaque(uint8_t block_id) {
 		case BLOCK_SNOW: return false;
 		default: return true;
 	}
+}
+
+static float gen_clampf(float value, float minv, float maxv) {
+	if(value < minv)
+		return minv;
+	if(value > maxv)
+		return maxv;
+	return value;
 }
 
 struct gen_biome_profile {
@@ -350,8 +355,8 @@ static struct gen_biome_profile gen_profile_for_biome(int biome_id) {
 	if(biome_id == river || biome_id == frozen_river) {
 		p.base_height = 60.0f;
 		p.amplitude = 2.0f;
-		p.top_block = BLOCK_SAND;
-		p.filler_block = BLOCK_SAND;
+		p.top_block = BLOCK_GRAVEL;
+		p.filler_block = BLOCK_DIRT;
 		p.oceanic = false;
 		p.riverine = true;
 		return p;
@@ -360,8 +365,8 @@ static struct gen_biome_profile gen_profile_for_biome(int biome_id) {
 	if(isOceanic(biome_id)) {
 		p.base_height = 49.0f;
 		p.amplitude = 4.0f;
-		p.top_block = BLOCK_SAND;
-		p.filler_block = BLOCK_SANDSTONE;
+		p.top_block = BLOCK_GRAVEL;
+		p.filler_block = BLOCK_DIRT;
 		p.oceanic = true;
 		return p;
 	}
@@ -399,8 +404,8 @@ static struct gen_biome_profile gen_profile_for_biome(int biome_id) {
 		case modified_gravelly_mountains:
 			p.base_height = 74.0f;
 			p.amplitude = 30.0f;
-			p.top_block = BLOCK_STONE;
-			p.filler_block = BLOCK_STONE;
+			p.top_block = BLOCK_GRASS;
+			p.filler_block = BLOCK_DIRT;
 			break;
 
 		case stone_shore:
@@ -440,8 +445,82 @@ static struct gen_biome_profile gen_profile_for_biome(int biome_id) {
 	return p;
 }
 
+struct gen_biome_cache_view {
+	bool valid;
+	int origin_x;
+	int origin_z;
+	int* ids;
+};
+
+struct gen_biome_cache_storage {
+	bool valid;
+	int origin_x;
+	int origin_z;
+	int ids[GEN_BIOME_CACHE_WIDTH * GEN_BIOME_CACHE_WIDTH];
+};
+
+static struct gen_biome_cache_view gen_active_biome_cache;
+static struct gen_biome_cache_storage gen_pending_biome_cache;
+
+static void gen_biome_cache_fill(Generator* biome_gen, int world_x0, int world_z0,
+								 bool* valid, int* origin_x, int* origin_z,
+								 int* ids) {
+	assert(valid && origin_x && origin_z && ids);
+
+	*valid = false;
+	*origin_x = world_x0 - GEN_BIOME_CACHE_MARGIN;
+	*origin_z = world_z0 - GEN_BIOME_CACHE_MARGIN;
+	for(int i = 0; i < GEN_BIOME_CACHE_WIDTH * GEN_BIOME_CACHE_WIDTH; i++)
+		ids[i] = none;
+
+	if(!biome_gen)
+		return;
+
+	Range r = {
+		.scale = 4,
+		.x = *origin_x,
+		.z = *origin_z,
+		.sx = GEN_BIOME_CACHE_WIDTH,
+		.sz = GEN_BIOME_CACHE_WIDTH,
+		.y = 64,
+		.sy = 1,
+	};
+	int* cache = allocCache(biome_gen, r);
+	if(!cache)
+		return;
+
+	if(genBiomes(biome_gen, cache, r) == 0) {
+		memcpy(ids, cache, GEN_BIOME_CACHE_WIDTH * GEN_BIOME_CACHE_WIDTH * sizeof(*ids));
+		*valid = true;
+	}
+	free(cache);
+}
+
+static void gen_biome_cache_activate(bool valid, int origin_x, int origin_z,
+									 int* ids) {
+	gen_active_biome_cache = (struct gen_biome_cache_view) {
+		.valid = valid,
+		.origin_x = origin_x,
+		.origin_z = origin_z,
+		.ids = ids,
+	};
+}
+
+static void gen_biome_cache_clear_active(void) {
+	gen_active_biome_cache = (struct gen_biome_cache_view) {0};
+}
+
 static int gen_biome_at_safe(Generator* biome_gen, int wx, int wz) {
-	int biome_id = getBiomeAt(biome_gen, 4, wx, 64, wz);
+	int biome_id = none;
+	if(gen_active_biome_cache.valid && gen_active_biome_cache.ids) {
+		int lx = wx - gen_active_biome_cache.origin_x;
+		int lz = wz - gen_active_biome_cache.origin_z;
+		if(lx >= 0 && lx < GEN_BIOME_CACHE_WIDTH
+		   && lz >= 0 && lz < GEN_BIOME_CACHE_WIDTH)
+			biome_id = gen_active_biome_cache.ids[lx + lz * GEN_BIOME_CACHE_WIDTH];
+	}
+	if(biome_id == none)
+		biome_id = getBiomeAt(biome_gen, 4, wx, 64, wz);
 	return (biome_id < 0) ? plains : biome_id;
 }
 
@@ -538,14 +617,13 @@ static struct gen_biome_profile gen_blended_profile(Generator* biome_gen, int wx
 	float base = 0.0f;
 	float amp = 0.0f;
 	float wsum = 0.0f;
-	int sand_votes = 0;
-	int stone_votes = 0;
 	int ocean_votes = 0;
 	int snowy_votes = 0;
 	int river_votes = 0;
 
 	int first = gen_apply_forest_biome_variation(
 		gen_reduce_extreme_biomes(gen_biome_at_safe(biome_gen, wx, wz), wx, wz), wx, wz);
+	struct gen_biome_profile center_profile = gen_profile_for_biome(first);
 	if(center_biome)
 		*center_biome = first;
 
@@ -562,10 +640,6 @@ static struct gen_biome_profile gen_blended_profile(Generator* biome_gen, int wx
 		base += p.base_height * w;
 		amp += p.amplitude * w;
 		wsum += w;
-		if(p.top_block == BLOCK_SAND)
-			sand_votes++;
-		if(p.top_block == BLOCK_STONE)
-			stone_votes++;
 		if(p.oceanic)
 			ocean_votes++;
 		if(p.riverine)
@@ -577,33 +651,119 @@ static struct gen_biome_profile gen_blended_profile(Generator* biome_gen, int wx
 	struct gen_biome_profile out = {
 		.base_height = base / wsum,
 		.amplitude = amp / wsum,
-		.top_block = BLOCK_GRASS,
-		.filler_block = BLOCK_DIRT,
+		.top_block = center_profile.top_block,
+		.filler_block = center_profile.filler_block,
 		.oceanic = ocean_votes >= 3,
 		.riverine = false,
 	};
 
-	if(stone_votes >= 3) {
-		out.top_block = BLOCK_STONE;
-		out.filler_block = BLOCK_STONE;
-	} else if(sand_votes >= 2) {
-		out.top_block = BLOCK_SAND;
-		out.filler_block = BLOCK_SAND;
-	}
-
 	if(snowy_votes >= 3 && out.top_block == BLOCK_GRASS)
 		out.base_height += 1.0f;
 
-	if(river_votes >= 2) {
-		out.base_height = 60.0f;
-		out.amplitude = 2.5f;
-		out.top_block = BLOCK_SAND;
-		out.filler_block = BLOCK_SAND;
+	bool center_river = (first == river || first == frozen_river);
+	if(center_river && river_votes >= 2) {
+		out.base_height = (out.base_height * 2.0f + 61.0f) / 3.0f;
+		out.amplitude = fminf(out.amplitude, 4.0f);
 		out.oceanic = false;
 		out.riverine = true;
 	}
 
 	return out;
+}
+
+static float gen_river_channel_strength(uint32_t seed, int32_t wx, int32_t wz) {
+	float valley = gen_fbm2d((float)wx * 0.010f, (float)wz * 0.010f,
+							 seed ^ 0xD1CEBEEFU, 3, 2.0f, 0.52f);
+	float bend = gen_fbm2d((float)wx * 0.0035f, (float)wz * 0.0035f,
+						   seed ^ 0x51DECAFEU, 2, 2.0f, 0.5f);
+	float bank = gen_fbm2d((float)wx * 0.028f, (float)wz * 0.028f,
+						   seed ^ 0x0A1154A1U, 1, 2.0f, 0.5f);
+	float center_distance = fabsf(valley + bend * 0.34f);
+	float width = 0.18f + fmaxf(0.0f, bank) * 0.05f;
+	float feather = 0.18f;
+	float strength = (width + feather - center_distance) / feather;
+	strength = gen_clampf(strength, 0.0f, 1.0f);
+	return strength * strength * (3.0f - 2.0f * strength);
+}
+
+static int gen_apply_river_channel(struct gen_biome_profile* profile,
+								   const struct gen_cuberite_runtime_args* gen_args,
+								   uint32_t seed, int32_t wx, int32_t wz,
+								   int surface) {
+	if(!GEN_ENABLE_RIVER_LOWERING || !profile->riverine)
+		return surface;
+
+	float strength = gen_river_channel_strength(seed, wx, wz);
+	if(strength < 0.20f) {
+		profile->riverine = false;
+		if(profile->top_block == BLOCK_SAND) {
+			profile->top_block = BLOCK_GRASS;
+			profile->filler_block = BLOCK_DIRT;
+		}
+		if(surface < gen_args->sea_level + 1)
+			surface = gen_args->sea_level + 1;
+		return surface;
+	}
+
+	float edge_lift = (1.0f - strength) * 3.0f;
+	int bank_surface = gen_args->sea_level + 1 + (int)edge_lift;
+	int river_floor = gen_args->sea_level - 1;
+	if(strength > 0.82f)
+		river_floor--;
+
+	float cut = gen_clampf((strength - 0.20f) / 0.80f, 0.0f, 1.0f);
+	cut = cut * cut * (3.0f - 2.0f * cut);
+	int target = (int)((float)bank_surface * (1.0f - cut)
+		+ (float)river_floor * cut);
+	if(surface > target)
+		surface = (int)((float)surface * (1.0f - cut)
+			+ (float)target * cut);
+	if(surface < river_floor)
+		surface = river_floor;
+	if(strength < 0.52f && surface < bank_surface)
+		surface = bank_surface;
+
+	if(strength > 0.55f) {
+		profile->top_block = BLOCK_GRAVEL;
+		profile->filler_block = BLOCK_DIRT;
+	} else {
+		profile->top_block = BLOCK_GRASS;
+		profile->filler_block = BLOCK_DIRT;
+	}
+	return surface;
+}
+
+static bool gen_biome_has_stony_surface(int biome_id) {
+	switch(biome_id) {
+	case mountains:
+	case wooded_mountains:
+	case mountain_edge:
+	case gravelly_mountains:
+	case modified_gravelly_mountains:
+	case stone_shore:
+		return true;
+	default:
+		return false;
+	}
+}
+
+static bool gen_biome_has_sandy_surface(int biome_id) {
+	switch(biome_id) {
+	case desert:
+	case desert_hills:
+	case desert_lakes:
+	case beach:
+	case snowy_beach:
+	case badlands:
+	case badlands_plateau:
+	case wooded_badlands_plateau:
+	case eroded_badlands:
+	case modified_badlands_plateau:
+	case modified_wooded_badlands_plateau:
+		return true;
+	default:
+		return false;
+	}
 }
 
 static int gen_compute_surface_height_base(const struct gen_biome_profile* profile,
@@ -623,32 +783,19 @@ static int gen_compute_surface_height_base(const struct gen_biome_profile* profi
 
 	float mountain_lift = fmaxf(0.0f, mountain);
 	float mountain_factor = gen_args->mountain_gain;
-	float micro_factor = 2.0f;
+	float micro_factor = 0.85f;
 	if(profile->top_block == BLOCK_SAND) {
 		mountain_factor = 0.35f;
-		micro_factor = 0.8f;
+		micro_factor = 0.35f;
 	} else if(profile->top_block == BLOCK_STONE && !profile->oceanic) {
 		mountain_factor = 0.95f;
-		micro_factor = 1.6f;
+		micro_factor = 1.1f;
 	}
 
 	int surface = (int)(profile->base_height
 		+ continental * profile->amplitude
 		+ mountain_lift * (profile->amplitude * mountain_factor)
 		+ micro * micro_factor);
-
-	if(GEN_ENABLE_RIVER_LOWERING && profile->riverine) {
-		int river_floor = gen_args->sea_level - 1 + (int)(micro * 0.75f);
-		if(river_floor < gen_args->sea_level - 1)
-			river_floor = gen_args->sea_level - 1;
-		if(river_floor > gen_args->sea_level)
-			river_floor = gen_args->sea_level;
-		surface = (surface + river_floor * 3) / 4;
-		if(surface < gen_args->sea_level - 2)
-			surface = gen_args->sea_level - 2;
-		if(surface > gen_args->sea_level + 1)
-			surface = gen_args->sea_level + 1;
-	}
 
 	if(GEN_ENABLE_OCEAN_ISLAND_MASK && profile->oceanic) {
 		float island_mask = gen_fbm2d(wx * gen_args->island_mask_frequency_x,
@@ -684,87 +831,58 @@ static int gen_compute_surface_height_base(const struct gen_biome_profile* profi
 	if(surface < gen_args->sea_level - 20)
 		surface = gen_args->sea_level - 20;
 
-	if(GEN_ENABLE_DRY_SANDY_SEA_CLAMP
-	   && gen_is_dry_sandy_biome(biome_id) && !profile->oceanic
-	   && biome_id != beach && biome_id != river) {
-		if(surface < gen_args->sea_level + 1)
-			surface = gen_args->sea_level + 1;
-		if(surface <= gen_args->sea_level + 4)
-			surface = gen_args->sea_level + 2;
-	}
-
 	return surface;
 }
 
-static int gen_compute_legacy_wii_surface(
-	const struct gen_cuberite_runtime_args* gen_args, uint32_t seed,
-	int32_t wx, int32_t wz) {
-	float h1 = gen_fbm2d(wx * gen_args->land_frequency_x,
-		wz * gen_args->land_frequency_z, seed ^ 0x11AABBCCU, 2, 2.0f, 0.5f);
-	float h2 = gen_fbm2d(wx * gen_args->detail_frequency_x,
-		wz * gen_args->detail_frequency_z, seed ^ 0x77CC22AAU, 1, 2.0f, 0.5f);
-	float m = gen_fbm2d(wx * gen_args->mountain_frequency_x,
-		wz * gen_args->mountain_frequency_z, seed ^ 0x55DD33AAU, 2, 2.0f, 0.5f);
-	int surface = (int)(63.0f + h1 * 11.0f + h2 * 2.0f + fmaxf(0.0f, m) * 8.0f);
-	if(surface < 6)
-		surface = 6;
-	if(surface > WORLD_HEIGHT - 2)
-		surface = WORLD_HEIGHT - 2;
-	return surface;
-}
+static void gen_choose_surface_materials(const struct gen_biome_profile* profile,
+										 int biome_id,
+										 const struct gen_cuberite_runtime_args* gen_args,
+										 uint32_t seed, int32_t wx, int32_t wz,
+										 int surface, uint8_t* top_block,
+										 uint8_t* filler_block,
+										 int* dirt_depth) {
+	(void)profile;
+	struct gen_biome_profile surface_profile = gen_profile_for_biome(biome_id);
+	uint8_t top = surface_profile.top_block;
+	uint8_t filler = surface_profile.filler_block;
+	int depth = 3 + (int)(gen_fbm2d((float)wx * 0.031f, (float)wz * 0.031f,
+									seed ^ 0x5107ACEDU, 2, 2.0f, 0.5f)
+						  * 1.5f);
+	if(depth < 1)
+		depth = 1;
+	if(depth > 6)
+		depth = 6;
 
-static int gen_apply_legacy_rare_oceans(
-	const struct gen_cuberite_runtime_args* gen_args, uint32_t seed,
-	int32_t wx, int32_t wz, int surface, int biome_id) {
-	if(!GEN_ENABLE_LEGACY_RARE_OCEANS)
-		return surface;
-	if(biome_id == river || biome_id == frozen_river)
-		return surface;
-
-	float ocean_macro = gen_fbm2d(wx * 0.0032f, wz * 0.0032f,
-		seed ^ 0x2F6E2B1DU, 3, 2.0f, 0.5f);
-	if(ocean_macro > -0.42f)
-		return surface;
-
-	float t = (-0.42f - ocean_macro) / 0.28f;
-	if(t < 0.0f)
-		t = 0.0f;
-	if(t > 1.0f)
-		t = 1.0f;
-	t = t * t * (3.0f - 2.0f * t);
-
-	int ocean_surface = gen_args->sea_level - 2;
-	int blended = (int)((1.0f - t) * (float)surface + t * (float)ocean_surface);
-	if(blended > surface)
-		blended = surface;
-	if(blended < gen_args->sea_level - 4)
-		blended = gen_args->sea_level - 4;
-	return blended;
-}
-
-static float gen_cave_threshold_for_biome(int biome_id) {
-	if(isOceanic(biome_id) || biome_id == river || biome_id == frozen_river)
-		return 0.70f;
-
-	switch(biome_id) {
-		case mountains:
-		case wooded_mountains:
-		case mountain_edge:
-		case gravelly_mountains:
-		case modified_gravelly_mountains: return 0.60f;
-		case desert:
-		case desert_hills:
-		case desert_lakes: return 0.67f;
-		default: return 0.64f;
+	if(gen_biome_has_stony_surface(biome_id)) {
+		float stone_noise = gen_fbm2d((float)wx * 0.045f, (float)wz * 0.045f,
+									  seed ^ 0x570A1E55U, 2, 2.0f, 0.5f);
+		int exposed_y = gen_args->sea_level + 34 + (int)(stone_noise * 8.0f);
+		if(biome_id == stone_shore
+		   || (surface >= exposed_y && stone_noise > 0.42f)) {
+			top = BLOCK_STONE;
+			filler = BLOCK_STONE;
+			depth = 1 + (int)(fabsf(stone_noise) * 2.0f);
+		}
 	}
-}
 
-static bool gen_is_dry_sandy_biome(int biome_id) {
-	return biome_id == desert || biome_id == desert_hills
-		   || biome_id == badlands || biome_id == badlands_plateau
-		   || biome_id == wooded_badlands_plateau || biome_id == eroded_badlands
-		   || biome_id == modified_badlands_plateau
-		   || biome_id == modified_wooded_badlands_plateau;
+	if(gen_biome_has_sandy_surface(biome_id)) {
+		top = BLOCK_SAND;
+		float sandstone_noise = gen_fbm2d((float)wx * 0.026f, (float)wz * 0.026f,
+										  seed ^ 0x5A9D5101U, 1, 2.0f, 0.5f);
+		filler = (sandstone_noise > -0.35f) ? BLOCK_SAND : BLOCK_SANDSTONE;
+		if(depth < 4)
+			depth = 4;
+	} else if(biome_id == river || biome_id == frozen_river) {
+		top = (surface <= gen_args->sea_level) ? BLOCK_GRAVEL : BLOCK_GRASS;
+		filler = BLOCK_DIRT;
+	} else if(isOceanic(biome_id)) {
+		top = BLOCK_GRAVEL;
+		filler = BLOCK_DIRT;
+	}
+
+	*top_block = top;
+	*filler_block = filler;
+	*dirt_depth = depth;
 }
 
 static bool gen_is_mountainous_biome(int biome_id) {
@@ -1428,7 +1546,7 @@ static void gen_carve_chunk_cave_entrance(struct server_chunk* sc, uint32_t seed
 	}
 	bool mountainous_chunk = gen_is_mountainous_biome(center_biome)
 		|| ((max_surface - min_surface) >= 14);
-	unsigned int entrance_chance = mountainous_chunk ? 80U : 20U;
+	unsigned int entrance_chance = mountainous_chunk ? 16U : 3U;
 	if((gen_hash3i(chunk_x, 941, chunk_z, seed) % 100U) >= entrance_chance)
 		return;
 
@@ -1449,7 +1567,7 @@ static void gen_carve_chunk_cave_entrance(struct server_chunk* sc, uint32_t seed
 	int entrance_lz = -1;
 	int best_score = -999999;
 	int required_surface = mountainous_chunk ? 62 : 58;
-	int required_slope = mountainous_chunk ? 2 : 1;
+	int required_slope = mountainous_chunk ? 4 : 3;
 	for(int attempt = 0; attempt < 32; attempt++) {
 		int lx = 4 + (int)(gen_hash3i(chunk_x, 953 + attempt * 17, chunk_z, seed) % (unsigned int)(CHUNK_SIZE - 8));
 		int lz = 4 + (int)(gen_hash3i(chunk_x, 967 + attempt * 19, chunk_z, seed) % (unsigned int)(CHUNK_SIZE - 8));
@@ -1843,21 +1961,33 @@ static void gen_cave_process_chunk(const struct gen_cave_tunnel* t, struct serve
 		int top = p->y + p->radius;
 		if(bottom < 1) bottom = 1;
 		if(top > WORLD_HEIGHT - 1) top = WORLD_HEIGHT - 1;
-		int sq_rad = p->radius * p->radius;
-		for(int z = 0; z < CHUNK_SIZE; z++) {
-			for(int x = 0; x < CHUNK_SIZE; x++) {
+		int x0 = dif_x - p->radius - 1;
+		int x1 = dif_x + p->radius + 1;
+		int z0 = dif_z - p->radius - 1;
+		int z1 = dif_z + p->radius + 1;
+		if(x0 < 0) x0 = 0;
+		if(z0 < 0) z0 = 0;
+		if(x1 >= CHUNK_SIZE) x1 = CHUNK_SIZE - 1;
+		if(z1 >= CHUNK_SIZE) z1 = CHUNK_SIZE - 1;
+		float sq_rad = (float)(p->radius * p->radius);
+		float y_scale = 1.35f;
+		for(int z = z0; z <= z1; z++) {
+			for(int x = x0; x <= x1; x++) {
 				for(int y = bottom; y <= top; y++) {
-					int sq_dist = (dif_x - x) * (dif_x - x)
-						+ (dif_y - y) * (dif_y - y)
-						+ (dif_z - z) * (dif_z - z);
-					if(sq_dist <= sq_rad) {
+					float dy = ((float)(dif_y - y)) * y_scale;
+					float sq_dist = (float)((dif_x - x) * (dif_x - x)
+						+ (dif_z - z) * (dif_z - z)) + dy * dy;
+					float edge_noise = gen_rand01_from_hash(
+						gen_hash3i(base_x + x, y, base_z + z, t->points[0].x ^ 0xCA7E5U));
+					float carve_rad = sq_rad * (0.82f + edge_noise * 0.22f);
+					if(sq_dist <= carve_rad) {
 						uint8_t b = gen_get_block(sc, x, y, z);
 						if(b == BLOCK_STONE || b == BLOCK_DIRT || b == BLOCK_GRASS
 						   || b == BLOCK_SAND || b == BLOCK_SANDSTONE
 						   || b == BLOCK_GRAVEL) {
 							gen_set_block(sc, x, y, z, BLOCK_AIR);
 						}
-					} else if(sq_dist <= sq_rad * 2) {
+					} else if(sq_dist <= sq_rad * 1.55f) {
 						if(gen_get_block(sc, x, y, z) == BLOCK_SAND) {
 							gen_set_block(sc, x, y, z, BLOCK_SANDSTONE);
 						}
@@ -1903,6 +2033,165 @@ static void gen_carve_worm_nest_caves(struct server_chunk* sc, uint32_t seed,
 		return;
 	gen_carve_chunk_linked_caves(sc, seed, gen_floor_div(world_x0, CHUNK_SIZE),
 								 gen_floor_div(world_z0, CHUNK_SIZE));
+}
+
+static bool gen_can_carve_density_block(uint8_t block) {
+	return block == BLOCK_STONE || block == BLOCK_DIRT || block == BLOCK_GRASS
+		|| block == BLOCK_SAND || block == BLOCK_SANDSTONE || block == BLOCK_GRAVEL
+		|| gen_is_ore_block(block);
+}
+
+static void gen_carve_density_block(struct server_chunk* sc, int lx, int y,
+									int lz, int sea_level) {
+	uint8_t block = gen_get_block(sc, lx, y, lz);
+	if(!gen_can_carve_density_block(block))
+		return;
+	if(y <= sea_level) {
+		gen_set_block(sc, lx, y, lz, BLOCK_WATER_STILL);
+	} else {
+		gen_set_block(sc, lx, y, lz, BLOCK_AIR);
+	}
+}
+
+static void gen_carve_density_caves(struct server_chunk* sc, uint32_t seed,
+									int32_t world_x0, int32_t world_z0,
+									const int* surface_map, int sea_level) {
+	if(sc == NULL || surface_map == NULL)
+		return;
+
+	for(int lz = 1; lz < CHUNK_SIZE - 1; lz++) {
+		for(int lx = 1; lx < CHUNK_SIZE - 1; lx++) {
+			int surface = surface_map[lx + lz * CHUNK_SIZE];
+			int max_y = surface - 7;
+			if(max_y > 56)
+				max_y = 56;
+			bool high_or_steep = surface >= sea_level + 18;
+			if(!high_or_steep) {
+				const int nx[4] = {1, -1, 0, 0};
+				const int nz[4] = {0, 0, 1, -1};
+				for(int i = 0; i < 4; i++) {
+					int nh = surface_map[(lx + nx[i]) + (lz + nz[i]) * CHUNK_SIZE];
+					if(abs(nh - surface) >= 7) {
+						high_or_steep = true;
+						break;
+					}
+				}
+			}
+			if(!high_or_steep && max_y > surface - 18)
+				max_y = surface - 18;
+			if(max_y < 14)
+				continue;
+
+			int wx = world_x0 + lx;
+			int wz = world_z0 + lz;
+			float cave_region = gen_fbm2d((float)wx * 0.010f,
+										  (float)wz * 0.010f,
+										  seed ^ 0xCA6E2111U, 2, 2.0f, 0.5f);
+			float density_boost = gen_clampf((cave_region + 0.45f) * 0.78f,
+											 0.0f, 0.56f);
+			if(cave_region < -0.78f)
+				continue;
+
+			for(int y = 8; y <= max_y; y += 2) {
+				float depth = (float)(surface - y);
+				float surface_fade = gen_clampf((depth - 6.0f) / 10.0f, 0.0f, 1.0f);
+				float bottom_fade = gen_clampf(((float)y - 6.0f) / 10.0f, 0.0f, 1.0f);
+				if(surface_fade * bottom_fade <= 0.15f)
+					continue;
+
+				float cheese = gen_fbm3d((float)wx * 0.034f, (float)y * 0.052f,
+										 (float)wz * 0.034f,
+										 seed ^ 0xC4EEC0DEU, 3, 2.0f, 0.52f);
+				float roughness = gen_fbm3d((float)wx * 0.090f, (float)y * 0.110f,
+											(float)wz * 0.090f,
+											seed ^ 0x5A1AD00DU, 2, 2.0f, 0.45f);
+				float cheese_threshold = 0.43f - density_boost
+					+ fabsf(roughness) * 0.06f;
+				bool carve_cheese = cheese > cheese_threshold;
+
+				float tunnel_a = fabsf(gen_fbm3d((float)wx * 0.020f,
+												 (float)y * 0.035f,
+												 (float)wz * 0.020f,
+												 seed ^ 0x5A6E7711U, 2, 2.0f, 0.5f));
+				float tunnel_b = fabsf(gen_fbm3d((float)wx * 0.024f,
+												 (float)y * 0.030f,
+												 (float)wz * 0.024f,
+												 seed ^ 0xB00D1E5U, 2, 2.0f, 0.5f));
+				float noodle = gen_fbm3d((float)wx * 0.060f, (float)y * 0.065f,
+										 (float)wz * 0.060f,
+										 seed ^ 0xD00D1E5U, 1, 2.0f, 0.5f);
+				float thickness = 0.135f + density_boost * 0.15f;
+				bool carve_spaghetti = tunnel_a < thickness
+					&& tunnel_b < thickness * 1.35f
+					&& noodle > -0.48f;
+
+				float layer = gen_fbm2d((float)wx * 0.017f, (float)wz * 0.017f,
+										seed ^ 0x1A7ECA6EU, 2, 2.0f, 0.5f);
+				float center_y = 22.0f + layer * 12.0f;
+				bool carve_layer = fabsf((float)y - center_y) < 3.5f
+					&& cheese > 0.16f
+					&& tunnel_a < 0.34f;
+
+				if(carve_cheese || carve_spaghetti || carve_layer) {
+					gen_carve_density_block(sc, lx, y, lz, sea_level);
+					if(y + 1 <= max_y)
+						gen_carve_density_block(sc, lx, y + 1, lz, sea_level);
+				}
+			}
+		}
+	}
+}
+
+static void gen_carve_density_canyon(struct server_chunk* sc, uint32_t seed,
+									 int32_t world_x0, int32_t world_z0,
+									 const int* surface_map, int sea_level) {
+	if(sc == NULL || surface_map == NULL)
+		return;
+	int chunk_x = gen_floor_div(world_x0, CHUNK_SIZE);
+	int chunk_z = gen_floor_div(world_z0, CHUNK_SIZE);
+	if((gen_hash3i(chunk_x, 331, chunk_z, seed ^ 0xCA110A11U) % 11U) != 0U)
+		return;
+
+	float angle = gen_rand01_from_hash(
+		gen_hash3i(chunk_x, 337, chunk_z, seed ^ 0xCA110A12U)) * 6.2831853f;
+	float dx = cosf(angle);
+	float dz = sinf(angle);
+	float cx = 7.5f + (gen_rand01_from_hash(
+		gen_hash3i(chunk_x, 341, chunk_z, seed ^ 0xCA110A13U)) - 0.5f) * 8.0f;
+	float cz = 7.5f + (gen_rand01_from_hash(
+		gen_hash3i(chunk_x, 347, chunk_z, seed ^ 0xCA110A14U)) - 0.5f) * 8.0f;
+	float width = 3.0f + gen_rand01_from_hash(
+		gen_hash3i(chunk_x, 349, chunk_z, seed ^ 0xCA110A15U)) * 2.25f;
+	float center_y = 24.0f + gen_rand01_from_hash(
+		gen_hash3i(chunk_x, 353, chunk_z, seed ^ 0xCA110A16U)) * 18.0f;
+	float height = 7.0f + gen_rand01_from_hash(
+		gen_hash3i(chunk_x, 359, chunk_z, seed ^ 0xCA110A17U)) * 8.0f;
+
+	for(int lz = 1; lz < CHUNK_SIZE - 1; lz++) {
+		for(int lx = 1; lx < CHUNK_SIZE - 1; lx++) {
+			float rx = (float)lx - cx;
+			float rz = (float)lz - cz;
+			float across = fabsf(rx * dz - rz * dx);
+			if(across > width + 1.0f)
+				continue;
+			int surface = surface_map[lx + lz * CHUNK_SIZE];
+			int max_y = surface - 8;
+			if(max_y > WORLD_HEIGHT - 2)
+				max_y = WORLD_HEIGHT - 2;
+			for(int y = 8; y <= max_y; y++) {
+				float vertical = ((float)y - center_y) / height;
+				float horizontal = across / width;
+				float rough = gen_fbm3d((float)(world_x0 + lx) * 0.070f,
+										(float)y * 0.060f,
+										(float)(world_z0 + lz) * 0.070f,
+										seed ^ 0xCA110A18U, 1, 2.0f, 0.5f);
+				float shape = horizontal * horizontal + vertical * vertical * 0.58f
+					+ rough * 0.10f;
+				if(shape < 1.0f)
+					gen_carve_density_block(sc, lx, y, lz, sea_level);
+			}
+		}
+	}
 }
 
 struct gen_chunk_ravine_connector {
@@ -2490,6 +2779,8 @@ static void gen_try_place_tree(struct server_chunk* sc, int lx, int lz, int y,
 	uint8_t ground = gen_get_block(sc, lx, y - 1, lz);
 	if(ground != BLOCK_GRASS && ground != BLOCK_DIRT)
 		return;
+	if(y <= 1 || y >= WORLD_HEIGHT - 12)
+		return;
 	if(biome_id == dark_forest || biome_id == roofedForest) {
 		gen_place_dark_forest_tree(sc, lx, y, lz, seed ^ 0xDAA60A11U);
 	} else if(biome_id == jungle || biome_id == jungle_hills) {
@@ -2515,6 +2806,52 @@ static void gen_try_place_tree(struct server_chunk* sc, int lx, int lz, int y,
 		else
 			gen_place_small_oak_tree(sc, lx, y, lz, seed ^ 0xA991E001U);
 	}
+}
+
+static bool gen_tree_density_rule(int biome_id, int world_x, int world_z,
+								  uint32_t seed, float deco,
+								  float* out_threshold) {
+	int spacing = 7;
+	float threshold = 0.82f;
+
+	if(biome_id == dark_forest || biome_id == roofedForest) {
+		spacing = 4;
+		threshold = 0.62f;
+	} else if(biome_id == jungle || biome_id == jungle_hills) {
+		spacing = 5;
+		threshold = 0.66f;
+	} else if(biome_id == forest || biome_id == birch_forest
+			  || biome_id == birch_forest_hills || biome_id == wooded_hills
+			  || biome_id == flower_forest) {
+		spacing = 6;
+		threshold = 0.70f;
+	} else if(biome_id == taiga || biome_id == taiga_hills
+			  || biome_id == giant_tree_taiga || biome_id == giant_tree_taiga_hills
+			  || biome_id == snowy_taiga || biome_id == snowy_taiga_hills) {
+		spacing = 6;
+		threshold = 0.74f;
+	} else if(biome_id == swamp) {
+		spacing = 7;
+		threshold = 0.78f;
+	} else if(biome_id == savanna || biome_id == savanna_plateau) {
+		spacing = 9;
+		threshold = 0.88f;
+	}
+
+	float grove = gen_fbm2d((float)world_x * 0.018f, (float)world_z * 0.018f,
+							seed ^ 0x70A57EEU, 2, 2.0f, 0.5f);
+	threshold = gen_clampf(threshold - grove * 0.10f, 0.52f, 0.94f);
+	if(out_threshold)
+		*out_threshold = threshold;
+	if(deco <= threshold)
+		return false;
+
+	int cell_x = gen_floor_div(world_x, spacing);
+	int cell_z = gen_floor_div(world_z, spacing);
+	uint32_t h = gen_hash3i(cell_x, 311, cell_z, seed ^ 0x7AEE5001U);
+	int pick_x = cell_x * spacing + (int)(h % (uint32_t)spacing);
+	int pick_z = cell_z * spacing + (int)((h >> 8) % (uint32_t)spacing);
+	return abs(world_x - pick_x) <= 1 && abs(world_z - pick_z) <= 1;
 }
 
 static void gen_try_place_dungeon(struct server_chunk* sc, uint32_t seed,
@@ -3253,82 +3590,6 @@ static void gen_recompute_height_and_skylight(struct server_chunk* sc) {
 	}
 }
 
-static void gen_surface_artifact_cleanup(struct server_chunk* sc) {
-	for(int pass = 0; pass < 2; pass++) {
-	for(int lx = 1; lx < CHUNK_SIZE - 1; lx++) {
-		for(int lz = 1; lz < CHUNK_SIZE - 1; lz++) {
-			int y = -1;
-			for(int yy = WORLD_HEIGHT - 2; yy >= 2; yy--) {
-				uint8_t b = sc->ids[S_CHUNK_IDX(lx, yy, lz)];
-				if(b != BLOCK_AIR && b != BLOCK_WATER_STILL && b != BLOCK_WATER_FLOW) {
-					y = yy;
-					break;
-				}
-			}
-			if(y < 3)
-				continue;
-
-			uint8_t top = sc->ids[S_CHUNK_IDX(lx, y, lz)];
-			if(top != BLOCK_GRASS && top != BLOCK_DIRT && top != BLOCK_SAND
-			   && top != BLOCK_STONE && top != BLOCK_SNOW)
-				continue;
-
-			int nsolid = 0;
-			int nlow = 0;
-			const int nx[4] = {1, -1, 0, 0};
-			const int nz[4] = {0, 0, 1, -1};
-			for(int i = 0; i < 4; i++) {
-				int sx = lx + nx[i], sz = lz + nz[i];
-				int sy = -1;
-				for(int yy = y + 2; yy >= y - 6 && yy >= 1; yy--) {
-					uint8_t b = sc->ids[S_CHUNK_IDX(sx, yy, sz)];
-					if(b != BLOCK_AIR && b != BLOCK_WATER_STILL && b != BLOCK_WATER_FLOW) {
-						sy = yy;
-						break;
-					}
-				}
-				if(sy >= 0)
-					nsolid++;
-				if(sy >= 0 && sy <= y - 2)
-					nlow++;
-			}
-
-			// Fill narrow trenches/pits near surface.
-			if(nlow >= 2 || nsolid <= 1) {
-				int fill_y = y - 1;
-				if(sc->ids[S_CHUNK_IDX(lx, fill_y, lz)] == BLOCK_AIR) {
-					sc->ids[S_CHUNK_IDX(lx, fill_y, lz)]
-						= (top == BLOCK_SAND) ? BLOCK_SAND :
-						  (top == BLOCK_STONE) ? BLOCK_STONE :
-											 BLOCK_DIRT;
-				}
-			}
-
-			// Close open surface holes: if an air cell has many solid neighbors, fill it.
-			for(int yy = y - 1; yy >= y - 8 && yy >= 2; yy--) {
-				size_t idx = S_CHUNK_IDX(lx, yy, lz);
-				if(sc->ids[idx] != BLOCK_AIR)
-					continue;
-				int s4 = 0;
-				if(gen_is_opaque(sc->ids[S_CHUNK_IDX(lx + 1, yy, lz)]))
-					s4++;
-				if(gen_is_opaque(sc->ids[S_CHUNK_IDX(lx - 1, yy, lz)]))
-					s4++;
-				if(gen_is_opaque(sc->ids[S_CHUNK_IDX(lx, yy, lz + 1)]))
-					s4++;
-				if(gen_is_opaque(sc->ids[S_CHUNK_IDX(lx, yy, lz - 1)]))
-					s4++;
-				if(s4 >= 3) {
-					sc->ids[idx] = (top == BLOCK_SAND) ? BLOCK_SAND :
-								   (top == BLOCK_STONE) ? BLOCK_STONE :
-														BLOCK_DIRT;
-				}
-			}
-		}
-	}
-	}
-}
-
 static bool gen_is_ore_block(uint8_t block) {
 	return (block == BLOCK_COAL_ORE)
 		|| (block == BLOCK_IRON_ORE)
@@ -3447,73 +3708,6 @@ static void gen_settle_falling_blocks_local(struct server_chunk* sc) {
 	}
 }
 
-static void gen_cleanup_coastal_spires_and_pits(struct server_chunk* sc, int sea_level) {
-	if(sc == NULL || sc->heightmap == NULL)
-		return;
-	for(int pass = 0; pass < 1; pass++) {
-		for(int lx = 1; lx < CHUNK_SIZE - 1; lx++) {
-			for(int lz = 1; lz < CHUNK_SIZE - 1; lz++) {
-				int h = gen_chunk_actual_surface_height(sc, lx, lz);
-				if(h < 2)
-					continue;
-				uint8_t top = gen_get_block(sc, lx, h, lz);
-				if(top != BLOCK_SAND && top != BLOCK_GRAVEL && top != BLOCK_SANDSTONE)
-					continue;
-				if(h > sea_level + 3)
-					continue;
-
-				int neigh_sum = 0;
-				int neigh_min = h;
-				int neigh_max = h;
-				int lower_neighbors = 0;
-				int higher_neighbors = 0;
-				int water_neighbors = 0;
-				const int nx[4] = {1, -1, 0, 0};
-				const int nz[4] = {0, 0, 1, -1};
-				for(int i = 0; i < 4; i++) {
-					int nh = gen_chunk_actual_surface_height(sc, lx + nx[i], lz + nz[i]);
-					neigh_sum += nh;
-					if(nh < neigh_min)
-						neigh_min = nh;
-					if(nh > neigh_max)
-						neigh_max = nh;
-					if(nh <= h - 2)
-						lower_neighbors++;
-					if(nh >= h + 2)
-						higher_neighbors++;
-					if(gen_get_block(sc, lx + nx[i], nh + 1, lz + nz[i]) == BLOCK_WATER_STILL
-					   || gen_get_block(sc, lx + nx[i], nh + 1, lz + nz[i]) == BLOCK_WATER_FLOW)
-						water_neighbors++;
-				}
-				int neigh_avg = neigh_sum / 4;
-
-				if(lower_neighbors >= 3 && h >= neigh_avg + 3) {
-					int target = neigh_avg + 1;
-					for(int y = h; y > target; y--) {
-						uint8_t here = gen_get_block(sc, lx, y, lz);
-						if(here == BLOCK_SAND || here == BLOCK_GRAVEL || here == BLOCK_SANDSTONE)
-							gen_set_block(sc, lx, y, lz, (y <= sea_level) ? BLOCK_WATER_STILL : BLOCK_AIR);
-					}
-					continue;
-				}
-
-				if((higher_neighbors >= 3 || water_neighbors >= 2) && h <= neigh_avg - 3) {
-					int fill_to = neigh_avg - 1;
-					if(fill_to > sea_level)
-						fill_to = sea_level;
-					for(int y = h + 1; y <= fill_to; y++) {
-						uint8_t below = gen_get_block(sc, lx, y - 1, lz);
-						uint8_t fill = (below == BLOCK_SANDSTONE || below == BLOCK_STONE) ? BLOCK_SANDSTONE : BLOCK_SAND;
-						uint8_t here = gen_get_block(sc, lx, y, lz);
-						if(here == BLOCK_AIR || here == BLOCK_WATER_STILL || here == BLOCK_WATER_FLOW)
-							gen_set_block(sc, lx, y, lz, fill);
-					}
-				}
-			}
-		}
-	}
-}
-
 static int gen_chunk_surface_height(const struct server_chunk* sc, int lx, int lz) {
 	if(!sc || !sc->heightmap)
 		return -1;
@@ -3536,54 +3730,6 @@ static int gen_chunk_actual_surface_height(const struct server_chunk* sc, int lx
 		}
 	}
 	return -1;
-}
-
-static void gen_cleanup_sandy_water_channels(struct server_chunk* sc, int sea_level) {
-	if(sc == NULL)
-		return;
-	for(int pass = 0; pass < 1; pass++) {
-		for(int lx = 1; lx < CHUNK_SIZE - 1; lx++) {
-			for(int lz = 1; lz < CHUNK_SIZE - 1; lz++) {
-				int h = gen_chunk_actual_surface_height(sc, lx, lz);
-				if(h < 1 || h > sea_level)
-					continue;
-				uint8_t top = gen_get_block(sc, lx, h, lz);
-				if(top != BLOCK_SAND && top != BLOCK_GRAVEL && top != BLOCK_SANDSTONE)
-					continue;
-
-				int neigh[4];
-				int higher = 0;
-				int sandy = 0;
-				int avg = 0;
-				const int nx[4] = {1, -1, 0, 0};
-				const int nz[4] = {0, 0, 1, -1};
-				for(int i = 0; i < 4; i++) {
-					neigh[i] = gen_chunk_actual_surface_height(sc, lx + nx[i], lz + nz[i]);
-					avg += neigh[i];
-					uint8_t ntop = gen_get_block(sc, lx + nx[i], neigh[i], lz + nz[i]);
-					if(neigh[i] >= h + 3)
-						higher++;
-					if(ntop == BLOCK_SAND || ntop == BLOCK_GRAVEL || ntop == BLOCK_SANDSTONE)
-						sandy++;
-				}
-				avg /= 4;
-				if(higher < 2 || sandy < 3 || avg <= h + 1)
-					continue;
-
-				int fill_to = avg - 1;
-				if(fill_to > sea_level + 1)
-					fill_to = sea_level + 1;
-				for(int y = h + 1; y <= fill_to; y++) {
-					uint8_t here = gen_get_block(sc, lx, y, lz);
-					if(here != BLOCK_AIR && here != BLOCK_WATER_STILL && here != BLOCK_WATER_FLOW)
-						continue;
-					uint8_t below = gen_get_block(sc, lx, y - 1, lz);
-					uint8_t fill = (below == BLOCK_SANDSTONE || below == BLOCK_STONE) ? BLOCK_SANDSTONE : BLOCK_SAND;
-					gen_set_block(sc, lx, y, lz, fill);
-				}
-			}
-		}
-	}
 }
 
 static bool gen_sample_neighbor_edge_height(struct server_world* w, w_coord_t cx,
@@ -3626,6 +3772,136 @@ static bool gen_sample_neighbor_edge_height(struct server_world* w, w_coord_t cx
 
 	*out_height = h;
 	return true;
+}
+
+static int gen_smooth_surface_against_local_neighbors(
+	const int* surface_map, int lx, int lz, int surface,
+	const struct gen_biome_profile* profile, int sea_level) {
+	if(surface_map == NULL || profile == NULL || profile->riverine)
+		return surface;
+
+	int sum = 0;
+	int count = 0;
+	if(lz > 0) {
+		sum += surface_map[lx + (lz - 1) * CHUNK_SIZE];
+		count++;
+	}
+	if(lx > 0) {
+		sum += surface_map[(lx - 1) + lz * CHUNK_SIZE];
+		count++;
+	}
+	if(count <= 0)
+		return surface;
+
+	int avg = sum / count;
+	int max_step = 3;
+	if(surface <= sea_level + 5 || profile->top_block == BLOCK_SAND)
+		max_step = 2;
+	if(profile->top_block == BLOCK_STONE)
+		max_step = 6;
+	if(profile->amplitude > 12.0f && profile->top_block != BLOCK_SAND)
+		max_step = 5;
+
+	if(surface > avg + max_step)
+		surface = avg + max_step;
+	else if(surface < avg - max_step)
+		surface = avg - max_step;
+	return surface;
+}
+
+static int gen_sample_raw_surface(Generator* biome_gen,
+								  const struct gen_cuberite_runtime_args* gen_args,
+								  uint32_t seed, int choice_octaves,
+								  int32_t wx, int32_t wz) {
+	int biome_id = plains;
+	struct gen_biome_profile profile = gen_blended_profile(biome_gen, wx, wz, &biome_id);
+	int surface = gen_compute_surface_height_base(
+		&profile, biome_id, gen_args, seed, choice_octaves, wx, wz);
+	return gen_apply_river_channel(&profile, gen_args, seed, wx, wz, surface);
+}
+
+static int gen_smooth_surface_against_java_like_area(
+	Generator* biome_gen, const struct gen_cuberite_runtime_args* gen_args,
+	uint32_t seed, int choice_octaves, int32_t wx, int32_t wz,
+	const struct gen_biome_profile* profile, int surface) {
+	if(profile == NULL || profile->oceanic || profile->riverine)
+		return surface;
+
+	static const int offs[4][2] = {{4, 0}, {-4, 0}, {0, 4}, {0, -4}};
+	int sum = surface * 4;
+	int count = 4;
+	for(int i = 0; i < 4; i++) {
+		sum += gen_sample_raw_surface(biome_gen, gen_args, seed, choice_octaves,
+									  wx + offs[i][0], wz + offs[i][1]);
+		count++;
+	}
+	int avg = sum / count;
+	int max_delta = (profile->amplitude > 18.0f) ? 8 : 4;
+	if(surface > avg + max_delta)
+		surface = avg + max_delta;
+	else if(surface < avg - max_delta)
+		surface = avg - max_delta;
+	return surface;
+}
+
+static float gen_java_like_density(const struct gen_biome_profile* profile,
+								   const struct gen_cuberite_runtime_args* gen_args,
+								   uint32_t seed, int32_t wx, int y, int32_t wz,
+								   int surface) {
+	float vertical = ((float)surface - (float)y) / 10.5f;
+	float low = gen_fbm3d((float)wx * gen_args->land_frequency_x * 0.42f,
+						  (float)y * 0.010f,
+						  (float)wz * gen_args->land_frequency_z * 0.42f,
+						  seed ^ 0xD31517E1U, 3, 2.0f, 0.5f);
+	float detail = gen_fbm3d((float)wx * gen_args->detail_frequency_x * 0.65f,
+							 (float)y * 0.026f,
+							 (float)wz * gen_args->detail_frequency_z * 0.65f,
+							 seed ^ 0xD31517E2U, 2, 2.0f, 0.5f);
+	float ridge = gen_fbm2d((float)wx * gen_args->mountain_frequency_x,
+							(float)wz * gen_args->mountain_frequency_z,
+							seed ^ 0xD31517E3U, 2, 2.0f, 0.5f);
+	float cave_bias = (profile != NULL && profile->amplitude > 18.0f) ? 0.05f : -0.08f;
+	float density = vertical + low * 0.42f + detail * 0.18f + fmaxf(0.0f, ridge) * 0.20f
+		+ cave_bias;
+	if(y < 5)
+		density += (5.0f - (float)y) * 0.80f;
+	if(profile != NULL && profile->oceanic && y > surface - 4)
+		density -= 0.25f;
+	return density;
+}
+
+static void gen_apply_surface_column(struct server_chunk* sc, int lx, int lz,
+									 int sea_level, int preliminary_surface,
+									 uint8_t top_block, uint8_t filler_block,
+									 int dirt_depth, int* out_surface) {
+	int surface = -1;
+	int depth_left = -1;
+	for(int y = WORLD_HEIGHT - 1; y >= 1; y--) {
+		size_t idx = S_CHUNK_IDX(lx, y, lz);
+		uint8_t block = sc->ids[idx];
+		if(block == BLOCK_AIR || block == BLOCK_WATER_STILL || block == BLOCK_WATER_FLOW) {
+			depth_left = -1;
+			continue;
+		}
+		if(block != BLOCK_STONE && !gen_is_ore_block(block))
+			continue;
+
+		if(surface < 0)
+			surface = y;
+
+		if(depth_left < 0) {
+			if(y < preliminary_surface - 8 && y < sea_level - 1)
+				continue;
+			depth_left = dirt_depth;
+			sc->ids[idx] = (y <= sea_level - 1 && top_block == BLOCK_GRASS)
+				? filler_block : top_block;
+		} else if(depth_left > 0) {
+			sc->ids[idx] = filler_block;
+			depth_left--;
+		}
+	}
+	if(out_surface)
+		*out_surface = surface;
 }
 
 /* ---- Server-Chunk-Speicherpool -----------------------------------------
@@ -3753,16 +4029,13 @@ static void gen_generate_terrain_columns(struct server_world* w,
 		struct gen_biome_profile profile = gen_blended_profile(biome_gen, wx, wz, &biome_id);
 		int surface = gen_compute_surface_height_base(
 			&profile, biome_id, gen_args, seed, choice_octaves, wx, wz);
-		int legacy_surface = gen_compute_legacy_wii_surface(gen_args, seed, wx, wz);
+		surface = gen_apply_river_channel(&profile, gen_args, seed, wx, wz, surface);
+		surface = gen_smooth_surface_against_java_like_area(
+			biome_gen, gen_args, seed, choice_octaves, wx, wz, &profile, surface);
+		surface = gen_smooth_surface_against_local_neighbors(
+			surface_map, lx, lz, surface, &profile, gen_args->sea_level);
 
-		if(GEN_FORCE_LEGACY_WII_SURFACE) {
-			surface = legacy_surface;
-			surface = gen_apply_legacy_rare_oceans(
-				gen_args, seed, wx, wz, surface, biome_id);
-		}
-
-		if(!GEN_FORCE_LEGACY_WII_SURFACE
-		   && GEN_ENABLE_LOWLAND_NEIGHBOR_SMOOTHING && !profile.oceanic) {
+		if(GEN_ENABLE_LOWLAND_NEIGHBOR_SMOOTHING && !profile.oceanic) {
 			int avg = surface;
 			int count = 1;
 			static const int smooth_offs[4][2] = {
@@ -3796,18 +4069,6 @@ static void gen_generate_terrain_columns(struct server_world* w,
 			if(sandy_or_river && surface < gen_args->sea_level - 1) {
 				surface = gen_args->sea_level - 1;
 			}
-
-			bool lowland = surface <= gen_args->sea_level + 6;
-			bool non_mountain = profile.top_block != BLOCK_STONE;
-			if(GEN_ENABLE_LEGACY_LOWLAND_FLOOR
-			   && (sandy_or_river || lowland) && non_mountain) {
-				int min_legacy = legacy_surface - 2;
-				if(surface < min_legacy)
-					surface = min_legacy;
-				if(surface < legacy_surface && lowland) {
-					surface = (surface * 2 + legacy_surface) / 3;
-				}
-			}
 		}
 
 		float neigh_h = 0.0f;
@@ -3838,58 +4099,39 @@ static void gen_generate_terrain_columns(struct server_world* w,
 				+ (neigh_h / neigh_w) * gen_args->edge_blend_weight_neighbor);
 		}
 
-		int dirt_depth = 4;
-		if(profile.top_block == BLOCK_SAND)
-			dirt_depth = 5;
-		if(profile.top_block == BLOCK_STONE)
-			dirt_depth = 2;
-		bool submerged = surface <= gen_args->sea_level;
-		uint8_t top_block = profile.top_block;
-		uint8_t filler_block = profile.filler_block;
-		if(GEN_ENABLE_BEACH_SURFACE_REPLACEMENT
-		   && surface >= gen_args->sea_level + gen_args->beach_band_low
-		   && surface <= gen_args->sea_level + gen_args->beach_band_high
-		   && !profile.oceanic && profile.top_block != BLOCK_STONE) {
-			top_block = BLOCK_SAND;
-			filler_block = BLOCK_SAND;
-			dirt_depth = 4;
-		}
-		if(GEN_ENABLE_SUBMERGED_SEAFLOOR_REPLACEMENT && submerged) {
-			float sea_floor = gen_fbm2d(wx * gen_args->sea_floor_frequency_x,
-				wz * gen_args->sea_floor_frequency_z, seed ^ 0x51A17E2BU, 2, 2.0f, 0.5f);
-			bool gravel_floor = (profile.top_block == BLOCK_STONE)
-				|| (sea_floor > gen_args->sea_floor_gravel_threshold);
-			if(gravel_floor) {
-				top_block = BLOCK_GRAVEL;
-				filler_block = BLOCK_STONE;
-			} else {
-				top_block = BLOCK_SAND;
-				filler_block = BLOCK_SAND;
-			}
-		}
+		int dirt_depth = 0;
+		uint8_t top_block = BLOCK_GRASS;
+		uint8_t filler_block = BLOCK_DIRT;
+		gen_choose_surface_materials(&profile, biome_id, gen_args, seed, wx, wz,
+									 surface, &top_block, &filler_block,
+									 &dirt_depth);
 
-		surface_map[lx + lz * CHUNK_SIZE] = surface;
 		for(int y = 0; y < WORLD_HEIGHT; y++) {
 			size_t idx = S_CHUNK_IDX(lx, y, lz);
 			uint8_t block = BLOCK_AIR;
 			if(y == 0) {
 				block = BLOCK_BEDROCK;
-			} else if(y <= surface) {
-				if(y == surface) {
-					block = top_block;
-				} else if(y >= surface - dirt_depth) {
-					block = filler_block;
-				} else {
+			} else {
+				float density = gen_java_like_density(
+					&profile, gen_args, seed, wx, y, wz, surface);
+				if(density > 0.0f || y <= surface - 18) {
 					block = BLOCK_STONE;
+				} else if(GEN_ENABLE_WATER_FILL_TO_SEA_LEVEL
+						  && y <= gen_args->sea_level) {
+					block = BLOCK_WATER_STILL;
 				}
-			} else if(GEN_ENABLE_WATER_FILL_TO_SEA_LEVEL
-					  && y <= gen_args->sea_level) {
-				block = BLOCK_WATER_STILL;
 			}
 			sc->ids[idx] = block;
 			gen_set_nibble(sc->metadata, idx, 0);
 			gen_set_nibble(sc->lighting_torch, idx, 0);
 		}
+		int actual_surface = surface;
+		gen_apply_surface_column(sc, lx, lz, gen_args->sea_level, surface,
+								 top_block, filler_block, dirt_depth,
+								 &actual_surface);
+		if(actual_surface >= 0)
+			surface = actual_surface;
+		surface_map[lx + lz * CHUNK_SIZE] = surface;
 
 		if(GEN_ENABLE_SNOW_SURFACE_LAYER && w->generator.finisher_snow
 		   && surface > gen_args->sea_level + 1 && isSnowy(biome_id)
@@ -3919,15 +4161,17 @@ static void gen_apply_feature_step(struct server_world* w, struct server_chunk* 
 	switch(step) {
 	case 0:
 		if(w->generator.finisher_worm_nest_caves) {
-			gen_carve_worm_nest_caves(sc, seed, world_x0, world_z0, &w->generator);
-			gen_carve_chunk_cave_entrance(sc, seed, chunk_x, chunk_z, surface_map,
-										  biome_gen, gen_args);
+			(void)chunk_x;
+			(void)chunk_z;
+			(void)biome_gen;
+			gen_carve_density_caves(sc, seed, world_x0, world_z0, surface_map,
+									gen_args->sea_level);
 		}
 		return;
 	case 1:
-		if(w->generator.finisher_rough_ravines)
-			gen_carve_ravine_pass(sc, seed, world_x0, world_z0, gen_args,
-								  &w->generator);
+		if(w->generator.finisher_worm_nest_caves)
+			gen_carve_density_canyon(sc, seed, world_x0, world_z0, surface_map,
+									 gen_args->sea_level);
 		return;
 	case 2:
 		if(w->generator.finisher_water_lakes)
@@ -3964,10 +4208,8 @@ static void gen_apply_feature_step(struct server_world* w, struct server_chunk* 
 		}
 		return;
 	case 8:
-		gen_cleanup_floating_cave_blocks(sc);
-		gen_cleanup_floating_cave_blocks(sc);
-		gen_cleanup_coastal_spires_and_pits(sc, gen_args->sea_level);
-		gen_cleanup_sandy_water_channels(sc, gen_args->sea_level);
+		(void)surface_map;
+		(void)gen_args;
 		gen_cleanup_floating_ores(sc);
 		return;
 	case 9:
@@ -4043,21 +4285,23 @@ static void gen_generate_deco_columns(struct server_world* w, struct server_chun
 			if(tree_threshold < 0.45f)
 				tree_threshold = 0.45f;
 		}
+		bool tree_candidate
+			= gen_tree_density_rule(biome_id, wx, wz, seed, deco, &tree_threshold);
 
 		if(w->generator.finisher_trees
 		   && (biome_id == forest || biome_id == birch_forest
 		   || biome_id == flower_forest || biome_id == dark_forest
 		   || biome_id == birch_forest_hills || biome_id == wooded_hills
-		   || biome_id == taiga
-		   || biome_id == taiga_hills || biome_id == giant_tree_taiga
-		   || biome_id == giant_tree_taiga_hills || biome_id == swamp
-		   || biome_id == jungle || biome_id == jungle_hills)
-		   && top == BLOCK_GRASS
-		   && sc->ids[S_CHUNK_IDX(lx, y + 1, lz)] == BLOCK_AIR
-		   && deco > tree_threshold) {
-			gen_try_place_tree(sc, lx, lz, y + 1, seed, wx, wz, biome_id);
-			continue;
-		}
+			   || biome_id == taiga
+			   || biome_id == taiga_hills || biome_id == giant_tree_taiga
+			   || biome_id == giant_tree_taiga_hills || biome_id == swamp
+			   || biome_id == jungle || biome_id == jungle_hills)
+			   && top == BLOCK_GRASS
+			   && sc->ids[S_CHUNK_IDX(lx, y + 1, lz)] == BLOCK_AIR
+			   && tree_candidate) {
+				gen_try_place_tree(sc, lx, lz, y + 1, seed, wx, wz, biome_id);
+				continue;
+			}
 		if(w->generator.finisher_tall_grass
 		   && (biome_id == plains || biome_id == forest || biome_id == flower_forest)
 		   && top == BLOCK_GRASS
@@ -4186,7 +4430,6 @@ static bool gen_finalize_chunk_step(struct server_world* w, struct server_chunk*
 		}
 		return false;
 	case 1:
-		gen_surface_artifact_cleanup(sc);
 		return false;
 	case 2:
 		gen_recompute_height_and_skylight(sc);
@@ -4367,6 +4610,15 @@ static bool server_world_generate_chunk(struct server_world* w, w_coord_t x,
 	int32_t world_x0 = x * CHUNK_SIZE;
 	int32_t world_z0 = z * CHUNK_SIZE;
 	int surface_map[CHUNK_SIZE * CHUNK_SIZE];
+	bool biome_cache_valid = false;
+	int biome_cache_origin_x = 0;
+	int biome_cache_origin_z = 0;
+	int biome_cache_ids[GEN_BIOME_CACHE_WIDTH * GEN_BIOME_CACHE_WIDTH];
+	gen_biome_cache_fill(biome_gen, world_x0, world_z0, &biome_cache_valid,
+						 &biome_cache_origin_x, &biome_cache_origin_z,
+						 biome_cache_ids);
+	gen_biome_cache_activate(biome_cache_valid, biome_cache_origin_x,
+							 biome_cache_origin_z, biome_cache_ids);
 	gen_generate_terrain_columns(w, &sc, surface_map, biome_gen, &gen_args, seed,
 								 choice_octaves, world_x0, world_z0, x, z, 0,
 								 CHUNK_SIZE * CHUNK_SIZE);
@@ -4375,8 +4627,10 @@ static bool server_world_generate_chunk(struct server_world* w, w_coord_t x,
 	gen_generate_deco_columns(w, &sc, biome_gen, &gen_args, seed, world_x0,
 							  world_z0, 0,
 							  (CHUNK_SIZE - 2) * (CHUNK_SIZE - 2));
-	return gen_finalize_chunk(w, &sc, biome_gen, &gen_args, seed, world_x0,
-							  world_z0, x, z, out);
+	bool ok = gen_finalize_chunk(w, &sc, biome_gen, &gen_args, seed, world_x0,
+								 world_z0, x, z, out);
+	gen_biome_cache_clear_active();
+	return ok;
 }
 
 static void server_world_pending_clear(struct server_world* w) {
@@ -4397,6 +4651,15 @@ static bool server_world_pending_start(struct server_world* w, w_coord_t x,
 	w->pending_chunk.phase = SERVER_WORLD_PENDING_TERRAIN;
 	w->pending_chunk.next_column = 0;
 	memset(w->pending_chunk.surface_map, 0, sizeof(w->pending_chunk.surface_map));
+	gen_pending_biome_cache = (struct gen_biome_cache_storage) {0};
+	if(w->dimension == WORLD_DIM_OVERWORLD) {
+		Generator* biome_gen = server_world_biome_gen(w);
+		gen_biome_cache_fill(biome_gen, x * CHUNK_SIZE, z * CHUNK_SIZE,
+							 &gen_pending_biome_cache.valid,
+							 &gen_pending_biome_cache.origin_x,
+							 &gen_pending_biome_cache.origin_z,
+							 gen_pending_biome_cache.ids);
+	}
 	return true;
 }
 
@@ -4469,6 +4732,10 @@ static bool server_world_advance_pending(struct server_world* w,
 	Generator* biome_gen = server_world_biome_gen(w);
 	int32_t world_x0 = w->pending_chunk.x * CHUNK_SIZE;
 	int32_t world_z0 = w->pending_chunk.z * CHUNK_SIZE;
+	gen_biome_cache_activate(gen_pending_biome_cache.valid,
+							 gen_pending_biome_cache.origin_x,
+							 gen_pending_biome_cache.origin_z,
+							 gen_pending_biome_cache.ids);
 
 	switch(w->pending_chunk.phase) {
 	case SERVER_WORLD_PENDING_TERRAIN:
@@ -4519,6 +4786,7 @@ static bool server_world_advance_pending(struct server_world* w,
 		w->pending_chunk.next_column++;
 		if(ok || w->pending_chunk.next_column >= GEN_FINALIZE_STEP_COUNT) {
 			memset(&w->pending_chunk, 0, sizeof(w->pending_chunk));
+			gen_biome_cache_clear_active();
 		}
 		return ok;
 	}

@@ -18,6 +18,7 @@
 */
 
 #include <assert.h>
+#include <float.h>
 #include <math.h>
 #include <stdlib.h>
 
@@ -578,11 +579,25 @@ bool world_block_intersection(struct world* w, struct ray* r, w_coord_t x,
 			struct AABB bbox[count];
 			blocks[blk.type]->getBoundingBox(&blk_info, false, bbox);
 
+			float closest_distance = FLT_MAX;
+			enum side closest_side = SIDE_MAX;
+			bool hit = false;
 			for(size_t k = 0; k < count; k++) {
 				aabb_translate(bbox + k, x, y, z);
 
-				if(aabb_intersection_ray(bbox + k, r, s))
-					return true;
+				enum side hit_side;
+				float distance;
+				if(aabb_intersection_ray_distance(bbox + k, r, &hit_side,
+												 &distance)
+					&& distance < closest_distance) {
+					closest_distance = distance;
+					closest_side = hit_side;
+					hit = true;
+				}
+			}
+			if(hit) {
+				*s = closest_side;
+				return true;
 			}
 		}
 	}

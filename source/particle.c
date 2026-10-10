@@ -18,6 +18,7 @@
 */
 
 #include <assert.h>
+#include <math.h>
 #ifdef PLATFORM_PC
 #include "particle.h"
 #endif
@@ -175,61 +176,91 @@ void particle_generate_side(struct block_info* info, enum side s) {
     struct AABB aabb[count];
     blocks[info->block->type]->getBoundingBox(info, false, aabb);
 
-    float area;
-    switch (s) {
-        case SIDE_RIGHT:
-        case SIDE_LEFT:
-            area = (aabb->y2 - aabb->y1) * (aabb->z2 - aabb->z1);
-            break;
-        case SIDE_BOTTOM:
-        case SIDE_TOP:
-            area = (aabb->x2 - aabb->x1) * (aabb->z2 - aabb->z1);
-            break;
-        case SIDE_FRONT:
-        case SIDE_BACK:
-            area = (aabb->x2 - aabb->x1) * (aabb->y2 - aabb->y1);
-            break;
-        default:
-            return;
-    }
-
     uint16_t tex = blocks[info->block->type]
                   ->getTextureIndex(info, s);
     float offset = 0.0625F;
 
-    for (int k = 0; k < area * PARTICLES_AREA; k++) {
-        float x = rand_gen_flt(&gstate.rand_src) * (aabb->x2 - aabb->x1) + aabb->x1;
-        float y = rand_gen_flt(&gstate.rand_src) * (aabb->y2 - aabb->y1) + aabb->y1;
-        float z = rand_gen_flt(&gstate.rand_src) * (aabb->z2 - aabb->z1) + aabb->z1;
-
-        switch (s) {
-            case SIDE_LEFT:   x = aabb->x1 - offset; break;
-            case SIDE_RIGHT:  x = aabb->x2 + offset; break;
-            case SIDE_BOTTOM: y = aabb->y1 - offset; break;
-            case SIDE_TOP:    y = aabb->y2 + offset; break;
-            case SIDE_FRONT:  z = aabb->z1 - offset; break;
-            case SIDE_BACK:   z = aabb->z2 + offset; break;
+    float extreme = (s == SIDE_LEFT || s == SIDE_FRONT || s == SIDE_BOTTOM)
+        ? 1.0F : 0.0F;
+    for(size_t k = 0; k < count; k++) {
+        float value;
+        switch(s) {
+            case SIDE_LEFT: value = aabb[k].x1; break;
+            case SIDE_RIGHT: value = aabb[k].x2; break;
+            case SIDE_BOTTOM: value = aabb[k].y1; break;
+            case SIDE_TOP: value = aabb[k].y2; break;
+            case SIDE_FRONT: value = aabb[k].z1; break;
+            case SIDE_BACK: value = aabb[k].z2; break;
             default: return;
         }
+        if((s == SIDE_LEFT || s == SIDE_FRONT || s == SIDE_BOTTOM)
+           ? value < extreme : value > extreme)
+            extreme = value;
+    }
 
-        vec3 vel = {
-            rand_gen_flt(&gstate.rand_src) - 0.5F,
-            rand_gen_flt(&gstate.rand_src) - 0.5F,
-            rand_gen_flt(&gstate.rand_src) - 0.5F
-        };
-        glm_vec3_normalize(vel);
-        glm_vec3_scale(
-            vel,
-            (2.0F * rand_gen_flt(&gstate.rand_src) + 0.5F) * 0.05F,
-            vel
-        );
-
-        vec3 pos = { info->x + x, info->y + y, info->z + z };
-        float size = (rand_gen_flt(&gstate.rand_src) + 1.0F) * 0.03125F;
-        float age  = 4.0F / (rand_gen_flt(&gstate.rand_src) * 0.9F + 0.1F);
-
-        particle_add(pos, vel, tex, size, age, true, 255,255,255, false, TEXTURE_ATLAS_TERRAIN);
+    for(size_t box = 0; box < count; box++) {
+        float value;
+        switch(s) {
+            case SIDE_LEFT: value = aabb[box].x1; break;
+            case SIDE_RIGHT: value = aabb[box].x2; break;
+            case SIDE_BOTTOM: value = aabb[box].y1; break;
+            case SIDE_TOP: value = aabb[box].y2; break;
+            case SIDE_FRONT: value = aabb[box].z1; break;
+            case SIDE_BACK: value = aabb[box].z2; break;
+            default: return;
         }
+        if(fabsf(value - extreme) > 0.001F)
+            continue;
+
+        float area;
+        if(s == SIDE_RIGHT || s == SIDE_LEFT)
+            area = (aabb[box].y2 - aabb[box].y1)
+                 * (aabb[box].z2 - aabb[box].z1);
+        else if(s == SIDE_BOTTOM || s == SIDE_TOP)
+            area = (aabb[box].x2 - aabb[box].x1)
+                 * (aabb[box].z2 - aabb[box].z1);
+        else
+            area = (aabb[box].x2 - aabb[box].x1)
+                 * (aabb[box].y2 - aabb[box].y1);
+
+        for(int k = 0; k < area * PARTICLES_AREA; k++) {
+            float x = rand_gen_flt(&gstate.rand_src)
+                    * (aabb[box].x2 - aabb[box].x1) + aabb[box].x1;
+            float y = rand_gen_flt(&gstate.rand_src)
+                    * (aabb[box].y2 - aabb[box].y1) + aabb[box].y1;
+            float z = rand_gen_flt(&gstate.rand_src)
+                    * (aabb[box].z2 - aabb[box].z1) + aabb[box].z1;
+
+            switch(s) {
+                case SIDE_LEFT: x = aabb[box].x1 - offset; break;
+                case SIDE_RIGHT: x = aabb[box].x2 + offset; break;
+                case SIDE_BOTTOM: y = aabb[box].y1 - offset; break;
+                case SIDE_TOP: y = aabb[box].y2 + offset; break;
+                case SIDE_FRONT: z = aabb[box].z1 - offset; break;
+                case SIDE_BACK: z = aabb[box].z2 + offset; break;
+                default: return;
+            }
+
+            vec3 vel = {
+                rand_gen_flt(&gstate.rand_src) - 0.5F,
+                rand_gen_flt(&gstate.rand_src) - 0.5F,
+                rand_gen_flt(&gstate.rand_src) - 0.5F
+            };
+            glm_vec3_normalize(vel);
+            glm_vec3_scale(
+                vel,
+                (2.0F * rand_gen_flt(&gstate.rand_src) + 0.5F) * 0.05F,
+                vel
+            );
+
+            vec3 pos = { info->x + x, info->y + y, info->z + z };
+            float size = (rand_gen_flt(&gstate.rand_src) + 1.0F) * 0.03125F;
+            float age  = 4.0F / (rand_gen_flt(&gstate.rand_src) * 0.9F + 0.1F);
+
+            particle_add(pos, vel, tex, size, age, true, 255,255,255, false,
+                         TEXTURE_ATLAS_TERRAIN);
+        }
+    }
 }
 
 void particle_generate_explosion_flash(vec3 center, float intensity) {

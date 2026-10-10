@@ -19,6 +19,7 @@
 
 #include <assert.h>
 #include <math.h>
+#include <stddef.h>
 
 #include "aabb.h"
 
@@ -82,6 +83,11 @@ void aabb_translate(struct AABB* a, float x, float y, float z) {
 
 // see: https://tavianator.com/2011/ray_box.html
 bool aabb_intersection_ray(struct AABB* a, struct ray* r, enum side* s) {
+	return aabb_intersection_ray_distance(a, r, s, NULL);
+}
+
+bool aabb_intersection_ray_distance(struct AABB* a, struct ray* r,
+								enum side* s, float* distance) {
 	assert(a && r);
 
 	float inv_x = 1.0F / r->dx;
@@ -120,6 +126,8 @@ bool aabb_intersection_ray(struct AABB* a, struct ray* r, enum side* s) {
 		else if(tmin == tz2)
 			*s = SIDE_BACK;
 	}
+	if(distance)
+		*distance = tmin;
 
 	return tmax > fmax(tmin, 0.0F);
 }

@@ -15,42 +15,36 @@ static enum block_material getMaterial(struct block_info* this) {
 
 static size_t getBoundingBox(struct block_info* this, bool entity,
 							 struct AABB* x) {
-	// Same geometry as the built-in stairs.
-	if(entity) {
-		if(x) {
-			aabb_setsize(x + 0, 1.0F, 0.5F, 1.0F);
+	(void)entity;
+	if(x) {
+		aabb_setsize(x + 0, 1.0F, 0.5F, 1.0F);
 
-			enum side facing
-				= (enum side[4]) {SIDE_RIGHT, SIDE_LEFT, SIDE_BACK,
-								  SIDE_FRONT}[this->block->metadata & 3];
+		enum side facing
+			= (enum side[4]) {SIDE_RIGHT, SIDE_LEFT, SIDE_BACK,
+							  SIDE_FRONT}[this->block->metadata & 3];
 
-			switch(facing) {
-				default:
-				case SIDE_FRONT:
-					aabb_setsize(x + 1, 1.0F, 0.5F, 0.5F);
-					aabb_translate(x + 1, 0, 0.5F, -0.25F);
-					break;
-				case SIDE_BACK:
-					aabb_setsize(x + 1, 1.0F, 0.5F, 0.5F);
-					aabb_translate(x + 1, 0, 0.5F, 0.25F);
-					break;
-				case SIDE_RIGHT:
-					aabb_setsize(x + 1, 0.5F, 0.5F, 1.0F);
-					aabb_translate(x + 1, 0.25F, 0.5F, 0);
-					break;
-				case SIDE_LEFT:
-					aabb_setsize(x + 1, 0.5F, 0.5F, 1.0F);
-					aabb_translate(x + 1, -0.25F, 0.5F, 0);
-					break;
-			}
+		switch(facing) {
+			default:
+			case SIDE_FRONT:
+				aabb_setsize(x + 1, 1.0F, 0.5F, 0.5F);
+				aabb_translate(x + 1, 0, 0.5F, -0.25F);
+				break;
+			case SIDE_BACK:
+				aabb_setsize(x + 1, 1.0F, 0.5F, 0.5F);
+				aabb_translate(x + 1, 0, 0.5F, 0.25F);
+				break;
+			case SIDE_RIGHT:
+				aabb_setsize(x + 1, 0.5F, 0.5F, 1.0F);
+				aabb_translate(x + 1, 0.25F, 0.5F, 0);
+				break;
+			case SIDE_LEFT:
+				aabb_setsize(x + 1, 0.5F, 0.5F, 1.0F);
+				aabb_translate(x + 1, -0.25F, 0.5F, 0);
+				break;
 		}
-
-		return 2;
-	} else {
-		if(x)
-			aabb_setsize(x, 1.0F, 1.0F, 1.0F);
-		return 1;
 	}
+
+	return 2;
 }
 
 static struct face_occlusion side_mask = {
@@ -207,4 +201,3 @@ struct block block_brick_stairs = {
 		.tool.type = TOOL_TYPE_ANY,
 	},
 };
-

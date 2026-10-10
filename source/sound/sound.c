@@ -597,12 +597,6 @@ static const char* sound_get_mp3_path(enum mp3_sound sound) {
         case mp3_bg8:
             snprintf(fullpath, sizeof(fullpath), "%s/bg/bg8.mp3", base);
             return fullpath;
-        case mp3_bg9:
-            snprintf(fullpath, sizeof(fullpath), "%s/bg/bg9.mp3", base);
-            return fullpath;
-        case mp3_bg10:
-            snprintf(fullpath, sizeof(fullpath), "%s/bg/bg10.mp3", base);
-            return fullpath;
         default:
             return NULL;
     }

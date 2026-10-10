@@ -28,9 +28,7 @@ enum mp3_sound {
     mp3_bg5,
     mp3_bg6,
     mp3_bg7,
-    mp3_bg8,
-    mp3_bg9,
-    mp3_bg10
+    mp3_bg8
 };
 
 enum pcm_sound {

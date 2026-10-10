@@ -9,17 +9,25 @@
 
 * ~~If you jump into water or climb down the ladder, you take damage~~
 
+* if you place a block and there is already a stair block or a torch, the block despawn and there is the new block
+  - torch
+  - stair
+  - rose
+  - flower
+
 * Redstone doesn't really work
 
 * If you jump into a block, you will get stuck and won't be able to move.
 
 * ~~Placing blocks on dirt doesn't consume the block.~~
 
-* Stair and fence hitboxes are incorrect.
+* ~~Stair and fence hitboxes are incorrect.~~
 
 * Furnace output items despawn when moving an item.
 
-* Chests don't rotate when placed from a different side.
+* Blocks don't rotate when placed from a different side:
+  - ~~Chests~~
+  - Trapdoor
 
 * Chests can't combine into a double chest.
 
@@ -46,6 +54,7 @@
   - glass_pane
   - pumpkin stem
   - melon stem
+  - vine
 
 * save settings in config.json
 
@@ -65,10 +74,14 @@
 
 * the moon and sun are too little
 
+* Implement a fallback boundary at Y = -50 to stop players falling under the world.
+
 * in creative inventory add:
   - search function
   - save function
   - move to other screen with IB_INVENTORY_LEFT/RIGHT
+  - remove slot
+  - other icons
 
 * the menu of creative inventory of player 1 is the same like of player 2
 
@@ -76,15 +89,15 @@
 
 * the player doesn't move his arms if he places a block
 
-* you should be able to destroy blocks with destroy number -1 if you are in creative mode
+* ~~you should be able to destroy blocks with destroy number -1 if you are in creative mode~~
 
-* IB_ANY doesn't ask all buttons
+* ~~IB_ANY doesn't ask all buttons~~
 
 * shadow bugs on the wii
 
-* gpu on the pc is too slowly so it runs with 20-55fps on fullscreen
+* ~~gpu on the pc is too slowly so it runs with 20-55fps on fullscreen~~
 
-* world generator needs too much cpu
+* world generator needs too much cpu and is too slowly
 
 * you don't see the cracks on the blocks on the wii
 
@@ -104,8 +117,56 @@
 
 * loading chunks is broken on the Wii because the RAM problem-fixes
 
-* the world generator is too slowly
+* add a better food logic
 
+* ~~the mp3 loader expect 10 mp3 files~~
+
+* the position of the cursor in the main menu is broken because the 2 player mode
+
+* compatibility with Mac OS and Windows
+
+* the head of the men in the inventory is behind the body
+
+* the inventory item of chests isn't correct
+
+* there is no item in the creative inventory:
+  - fence
+
+* there is superfluous item in the creative inventory:
+  - boat motor
+
+* entities can't swim
+
+* there is sound missing/broken:
+  - under water you hear footsteps
+  - in the water you doesn't hear something
+  - on the leadder
+  - if you pic some item
+  - if entities walks
+
+* bad mob AI
+
+* tailgrass looks like dead bush
+
+* items doesn't despawn, if there is no block, next to him:
+  - tailgrass
+  - rail
+  - detector rail
+  - powered rail
+  - redstone torch
+  - redstone torch lit
+  - redstone
+  - pressure plate
+  - sampling
+  - flower
+  - dead bush
+  - rose
+  - brown mushroom
+  - red mushroom
+  - torch
+  - snow
+
+* scroll with the mouse wheel
 
 
 * diff metadata:

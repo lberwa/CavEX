@@ -29,10 +29,41 @@ static void screen_gworld_reset(struct screen* s, int width, int height) {
 	input_pointer_enable(true);
 
 	gstate_set_capture_input_all(false);
+	gstate.gen_debug.built = 0;
+	gstate.gen_debug.percent = 0;
+	gstate.gen_debug.active = false;
 
 	/* wait for a fresh "world ready" signal; a stale world_loaded from a
 	 * previous session would otherwise jump straight into the game */
 	gstate.world_loaded = false;
+}
+
+static float screen_gworld_progress(void) {
+	int vd = gstate.settings.view_distance;
+	if(vd < MIN_VIEW_DISTANCE)
+		vd = MIN_VIEW_DISTANCE;
+	if(vd > MAX_VIEW_DISTANCE)
+		vd = MAX_VIEW_DISTANCE;
+
+	int target = 0;
+	for(int z = -vd; z <= vd; z++) {
+		for(int x = -vd; x <= vd; x++) {
+			if(x * x + z * z <= vd * vd)
+				target++;
+		}
+	}
+	if(target < 1)
+		target = 1;
+
+	float current = (float)gstate.gen_debug.built;
+	if(gstate.gen_debug.active)
+		current += (float)gstate.gen_debug.percent / 100.0f;
+	float progress = current / (float)target;
+	if(progress < 0.0f)
+		progress = 0.0f;
+	if(progress > 1.0f)
+		progress = 1.0f;
+	return progress;
 }
 
 static void screen_gworld_update(struct screen* s, float dt) {
@@ -54,15 +85,13 @@ static void screen_gworld_render2D(struct screen* s, int width, int height) {
 	gutil_text(2 * GFX_GUI_SCALE, height - 2 * GFX_GUI_SCALE - (9 * GFX_GUI_SCALE) * 1, 
                     "Copyright (c) 2023-2026 ByteBit/xtreme8000, lberwa", 8 * GFX_GUI_SCALE, true);
 
-	// just a rough estimate
-	float progress
-		= fminf((float)world_loaded_chunks(&gstate.world) / MAX_CHUNKS, 1.0F);
+	float progress = screen_gworld_progress();
 
 	gfx_texture(false);
-	gutil_texquad_col((width - 100 * GFX_GUI_SCALE) / 2, height / 2 + 16 * GFX_GUI_SCALE, 0, 0, 0, 0, 100 * GFX_GUI_SCALE, 2 * GFX_GUI_SCALE,
+	gutil_texquad_col((width - 100 * GFX_GUI_SCALE) / 2, height / 2 + 16 * GFX_GUI_SCALE, 0, 0, 0, 0, 100 * GFX_GUI_SCALE, 4 * GFX_GUI_SCALE,
 					  128, 128, 128, 255);
 	gutil_texquad_col((width - 100 * GFX_GUI_SCALE) / 2, height / 2 + 16 * GFX_GUI_SCALE, 0, 0, 0, 0,
-					  100 * GFX_GUI_SCALE * progress, 2 * GFX_GUI_SCALE, 128, 255, 128, 255);
+					  100 * GFX_GUI_SCALE * progress, 4 * GFX_GUI_SCALE, 128, 255, 128, 255);
 	gfx_texture(true);
 }
 

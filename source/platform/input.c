@@ -552,6 +552,81 @@ static bool input_read_mapping(enum input_button b, int player, int* mapping,
 	return config_read_int_array(&gstate.config_user, base, mapping, length);
 }
 
+static void input_button_status(enum input_button b, int player, int vplayer,
+								bool* any_pressed, bool* any_released,
+								bool* any_held) {
+	size_t length = 8;
+	int mapping[length];
+
+	if(!input_read_mapping(b, player, mapping, &length))
+		return;
+
+	for(size_t k = 0; k < length; k++) {
+		bool pressed, released, held;
+		input_native_key_status(mapping[k], vplayer, &pressed, &released, &held);
+		if(pressed)
+			*any_pressed = true;
+		if(released)
+			*any_released = true;
+		if(held)
+			*any_held = true;
+	}
+}
+
+static bool input_button_pressed_state(enum input_button b, int player,
+									   int vplayer) {
+	bool any_pressed = false;
+	bool any_released = false;
+	bool any_held = false;
+	input_button_status(b, player, vplayer, &any_pressed, &any_released,
+						&any_held);
+	return any_pressed && !any_held && !any_released;
+}
+
+static bool input_button_released_state(enum input_button b, int player,
+										int vplayer) {
+	bool any_pressed = false;
+	bool any_released = false;
+	bool any_held = false;
+	input_button_status(b, player, vplayer, &any_pressed, &any_released,
+						&any_held);
+	return !any_pressed && !any_held && any_released;
+}
+
+static bool input_button_held_state(enum input_button b, int player,
+									int vplayer) {
+	bool any_pressed = false;
+	bool any_released = false;
+	bool any_held = false;
+	input_button_status(b, player, vplayer, &any_pressed, &any_released,
+						&any_held);
+	return any_pressed || any_held;
+}
+
+static bool input_any_pressed(int player, int vplayer) {
+	for(int bb = 0; bb < (int)IB_ANY; bb++) {
+		if(input_button_pressed_state((enum input_button)bb, player, vplayer))
+			return true;
+	}
+	return false;
+}
+
+static bool input_any_released(int player, int vplayer) {
+	for(int bb = 0; bb < (int)IB_ANY; bb++) {
+		if(input_button_released_state((enum input_button)bb, player, vplayer))
+			return true;
+	}
+	return false;
+}
+
+static bool input_any_held(int player, int vplayer) {
+	for(int bb = 0; bb < (int)IB_ANY; bb++) {
+		if(input_button_held_state((enum input_button)bb, player, vplayer))
+			return true;
+	}
+	return false;
+}
+
 bool input_symbol(enum input_button b, int* symbol, int* symbol_help,
 				  enum input_category* category, int player) {
 	const char* key = input_config_translate(b);
@@ -597,6 +672,10 @@ bool input_pressed(enum input_button b, int player) {
 #endif
 	}
 
+	if(b == IB_ANY) {
+		return input_any_pressed(player, vplayer);
+	}
+
 	const char* key = input_config_translate(b);
 
 	if(!key)
@@ -636,6 +715,10 @@ bool input_released(enum input_button b,int player) {
 #endif
 	}
 
+	if(b == IB_ANY) {
+		return input_any_released(player, vplayer);
+	}
+
 	const char* key = input_config_translate(b);
 
 	if(!key)
@@ -673,6 +756,10 @@ bool input_held(enum input_button b, int player) {
 #else
 		return false;
 #endif
+	}
+
+	if(b == IB_ANY) {
+		return input_any_held(player, vplayer);
 	}
 	
 	const char* key = input_config_translate(b);
@@ -798,34 +885,7 @@ bool rinput_pressed(enum input_button b, int player) {
 	// inputs for this channel (so it works even when config has no sensible
 	// `input.any_button` mapping).
 	if(b == IB_ANY) {
-		bool any_pressed = false;
-		bool any_held = false;
-		bool any_released = false;
-
-		for(int bb = 0; bb <= (int)IB_ANY; bb++) {
-			enum input_button b2 = (enum input_button)bb;
-			if(b2 == IB_ANY)
-				continue;
-
-			size_t length = 8;
-			int mapping[length];
-			if(!input_read_mapping(b2, player, mapping, &length))
-				continue;
-
-			for(size_t k = 0; k < length; k++) {
-				bool pressed, released, held;
-				input_native_key_status(mapping[k], player, &pressed, &released,
-										&held);
-				if(pressed)
-					any_pressed = true;
-				if(released)
-					any_released = true;
-				if(held)
-					any_held = true;
-			}
-		}
-
-		return any_pressed && !any_held && !any_released;
+		return input_any_pressed(player, player);
 	}
 #endif
 
