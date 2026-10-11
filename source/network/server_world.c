@@ -31,6 +31,7 @@
 #include "../daytime.h"
 #include "../cubiomes/generator.h"
 #include "../cubiomes/biomes.h"
+#include "gen_world.h"
 
 #define EXPLOSION_MAX_RAYS 300
 #define EXPLOSION_STEP     0.5f
@@ -924,7 +925,7 @@ enum {
 #else
 	GEN_CHUNK_COLUMNS_PER_STEP = 64,
 #endif
-	GEN_FEATURE_STEP_COUNT = 13,
+	GEN_FEATURE_STEP_COUNT = 16,
 	GEN_FINALIZE_STEP_COUNT = 3,
 };
 
@@ -1331,7 +1332,7 @@ static void gen_carve_chunk_cave_worm_branch(struct server_chunk* sc, uint32_t s
 	int dir = start_dir & 3;
 
 	for(int seg = 0; seg < segments; seg++) {
-		int len = 5 + (int)(gen_hash3i(chunk_x, 1501 + seg * 41, chunk_z, seed) % 5U);
+		int len = 10 + (int)(gen_hash3i(chunk_x, 1501 + seg * 41, chunk_z, seed) % 9U);
 		int dy = (int)(gen_hash3i(chunk_x, 1543 + seg * 43, chunk_z, seed) % 3U) - 1;
 		int end_x = cur_x;
 		int end_z = cur_z;
@@ -1359,7 +1360,7 @@ static void gen_carve_chunk_cave_worm_branch(struct server_chunk* sc, uint32_t s
 		gen_cave_process_chunk(&tunnel, sc, chunk_x, chunk_z);
 
 		if(split_depth > 0 && seg >= 1
-		   && (int)(gen_hash3i(chunk_x, 1589 + seg * 47, chunk_z, seed) % 100U) < 72) {
+		   && (int)(gen_hash3i(chunk_x, 1589 + seg * 47, chunk_z, seed) % 100U) < 18) {
 			int side_dir = (dir + 1 + ((int)(gen_hash3i(chunk_x, 1627 + seg * 53, chunk_z, seed) & 1U) * 2)) % 4;
 			gen_carve_chunk_cave_worm_branch(
 				sc, seed ^ (uint32_t)(0xD00D900U + seg * 61U), chunk_x, chunk_z,
@@ -1441,7 +1442,7 @@ static void gen_carve_chunk_cave_local_network(struct server_chunk* sc, uint32_t
 	}
 
 	for(int i = 1; i + 2 < node_count; i++) {
-		if((int)(gen_hash3i(chunk_x, 1097 + i * 31, chunk_z, seed) % 100U) >= 35U)
+		if((int)(gen_hash3i(chunk_x, 1097 + i * 31, chunk_z, seed) % 100U) >= 8U)
 			continue;
 		int j = i + 1 + (int)(gen_hash3i(chunk_x, 1129 + i * 37, chunk_z, seed)
 							  % (unsigned int)(node_count - i - 1));
@@ -1456,7 +1457,7 @@ static void gen_carve_chunk_cave_local_network(struct server_chunk* sc, uint32_t
 	}
 
 	for(int i = 1; i < node_count; i++) {
-		int branch_count = 2 + (int)(gen_hash3i(chunk_x, 1163 + i * 41, chunk_z, seed) % 2U);
+		int branch_count = 1 + (int)(gen_hash3i(chunk_x, 1163 + i * 41, chunk_z, seed) % 2U);
 		for(int b = 0; b < branch_count; b++) {
 			int dir = (int)(gen_hash3i(chunk_x, 1201 + i * 43 + b * 11, chunk_z, seed) % 4U);
 			int segs = 4 + (int)(gen_hash3i(chunk_x, 1237 + i * 47 + b * 13, chunk_z, seed) % 4U);
@@ -1520,6 +1521,103 @@ static void gen_carve_chunk_linked_caves(struct server_chunk* sc, uint32_t seed,
 									   hub_x, hub_y, hub_z, tunnel_budget);
 }
 
+/* Neuer Eingang-Generator: gräbt einen begehbaren Schacht von der Oberfläche
+ * nach unten, bis er eine existierende Wurmhöhle (Luft) trifft. So verbinden
+ * sich die Eingänge garantiert mit dem Tunnel-System (gen_carve_worm_caves,
+ * das VOR diesem Step in derselben Chunk-Generierung läuft). */
+static void gen_carve_cave_entrance_to_worm(struct server_chunk* sc, uint32_t seed,
+                                            int chunk_x, int chunk_z,
+                                            const int* surface_map, int sea_level) {
+	if(sc == NULL || surface_map == NULL)
+		return;
+
+	/* ~40% der Chunks bekommen einen Eingangsversuch */
+	if((gen_hash3i(chunk_x, 941, chunk_z, seed ^ 0x3A7C001U) % 100U) >= 40U)
+		return;
+
+	/* Bis zu 3 Kandidaten-Positionen testen */
+	for(int attempt = 0; attempt < 3; attempt++) {
+		uint32_t h = gen_hash3i(chunk_x, 97 + attempt * 31, chunk_z,
+		                        seed ^ (0xE17A100U + (uint32_t)attempt * 53U));
+		/* zentraler platzieren (6..9), damit die grosse Spirale in den Chunk passt */
+		int lx = 6 + (int)(h % 4U);
+		int lz = 6 + (int)((h >> 8) % 4U);
+
+		int surface = surface_map[lx + lz * CHUNK_SIZE];
+		if(surface < sea_level + 2 || surface >= WORLD_HEIGHT - 2)
+			continue; /* kein Eingang unter Wasser oder zu hoch */
+
+		/* Nach unten sondieren: gibt es eine Höhle (Luft) unter der Oberfläche? */
+		int cave_y = -1;
+		for(int y = surface - 4; y >= 6; y--) {
+			if(gen_get_block(sc, lx, y, lz) == BLOCK_AIR) {
+				cave_y = y;
+				break;
+			}
+		}
+		if(cave_y < 0)
+			continue; /* keine Höhle in Reichweite → kein isolierter Eingang */
+
+		int depth = surface - cave_y;
+		float radius = 1.7f; /* Tunnel-Dicke */
+
+		/* Spiralförmiger, flach abfallender Abstieg (statt gerader Schacht).
+		 * Mittelpunkt driftet und Drehrichtung wechselt gelegentlich → es
+		 * entstehen organische Formen (Kreis, Acht, Doppelschleife, ...). */
+		uint32_t h2 = gen_hash3i(chunk_x, 211 + attempt, chunk_z,
+		                         seed ^ (0xB1A5000U + (uint32_t)attempt * 71U));
+		float spiral_r = 3.0f + (float)(h2 % 600) / 100.0f; /* 3..9, ~6 im Mittel */
+		float angle = (float)(h % 628) / 100.0f;            /* Startwinkel */
+		int   dir = (h2 & 1u) ? 1 : -1;                     /* Drehrichtung */
+		int   flip_period = 10 + (int)((h2 >> 4) % 14u);    /* nach 10..23 Schritten wenden */
+		float cxf = (float)lx, czf = (float)lz;             /* wandernder Mittelpunkt */
+		float y_step = 0.4f;    /* flacher Abstieg: 0.4 Blöcke pro Schritt */
+		int steps = (int)((float)depth / y_step) + 6;
+		float cur_y = (float)(surface + 1);
+
+		for(int s = 0; s < steps; s++) {
+			/* Radius pulsiert für natürliche Form (bleibt in 3..9) */
+			float sr = spiral_r + sinf((float)s * 0.18f) * 1.5f;
+			if(sr < 3.0f) sr = 3.0f;
+			if(sr > 9.0f) sr = 9.0f;
+
+			float px = cxf + cosf(angle) * sr;
+			float pz = czf + sinf(angle) * sr;
+
+			int cxi = (int)(px + 0.5f);
+			int czi = (int)(pz + 0.5f);
+			int cyi = (int)(cur_y + 0.5f);
+
+			int ir = (int)(radius) + 1;
+			for(int dy = -ir; dy <= ir; dy++)
+				for(int dx = -ir; dx <= ir; dx++)
+					for(int dz = -ir; dz <= ir; dz++) {
+						if((float)(dx*dx + dy*dy + dz*dz) > radius * radius + 0.5f) continue;
+						int nx = cxi + dx, ny = cyi + dy, nz = czi + dz;
+						if(nx < 0 || nx >= CHUNK_SIZE || nz < 0 || nz >= CHUNK_SIZE) continue;
+						if(ny < 1 || ny >= WORLD_HEIGHT) continue;
+						uint8_t b = gen_get_block(sc, nx, ny, nz);
+						if(b != BLOCK_BEDROCK && b != BLOCK_WATER_STILL
+						   && b != BLOCK_WATER_FLOW)
+							gen_set_block(sc, nx, ny, nz, BLOCK_AIR);
+					}
+
+			angle += (float)dir * 0.40f;  /* Drehung pro Schritt */
+			cur_y -= y_step;              /* Abstieg */
+
+			/* Richtungswechsel → Acht/Doppelschleife. Mittelpunkt an die
+			 * aktuelle Position legen, damit die neue Schleife anschließt. */
+			if(s > 0 && (s % flip_period) == 0) {
+				dir = -dir;
+				cxf = px - cosf(angle) * sr;
+				czf = pz - sinf(angle) * sr;
+			}
+			if(cur_y <= (float)cave_y) break;
+		}
+		return; /* ein Eingang pro Chunk reicht */
+	}
+}
+
 static void gen_carve_chunk_cave_entrance(struct server_chunk* sc, uint32_t seed,
 										  int chunk_x, int chunk_z,
 										  const int* surface_map,
@@ -1546,7 +1644,7 @@ static void gen_carve_chunk_cave_entrance(struct server_chunk* sc, uint32_t seed
 	}
 	bool mountainous_chunk = gen_is_mountainous_biome(center_biome)
 		|| ((max_surface - min_surface) >= 14);
-	unsigned int entrance_chance = mountainous_chunk ? 16U : 3U;
+	unsigned int entrance_chance = mountainous_chunk ? 60U : 25U;
 	if((gen_hash3i(chunk_x, 941, chunk_z, seed) % 100U) >= entrance_chance)
 		return;
 
@@ -2043,14 +2141,12 @@ static bool gen_can_carve_density_block(uint8_t block) {
 
 static void gen_carve_density_block(struct server_chunk* sc, int lx, int y,
 									int lz, int sea_level) {
+	(void)sea_level;
 	uint8_t block = gen_get_block(sc, lx, y, lz);
 	if(!gen_can_carve_density_block(block))
 		return;
-	if(y <= sea_level) {
-		gen_set_block(sc, lx, y, lz, BLOCK_WATER_STILL);
-	} else {
-		gen_set_block(sc, lx, y, lz, BLOCK_AIR);
-	}
+	/* Schluchten/Höhlen immer AIR — kein Wasser am Grund (User-Wunsch) */
+	gen_set_block(sc, lx, y, lz, BLOCK_AIR);
 }
 
 static void gen_carve_density_caves(struct server_chunk* sc, uint32_t seed,
@@ -2149,23 +2245,30 @@ static void gen_carve_density_canyon(struct server_chunk* sc, uint32_t seed,
 		return;
 	int chunk_x = gen_floor_div(world_x0, CHUNK_SIZE);
 	int chunk_z = gen_floor_div(world_z0, CHUNK_SIZE);
-	if((gen_hash3i(chunk_x, 331, chunk_z, seed ^ 0xCA110A11U) % 11U) != 0U)
+
+	/* Seeding: world_seed XOR chunk-Hash */
+	uint32_t canyon_seed = (uint32_t)((int64_t)seed * 6364136223846793005LL
+	                       + (int64_t)chunk_x * 1664525L
+	                       + (int64_t)chunk_z * 22695477L);
+
+	if((gen_hash3i(chunk_x, 331, chunk_z, canyon_seed ^ 0xCA110A11U) % 11U) != 0U)
 		return;
 
 	float angle = gen_rand01_from_hash(
-		gen_hash3i(chunk_x, 337, chunk_z, seed ^ 0xCA110A12U)) * 6.2831853f;
+		gen_hash3i(chunk_x, 337, chunk_z, canyon_seed ^ 0xCA110A12U)) * 6.2831853f;
 	float dx = cosf(angle);
 	float dz = sinf(angle);
 	float cx = 7.5f + (gen_rand01_from_hash(
-		gen_hash3i(chunk_x, 341, chunk_z, seed ^ 0xCA110A13U)) - 0.5f) * 8.0f;
+		gen_hash3i(chunk_x, 341, chunk_z, canyon_seed ^ 0xCA110A13U)) - 0.5f) * 8.0f;
 	float cz = 7.5f + (gen_rand01_from_hash(
-		gen_hash3i(chunk_x, 347, chunk_z, seed ^ 0xCA110A14U)) - 0.5f) * 8.0f;
-	float width = 3.0f + gen_rand01_from_hash(
-		gen_hash3i(chunk_x, 349, chunk_z, seed ^ 0xCA110A15U)) * 2.25f;
-	float center_y = 24.0f + gen_rand01_from_hash(
-		gen_hash3i(chunk_x, 353, chunk_z, seed ^ 0xCA110A16U)) * 18.0f;
-	float height = 7.0f + gen_rand01_from_hash(
-		gen_hash3i(chunk_x, 359, chunk_z, seed ^ 0xCA110A17U)) * 8.0f;
+		gen_hash3i(chunk_x, 347, chunk_z, canyon_seed ^ 0xCA110A14U)) - 0.5f) * 8.0f;
+	/* Breiter (4..9) und höher (tiefe Schlucht) als zuvor */
+	float width = 4.0f + gen_rand01_from_hash(
+		gen_hash3i(chunk_x, 349, chunk_z, canyon_seed ^ 0xCA110A15U)) * 5.0f;
+	float center_y = 22.0f + gen_rand01_from_hash(
+		gen_hash3i(chunk_x, 353, chunk_z, canyon_seed ^ 0xCA110A16U)) * 16.0f;
+	float height = 11.0f + gen_rand01_from_hash(
+		gen_hash3i(chunk_x, 359, chunk_z, canyon_seed ^ 0xCA110A17U)) * 10.0f;
 
 	for(int lz = 1; lz < CHUNK_SIZE - 1; lz++) {
 		for(int lx = 1; lx < CHUNK_SIZE - 1; lx++) {
@@ -2175,7 +2278,9 @@ static void gen_carve_density_canyon(struct server_chunk* sc, uint32_t seed,
 			if(across > width + 1.0f)
 				continue;
 			int surface = surface_map[lx + lz * CHUNK_SIZE];
-			int max_y = surface - 8;
+			/* -6: Schlucht darf oben offen sein, aber nicht die ganze Erdschicht
+			 * als schmalen Kanal durchschneiden */
+			int max_y = surface - 6;
 			if(max_y > WORLD_HEIGHT - 2)
 				max_y = WORLD_HEIGHT - 2;
 			for(int y = 8; y <= max_y; y++) {
@@ -2184,7 +2289,7 @@ static void gen_carve_density_canyon(struct server_chunk* sc, uint32_t seed,
 				float rough = gen_fbm3d((float)(world_x0 + lx) * 0.070f,
 										(float)y * 0.060f,
 										(float)(world_z0 + lz) * 0.070f,
-										seed ^ 0xCA110A18U, 1, 2.0f, 0.5f);
+										canyon_seed ^ 0xCA110A18U, 1, 2.0f, 0.5f);
 				float shape = horizontal * horizontal + vertical * vertical * 0.58f
 					+ rough * 0.10f;
 				if(shape < 1.0f)
@@ -3053,8 +3158,8 @@ static void gen_place_mineshaft(struct server_chunk* sc, uint32_t seed,
 				gen_fill_box(sc, x, cy, cz + 1, x, cy + 2, cz + 1, BLOCK_FENCE);
 				gen_fill_box(sc, x - 1, cy + 2, cz - 1, x + 1, cy + 2, cz + 1,
 							 BLOCK_PLANKS);
-				gen_set_block(sc, x, cy + 1, cz - 2, BLOCK_TORCH);
-				gen_set_block(sc, x, cy + 1, cz + 2, BLOCK_TORCH);
+				gen_set_block_with_meta(sc, x, cy + 1, cz - 2, BLOCK_TORCH, 3); /* Nordseite → zeigt Nord */
+				gen_set_block_with_meta(sc, x, cy + 1, cz + 2, BLOCK_TORCH, 4); /* Südseite → zeigt Süd */
 			}
 			if((gen_hash3i(x, cy, cz, seed ^ 0x5AF72001U) % 100U) < 55U)
 				gen_set_block(sc, x, cy, cz, BLOCK_RAIL);
@@ -3073,8 +3178,8 @@ static void gen_place_mineshaft(struct server_chunk* sc, uint32_t seed,
 				gen_fill_box(sc, cx + 1, cy, z, cx + 1, cy + 2, z, BLOCK_FENCE);
 				gen_fill_box(sc, cx - 1, cy + 2, z - 1, cx + 1, cy + 2, z + 1,
 							 BLOCK_PLANKS);
-				gen_set_block(sc, cx - 2, cy + 1, z, BLOCK_TORCH);
-				gen_set_block(sc, cx + 2, cy + 1, z, BLOCK_TORCH);
+				gen_set_block_with_meta(sc, cx - 2, cy + 1, z, BLOCK_TORCH, 2); /* Westseite → zeigt West */
+				gen_set_block_with_meta(sc, cx + 2, cy + 1, z, BLOCK_TORCH, 1); /* Ostseite → zeigt Ost */
 			}
 			if((gen_hash3i(cx, cy, z, seed ^ 0x5AF72002U) % 100U) < 55U)
 				gen_set_block(sc, cx, cy, z, BLOCK_RAIL);
@@ -3111,66 +3216,2746 @@ static void gen_place_small_house(struct server_chunk* sc, int cx, int y, int cz
 	gen_set_block(sc, cx + 1, y + 1, cz - 1, BLOCK_CHEST);
 }
 
-static void gen_place_village(struct server_chunk* sc, uint32_t seed,
-							  int world_x0, int world_z0, int sea_level,
-							  Generator* biome_gen) {
-	if((gen_hash3i(world_x0, 1601, world_z0, seed ^ 0x7111A63EU) % 100U) >= 20U)
-		return;
+/* Dorfhaus:
+ * - Kopfstein-Fundament
+ * - Eichenholz-Planken Wände
+ * - Log-Ecksäulen
+ * - Glasscheiben-Fenster
+ * - Dachüberhang mit Platten
+ * Fußpunkt (ox,y,oz) = Vordermitte der Haustür (Tür öffnet nach außen in -z)
+ * Haus ist 5 breit (x: -2..+2), 7 tief (z: -1..+5), 4 hoch */
 
-	int cx = 8;
-	int cz = 8;
-	int wx = world_x0 + cx;
-	int wz = world_z0 + cz;
-	int biome_id = gen_biome_at_safe(biome_gen, wx, wz);
-	if(!(biome_id == plains || biome_id == desert || biome_id == desert_hills
-		 || biome_id == savanna || biome_id == savanna_plateau
-		 || biome_id == taiga || biome_id == taiga_hills))
-		return;
+/* plains_fountain: Groesse 9x4x9 */
+static void gen_place_plains_fountain(struct server_chunk* sc, int ox, int oy, int oz) {
+    gen_set_block(sc, ox+2, oy+0, oz+2, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+2, oy+0, oz+3, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+2, oy+0, oz+4, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+2, oy+0, oz+5, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+2, oy+0, oz+6, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+3, oy+0, oz+2, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+3, oy+0, oz+3, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+3, oy+0, oz+4, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+3, oy+0, oz+5, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+3, oy+0, oz+6, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+4, oy+0, oz+2, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+4, oy+0, oz+3, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+4, oy+0, oz+4, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+4, oy+0, oz+5, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+4, oy+0, oz+6, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+5, oy+0, oz+2, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+5, oy+0, oz+3, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+5, oy+0, oz+4, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+5, oy+0, oz+5, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+5, oy+0, oz+6, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+6, oy+0, oz+2, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+6, oy+0, oz+3, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+6, oy+0, oz+4, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+6, oy+0, oz+5, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+6, oy+0, oz+6, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+2, oy+1, oz+3, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+2, oy+1, oz+4, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+2, oy+1, oz+5, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+3, oy+1, oz+2, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+3, oy+1, oz+6, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+4, oy+1, oz+2, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+4, oy+1, oz+4, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+4, oy+1, oz+6, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+5, oy+1, oz+2, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+5, oy+1, oz+6, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+6, oy+1, oz+3, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+6, oy+1, oz+4, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+6, oy+1, oz+5, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+4, oy+2, oz+4, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+0, oy+0, oz+1, BLOCK_STONE);
+    gen_set_block(sc, ox+0, oy+0, oz+2, BLOCK_STONE);
+    gen_set_block(sc, ox+0, oy+0, oz+3, BLOCK_STONE);
+    gen_set_block(sc, ox+0, oy+0, oz+4, BLOCK_STONE);
+    gen_set_block(sc, ox+0, oy+0, oz+5, BLOCK_STONE);
+    gen_set_block(sc, ox+0, oy+0, oz+7, BLOCK_STONE);
+    gen_set_block(sc, ox+1, oy+0, oz+0, BLOCK_STONE);
+    gen_set_block(sc, ox+1, oy+0, oz+1, BLOCK_STONE);
+    gen_set_block(sc, ox+1, oy+0, oz+3, BLOCK_STONE);
+    gen_set_block(sc, ox+1, oy+0, oz+4, BLOCK_STONE);
+    gen_set_block(sc, ox+1, oy+0, oz+5, BLOCK_STONE);
+    gen_set_block(sc, ox+1, oy+0, oz+6, BLOCK_STONE);
+    gen_set_block(sc, ox+1, oy+0, oz+7, BLOCK_STONE);
+    gen_set_block(sc, ox+1, oy+0, oz+8, BLOCK_STONE);
+    gen_set_block(sc, ox+2, oy+0, oz+0, BLOCK_STONE);
+    gen_set_block(sc, ox+2, oy+0, oz+8, BLOCK_STONE);
+    gen_set_block(sc, ox+3, oy+0, oz+0, BLOCK_STONE);
+    gen_set_block(sc, ox+3, oy+0, oz+1, BLOCK_STONE);
+    gen_set_block(sc, ox+3, oy+0, oz+7, BLOCK_STONE);
+    gen_set_block(sc, ox+3, oy+0, oz+8, BLOCK_STONE);
+    gen_set_block(sc, ox+4, oy+0, oz+0, BLOCK_STONE);
+    gen_set_block(sc, ox+4, oy+0, oz+1, BLOCK_STONE);
+    gen_set_block(sc, ox+4, oy+0, oz+7, BLOCK_STONE);
+    gen_set_block(sc, ox+4, oy+0, oz+8, BLOCK_STONE);
+    gen_set_block(sc, ox+5, oy+0, oz+0, BLOCK_STONE);
+    gen_set_block(sc, ox+5, oy+0, oz+1, BLOCK_STONE);
+    gen_set_block(sc, ox+5, oy+0, oz+7, BLOCK_STONE);
+    gen_set_block(sc, ox+5, oy+0, oz+8, BLOCK_STONE);
+    gen_set_block(sc, ox+6, oy+0, oz+0, BLOCK_STONE);
+    gen_set_block(sc, ox+6, oy+0, oz+1, BLOCK_STONE);
+    gen_set_block(sc, ox+6, oy+0, oz+7, BLOCK_STONE);
+    gen_set_block(sc, ox+6, oy+0, oz+8, BLOCK_STONE);
+    gen_set_block(sc, ox+7, oy+0, oz+0, BLOCK_STONE);
+    gen_set_block(sc, ox+7, oy+0, oz+1, BLOCK_STONE);
+    gen_set_block(sc, ox+7, oy+0, oz+3, BLOCK_STONE);
+    gen_set_block(sc, ox+7, oy+0, oz+4, BLOCK_STONE);
+    gen_set_block(sc, ox+7, oy+0, oz+5, BLOCK_STONE);
+    gen_set_block(sc, ox+7, oy+0, oz+6, BLOCK_STONE);
+    gen_set_block(sc, ox+7, oy+0, oz+8, BLOCK_STONE);
+    gen_set_block(sc, ox+8, oy+0, oz+1, BLOCK_STONE);
+    gen_set_block(sc, ox+8, oy+0, oz+2, BLOCK_STONE);
+    gen_set_block(sc, ox+8, oy+0, oz+3, BLOCK_STONE);
+    gen_set_block(sc, ox+8, oy+0, oz+4, BLOCK_STONE);
+    gen_set_block(sc, ox+8, oy+0, oz+5, BLOCK_STONE);
+    gen_set_block(sc, ox+8, oy+0, oz+6, BLOCK_STONE);
+    gen_set_block(sc, ox+8, oy+0, oz+7, BLOCK_STONE);
+    gen_set_block_with_meta(sc, ox+2, oy+1, oz+2, BLOCK_TORCH, 5);
+    gen_set_block_with_meta(sc, ox+2, oy+1, oz+6, BLOCK_TORCH, 5);
+    gen_set_block(sc, ox+3, oy+1, oz+3, BLOCK_WATER_STILL);
+    gen_set_block(sc, ox+3, oy+1, oz+4, BLOCK_WATER_STILL);
+    gen_set_block(sc, ox+3, oy+1, oz+5, BLOCK_WATER_STILL);
+    gen_set_block(sc, ox+4, oy+1, oz+3, BLOCK_WATER_STILL);
+    gen_set_block(sc, ox+4, oy+1, oz+5, BLOCK_WATER_STILL);
+    gen_set_block(sc, ox+5, oy+1, oz+3, BLOCK_WATER_STILL);
+    gen_set_block(sc, ox+5, oy+1, oz+4, BLOCK_WATER_STILL);
+    gen_set_block(sc, ox+5, oy+1, oz+5, BLOCK_WATER_STILL);
+    gen_set_block_with_meta(sc, ox+6, oy+1, oz+2, BLOCK_TORCH, 5);
+    gen_set_block_with_meta(sc, ox+6, oy+1, oz+6, BLOCK_TORCH, 5);
+    gen_set_block(sc, ox+3, oy+2, oz+4, BLOCK_WATER_STILL);
+    gen_set_block(sc, ox+4, oy+2, oz+3, BLOCK_WATER_STILL);
+    gen_set_block(sc, ox+4, oy+2, oz+5, BLOCK_WATER_STILL);
+    gen_set_block(sc, ox+5, oy+2, oz+4, BLOCK_WATER_STILL);
+    gen_set_block(sc, ox+3, oy+3, oz+4, BLOCK_WATER_STILL);
+    gen_set_block(sc, ox+4, oy+3, oz+3, BLOCK_WATER_STILL);
+    gen_set_block(sc, ox+4, oy+3, oz+4, BLOCK_WATER_STILL);
+    gen_set_block(sc, ox+4, oy+3, oz+5, BLOCK_WATER_STILL);
+    gen_set_block(sc, ox+5, oy+3, oz+4, BLOCK_WATER_STILL);
+    gen_set_block(sc, ox+4, oy+2, oz+2, BLOCK_STONE);
+}
 
-	int y = 0;
-	if(!gen_can_surface_structure(sc, cx, cz, 6, &y))
-		return;
-	if(y <= sea_level)
-		return;
+/* plains_small_house: Groesse 7x7x7 */
+static void gen_place_plains_small_house(struct server_chunk* sc, int ox, int oy, int oz) {
+    /* Innenraum leeren (Dirt/Stein durch Luft ersetzen) */
+    for(int iy=1; iy<=3; iy++)
+      for(int ix=1; ix<=5; ix++)
+        for(int iz=1; iz<=5; iz++) {
+          uint8_t b=gen_get_block(sc,ox+ix,oy+iy,oz+iz);
+          if(b!=BLOCK_AIR && b!=BLOCK_WATER_STILL && b!=BLOCK_WATER_FLOW)
+            gen_set_block(sc,ox+ix,oy+iy,oz+iz,BLOCK_AIR);
+        }
+    gen_set_block_with_meta(sc, ox+1, oy+0, oz+1, BLOCK_LOG, 0);
+    gen_set_block(sc, ox+1, oy+0, oz+2, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+1, oy+0, oz+3, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+1, oy+0, oz+4, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+1, oy+0, oz+5, BLOCK_LOG, 0);
+    gen_set_block(sc, ox+2, oy+0, oz+1, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+2, oy+0, oz+2, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+0, oz+3, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+0, oz+4, BLOCK_PLANKS, 0);
+    gen_set_block(sc, ox+2, oy+0, oz+5, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+3, oy+0, oz+1, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+3, oy+0, oz+2, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+0, oz+4, BLOCK_PLANKS, 0);
+    gen_set_block(sc, ox+3, oy+0, oz+5, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+4, oy+0, oz+1, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+4, oy+0, oz+2, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+0, oz+3, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+0, oz+4, BLOCK_PLANKS, 0);
+    gen_set_block(sc, ox+4, oy+0, oz+5, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+5, oy+0, oz+1, BLOCK_LOG, 0);
+    gen_set_block(sc, ox+5, oy+0, oz+2, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+5, oy+0, oz+3, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+5, oy+0, oz+4, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+5, oy+0, oz+5, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+1, oy+1, oz+1, BLOCK_LOG, 0);
+    gen_set_block(sc, ox+1, oy+1, oz+2, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+1, oy+1, oz+4, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+1, oy+1, oz+5, BLOCK_LOG, 0);
+    gen_set_block(sc, ox+2, oy+1, oz+1, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+2, oy+1, oz+5, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+3, oy+1, oz+1, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+3, oy+1, oz+5, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+4, oy+1, oz+1, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+4, oy+1, oz+5, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+5, oy+1, oz+1, BLOCK_LOG, 0);
+    gen_set_block(sc, ox+5, oy+1, oz+2, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+5, oy+1, oz+3, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+5, oy+1, oz+4, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+5, oy+1, oz+5, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+1, oy+2, oz+1, BLOCK_LOG, 0);
+    gen_set_block(sc, ox+1, oy+2, oz+2, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+1, oy+2, oz+4, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+1, oy+2, oz+5, BLOCK_LOG, 0);
+    gen_set_block(sc, ox+2, oy+2, oz+1, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+2, oy+2, oz+5, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+4, oy+2, oz+1, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+4, oy+2, oz+5, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+5, oy+2, oz+1, BLOCK_LOG, 0);
+    gen_set_block(sc, ox+5, oy+2, oz+2, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+5, oy+2, oz+4, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+5, oy+2, oz+5, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+1, oy+3, oz+1, BLOCK_LOG, 0);
+    gen_set_block(sc, ox+1, oy+3, oz+2, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+1, oy+3, oz+3, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+1, oy+3, oz+4, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+1, oy+3, oz+5, BLOCK_LOG, 0);
+    gen_set_block(sc, ox+2, oy+3, oz+1, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+2, oy+3, oz+5, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+3, oy+3, oz+1, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+3, oy+3, oz+5, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+4, oy+3, oz+1, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+4, oy+3, oz+5, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+5, oy+3, oz+1, BLOCK_LOG, 0);
+    gen_set_block(sc, ox+5, oy+3, oz+2, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+5, oy+3, oz+3, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+5, oy+3, oz+4, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+5, oy+3, oz+5, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+1, oy+4, oz+1, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+1, oy+4, oz+2, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+1, oy+4, oz+3, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+1, oy+4, oz+4, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+1, oy+4, oz+5, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+4, oz+1, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+4, oz+5, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+4, oz+1, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+4, oz+5, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+4, oz+1, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+4, oz+5, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+4, oz+1, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+4, oz+2, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+4, oz+3, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+4, oz+4, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+4, oz+5, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+5, oz+2, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+5, oz+3, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+5, oz+4, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+5, oz+2, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+5, oz+4, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+5, oz+2, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+5, oz+3, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+5, oz+4, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+6, oz+3, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+1, oy+1, oz+3, BLOCK_DOOR_WOOD, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+1, oz+4, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+0, oy+2, oz+2, BLOCK_TORCH, 2);
+    gen_set_block_with_meta(sc, ox+0, oy+2, oz+4, BLOCK_TORCH, 2);
+    gen_set_block_with_meta(sc, ox+1, oy+2, oz+3, BLOCK_DOOR_WOOD, 8);
+    gen_set_block(sc, ox+3, oy+2, oz+1, BLOCK_GLASS_PANE);
+    gen_set_block(sc, ox+3, oy+2, oz+5, BLOCK_GLASS_PANE);
+    gen_set_block(sc, ox+5, oy+2, oz+3, BLOCK_GLASS_PANE);
+    gen_set_block_with_meta(sc, ox+4, oy+3, oz+3, BLOCK_TORCH, 2);
+    gen_set_block_with_meta(sc, ox+0, oy+4, oz+0, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+0, oy+4, oz+1, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+0, oy+4, oz+2, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+0, oy+4, oz+3, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+0, oy+4, oz+4, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+0, oy+4, oz+5, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+0, oy+4, oz+6, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+1, oy+4, oz+0, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+1, oy+4, oz+6, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+2, oy+4, oz+0, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+2, oy+4, oz+6, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+3, oy+4, oz+0, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+3, oy+4, oz+6, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+4, oy+4, oz+0, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+4, oy+4, oz+6, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+5, oy+4, oz+0, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+5, oy+4, oz+6, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+6, oy+4, oz+0, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+6, oy+4, oz+1, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+6, oy+4, oz+2, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+6, oy+4, oz+3, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+6, oy+4, oz+4, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+6, oy+4, oz+5, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+6, oy+4, oz+6, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+1, oy+5, oz+1, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+1, oy+5, oz+2, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+1, oy+5, oz+3, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+1, oy+5, oz+4, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+1, oy+5, oz+5, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+5, oz+1, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+2, oy+5, oz+5, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+3, oy+5, oz+1, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+3, oy+5, oz+5, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+4, oy+5, oz+1, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+4, oy+5, oz+5, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+5, oy+5, oz+1, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+5, oy+5, oz+2, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+5, oy+5, oz+3, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+5, oy+5, oz+4, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+5, oy+5, oz+5, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+2, oy+6, oz+2, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+6, oz+3, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+6, oz+4, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+6, oz+2, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+3, oy+6, oz+4, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+4, oy+6, oz+2, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+4, oy+6, oz+3, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+4, oy+6, oz+4, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+3, oy+1, oz+2, BLOCK_BED, 3);
+    gen_set_block_with_meta(sc, ox+4, oy+1, oz+2, BLOCK_BED, 11);
+}
 
-	uint8_t path = (biome_id == desert || biome_id == desert_hills) ? BLOCK_SANDSTONE : BLOCK_GRAVEL;
-	uint8_t wall = (biome_id == desert || biome_id == desert_hills) ? BLOCK_SANDSTONE : BLOCK_PLANKS;
-	uint8_t roof = (biome_id == desert || biome_id == desert_hills) ? BLOCK_SLAB : BLOCK_WOODEN_STAIRS;
-	uint8_t floor = (biome_id == desert || biome_id == desert_hills) ? BLOCK_SANDSTONE : BLOCK_PLANKS;
+/* plains_medium_house: Groesse 13x8x11 */
+static void gen_place_plains_medium_house(struct server_chunk* sc, int ox, int oy, int oz) {
+    /* Innenraum leeren (Dirt/Stein durch Luft ersetzen) */
+    for(int iy=1; iy<=5; iy++)
+      for(int ix=1; ix<=11; ix++)
+        for(int iz=1; iz<=9; iz++) {
+          uint8_t b=gen_get_block(sc,ox+ix,oy+iy,oz+iz);
+          if(b!=BLOCK_AIR && b!=BLOCK_WATER_STILL && b!=BLOCK_WATER_FLOW)
+            gen_set_block(sc,ox+ix,oy+iy,oz+iz,BLOCK_AIR);
+        }
+    gen_set_block(sc, ox+0, oy+0, oz+3, BLOCK_GRASS);
+    gen_set_block(sc, ox+0, oy+0, oz+4, BLOCK_DIRT);
+    gen_set_block(sc, ox+1, oy+0, oz+1, BLOCK_DIRT);
+    gen_set_block(sc, ox+1, oy+0, oz+2, BLOCK_DIRT);
+    gen_set_block(sc, ox+1, oy+0, oz+3, BLOCK_DIRT);
+    gen_set_block(sc, ox+1, oy+0, oz+4, BLOCK_DIRT);
+    gen_set_block(sc, ox+1, oy+0, oz+5, BLOCK_DIRT);
+    gen_set_block(sc, ox+1, oy+0, oz+6, BLOCK_DIRT);
+    gen_set_block(sc, ox+1, oy+0, oz+7, BLOCK_DIRT);
+    gen_set_block(sc, ox+1, oy+0, oz+8, BLOCK_DIRT);
+    gen_set_block(sc, ox+1, oy+0, oz+9, BLOCK_DIRT);
+    gen_set_block(sc, ox+2, oy+0, oz+1, BLOCK_DIRT);
+    gen_set_block(sc, ox+2, oy+0, oz+2, BLOCK_DIRT);
+    gen_set_block(sc, ox+2, oy+0, oz+3, BLOCK_DIRT);
+    gen_set_block(sc, ox+2, oy+0, oz+4, BLOCK_DIRT);
+    gen_set_block(sc, ox+2, oy+0, oz+5, BLOCK_DIRT);
+    gen_set_block(sc, ox+2, oy+0, oz+6, BLOCK_DIRT);
+    gen_set_block(sc, ox+2, oy+0, oz+7, BLOCK_DIRT);
+    gen_set_block(sc, ox+2, oy+0, oz+8, BLOCK_DIRT);
+    gen_set_block(sc, ox+2, oy+0, oz+9, BLOCK_DIRT);
+    gen_set_block(sc, ox+3, oy+0, oz+1, BLOCK_DIRT);
+    gen_set_block(sc, ox+3, oy+0, oz+2, BLOCK_DIRT);
+    gen_set_block(sc, ox+3, oy+0, oz+3, BLOCK_DIRT);
+    gen_set_block(sc, ox+3, oy+0, oz+4, BLOCK_DIRT);
+    gen_set_block(sc, ox+3, oy+0, oz+5, BLOCK_DIRT);
+    gen_set_block(sc, ox+3, oy+0, oz+6, BLOCK_DIRT);
+    gen_set_block(sc, ox+3, oy+0, oz+7, BLOCK_DIRT);
+    gen_set_block(sc, ox+3, oy+0, oz+8, BLOCK_DIRT);
+    gen_set_block(sc, ox+3, oy+0, oz+9, BLOCK_DIRT);
+    gen_set_block(sc, ox+4, oy+0, oz+1, BLOCK_DIRT);
+    gen_set_block(sc, ox+4, oy+0, oz+2, BLOCK_DIRT);
+    gen_set_block(sc, ox+4, oy+0, oz+3, BLOCK_DIRT);
+    gen_set_block(sc, ox+4, oy+0, oz+4, BLOCK_DIRT);
+    gen_set_block(sc, ox+4, oy+0, oz+5, BLOCK_DIRT);
+    gen_set_block(sc, ox+4, oy+0, oz+6, BLOCK_DIRT);
+    gen_set_block(sc, ox+4, oy+0, oz+7, BLOCK_DIRT);
+    gen_set_block(sc, ox+4, oy+0, oz+8, BLOCK_DIRT);
+    gen_set_block(sc, ox+4, oy+0, oz+9, BLOCK_DIRT);
+    gen_set_block(sc, ox+5, oy+0, oz+1, BLOCK_DIRT);
+    gen_set_block(sc, ox+5, oy+0, oz+2, BLOCK_DIRT);
+    gen_set_block(sc, ox+5, oy+0, oz+3, BLOCK_DIRT);
+    gen_set_block(sc, ox+5, oy+0, oz+4, BLOCK_DIRT);
+    gen_set_block(sc, ox+5, oy+0, oz+5, BLOCK_DIRT);
+    gen_set_block(sc, ox+5, oy+0, oz+6, BLOCK_DIRT);
+    gen_set_block(sc, ox+5, oy+0, oz+7, BLOCK_DIRT);
+    gen_set_block(sc, ox+5, oy+0, oz+8, BLOCK_DIRT);
+    gen_set_block(sc, ox+5, oy+0, oz+9, BLOCK_DIRT);
+    gen_set_block(sc, ox+6, oy+0, oz+1, BLOCK_DIRT);
+    gen_set_block(sc, ox+6, oy+0, oz+2, BLOCK_DIRT);
+    gen_set_block(sc, ox+6, oy+0, oz+3, BLOCK_DIRT);
+    gen_set_block(sc, ox+6, oy+0, oz+4, BLOCK_DIRT);
+    gen_set_block(sc, ox+6, oy+0, oz+5, BLOCK_DIRT);
+    gen_set_block(sc, ox+6, oy+0, oz+6, BLOCK_DIRT);
+    gen_set_block(sc, ox+6, oy+0, oz+7, BLOCK_DIRT);
+    gen_set_block(sc, ox+6, oy+0, oz+8, BLOCK_DIRT);
+    gen_set_block(sc, ox+6, oy+0, oz+9, BLOCK_DIRT);
+    gen_set_block(sc, ox+7, oy+0, oz+3, BLOCK_DIRT);
+    gen_set_block(sc, ox+7, oy+0, oz+4, BLOCK_DIRT);
+    gen_set_block(sc, ox+7, oy+0, oz+5, BLOCK_DIRT);
+    gen_set_block(sc, ox+7, oy+0, oz+6, BLOCK_DIRT);
+    gen_set_block(sc, ox+7, oy+0, oz+7, BLOCK_DIRT);
+    gen_set_block(sc, ox+7, oy+0, oz+8, BLOCK_DIRT);
+    gen_set_block(sc, ox+7, oy+0, oz+9, BLOCK_DIRT);
+    gen_set_block(sc, ox+8, oy+0, oz+3, BLOCK_DIRT);
+    gen_set_block(sc, ox+8, oy+0, oz+4, BLOCK_DIRT);
+    gen_set_block(sc, ox+8, oy+0, oz+5, BLOCK_DIRT);
+    gen_set_block(sc, ox+8, oy+0, oz+6, BLOCK_DIRT);
+    gen_set_block(sc, ox+8, oy+0, oz+7, BLOCK_DIRT);
+    gen_set_block(sc, ox+8, oy+0, oz+8, BLOCK_DIRT);
+    gen_set_block(sc, ox+8, oy+0, oz+9, BLOCK_DIRT);
+    gen_set_block(sc, ox+9, oy+0, oz+3, BLOCK_DIRT);
+    gen_set_block(sc, ox+9, oy+0, oz+4, BLOCK_DIRT);
+    gen_set_block(sc, ox+9, oy+0, oz+5, BLOCK_DIRT);
+    gen_set_block(sc, ox+9, oy+0, oz+6, BLOCK_DIRT);
+    gen_set_block(sc, ox+9, oy+0, oz+7, BLOCK_DIRT);
+    gen_set_block(sc, ox+9, oy+0, oz+8, BLOCK_DIRT);
+    gen_set_block(sc, ox+9, oy+0, oz+9, BLOCK_DIRT);
+    gen_set_block(sc, ox+10, oy+0, oz+3, BLOCK_DIRT);
+    gen_set_block(sc, ox+10, oy+0, oz+4, BLOCK_DIRT);
+    gen_set_block(sc, ox+10, oy+0, oz+5, BLOCK_DIRT);
+    gen_set_block(sc, ox+10, oy+0, oz+6, BLOCK_DIRT);
+    gen_set_block(sc, ox+10, oy+0, oz+7, BLOCK_DIRT);
+    gen_set_block(sc, ox+10, oy+0, oz+8, BLOCK_DIRT);
+    gen_set_block(sc, ox+10, oy+0, oz+9, BLOCK_DIRT);
+    gen_set_block(sc, ox+11, oy+0, oz+3, BLOCK_DIRT);
+    gen_set_block(sc, ox+11, oy+0, oz+4, BLOCK_DIRT);
+    gen_set_block(sc, ox+11, oy+0, oz+5, BLOCK_DIRT);
+    gen_set_block(sc, ox+11, oy+0, oz+6, BLOCK_DIRT);
+    gen_set_block(sc, ox+11, oy+0, oz+7, BLOCK_DIRT);
+    gen_set_block(sc, ox+11, oy+0, oz+8, BLOCK_DIRT);
+    gen_set_block(sc, ox+11, oy+0, oz+9, BLOCK_DIRT);
+    gen_set_block_with_meta(sc, ox+1, oy+1, oz+1, BLOCK_LOG, 0);
+    gen_set_block(sc, ox+1, oy+1, oz+2, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+1, oy+1, oz+3, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+1, oy+1, oz+4, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+1, oy+1, oz+5, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+1, oy+1, oz+6, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+1, oy+1, oz+7, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+1, oy+1, oz+8, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+1, oy+1, oz+9, BLOCK_LOG, 0);
+    gen_set_block(sc, ox+2, oy+1, oz+1, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+2, oy+1, oz+2, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+1, oz+3, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+1, oz+4, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+1, oz+5, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+1, oz+6, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+1, oz+7, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+1, oz+8, BLOCK_PLANKS, 0);
+    gen_set_block(sc, ox+2, oy+1, oz+9, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+3, oy+1, oz+1, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+3, oy+1, oz+2, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+1, oz+3, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+1, oz+4, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+1, oz+5, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+1, oz+6, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+1, oz+7, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+1, oz+8, BLOCK_PLANKS, 0);
+    gen_set_block(sc, ox+3, oy+1, oz+9, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+4, oy+1, oz+1, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+4, oy+1, oz+2, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+1, oz+3, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+1, oz+4, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+1, oz+5, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+1, oz+6, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+1, oz+8, BLOCK_PLANKS, 0);
+    gen_set_block(sc, ox+4, oy+1, oz+9, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+5, oy+1, oz+1, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+5, oy+1, oz+2, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+1, oz+3, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+1, oz+4, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+1, oz+5, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+1, oz+6, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+1, oz+7, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+1, oz+8, BLOCK_PLANKS, 0);
+    gen_set_block(sc, ox+5, oy+1, oz+9, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+6, oy+1, oz+1, BLOCK_LOG, 0);
+    gen_set_block(sc, ox+6, oy+1, oz+2, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+6, oy+1, oz+3, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+6, oy+1, oz+4, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+1, oz+5, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+1, oz+7, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+1, oz+8, BLOCK_PLANKS, 0);
+    gen_set_block(sc, ox+6, oy+1, oz+9, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+7, oy+1, oz+3, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+7, oy+1, oz+4, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+7, oy+1, oz+5, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+7, oy+1, oz+6, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+7, oy+1, oz+7, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+7, oy+1, oz+8, BLOCK_PLANKS, 0);
+    gen_set_block(sc, ox+7, oy+1, oz+9, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+8, oy+1, oz+3, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+8, oy+1, oz+4, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+8, oy+1, oz+5, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+8, oy+1, oz+6, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+8, oy+1, oz+7, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+8, oy+1, oz+8, BLOCK_PLANKS, 0);
+    gen_set_block(sc, ox+8, oy+1, oz+9, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+9, oy+1, oz+3, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+9, oy+1, oz+4, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+1, oz+5, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+1, oz+6, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+1, oz+7, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+1, oz+8, BLOCK_PLANKS, 0);
+    gen_set_block(sc, ox+9, oy+1, oz+9, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+10, oy+1, oz+3, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+10, oy+1, oz+4, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+10, oy+1, oz+5, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+10, oy+1, oz+6, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+10, oy+1, oz+7, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+10, oy+1, oz+8, BLOCK_PLANKS, 0);
+    gen_set_block(sc, ox+10, oy+1, oz+9, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+11, oy+1, oz+3, BLOCK_LOG, 0);
+    gen_set_block(sc, ox+11, oy+1, oz+4, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+11, oy+1, oz+5, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+11, oy+1, oz+6, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+11, oy+1, oz+7, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+11, oy+1, oz+8, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+11, oy+1, oz+9, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+1, oy+2, oz+1, BLOCK_LOG, 0);
+    gen_set_block(sc, ox+1, oy+2, oz+2, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+1, oy+2, oz+4, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+1, oy+2, oz+5, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+1, oy+2, oz+6, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+1, oy+2, oz+7, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+1, oy+2, oz+8, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+1, oy+2, oz+9, BLOCK_LOG, 0);
+    gen_set_block(sc, ox+2, oy+2, oz+1, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+2, oy+2, oz+9, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+3, oy+2, oz+1, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+3, oy+2, oz+9, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+4, oy+2, oz+1, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+4, oy+2, oz+9, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+5, oy+2, oz+1, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+5, oy+2, oz+9, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+6, oy+2, oz+1, BLOCK_LOG, 0);
+    gen_set_block(sc, ox+6, oy+2, oz+2, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+6, oy+2, oz+3, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+6, oy+2, oz+9, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+7, oy+2, oz+3, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+7, oy+2, oz+9, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+8, oy+2, oz+3, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+8, oy+2, oz+9, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+9, oy+2, oz+3, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+9, oy+2, oz+9, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+10, oy+2, oz+3, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+10, oy+2, oz+9, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+11, oy+2, oz+3, BLOCK_LOG, 0);
+    gen_set_block(sc, ox+11, oy+2, oz+4, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+11, oy+2, oz+5, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+11, oy+2, oz+6, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+11, oy+2, oz+7, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+11, oy+2, oz+8, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+11, oy+2, oz+9, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+1, oy+3, oz+1, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+1, oy+3, oz+2, BLOCK_LOG, 8);
+    gen_set_block_with_meta(sc, ox+1, oy+3, oz+4, BLOCK_LOG, 8);
+    gen_set_block_with_meta(sc, ox+1, oy+3, oz+5, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+1, oy+3, oz+7, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+1, oy+3, oz+8, BLOCK_LOG, 8);
+    gen_set_block_with_meta(sc, ox+1, oy+3, oz+9, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+3, oz+1, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+3, oz+9, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+3, oz+1, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+3, oz+9, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+3, oz+1, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+3, oz+2, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+3, oz+3, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+3, oz+9, BLOCK_LOG, 4);
+    gen_set_block_with_meta(sc, ox+7, oy+3, oz+3, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+7, oy+3, oz+9, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+10, oy+3, oz+3, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+10, oy+3, oz+9, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+11, oy+3, oz+3, BLOCK_LOG, 0);
+    gen_set_block(sc, ox+11, oy+3, oz+4, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+11, oy+3, oz+5, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+11, oy+3, oz+6, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+11, oy+3, oz+7, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+11, oy+3, oz+8, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+11, oy+3, oz+9, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+1, oy+4, oz+0, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+1, oy+4, oz+1, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+1, oy+4, oz+2, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+1, oy+4, oz+3, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+1, oy+4, oz+4, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+1, oy+4, oz+5, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+1, oy+4, oz+6, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+1, oy+4, oz+7, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+1, oy+4, oz+8, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+1, oy+4, oz+9, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+1, oy+4, oz+10, BLOCK_PLANKS, 0);
+    gen_set_block(sc, ox+2, oy+4, oz+1, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+2, oy+4, oz+9, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+3, oy+4, oz+1, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+3, oy+4, oz+9, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+4, oy+4, oz+1, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+4, oy+4, oz+9, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+5, oy+4, oz+1, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+5, oy+4, oz+9, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+6, oy+4, oz+0, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+4, oz+1, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+4, oz+2, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+4, oz+3, BLOCK_PLANKS, 0);
+    gen_set_block(sc, ox+6, oy+4, oz+9, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+6, oy+4, oz+10, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+7, oy+4, oz+2, BLOCK_PLANKS, 0);
+    gen_set_block(sc, ox+7, oy+4, oz+3, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+7, oy+4, oz+9, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+8, oy+4, oz+3, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+8, oy+4, oz+9, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+9, oy+4, oz+3, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+9, oy+4, oz+9, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+10, oy+4, oz+3, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+10, oy+4, oz+9, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+11, oy+4, oz+3, BLOCK_LOG, 0);
+    gen_set_block(sc, ox+11, oy+4, oz+4, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+11, oy+4, oz+5, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+11, oy+4, oz+6, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+11, oy+4, oz+7, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+11, oy+4, oz+8, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+11, oy+4, oz+9, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+12, oy+4, oz+3, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+12, oy+4, oz+9, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+5, oz+0, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+5, oz+1, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+5, oz+2, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+5, oz+3, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+5, oz+4, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+5, oz+5, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+5, oz+6, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+5, oz+7, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+5, oz+8, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+5, oz+9, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+5, oz+10, BLOCK_PLANKS, 0);
+    gen_set_block(sc, ox+3, oy+5, oz+1, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+3, oy+5, oz+8, BLOCK_PLANKS, 0);
+    gen_set_block(sc, ox+3, oy+5, oz+9, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+4, oy+5, oz+1, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+4, oy+5, oz+8, BLOCK_PLANKS, 0);
+    gen_set_block(sc, ox+4, oy+5, oz+9, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+5, oy+5, oz+0, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+5, oz+1, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+5, oz+2, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+5, oz+3, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+5, oz+4, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+5, oz+8, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+5, oz+9, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+5, oz+10, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+5, oz+3, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+5, oz+4, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+5, oz+8, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+7, oy+5, oz+4, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+7, oy+5, oz+8, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+8, oy+5, oz+4, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+8, oy+5, oz+8, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+5, oz+4, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+5, oz+8, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+10, oy+5, oz+4, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+10, oy+5, oz+8, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+11, oy+5, oz+4, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+11, oy+5, oz+5, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+11, oy+5, oz+7, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+11, oy+5, oz+8, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+12, oy+5, oz+4, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+12, oy+5, oz+8, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+6, oz+0, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+6, oz+1, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+6, oz+2, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+6, oz+3, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+6, oz+4, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+6, oz+5, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+6, oz+6, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+6, oz+7, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+6, oz+8, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+6, oz+9, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+6, oz+10, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+6, oz+0, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+6, oz+1, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+6, oz+2, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+6, oz+3, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+6, oz+4, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+6, oz+5, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+6, oz+6, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+6, oz+7, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+6, oz+8, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+6, oz+9, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+6, oz+10, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+6, oz+4, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+6, oz+5, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+6, oz+7, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+6, oz+8, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+6, oz+5, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+6, oz+7, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+7, oy+6, oz+5, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+7, oy+6, oz+7, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+8, oy+6, oz+5, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+8, oy+6, oz+7, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+6, oz+5, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+6, oz+7, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+10, oy+6, oz+5, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+10, oy+6, oz+7, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+11, oy+6, oz+5, BLOCK_PLANKS, 0);
+    gen_set_block(sc, ox+11, oy+6, oz+6, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+11, oy+6, oz+7, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+12, oy+6, oz+5, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+12, oy+6, oz+7, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+7, oz+5, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+7, oz+6, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+7, oz+7, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+7, oz+6, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+7, oz+6, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+7, oy+7, oz+6, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+8, oy+7, oz+6, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+7, oz+6, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+10, oy+7, oz+6, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+11, oy+7, oz+6, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+12, oy+7, oz+6, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+0, oy+1, oz+3, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+1, oy+2, oz+3, BLOCK_DOOR_WOOD, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+2, oz+5, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block(sc, ox+2, oy+2, oz+6, BLOCK_FENCE);
+    gen_set_block_with_meta(sc, ox+2, oy+2, oz+7, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block(sc, ox+6, oy+2, oz+8, BLOCK_FENCE);
+    gen_set_block(sc, ox+10, oy+2, oz+4, BLOCK_FENCE);
+    gen_set_block(sc, ox+10, oy+2, oz+8, BLOCK_FENCE);
+    gen_set_block_with_meta(sc, ox+0, oy+3, oz+2, BLOCK_TORCH, 2);
+    gen_set_block_with_meta(sc, ox+0, oy+3, oz+4, BLOCK_TORCH, 2);
+    gen_set_block_with_meta(sc, ox+1, oy+3, oz+3, BLOCK_DOOR_WOOD, 8);
+    gen_set_block(sc, ox+1, oy+3, oz+6, BLOCK_GLASS_PANE);
+    gen_set_block(sc, ox+2, oy+3, oz+6, BLOCK_STONE);
+    gen_set_block(sc, ox+3, oy+3, oz+1, BLOCK_GLASS_PANE);
+    gen_set_block(sc, ox+3, oy+3, oz+9, BLOCK_GLASS_PANE);
+    gen_set_block(sc, ox+4, oy+3, oz+1, BLOCK_GLASS_PANE);
+    gen_set_block(sc, ox+4, oy+3, oz+9, BLOCK_GLASS_PANE);
+    gen_set_block(sc, ox+6, oy+3, oz+8, BLOCK_STONE);
+    gen_set_block(sc, ox+8, oy+3, oz+3, BLOCK_GLASS_PANE);
+    gen_set_block(sc, ox+8, oy+3, oz+9, BLOCK_GLASS_PANE);
+    gen_set_block(sc, ox+9, oy+3, oz+3, BLOCK_GLASS_PANE);
+    gen_set_block(sc, ox+9, oy+3, oz+9, BLOCK_GLASS_PANE);
+    gen_set_block(sc, ox+10, oy+3, oz+4, BLOCK_STONE);
+    gen_set_block_with_meta(sc, ox+10, oy+3, oz+6, BLOCK_TORCH, 2);
+    gen_set_block(sc, ox+10, oy+3, oz+8, BLOCK_STONE);
+    gen_set_block_with_meta(sc, ox+12, oy+3, oz+6, BLOCK_TORCH, 1);
+    gen_set_block_with_meta(sc, ox+0, oy+4, oz+0, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+0, oy+4, oz+1, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+0, oy+4, oz+2, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+0, oy+4, oz+3, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+0, oy+4, oz+4, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+0, oy+4, oz+5, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+0, oy+4, oz+6, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+0, oy+4, oz+7, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+0, oy+4, oz+8, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+0, oy+4, oz+9, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+0, oy+4, oz+10, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+4, oz+3, BLOCK_TORCH, 1);
+    gen_set_block_with_meta(sc, ox+6, oy+4, oz+8, BLOCK_TORCH, 4);
+    gen_set_block_with_meta(sc, ox+7, oy+4, oz+0, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+7, oy+4, oz+1, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+7, oy+4, oz+10, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+8, oy+4, oz+2, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+8, oy+4, oz+10, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+9, oy+4, oz+2, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+9, oy+4, oz+10, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+10, oy+4, oz+2, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+10, oy+4, oz+10, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+11, oy+4, oz+2, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+11, oy+4, oz+10, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+12, oy+4, oz+2, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+12, oy+4, oz+10, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+1, oy+5, oz+0, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+1, oy+5, oz+1, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+1, oy+5, oz+2, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+1, oy+5, oz+3, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+1, oy+5, oz+4, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+1, oy+5, oz+5, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+1, oy+5, oz+6, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+1, oy+5, oz+7, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+1, oy+5, oz+8, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+1, oy+5, oz+9, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+1, oy+5, oz+10, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+5, oz+0, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+6, oy+5, oz+1, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+6, oy+5, oz+2, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+6, oy+5, oz+9, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+6, oy+5, oz+10, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+7, oy+5, oz+3, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+7, oy+5, oz+9, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+8, oy+5, oz+3, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+8, oy+5, oz+9, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+9, oy+5, oz+3, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+9, oy+5, oz+9, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+10, oy+5, oz+3, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+10, oy+5, oz+9, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+11, oy+5, oz+3, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block(sc, ox+11, oy+5, oz+6, BLOCK_GLASS_PANE);
+    gen_set_block_with_meta(sc, ox+11, oy+5, oz+9, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+12, oy+5, oz+3, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+12, oy+5, oz+9, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+2, oy+6, oz+0, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+6, oz+1, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+6, oz+2, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+6, oz+3, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+6, oz+4, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+6, oz+5, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+6, oz+6, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+6, oz+7, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+6, oz+8, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+6, oz+9, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+6, oz+10, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+6, oz+0, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+5, oy+6, oz+1, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+5, oy+6, oz+2, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+5, oy+6, oz+3, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+5, oy+6, oz+9, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+5, oy+6, oz+10, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+6, oy+6, oz+4, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+6, oy+6, oz+8, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+7, oy+6, oz+4, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+7, oy+6, oz+8, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+8, oy+6, oz+4, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+8, oy+6, oz+8, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+9, oy+6, oz+4, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+9, oy+6, oz+8, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+10, oy+6, oz+4, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+10, oy+6, oz+8, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+11, oy+6, oz+4, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+11, oy+6, oz+8, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+12, oy+6, oz+4, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+12, oy+6, oz+8, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+3, oy+7, oz+0, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+7, oz+1, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+7, oz+2, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+7, oz+3, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+7, oz+4, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+7, oz+5, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+7, oz+6, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+7, oz+7, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+7, oz+8, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+7, oz+9, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+7, oz+10, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+7, oz+0, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+4, oy+7, oz+1, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+4, oy+7, oz+2, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+4, oy+7, oz+3, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+4, oy+7, oz+4, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+4, oy+7, oz+8, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+4, oy+7, oz+9, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+4, oy+7, oz+10, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+5, oy+7, oz+5, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+5, oy+7, oz+7, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+6, oy+7, oz+5, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+6, oy+7, oz+7, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+7, oy+7, oz+5, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+7, oy+7, oz+7, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+8, oy+7, oz+5, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+8, oy+7, oz+7, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+9, oy+7, oz+5, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+9, oy+7, oz+7, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+10, oy+7, oz+5, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+10, oy+7, oz+7, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+11, oy+7, oz+5, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+11, oy+7, oz+7, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+12, oy+7, oz+5, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+12, oy+7, oz+7, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+9, oy+2, oz+5, BLOCK_BED, 3);
+    gen_set_block_with_meta(sc, ox+9, oy+2, oz+7, BLOCK_BED, 3);
+    gen_set_block_with_meta(sc, ox+10, oy+2, oz+5, BLOCK_BED, 11);
+    gen_set_block_with_meta(sc, ox+10, oy+2, oz+7, BLOCK_BED, 11);
+}
 
-	gen_flatten_surface_patch(sc, cx, cz, 6, y, path, path);
-	for(int x = cx - 5; x <= cx + 5; x++)
-		for(int z = cz - 1; z <= cz + 1; z++)
-			gen_set_block(sc, x, y, z, path);
-	for(int z = cz - 5; z <= cz + 5; z++)
-		for(int x = cx - 1; x <= cx + 1; x++)
-			gen_set_block(sc, x, y, z, path);
+/* ---- Dorfhaus-Strukturen ---- */
 
-	if(biome_id == desert || biome_id == desert_hills) {
-		gen_place_desert_well(sc, cx, y, cz);
-	} else {
-		gen_fill_box(sc, cx - 1, y, cz - 1, cx + 1, y, cz + 1, BLOCK_COBBLESTONE);
-		for(int dx = -1; dx <= 1; dx += 2)
-			for(int dz = -1; dz <= 1; dz += 2)
-				gen_fill_box(sc, cx + dx, y + 1, cz + dz, cx + dx, y + 3, cz + dz, BLOCK_FENCE);
-		gen_fill_box(sc, cx - 2, y + 4, cz - 2, cx + 2, y + 4, cz + 2, BLOCK_PLANKS);
-		gen_set_block(sc, cx, y + 1, cz, BLOCK_WATER_STILL);
+/* Hilfsfunktion: Hohlbox (Rand=block_wall, Innen=block_fill) */
+static void gen_fill_box_hollow(struct server_chunk* sc,
+                                int x1, int y1, int z1,
+                                int x2, int y2, int z2,
+                                uint8_t block_wall, uint8_t block_fill) {
+    for(int y = y1; y <= y2; y++)
+      for(int x = x1; x <= x2; x++)
+        for(int z = z1; z <= z2; z++) {
+            bool on_boundary = (x==x1||x==x2||y==y1||y==y2||z==z1||z==z2);
+            gen_set_block(sc, x, y, z, on_boundary ? block_wall : block_fill);
+        }
+}
+
+/* uy — Kleine Huette, 5×6×5 */
+static void gen_mc10_house_uy(struct server_chunk* sc, int ox, int oy, int oz) {
+    /* Boden + Dachrahmen + Dachfuellung */
+    gen_fill_box(sc, ox+0, oy+0, oz+0, ox+4, oy+0, oz+4, BLOCK_COBBLESTONE);
+    gen_fill_box(sc, ox+0, oy+4, oz+0, ox+4, oy+4, oz+4, BLOCK_LOG);
+    gen_fill_box(sc, ox+1, oy+4, oz+1, ox+3, oy+4, oz+3, BLOCK_PLANKS);
+    /* Cobblestone-Ecksaeulen */
+    gen_fill_box(sc, ox+0, oy+1, oz+0, ox+0, oy+3, oz+0, BLOCK_COBBLESTONE);
+    gen_fill_box(sc, ox+4, oy+1, oz+0, ox+4, oy+3, oz+0, BLOCK_COBBLESTONE);
+    gen_fill_box(sc, ox+0, oy+1, oz+4, ox+0, oy+3, oz+4, BLOCK_COBBLESTONE);
+    gen_fill_box(sc, ox+4, oy+1, oz+4, ox+4, oy+3, oz+4, BLOCK_COBBLESTONE);
+    /* Planken-Waende */
+    gen_fill_box(sc, ox+0, oy+1, oz+1, ox+0, oy+3, oz+3, BLOCK_PLANKS);
+    gen_fill_box(sc, ox+4, oy+1, oz+1, ox+4, oy+3, oz+3, BLOCK_PLANKS);
+    gen_fill_box(sc, ox+1, oy+1, oz+4, ox+3, oy+3, oz+4, BLOCK_PLANKS);
+    /* Fenster */
+    gen_set_block(sc, ox+0, oy+2, oz+2, BLOCK_GLASS_PANE);
+    gen_set_block(sc, ox+2, oy+2, oz+4, BLOCK_GLASS_PANE);
+    gen_set_block(sc, ox+4, oy+2, oz+2, BLOCK_GLASS_PANE);
+    /* Vorderwand mit Tueroeffnung */
+    gen_set_block(sc, ox+1, oy+1, oz+0, BLOCK_PLANKS);
+    gen_set_block(sc, ox+1, oy+2, oz+0, BLOCK_PLANKS);
+    gen_set_block(sc, ox+1, oy+3, oz+0, BLOCK_PLANKS);
+    gen_set_block(sc, ox+2, oy+3, oz+0, BLOCK_PLANKS);
+    gen_set_block(sc, ox+3, oy+3, oz+0, BLOCK_PLANKS);
+    gen_set_block(sc, ox+3, oy+2, oz+0, BLOCK_PLANKS);
+    gen_set_block(sc, ox+3, oy+1, oz+0, BLOCK_PLANKS);
+    /* Innenraum leeren */
+    gen_fill_box(sc, ox+1, oy+1, oz+1, ox+3, oy+3, oz+3, BLOCK_AIR);
+    /* Fackel innen (stehend) */
+    gen_set_block_with_meta(sc, ox+2, oy+3, oz+1, BLOCK_TORCH, 5);
+    /* Einrichtung: Bett (Fuss +z) + Werkbank */
+    gen_set_block_with_meta(sc, ox+1, oy+1, oz+1, BLOCK_BED, 0);
+    gen_set_block_with_meta(sc, ox+1, oy+1, oz+2, BLOCK_BED, 0 | 8);
+    gen_set_block(sc, ox+3, oy+1, oz+3, BLOCK_WORKBENCH);
+    /* Tuer */
+    gen_set_block(sc, ox+2, oy+1, oz+0, BLOCK_AIR);
+    gen_set_block(sc, ox+2, oy+2, oz+0, BLOCK_AIR);
+    gen_set_block_with_meta(sc, ox+2, oy+1, oz+0, BLOCK_DOOR_WOOD, 1);
+    gen_set_block_with_meta(sc, ox+2, oy+2, oz+0, BLOCK_DOOR_WOOD, 9);
+    /* Eingangsstufe */
+    gen_set_block_with_meta(sc, ox+2, oy+0, oz-1, BLOCK_STONE_STAIRS, 2);
+}
+
+/* wi — Kleine Huette (Variante), 4×6×5 */
+static void gen_mc10_house_wi(struct server_chunk* sc, int ox, int oy, int oz) {
+    gen_fill_box(sc, ox+1, oy+1, oz+1, ox+3, oy+5, oz+4, BLOCK_AIR);
+    gen_fill_box(sc, ox, oy, oz, ox+3, oy, oz+4, BLOCK_COBBLESTONE);
+    gen_fill_box(sc, ox+1, oy, oz+1, ox+2, oy, oz+3, BLOCK_DIRT);
+    gen_fill_box(sc, ox+1, oy+4, oz+1, ox+2, oy+4, oz+3, BLOCK_LOG);
+    gen_set_block(sc, ox+1, oy+4, oz, BLOCK_LOG);
+    gen_set_block(sc, ox+2, oy+4, oz, BLOCK_LOG);
+    gen_set_block(sc, ox+1, oy+4, oz+4, BLOCK_LOG);
+    gen_set_block(sc, ox+2, oy+4, oz+4, BLOCK_LOG);
+    gen_set_block(sc, ox, oy+4, oz+1, BLOCK_LOG);
+    gen_set_block(sc, ox, oy+4, oz+2, BLOCK_LOG);
+    gen_set_block(sc, ox, oy+4, oz+3, BLOCK_LOG);
+    gen_set_block(sc, ox+3, oy+4, oz+1, BLOCK_LOG);
+    gen_set_block(sc, ox+3, oy+4, oz+2, BLOCK_LOG);
+    gen_set_block(sc, ox+3, oy+4, oz+3, BLOCK_LOG);
+    gen_fill_box(sc, ox, oy+1, oz, ox, oy+3, oz, BLOCK_LOG);
+    gen_fill_box(sc, ox+3, oy+1, oz, ox+3, oy+3, oz, BLOCK_LOG);
+    gen_fill_box(sc, ox, oy+1, oz+4, ox, oy+3, oz+4, BLOCK_LOG);
+    gen_fill_box(sc, ox+3, oy+1, oz+4, ox+3, oy+3, oz+4, BLOCK_LOG);
+    gen_fill_box(sc, ox, oy+1, oz+1, ox, oy+3, oz+3, BLOCK_PLANKS);
+    gen_fill_box(sc, ox+3, oy+1, oz+1, ox+3, oy+3, oz+3, BLOCK_PLANKS);
+    gen_fill_box(sc, ox+1, oy+1, oz, ox+2, oy+3, oz, BLOCK_PLANKS);
+    gen_fill_box(sc, ox+1, oy+1, oz+4, ox+2, oy+3, oz+4, BLOCK_PLANKS);
+    gen_set_block(sc, ox, oy+2, oz+2, BLOCK_GLASS_PANE);
+    gen_set_block(sc, ox+3, oy+2, oz+2, BLOCK_GLASS_PANE);
+    /* Einrichtung: Bett (Fuss +z) + Truhe */
+    gen_set_block_with_meta(sc, ox+2, oy+1, oz+2, BLOCK_BED, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+1, oz+3, BLOCK_BED, 0 | 8);
+    gen_set_block(sc, ox+1, oy+1, oz+3, BLOCK_CHEST);
+    gen_set_block(sc, ox+1, oy+1, oz, BLOCK_AIR);
+    gen_set_block(sc, ox+1, oy+2, oz, BLOCK_AIR);
+    gen_set_block_with_meta(sc, ox+1, oy+1, oz, BLOCK_DOOR_WOOD, 1);
+    gen_set_block_with_meta(sc, ox+1, oy+2, oz, BLOCK_DOOR_WOOD, 9);
+    gen_set_block_with_meta(sc, ox+1, oy+0, oz-1, BLOCK_STONE_STAIRS, 2);
+}
+
+/* ko — Haus mit Werkstatt, 10×6×7 */
+static void gen_mc10_house_ko(struct server_chunk* sc, int ox, int oy, int oz) {
+    gen_fill_box(sc, ox, oy+1, oz, ox+9, oy+4, oz+6, BLOCK_AIR);
+    gen_fill_box(sc, ox, oy, oz, ox+9, oy, oz+6, BLOCK_COBBLESTONE);
+    gen_fill_box(sc, ox, oy+4, oz, ox+9, oy+4, oz+6, BLOCK_COBBLESTONE);
+    gen_fill_box(sc, ox, oy+5, oz, ox+9, oy+5, oz+6, BLOCK_SLAB);
+    gen_fill_box(sc, ox+1, oy+5, oz+1, ox+8, oy+5, oz+5, BLOCK_AIR);
+    gen_fill_box(sc, ox+1, oy+1, oz, ox+2, oy+3, oz, BLOCK_PLANKS);
+    gen_fill_box(sc, ox, oy+1, oz, ox, oy+4, oz, BLOCK_LOG);
+    gen_fill_box(sc, ox+3, oy+1, oz, ox+3, oy+4, oz, BLOCK_LOG);
+    gen_fill_box(sc, ox, oy+1, oz+6, ox, oy+4, oz+6, BLOCK_LOG);
+    gen_set_block(sc, ox+3, oy+3, oz+1, BLOCK_PLANKS);
+    gen_fill_box(sc, ox+3, oy+1, oz+2, ox+3, oy+3, oz+2, BLOCK_PLANKS);
+    gen_fill_box(sc, ox+4, oy+1, oz+3, ox+5, oy+3, oz+3, BLOCK_PLANKS);
+    gen_fill_box(sc, ox, oy+1, oz+1, ox, oy+3, oz+5, BLOCK_PLANKS);
+    gen_fill_box(sc, ox+1, oy+1, oz+6, ox+5, oy+3, oz+6, BLOCK_PLANKS);
+    gen_fill_box(sc, ox+5, oy+1, oz, ox+5, oy+3, oz, BLOCK_FENCE);
+    gen_fill_box(sc, ox+9, oy+1, oz, ox+9, oy+3, oz, BLOCK_FENCE);
+    gen_fill_box(sc, ox+6, oy+4, oz+4, ox+9, oy+4, oz+6, BLOCK_COBBLESTONE);
+    /* Lava-Grube (BLOCK_LAVA_STILL=11) */
+    gen_set_block(sc, ox+7, oy+1, oz+5, BLOCK_LAVA_STILL);
+    gen_set_block(sc, ox+8, oy+1, oz+5, BLOCK_LAVA_STILL);
+    gen_fill_box(sc, ox+7, oy+2, oz+4, ox+8, oy+2, oz+5, BLOCK_AIR);
+    /* Oefen */
+    gen_set_block(sc, ox+6, oy+1, oz+3, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+6, oy+2, oz+3, BLOCK_FURNACE);
+    gen_set_block(sc, ox+6, oy+3, oz+3, BLOCK_FURNACE);
+    /* Steinplatte als Arbeitsflaeche */
+    gen_set_block(sc, ox+8, oy+1, oz+1, BLOCK_SLAB);
+    gen_set_block(sc, ox, oy+2, oz+2, BLOCK_GLASS_PANE);
+    gen_set_block(sc, ox, oy+2, oz+4, BLOCK_GLASS_PANE);
+    gen_set_block(sc, ox+2, oy+2, oz+6, BLOCK_GLASS_PANE);
+    gen_set_block(sc, ox+4, oy+2, oz+6, BLOCK_GLASS_PANE);
+    /* Einrichtung: Truhe (Schmied-Loot) + Werkbank im Wohnbereich */
+    gen_set_block(sc, ox+1, oy+1, oz+1, BLOCK_CHEST);
+    gen_set_block(sc, ox+4, oy+1, oz+5, BLOCK_WORKBENCH);
+    gen_set_block_with_meta(sc, ox+6, oy, oz-1, BLOCK_STONE_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+7, oy, oz-1, BLOCK_STONE_STAIRS, 2);
+    gen_set_block(sc, ox+7, oy+1, oz+1, BLOCK_AIR);
+    gen_set_block(sc, ox+7, oy+2, oz+1, BLOCK_AIR);
+    gen_set_block_with_meta(sc, ox+7, oy+1, oz+1, BLOCK_DOOR_WOOD, 1);
+    gen_set_block_with_meta(sc, ox+7, oy+2, oz+1, BLOCK_DOOR_WOOD, 9);
+}
+
+/* tf — Grosses L-Haus, 9×7×12 */
+static void gen_mc10_house_tf(struct server_chunk* sc, int ox, int oy, int oz) {
+    gen_fill_box(sc, ox+1, oy+1, oz+1, ox+7, oy+4, oz+4, BLOCK_AIR);
+    gen_fill_box(sc, ox+2, oy+1, oz+6, ox+8, oy+4, oz+10, BLOCK_AIR);
+    gen_fill_box(sc, ox+2, oy, oz+5, ox+8, oy, oz+10, BLOCK_PLANKS);
+    gen_fill_box(sc, ox+1, oy, oz+1, ox+7, oy, oz+4, BLOCK_PLANKS);
+    gen_fill_box(sc, ox, oy, oz, ox, oy+3, oz+5, BLOCK_COBBLESTONE);
+    gen_fill_box(sc, ox+8, oy, oz, ox+8, oy+3, oz+10, BLOCK_COBBLESTONE);
+    gen_fill_box(sc, ox+1, oy, oz, ox+7, oy+2, oz, BLOCK_COBBLESTONE);
+    gen_fill_box(sc, ox+1, oy+2, oz, ox+7, oy+3, oz, BLOCK_PLANKS);
+    gen_fill_box(sc, ox+2, oy, oz+6, ox+2, oy+3, oz+10, BLOCK_COBBLESTONE);
+    gen_fill_box(sc, ox+3, oy, oz+10, ox+7, oy+3, oz+10, BLOCK_COBBLESTONE);
+    /* Dach (Holztreppe) */
+    gen_fill_box(sc, ox, oy+4, oz+1, ox+8, oy+4, oz+1, BLOCK_PLANKS);
+    gen_fill_box(sc, ox, oy+5, oz+2, ox+8, oy+5, oz+3, BLOCK_PLANKS);
+    gen_set_block(sc, ox, oy+4, oz+2, BLOCK_PLANKS);
+    gen_set_block(sc, ox, oy+4, oz+3, BLOCK_PLANKS);
+    gen_set_block(sc, ox+8, oy+4, oz+2, BLOCK_PLANKS);
+    gen_set_block(sc, ox+8, oy+4, oz+3, BLOCK_PLANKS);
+    for(int n5 = -1; n5 <= 2; n5++)
+        for(int n4 = 0; n4 <= 8; n4++) {
+            gen_set_block_with_meta(sc, ox+n4, oy+4+n5, oz+n5, BLOCK_WOODEN_STAIRS, 3);
+            if(!(n5<=-1 && n4>1) && !(n5<=0 && n4>3))
+                gen_set_block_with_meta(sc, ox+n4, oy+4+n5, oz+5-n5, BLOCK_WOODEN_STAIRS, 2);
+        }
+    /* Fenster und Saeulen */
+    gen_set_block(sc, ox, oy+2, oz+2, BLOCK_GLASS_PANE);
+    gen_set_block(sc, ox, oy+2, oz+3, BLOCK_GLASS_PANE);
+    gen_set_block(sc, ox+5, oy+2, oz, BLOCK_GLASS_PANE);
+    gen_set_block(sc, ox+8, oy+2, oz+2, BLOCK_GLASS_PANE);
+    gen_set_block(sc, ox+8, oy+2, oz+3, BLOCK_GLASS_PANE);
+    gen_set_block(sc, ox+8, oy+2, oz+7, BLOCK_GLASS_PANE);
+    gen_set_block(sc, ox+8, oy+2, oz+8, BLOCK_GLASS_PANE);
+    gen_set_block(sc, ox+2, oy+2, oz+7, BLOCK_GLASS_PANE);
+    gen_set_block(sc, ox+2, oy+2, oz+8, BLOCK_GLASS_PANE);
+    /* Einrichtung im Wohnbereich (x1-7, z1-4): Bett + Werkbank + Ofen */
+    gen_set_block_with_meta(sc, ox+6, oy+1, oz+1, BLOCK_BED, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+1, oz+2, BLOCK_BED, 0 | 8);
+    gen_set_block(sc, ox+1, oy+1, oz+3, BLOCK_WORKBENCH);
+    gen_set_block(sc, ox+1, oy+1, oz+1, BLOCK_FURNACE);
+    /* Fackel innen (stehend) */
+    gen_set_block_with_meta(sc, ox+2, oy+3, oz+1, BLOCK_TORCH, 5);
+    /* Tuer */
+    gen_set_block(sc, ox+2, oy+1, oz, BLOCK_AIR);
+    gen_set_block(sc, ox+2, oy+2, oz, BLOCK_AIR);
+    gen_set_block_with_meta(sc, ox+2, oy+1, oz, BLOCK_DOOR_WOOD, 1);
+    gen_set_block_with_meta(sc, ox+2, oy+2, oz, BLOCK_DOOR_WOOD, 9);
+    /* Eingang vor der Tuer freiraeumen */
+    gen_fill_box(sc, ox+1, oy+0, oz-1, ox+3, oy+2, oz-1, BLOCK_AIR);
+    gen_set_block_with_meta(sc, ox+2, oy+0, oz-1, BLOCK_STONE_STAIRS, 2);
+}
+
+/* uz — Grosses Haus/Turm (2-stoeckig), 5×12×9 */
+static void gen_mc10_house_uz(struct server_chunk* sc, int ox, int oy, int oz) {
+    gen_fill_box(sc, ox+1, oy+1, oz+1, ox+3, oy+3, oz+7, BLOCK_AIR);
+    gen_fill_box(sc, ox+1, oy+5, oz+1, ox+3, oy+9, oz+3, BLOCK_AIR);
+    gen_fill_box(sc, ox+1, oy, oz, ox+3, oy, oz+8, BLOCK_COBBLESTONE);
+    gen_fill_box(sc, ox+1, oy+1, oz+0, ox+3, oy+10, oz+0, BLOCK_COBBLESTONE); /* Vorderwand z=0 */
+    gen_fill_box(sc, ox, oy+1, oz+1, ox, oy+10, oz+3, BLOCK_COBBLESTONE);
+    gen_fill_box(sc, ox+4, oy+1, oz+1, ox+4, oy+10, oz+3, BLOCK_COBBLESTONE);
+    gen_fill_box(sc, ox, oy, oz+4, ox, oy+4, oz+7, BLOCK_COBBLESTONE);
+    gen_fill_box(sc, ox+4, oy, oz+4, ox+4, oy+4, oz+7, BLOCK_COBBLESTONE);
+    gen_fill_box(sc, ox+1, oy+1, oz+8, ox+3, oy+4, oz+8, BLOCK_COBBLESTONE);
+    gen_fill_box(sc, ox+1, oy+5, oz+4, ox+3, oy+10, oz+4, BLOCK_COBBLESTONE);
+    gen_fill_box(sc, ox, oy+9, oz, ox+4, oy+9, oz+4, BLOCK_COBBLESTONE);
+    gen_fill_box(sc, ox, oy+4, oz, ox+4, oy+4, oz+4, BLOCK_COBBLESTONE);
+    /* Fenster */
+    gen_set_block(sc, ox, oy+2, oz+2, BLOCK_GLASS_PANE);
+    gen_set_block(sc, ox, oy+3, oz+2, BLOCK_GLASS_PANE);
+    gen_set_block(sc, ox+4, oy+2, oz+2, BLOCK_GLASS_PANE);
+    gen_set_block(sc, ox+4, oy+3, oz+2, BLOCK_GLASS_PANE);
+    gen_set_block(sc, ox+2, oy+3, oz+8, BLOCK_GLASS_PANE);
+    gen_set_block(sc, ox, oy+3, oz+6, BLOCK_GLASS_PANE);
+    gen_set_block(sc, ox+4, oy+3, oz+6, BLOCK_GLASS_PANE);
+    /* Fackeln innen (stehend) */
+    gen_set_block_with_meta(sc, ox+2, oy+4, oz+7, BLOCK_TORCH, 5);
+    gen_set_block_with_meta(sc, ox+1, oy+4, oz+6, BLOCK_TORCH, 5);
+    gen_set_block_with_meta(sc, ox+3, oy+4, oz+6, BLOCK_TORCH, 5);
+    /* Leiter innen */
+    for(int i = 1; i <= 9; i++)
+        gen_set_block_with_meta(sc, ox+3, oy+i, oz+3, BLOCK_LADDER, 4);
+    /* Einrichtung: Bett (Fuss +z) + Truhe im Erdgeschoss */
+    gen_set_block_with_meta(sc, ox+1, oy+1, oz+1, BLOCK_BED, 0);
+    gen_set_block_with_meta(sc, ox+1, oy+1, oz+2, BLOCK_BED, 0 | 8);
+    gen_set_block(sc, ox+3, oy+1, oz+1, BLOCK_CHEST);
+    /* Tuer */
+    gen_set_block(sc, ox+2, oy+1, oz, BLOCK_AIR);
+    gen_set_block(sc, ox+2, oy+2, oz, BLOCK_AIR);
+    gen_set_block_with_meta(sc, ox+2, oy+1, oz, BLOCK_DOOR_WOOD, 1);
+    gen_set_block_with_meta(sc, ox+2, oy+2, oz, BLOCK_DOOR_WOOD, 9);
+    gen_set_block_with_meta(sc, ox+2, oy, oz-1, BLOCK_STONE_STAIRS, 2);
+}
+
+/* ---- Ende Dorfhaus-Strukturen ---- */
+
+/* plains_lamp: Groesse 3x4x3 */
+/* Planken-Pfahl 3 hoch, Zaun-Kopf, 4 Fackeln rundum */
+static void gen_place_plains_lamp(struct server_chunk* sc, int ox, int oy, int oz) {
+    /* Pfahl aus Holzplanken */
+    gen_set_block_with_meta(sc, ox, oy+0, oz, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox, oy+1, oz, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox, oy+2, oz, BLOCK_PLANKS, 0);
+    /* Zaun als Lampenkopf */
+    gen_set_block(sc, ox, oy+3, oz, BLOCK_FENCE);
+    /* 4 Fackeln an allen Seiten des Zauns */
+    gen_set_block_with_meta(sc, ox-1, oy+3, oz, BLOCK_TORCH, 2); /* West: lehnt Ost=Zaun */
+    gen_set_block_with_meta(sc, ox+1, oy+3, oz, BLOCK_TORCH, 1); /* Ost:  lehnt West=Zaun */
+    gen_set_block_with_meta(sc, ox, oy+3, oz-1, BLOCK_TORCH, 4); /* Nord: lehnt Sued=Zaun */
+    gen_set_block_with_meta(sc, ox, oy+3, oz+1, BLOCK_TORCH, 3); /* Sued: lehnt Nord=Zaun */
+}
+
+/* plains_small_farm: Groesse 7x6x9 */
+static void gen_place_plains_small_farm(struct server_chunk* sc, int ox, int oy, int oz) {
+    gen_set_block_with_meta(sc, ox+0, oy+0, oz+0, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+0, oy+0, oz+1, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+0, oy+0, oz+2, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+0, oy+0, oz+3, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+0, oy+0, oz+5, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+0, oy+0, oz+6, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+0, oy+0, oz+7, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+0, oy+0, oz+8, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+1, oy+0, oz+0, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+1, oy+0, oz+8, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+0, oz+0, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+0, oz+8, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+0, oz+0, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+0, oz+8, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+0, oz+0, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+0, oz+8, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+0, oz+0, BLOCK_LOG, 0);
+    gen_set_block(sc, ox+5, oy+0, oz+7, BLOCK_DIRT);
+    gen_set_block_with_meta(sc, ox+5, oy+0, oz+8, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+0, oz+0, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+0, oz+1, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+0, oz+2, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+0, oz+3, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+0, oz+4, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+0, oz+5, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+0, oz+6, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+0, oz+7, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+0, oz+8, BLOCK_LOG, 0);
+    gen_set_block(sc, ox+1, oy+0, oz+1, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+1, oy+0, oz+2, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+1, oy+0, oz+3, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+1, oy+0, oz+4, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+1, oy+0, oz+5, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+1, oy+0, oz+6, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+1, oy+0, oz+7, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+2, oy+0, oz+1, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+2, oy+0, oz+2, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+2, oy+0, oz+3, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+2, oy+0, oz+4, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+2, oy+0, oz+5, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+2, oy+0, oz+6, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+2, oy+0, oz+7, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+3, oy+0, oz+1, BLOCK_WATER_STILL);
+    gen_set_block(sc, ox+3, oy+0, oz+2, BLOCK_WATER_STILL);
+    gen_set_block(sc, ox+3, oy+0, oz+3, BLOCK_WATER_STILL);
+    gen_set_block(sc, ox+3, oy+0, oz+4, BLOCK_WATER_STILL);
+    gen_set_block(sc, ox+3, oy+0, oz+5, BLOCK_WATER_STILL);
+    gen_set_block(sc, ox+3, oy+0, oz+6, BLOCK_WATER_STILL);
+    gen_set_block(sc, ox+3, oy+0, oz+7, BLOCK_WATER_STILL);
+    gen_set_block(sc, ox+4, oy+0, oz+1, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+4, oy+0, oz+2, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+4, oy+0, oz+3, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+4, oy+0, oz+4, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+4, oy+0, oz+5, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+4, oy+0, oz+6, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+4, oy+0, oz+7, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+5, oy+0, oz+1, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+5, oy+0, oz+2, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+5, oy+0, oz+3, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+5, oy+0, oz+4, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+5, oy+0, oz+5, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+5, oy+0, oz+6, BLOCK_FARMLAND);
+    gen_set_block_with_meta(sc, ox+1, oy+1, oz+1, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+1, oy+1, oz+2, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+1, oy+1, oz+3, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+1, oy+1, oz+4, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+1, oy+1, oz+5, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+1, oy+1, oz+6, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+1, oy+1, oz+7, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+2, oy+1, oz+1, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+2, oy+1, oz+2, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+2, oy+1, oz+3, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+2, oy+1, oz+4, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+2, oy+1, oz+5, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+2, oy+1, oz+6, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+2, oy+1, oz+7, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+4, oy+1, oz+1, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+4, oy+1, oz+2, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+4, oy+1, oz+3, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+4, oy+1, oz+4, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+4, oy+1, oz+5, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+4, oy+1, oz+6, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+4, oy+1, oz+7, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+5, oy+1, oz+1, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+5, oy+1, oz+2, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+5, oy+1, oz+3, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+5, oy+1, oz+4, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+5, oy+1, oz+5, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+5, oy+1, oz+6, BLOCK_CROPS, 7);
+    gen_set_block(sc, ox+5, oy+1, oz+7, BLOCK_WORKBENCH);
+}
+
+/* plains_large_farm: Groesse 13x6x9 */
+static void gen_place_plains_large_farm(struct server_chunk* sc, int ox, int oy, int oz) {
+    gen_set_block_with_meta(sc, ox+0, oy+0, oz+0, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+0, oy+0, oz+1, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+0, oy+0, oz+2, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+0, oy+0, oz+3, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+0, oy+0, oz+5, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+0, oy+0, oz+6, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+0, oy+0, oz+7, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+0, oy+0, oz+8, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+1, oy+0, oz+0, BLOCK_LOG, 0);
+    gen_set_block(sc, ox+1, oy+0, oz+1, BLOCK_DIRT);
+    gen_set_block_with_meta(sc, ox+1, oy+0, oz+8, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+0, oz+0, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+0, oz+8, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+0, oz+0, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+0, oz+8, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+0, oz+0, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+0, oz+8, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+0, oz+0, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+0, oz+8, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+0, oz+0, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+0, oz+1, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+0, oz+2, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+0, oz+3, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+0, oz+4, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+0, oz+5, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+0, oz+6, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+0, oz+7, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+0, oz+8, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+7, oy+0, oz+0, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+7, oy+0, oz+8, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+8, oy+0, oz+0, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+8, oy+0, oz+8, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+0, oz+0, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+0, oz+8, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+10, oy+0, oz+0, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+10, oy+0, oz+8, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+11, oy+0, oz+0, BLOCK_LOG, 0);
+    gen_set_block(sc, ox+11, oy+0, oz+1, BLOCK_GRASS);
+    gen_set_block_with_meta(sc, ox+11, oy+0, oz+8, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+12, oy+0, oz+0, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+12, oy+0, oz+1, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+12, oy+0, oz+2, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+12, oy+0, oz+3, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+12, oy+0, oz+4, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+12, oy+0, oz+5, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+12, oy+0, oz+6, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+12, oy+0, oz+7, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+12, oy+0, oz+8, BLOCK_LOG, 0);
+    gen_set_block(sc, ox+1, oy+0, oz+2, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+1, oy+0, oz+3, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+1, oy+0, oz+4, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+1, oy+0, oz+5, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+1, oy+0, oz+6, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+1, oy+0, oz+7, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+2, oy+0, oz+1, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+2, oy+0, oz+2, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+2, oy+0, oz+3, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+2, oy+0, oz+4, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+2, oy+0, oz+5, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+2, oy+0, oz+6, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+2, oy+0, oz+7, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+3, oy+0, oz+1, BLOCK_WATER_STILL);
+    gen_set_block(sc, ox+3, oy+0, oz+2, BLOCK_WATER_STILL);
+    gen_set_block(sc, ox+3, oy+0, oz+3, BLOCK_WATER_STILL);
+    gen_set_block(sc, ox+3, oy+0, oz+4, BLOCK_WATER_STILL);
+    gen_set_block(sc, ox+3, oy+0, oz+5, BLOCK_WATER_STILL);
+    gen_set_block(sc, ox+3, oy+0, oz+6, BLOCK_WATER_STILL);
+    gen_set_block(sc, ox+3, oy+0, oz+7, BLOCK_WATER_STILL);
+    gen_set_block(sc, ox+4, oy+0, oz+1, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+4, oy+0, oz+2, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+4, oy+0, oz+3, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+4, oy+0, oz+4, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+4, oy+0, oz+5, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+4, oy+0, oz+6, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+4, oy+0, oz+7, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+5, oy+0, oz+1, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+5, oy+0, oz+2, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+5, oy+0, oz+3, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+5, oy+0, oz+4, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+5, oy+0, oz+5, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+5, oy+0, oz+6, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+5, oy+0, oz+7, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+7, oy+0, oz+1, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+7, oy+0, oz+2, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+7, oy+0, oz+3, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+7, oy+0, oz+4, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+7, oy+0, oz+5, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+7, oy+0, oz+6, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+7, oy+0, oz+7, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+8, oy+0, oz+1, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+8, oy+0, oz+2, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+8, oy+0, oz+3, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+8, oy+0, oz+4, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+8, oy+0, oz+5, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+8, oy+0, oz+6, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+8, oy+0, oz+7, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+9, oy+0, oz+1, BLOCK_WATER_STILL);
+    gen_set_block(sc, ox+9, oy+0, oz+2, BLOCK_WATER_STILL);
+    gen_set_block(sc, ox+9, oy+0, oz+3, BLOCK_WATER_STILL);
+    gen_set_block(sc, ox+9, oy+0, oz+4, BLOCK_WATER_STILL);
+    gen_set_block(sc, ox+9, oy+0, oz+5, BLOCK_WATER_STILL);
+    gen_set_block(sc, ox+9, oy+0, oz+6, BLOCK_WATER_STILL);
+    gen_set_block(sc, ox+9, oy+0, oz+7, BLOCK_WATER_STILL);
+    gen_set_block(sc, ox+10, oy+0, oz+1, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+10, oy+0, oz+2, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+10, oy+0, oz+3, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+10, oy+0, oz+4, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+10, oy+0, oz+5, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+10, oy+0, oz+6, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+10, oy+0, oz+7, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+11, oy+0, oz+2, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+11, oy+0, oz+3, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+11, oy+0, oz+4, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+11, oy+0, oz+5, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+11, oy+0, oz+6, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+11, oy+0, oz+7, BLOCK_FARMLAND);
+    gen_set_block(sc, ox+1, oy+1, oz+1, BLOCK_WORKBENCH);
+    gen_set_block_with_meta(sc, ox+1, oy+1, oz+2, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+1, oy+1, oz+3, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+1, oy+1, oz+4, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+1, oy+1, oz+5, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+1, oy+1, oz+6, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+1, oy+1, oz+7, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+2, oy+1, oz+1, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+2, oy+1, oz+2, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+2, oy+1, oz+3, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+2, oy+1, oz+4, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+2, oy+1, oz+5, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+2, oy+1, oz+6, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+2, oy+1, oz+7, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+4, oy+1, oz+1, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+4, oy+1, oz+2, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+4, oy+1, oz+3, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+4, oy+1, oz+4, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+4, oy+1, oz+5, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+4, oy+1, oz+6, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+4, oy+1, oz+7, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+5, oy+1, oz+1, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+5, oy+1, oz+2, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+5, oy+1, oz+3, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+5, oy+1, oz+4, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+5, oy+1, oz+5, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+5, oy+1, oz+6, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+5, oy+1, oz+7, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+7, oy+1, oz+1, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+7, oy+1, oz+2, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+7, oy+1, oz+3, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+7, oy+1, oz+4, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+7, oy+1, oz+5, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+7, oy+1, oz+6, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+7, oy+1, oz+7, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+8, oy+1, oz+1, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+8, oy+1, oz+2, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+8, oy+1, oz+3, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+8, oy+1, oz+4, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+8, oy+1, oz+5, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+8, oy+1, oz+6, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+8, oy+1, oz+7, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+10, oy+1, oz+1, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+10, oy+1, oz+2, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+10, oy+1, oz+3, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+10, oy+1, oz+4, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+10, oy+1, oz+5, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+10, oy+1, oz+6, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+10, oy+1, oz+7, BLOCK_CROPS, 7);
+    gen_set_block(sc, ox+11, oy+1, oz+1, BLOCK_WORKBENCH);
+    gen_set_block_with_meta(sc, ox+11, oy+1, oz+2, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+11, oy+1, oz+3, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+11, oy+1, oz+4, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+11, oy+1, oz+5, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+11, oy+1, oz+6, BLOCK_CROPS, 7);
+    gen_set_block_with_meta(sc, ox+11, oy+1, oz+7, BLOCK_CROPS, 7);
+}
+
+/* plains_library: Groesse 11x10x17 */
+static void gen_place_plains_library(struct server_chunk* sc, int ox, int oy, int oz) {
+    /* Innenraum leeren (Dirt/Stein durch Luft ersetzen) */
+    for(int iy=1; iy<=7; iy++)
+      for(int ix=1; ix<=9; ix++)
+        for(int iz=1; iz<=15; iz++) {
+          uint8_t b=gen_get_block(sc,ox+ix,oy+iy,oz+iz);
+          if(b!=BLOCK_AIR && b!=BLOCK_WATER_STILL && b!=BLOCK_WATER_FLOW)
+            gen_set_block(sc,ox+ix,oy+iy,oz+iz,BLOCK_AIR);
+        }
+    gen_set_block(sc, ox+1, oy+0, oz+7, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+1, oy+0, oz+8, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+1, oy+0, oz+9, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+2, oy+0, oz+6, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+2, oy+0, oz+7, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+2, oy+0, oz+8, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+2, oy+0, oz+9, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+2, oy+0, oz+10, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+3, oy+0, oz+1, BLOCK_LOG, 0);
+    gen_set_block(sc, ox+3, oy+0, oz+2, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+3, oy+0, oz+3, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+3, oy+0, oz+4, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+3, oy+0, oz+5, BLOCK_LOG, 0);
+    gen_set_block(sc, ox+3, oy+0, oz+6, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+3, oy+0, oz+7, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+3, oy+0, oz+8, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+3, oy+0, oz+9, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+3, oy+0, oz+10, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+3, oy+0, oz+11, BLOCK_LOG, 0);
+    gen_set_block(sc, ox+3, oy+0, oz+12, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+3, oy+0, oz+13, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+3, oy+0, oz+14, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+3, oy+0, oz+15, BLOCK_LOG, 0);
+    gen_set_block(sc, ox+4, oy+0, oz+1, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+4, oy+0, oz+2, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+4, oy+0, oz+3, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+4, oy+0, oz+4, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+4, oy+0, oz+5, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+4, oy+0, oz+6, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+4, oy+0, oz+7, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+4, oy+0, oz+8, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+4, oy+0, oz+9, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+4, oy+0, oz+10, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+4, oy+0, oz+11, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+4, oy+0, oz+12, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+4, oy+0, oz+13, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+4, oy+0, oz+14, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+4, oy+0, oz+15, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+5, oy+0, oz+1, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+5, oy+0, oz+2, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+5, oy+0, oz+3, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+5, oy+0, oz+4, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+5, oy+0, oz+5, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+5, oy+0, oz+6, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+5, oy+0, oz+7, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+5, oy+0, oz+8, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+5, oy+0, oz+9, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+5, oy+0, oz+10, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+5, oy+0, oz+11, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+5, oy+0, oz+12, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+5, oy+0, oz+13, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+5, oy+0, oz+14, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+5, oy+0, oz+15, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+6, oy+0, oz+1, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+6, oy+0, oz+2, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+6, oy+0, oz+3, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+6, oy+0, oz+4, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+6, oy+0, oz+5, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+6, oy+0, oz+6, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+6, oy+0, oz+7, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+6, oy+0, oz+8, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+6, oy+0, oz+9, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+6, oy+0, oz+10, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+6, oy+0, oz+11, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+6, oy+0, oz+12, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+6, oy+0, oz+13, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+6, oy+0, oz+14, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+6, oy+0, oz+15, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+7, oy+0, oz+1, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+7, oy+0, oz+2, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+7, oy+0, oz+3, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+7, oy+0, oz+4, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+7, oy+0, oz+5, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+7, oy+0, oz+6, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+7, oy+0, oz+7, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+7, oy+0, oz+8, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+7, oy+0, oz+9, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+7, oy+0, oz+10, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+7, oy+0, oz+11, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+7, oy+0, oz+12, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+7, oy+0, oz+13, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+7, oy+0, oz+14, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+7, oy+0, oz+15, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+8, oy+0, oz+1, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+8, oy+0, oz+2, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+8, oy+0, oz+3, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+8, oy+0, oz+4, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+8, oy+0, oz+5, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+8, oy+0, oz+6, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+8, oy+0, oz+7, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+8, oy+0, oz+8, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+8, oy+0, oz+9, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+8, oy+0, oz+10, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+8, oy+0, oz+11, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+8, oy+0, oz+12, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+8, oy+0, oz+13, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+8, oy+0, oz+14, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+8, oy+0, oz+15, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+9, oy+0, oz+1, BLOCK_LOG, 0);
+    gen_set_block(sc, ox+9, oy+0, oz+2, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+9, oy+0, oz+3, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+9, oy+0, oz+4, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+9, oy+0, oz+5, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+9, oy+0, oz+6, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+9, oy+0, oz+7, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+9, oy+0, oz+8, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+9, oy+0, oz+9, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+9, oy+0, oz+10, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+9, oy+0, oz+11, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+9, oy+0, oz+12, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+9, oy+0, oz+13, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+9, oy+0, oz+14, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+9, oy+0, oz+15, BLOCK_LOG, 0);
+    gen_set_block(sc, ox+1, oy+1, oz+7, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+1, oy+1, oz+9, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+2, oy+1, oz+6, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+2, oy+1, oz+10, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+3, oy+1, oz+1, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+1, oz+2, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+1, oz+3, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+1, oz+4, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+1, oz+5, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+1, oz+11, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+1, oz+12, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+1, oz+13, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+1, oz+14, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+1, oz+15, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+1, oz+1, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+1, oz+15, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+1, oz+1, BLOCK_PLANKS, 0);
+    gen_set_block(sc, ox+5, oy+1, oz+4, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+5, oy+1, oz+5, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+5, oy+1, oz+11, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+5, oy+1, oz+12, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+5, oy+1, oz+15, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+1, oz+1, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+1, oz+15, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+7, oy+1, oz+1, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+7, oy+1, oz+15, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+8, oy+1, oz+1, BLOCK_PLANKS, 0);
+    gen_set_block(sc, ox+8, oy+1, oz+5, BLOCK_BOOKSHELF);
+    gen_set_block(sc, ox+8, oy+1, oz+6, BLOCK_BOOKSHELF);
+    gen_set_block(sc, ox+8, oy+1, oz+7, BLOCK_BOOKSHELF);
+    gen_set_block(sc, ox+8, oy+1, oz+9, BLOCK_BOOKSHELF);
+    gen_set_block(sc, ox+8, oy+1, oz+10, BLOCK_BOOKSHELF);
+    gen_set_block(sc, ox+8, oy+1, oz+11, BLOCK_BOOKSHELF);
+    gen_set_block_with_meta(sc, ox+8, oy+1, oz+15, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+1, oz+1, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+1, oz+2, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+1, oz+3, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+1, oz+4, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+1, oz+5, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+1, oz+6, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+1, oz+7, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+1, oz+8, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+1, oz+9, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+1, oz+10, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+1, oz+11, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+1, oz+12, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+1, oz+13, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+1, oz+14, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+1, oz+15, BLOCK_LOG, 0);
+    gen_set_block(sc, ox+1, oy+2, oz+7, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+1, oy+2, oz+9, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+2, oy+2, oz+6, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+2, oy+2, oz+10, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+3, oy+2, oz+1, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+2, oz+2, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+2, oz+4, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+2, oz+5, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+2, oz+11, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+2, oz+12, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+2, oz+14, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+2, oz+15, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+2, oz+1, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+2, oz+15, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+2, oz+1, BLOCK_LOG, 4);
+    gen_set_block(sc, ox+5, oy+2, oz+5, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+5, oy+2, oz+11, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+5, oy+2, oz+15, BLOCK_LOG, 4);
+    gen_set_block_with_meta(sc, ox+7, oy+2, oz+1, BLOCK_LOG, 4);
+    gen_set_block_with_meta(sc, ox+7, oy+2, oz+15, BLOCK_LOG, 4);
+    gen_set_block_with_meta(sc, ox+8, oy+2, oz+1, BLOCK_PLANKS, 0);
+    gen_set_block(sc, ox+8, oy+2, oz+6, BLOCK_BOOKSHELF);
+    gen_set_block(sc, ox+8, oy+2, oz+10, BLOCK_BOOKSHELF);
+    gen_set_block_with_meta(sc, ox+8, oy+2, oz+15, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+2, oz+1, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+2, oz+2, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+2, oz+3, BLOCK_LOG, 8);
+    gen_set_block_with_meta(sc, ox+9, oy+2, oz+5, BLOCK_LOG, 8);
+    gen_set_block_with_meta(sc, ox+9, oy+2, oz+6, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+2, oz+7, BLOCK_LOG, 8);
+    gen_set_block_with_meta(sc, ox+9, oy+2, oz+9, BLOCK_LOG, 8);
+    gen_set_block_with_meta(sc, ox+9, oy+2, oz+10, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+2, oz+11, BLOCK_LOG, 8);
+    gen_set_block_with_meta(sc, ox+9, oy+2, oz+13, BLOCK_LOG, 8);
+    gen_set_block_with_meta(sc, ox+9, oy+2, oz+14, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+2, oz+15, BLOCK_LOG, 0);
+    gen_set_block(sc, ox+1, oy+3, oz+7, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+1, oy+3, oz+8, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+1, oy+3, oz+9, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+2, oy+3, oz+6, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+2, oy+3, oz+7, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+3, oz+8, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+3, oz+9, BLOCK_PLANKS, 0);
+    gen_set_block(sc, ox+2, oy+3, oz+10, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+3, oy+3, oz+1, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+3, oz+2, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+3, oz+3, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+3, oz+4, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+3, oz+5, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+3, oz+6, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+3, oz+7, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+3, oz+8, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+3, oz+9, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+3, oz+10, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+3, oz+11, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+3, oz+12, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+3, oz+13, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+3, oz+14, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+3, oz+15, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+3, oz+1, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+3, oz+6, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+3, oz+7, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+3, oz+8, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+3, oz+9, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+3, oz+10, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+3, oz+15, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+3, oz+1, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+3, oz+6, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+3, oz+7, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+3, oz+8, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+3, oz+9, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+3, oz+10, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+3, oz+15, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+3, oz+1, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+3, oz+15, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+7, oy+3, oz+1, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+7, oy+3, oz+15, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+8, oy+3, oz+1, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+8, oy+3, oz+15, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+3, oz+1, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+3, oz+2, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+3, oz+3, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+3, oz+4, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+3, oz+5, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+3, oz+6, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+3, oz+7, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+3, oz+8, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+3, oz+9, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+3, oz+10, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+3, oz+11, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+3, oz+12, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+3, oz+13, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+3, oz+14, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+3, oz+15, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+4, oz+1, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+4, oz+2, BLOCK_LOG, 8);
+    gen_set_block_with_meta(sc, ox+3, oy+4, oz+3, BLOCK_LOG, 8);
+    gen_set_block_with_meta(sc, ox+3, oy+4, oz+4, BLOCK_LOG, 8);
+    gen_set_block_with_meta(sc, ox+3, oy+4, oz+5, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+4, oz+6, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+4, oz+8, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+4, oz+10, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+4, oz+11, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+4, oz+12, BLOCK_LOG, 8);
+    gen_set_block_with_meta(sc, ox+3, oy+4, oz+13, BLOCK_LOG, 8);
+    gen_set_block_with_meta(sc, ox+3, oy+4, oz+14, BLOCK_LOG, 8);
+    gen_set_block_with_meta(sc, ox+3, oy+4, oz+15, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+4, oz+1, BLOCK_LOG, 4);
+    gen_set_block_with_meta(sc, ox+4, oy+4, oz+15, BLOCK_LOG, 4);
+    gen_set_block_with_meta(sc, ox+5, oy+4, oz+1, BLOCK_LOG, 4);
+    gen_set_block_with_meta(sc, ox+5, oy+4, oz+15, BLOCK_LOG, 4);
+    gen_set_block_with_meta(sc, ox+6, oy+4, oz+1, BLOCK_LOG, 4);
+    gen_set_block_with_meta(sc, ox+6, oy+4, oz+15, BLOCK_LOG, 4);
+    gen_set_block_with_meta(sc, ox+7, oy+4, oz+1, BLOCK_LOG, 4);
+    gen_set_block_with_meta(sc, ox+7, oy+4, oz+15, BLOCK_LOG, 4);
+    gen_set_block_with_meta(sc, ox+8, oy+4, oz+1, BLOCK_LOG, 4);
+    gen_set_block_with_meta(sc, ox+8, oy+4, oz+15, BLOCK_LOG, 4);
+    gen_set_block_with_meta(sc, ox+9, oy+4, oz+1, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+4, oz+2, BLOCK_LOG, 8);
+    gen_set_block_with_meta(sc, ox+9, oy+4, oz+3, BLOCK_LOG, 8);
+    gen_set_block_with_meta(sc, ox+9, oy+4, oz+4, BLOCK_LOG, 8);
+    gen_set_block_with_meta(sc, ox+9, oy+4, oz+5, BLOCK_LOG, 8);
+    gen_set_block_with_meta(sc, ox+9, oy+4, oz+6, BLOCK_LOG, 8);
+    gen_set_block_with_meta(sc, ox+9, oy+4, oz+7, BLOCK_LOG, 8);
+    gen_set_block_with_meta(sc, ox+9, oy+4, oz+8, BLOCK_LOG, 8);
+    gen_set_block_with_meta(sc, ox+9, oy+4, oz+9, BLOCK_LOG, 8);
+    gen_set_block_with_meta(sc, ox+9, oy+4, oz+10, BLOCK_LOG, 8);
+    gen_set_block_with_meta(sc, ox+9, oy+4, oz+11, BLOCK_LOG, 8);
+    gen_set_block_with_meta(sc, ox+9, oy+4, oz+12, BLOCK_LOG, 8);
+    gen_set_block_with_meta(sc, ox+9, oy+4, oz+13, BLOCK_LOG, 8);
+    gen_set_block_with_meta(sc, ox+9, oy+4, oz+14, BLOCK_LOG, 8);
+    gen_set_block_with_meta(sc, ox+9, oy+4, oz+15, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+5, oz+1, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+5, oz+2, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+5, oz+3, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+5, oz+4, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+5, oz+5, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+5, oz+6, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+5, oz+8, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+5, oz+10, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+5, oz+11, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+5, oz+12, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+5, oz+13, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+5, oz+14, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+5, oz+15, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+5, oz+1, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+5, oz+15, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+5, oz+1, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+5, oz+15, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+5, oz+1, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+5, oz+15, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+7, oy+5, oz+1, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+7, oy+5, oz+15, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+8, oy+5, oz+1, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+8, oy+5, oz+15, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+5, oz+1, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+5, oz+2, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+5, oz+3, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+5, oz+4, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+5, oz+5, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+5, oz+6, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+5, oz+7, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+5, oz+8, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+5, oz+9, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+5, oz+10, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+5, oz+11, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+5, oz+12, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+5, oz+13, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+5, oz+14, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+5, oz+15, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+6, oz+5, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+6, oz+6, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+6, oz+7, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+6, oz+8, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+6, oz+9, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+6, oz+10, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+6, oz+11, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+6, oz+1, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+6, oz+2, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+6, oz+3, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+6, oz+4, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+6, oz+5, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+6, oz+11, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+6, oz+12, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+6, oz+13, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+6, oz+14, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+6, oz+15, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+6, oz+1, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+6, oz+15, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+6, oz+1, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+6, oz+15, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+7, oy+6, oz+1, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+7, oy+6, oz+15, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+8, oy+6, oz+1, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+8, oy+6, oz+2, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+8, oy+6, oz+3, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+8, oy+6, oz+4, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+8, oy+6, oz+5, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+8, oy+6, oz+6, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+8, oy+6, oz+7, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+8, oy+6, oz+8, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+8, oy+6, oz+9, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+8, oy+6, oz+10, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+8, oy+6, oz+11, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+8, oy+6, oz+12, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+8, oy+6, oz+13, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+8, oy+6, oz+14, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+8, oy+6, oz+15, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+7, oz+6, BLOCK_LOG, 8);
+    gen_set_block_with_meta(sc, ox+3, oy+7, oz+7, BLOCK_LOG, 8);
+    gen_set_block_with_meta(sc, ox+3, oy+7, oz+8, BLOCK_LOG, 8);
+    gen_set_block_with_meta(sc, ox+3, oy+7, oz+9, BLOCK_LOG, 8);
+    gen_set_block_with_meta(sc, ox+3, oy+7, oz+10, BLOCK_LOG, 8);
+    gen_set_block_with_meta(sc, ox+4, oy+7, oz+6, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+7, oz+10, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+7, oz+1, BLOCK_LOG, 4);
+    gen_set_block_with_meta(sc, ox+5, oy+7, oz+2, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+7, oz+3, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+7, oz+4, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+7, oz+5, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+7, oz+6, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+7, oz+10, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+7, oz+11, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+7, oz+12, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+7, oz+13, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+7, oz+14, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+7, oz+15, BLOCK_LOG, 4);
+    gen_set_block_with_meta(sc, ox+6, oy+7, oz+1, BLOCK_LOG, 4);
+    gen_set_block_with_meta(sc, ox+6, oy+7, oz+15, BLOCK_LOG, 4);
+    gen_set_block_with_meta(sc, ox+7, oy+7, oz+1, BLOCK_LOG, 4);
+    gen_set_block_with_meta(sc, ox+7, oy+7, oz+2, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+7, oy+7, oz+3, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+7, oy+7, oz+4, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+7, oy+7, oz+5, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+7, oy+7, oz+6, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+7, oy+7, oz+7, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+7, oy+7, oz+8, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+7, oy+7, oz+9, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+7, oy+7, oz+10, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+7, oy+7, oz+11, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+7, oy+7, oz+12, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+7, oy+7, oz+13, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+7, oy+7, oz+14, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+7, oy+7, oz+15, BLOCK_LOG, 4);
+    gen_set_block_with_meta(sc, ox+3, oy+8, oz+7, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+8, oz+8, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+8, oz+9, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+8, oz+7, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+8, oz+9, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+8, oz+7, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+8, oz+9, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+8, oz+0, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+8, oz+1, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+8, oz+2, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+8, oz+3, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+8, oz+4, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+8, oz+5, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+8, oz+6, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+8, oz+7, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+8, oz+8, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+8, oz+9, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+8, oz+10, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+8, oz+11, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+8, oz+12, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+8, oz+13, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+8, oz+14, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+8, oz+15, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+8, oz+16, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+9, oz+8, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+9, oz+8, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+9, oz+8, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+9, oz+8, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+1, oy+1, oz+8, BLOCK_DOOR_WOOD, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+1, oz+3, BLOCK_STONE_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+5, oy+1, oz+13, BLOCK_STONE_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+7, oy+1, oz+2, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+7, oy+1, oz+14, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+8, oy+1, oz+2, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+8, oy+1, oz+3, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+8, oy+1, oz+4, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+8, oy+1, oz+12, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+8, oy+1, oz+13, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+8, oy+1, oz+14, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+0, oy+2, oz+7, BLOCK_TORCH, 2);
+    gen_set_block_with_meta(sc, ox+0, oy+2, oz+9, BLOCK_TORCH, 2);
+    gen_set_block_with_meta(sc, ox+1, oy+2, oz+8, BLOCK_DOOR_WOOD, 8);
+    gen_set_block_with_meta(sc, ox+2, oy+2, oz+1, BLOCK_TORCH, 2);
+    gen_set_block_with_meta(sc, ox+2, oy+2, oz+15, BLOCK_TORCH, 2);
+    gen_set_block(sc, ox+3, oy+2, oz+3, BLOCK_GLASS_PANE);
+    gen_set_block(sc, ox+3, oy+2, oz+13, BLOCK_GLASS_PANE);
+    gen_set_block_with_meta(sc, ox+5, oy+2, oz+4, BLOCK_STONE_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+5, oy+2, oz+12, BLOCK_STONE_STAIRS, 3);
+    gen_set_block(sc, ox+6, oy+2, oz+1, BLOCK_GLASS_PANE);
+    gen_set_block(sc, ox+6, oy+2, oz+15, BLOCK_GLASS_PANE);
+    gen_set_block(sc, ox+9, oy+2, oz+4, BLOCK_GLASS_PANE);
+    gen_set_block(sc, ox+9, oy+2, oz+8, BLOCK_GLASS_PANE);
+    gen_set_block(sc, ox+9, oy+2, oz+12, BLOCK_GLASS_PANE);
+    gen_set_block_with_meta(sc, ox+10, oy+2, oz+6, BLOCK_TORCH, 1);
+    gen_set_block_with_meta(sc, ox+10, oy+2, oz+10, BLOCK_TORCH, 1);
+    gen_set_block_with_meta(sc, ox+5, oy+3, oz+5, BLOCK_STONE_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+5, oy+3, oz+11, BLOCK_STONE_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+6, oy+3, oz+6, BLOCK_TORCH, 1);
+    gen_set_block_with_meta(sc, ox+6, oy+3, oz+10, BLOCK_TORCH, 1);
+    gen_set_block(sc, ox+1, oy+4, oz+7, BLOCK_FENCE);
+    gen_set_block(sc, ox+1, oy+4, oz+8, BLOCK_FENCE);
+    gen_set_block(sc, ox+1, oy+4, oz+9, BLOCK_FENCE);
+    gen_set_block(sc, ox+2, oy+4, oz+6, BLOCK_FENCE);
+    gen_set_block(sc, ox+2, oy+4, oz+10, BLOCK_FENCE);
+    gen_set_block_with_meta(sc, ox+3, oy+4, oz+7, BLOCK_DOOR_WOOD, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+4, oz+9, BLOCK_DOOR_WOOD, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+4, oz+8, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+2, oy+5, oz+0, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+5, oz+1, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+5, oz+2, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+5, oz+3, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+5, oz+4, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+5, oz+12, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+5, oz+13, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+5, oz+14, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+5, oz+15, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+5, oz+16, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+5, oz+0, BLOCK_WOODEN_STAIRS, 5);
+    gen_set_block_with_meta(sc, ox+3, oy+5, oz+7, BLOCK_DOOR_WOOD, 8);
+    gen_set_block_with_meta(sc, ox+3, oy+5, oz+9, BLOCK_DOOR_WOOD, 8);
+    gen_set_block_with_meta(sc, ox+3, oy+5, oz+16, BLOCK_WOODEN_STAIRS, 5);
+    gen_set_block_with_meta(sc, ox+9, oy+5, oz+0, BLOCK_WOODEN_STAIRS, 4);
+    gen_set_block_with_meta(sc, ox+9, oy+5, oz+16, BLOCK_WOODEN_STAIRS, 4);
+    gen_set_block_with_meta(sc, ox+10, oy+5, oz+0, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+10, oy+5, oz+1, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+10, oy+5, oz+2, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+10, oy+5, oz+3, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+10, oy+5, oz+4, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+10, oy+5, oz+5, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+10, oy+5, oz+6, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+10, oy+5, oz+7, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+10, oy+5, oz+8, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+10, oy+5, oz+9, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+10, oy+5, oz+10, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+10, oy+5, oz+11, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+10, oy+5, oz+12, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+10, oy+5, oz+13, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+10, oy+5, oz+14, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+10, oy+5, oz+15, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+10, oy+5, oz+16, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+3, oy+6, oz+0, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+6, oz+1, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+6, oz+2, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+6, oz+3, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+6, oz+4, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+6, oz+12, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+6, oz+13, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+6, oz+14, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+6, oz+15, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+6, oz+16, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+6, oz+0, BLOCK_WOODEN_STAIRS, 5);
+    gen_set_block_with_meta(sc, ox+4, oy+6, oz+16, BLOCK_WOODEN_STAIRS, 5);
+    gen_set_block_with_meta(sc, ox+6, oy+6, oz+2, BLOCK_TORCH, 3);
+    gen_set_block_with_meta(sc, ox+6, oy+6, oz+14, BLOCK_TORCH, 4);
+    gen_set_block_with_meta(sc, ox+8, oy+6, oz+0, BLOCK_WOODEN_STAIRS, 4);
+    gen_set_block_with_meta(sc, ox+8, oy+6, oz+16, BLOCK_WOODEN_STAIRS, 4);
+    gen_set_block_with_meta(sc, ox+9, oy+6, oz+0, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+9, oy+6, oz+1, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+9, oy+6, oz+2, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+9, oy+6, oz+3, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+9, oy+6, oz+4, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+9, oy+6, oz+5, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+9, oy+6, oz+6, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+9, oy+6, oz+7, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+9, oy+6, oz+8, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+9, oy+6, oz+9, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+9, oy+6, oz+10, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+9, oy+6, oz+11, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+9, oy+6, oz+12, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+9, oy+6, oz+13, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+9, oy+6, oz+14, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+9, oy+6, oz+15, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+9, oy+6, oz+16, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+2, oy+7, oz+5, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+2, oy+7, oz+6, BLOCK_WOODEN_STAIRS, 7);
+    gen_set_block_with_meta(sc, ox+2, oy+7, oz+10, BLOCK_WOODEN_STAIRS, 6);
+    gen_set_block_with_meta(sc, ox+2, oy+7, oz+11, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+3, oy+7, oz+5, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+3, oy+7, oz+11, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+4, oy+7, oz+0, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+7, oz+1, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+7, oz+2, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+7, oz+3, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+7, oz+4, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+7, oz+5, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+4, oy+7, oz+11, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+7, oz+12, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+7, oz+13, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+7, oz+14, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+7, oz+15, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+7, oz+16, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+7, oz+0, BLOCK_WOODEN_STAIRS, 5);
+    gen_set_block_with_meta(sc, ox+5, oy+7, oz+16, BLOCK_WOODEN_STAIRS, 5);
+    gen_set_block_with_meta(sc, ox+7, oy+7, oz+0, BLOCK_WOODEN_STAIRS, 4);
+    gen_set_block_with_meta(sc, ox+7, oy+7, oz+16, BLOCK_WOODEN_STAIRS, 4);
+    gen_set_block_with_meta(sc, ox+8, oy+7, oz+0, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+8, oy+7, oz+1, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+8, oy+7, oz+2, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+8, oy+7, oz+3, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+8, oy+7, oz+4, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+8, oy+7, oz+5, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+8, oy+7, oz+6, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+8, oy+7, oz+7, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+8, oy+7, oz+8, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+8, oy+7, oz+9, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+8, oy+7, oz+10, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+8, oy+7, oz+11, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+8, oy+7, oz+12, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+8, oy+7, oz+13, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+8, oy+7, oz+14, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+8, oy+7, oz+15, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+8, oy+7, oz+16, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+2, oy+8, oz+6, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+2, oy+8, oz+7, BLOCK_WOODEN_STAIRS, 7);
+    gen_set_block_with_meta(sc, ox+2, oy+8, oz+9, BLOCK_WOODEN_STAIRS, 6);
+    gen_set_block_with_meta(sc, ox+2, oy+8, oz+10, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+3, oy+8, oz+6, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+3, oy+8, oz+10, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+4, oy+8, oz+6, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+4, oy+8, oz+10, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+5, oy+8, oz+0, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+8, oz+1, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+8, oz+2, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+8, oz+3, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+8, oz+4, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+8, oz+5, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+8, oz+6, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+5, oy+8, oz+10, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+5, oy+8, oz+11, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+8, oz+12, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+8, oz+13, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+8, oz+14, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+8, oz+15, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+8, oz+16, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+7, oy+8, oz+0, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+7, oy+8, oz+1, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+7, oy+8, oz+2, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+7, oy+8, oz+3, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+7, oy+8, oz+4, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+7, oy+8, oz+5, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+7, oy+8, oz+6, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+7, oy+8, oz+7, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+7, oy+8, oz+8, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+7, oy+8, oz+9, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+7, oy+8, oz+10, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+7, oy+8, oz+11, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+7, oy+8, oz+12, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+7, oy+8, oz+13, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+7, oy+8, oz+14, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+7, oy+8, oz+15, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+7, oy+8, oz+16, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+2, oy+9, oz+7, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+2, oy+9, oz+9, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+3, oy+9, oz+7, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+3, oy+9, oz+9, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+4, oy+9, oz+7, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+4, oy+9, oz+9, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+5, oy+9, oz+7, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+5, oy+9, oz+9, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+6, oy+9, oz+7, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+6, oy+9, oz+8, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block_with_meta(sc, ox+6, oy+9, oz+9, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block(sc, ox+5, oy+1, oz+6, BLOCK_BOOKSHELF);
+    gen_set_block(sc, ox+5, oy+1, oz+10, BLOCK_BOOKSHELF);
+}
+
+/* plains_butcher: Groesse 11x8x12 */
+static void gen_place_plains_butcher(struct server_chunk* sc, int ox, int oy, int oz) {
+    /* Innenraum leeren (Dirt/Stein durch Luft ersetzen) */
+    for(int iy=1; iy<=5; iy++)
+      for(int ix=1; ix<=9; ix++)
+        for(int iz=1; iz<=10; iz++) {
+          uint8_t b=gen_get_block(sc,ox+ix,oy+iy,oz+iz);
+          if(b!=BLOCK_AIR && b!=BLOCK_WATER_STILL && b!=BLOCK_WATER_FLOW)
+            gen_set_block(sc,ox+ix,oy+iy,oz+iz,BLOCK_AIR);
+        }
+    gen_set_block_with_meta(sc, ox+1, oy+0, oz+1, BLOCK_LOG, 0);
+    gen_set_block(sc, ox+1, oy+0, oz+2, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+1, oy+0, oz+3, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+1, oy+0, oz+4, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+1, oy+0, oz+5, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+1, oy+0, oz+6, BLOCK_LOG, 0);
+    gen_set_block(sc, ox+2, oy+0, oz+1, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+2, oy+0, oz+2, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+0, oz+3, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+0, oz+4, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+0, oz+5, BLOCK_PLANKS, 0);
+    gen_set_block(sc, ox+2, oy+0, oz+6, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+3, oy+0, oz+1, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+3, oy+0, oz+2, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+0, oz+3, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+0, oz+4, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+0, oz+5, BLOCK_PLANKS, 0);
+    gen_set_block(sc, ox+3, oy+0, oz+6, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+3, oy+0, oz+7, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+0, oz+8, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+0, oz+9, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+0, oz+10, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+0, oz+11, BLOCK_LOG, 0);
+    gen_set_block(sc, ox+4, oy+0, oz+1, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+4, oy+0, oz+2, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+0, oz+3, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+0, oz+4, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+0, oz+5, BLOCK_PLANKS, 0);
+    gen_set_block(sc, ox+4, oy+0, oz+6, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+4, oy+0, oz+7, BLOCK_GRASS);
+    gen_set_block(sc, ox+4, oy+0, oz+8, BLOCK_GRASS);
+    gen_set_block(sc, ox+4, oy+0, oz+9, BLOCK_GRASS);
+    gen_set_block(sc, ox+4, oy+0, oz+10, BLOCK_GRASS);
+    gen_set_block_with_meta(sc, ox+4, oy+0, oz+11, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+0, oz+1, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+0, oz+2, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+0, oz+3, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+0, oz+4, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+0, oz+5, BLOCK_PLANKS, 0);
+    gen_set_block(sc, ox+5, oy+0, oz+6, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+5, oy+0, oz+7, BLOCK_DIRT);
+    gen_set_block(sc, ox+5, oy+0, oz+8, BLOCK_GRASS);
+    gen_set_block(sc, ox+5, oy+0, oz+9, BLOCK_GRASS);
+    gen_set_block(sc, ox+5, oy+0, oz+10, BLOCK_GRASS);
+    gen_set_block_with_meta(sc, ox+5, oy+0, oz+11, BLOCK_LOG, 0);
+    gen_set_block(sc, ox+6, oy+0, oz+1, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+6, oy+0, oz+2, BLOCK_SLAB, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+0, oz+3, BLOCK_SLAB, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+0, oz+4, BLOCK_SLAB, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+0, oz+5, BLOCK_PLANKS, 0);
+    gen_set_block(sc, ox+6, oy+0, oz+6, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+6, oy+0, oz+7, BLOCK_DIRT);
+    gen_set_block(sc, ox+6, oy+0, oz+8, BLOCK_GRASS);
+    gen_set_block(sc, ox+6, oy+0, oz+10, BLOCK_GRASS);
+    gen_set_block_with_meta(sc, ox+6, oy+0, oz+11, BLOCK_LOG, 0);
+    gen_set_block(sc, ox+7, oy+0, oz+1, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+7, oy+0, oz+2, BLOCK_SLAB, 0);
+    gen_set_block_with_meta(sc, ox+7, oy+0, oz+3, BLOCK_SLAB, 0);
+    gen_set_block_with_meta(sc, ox+7, oy+0, oz+4, BLOCK_SLAB, 0);
+    gen_set_block_with_meta(sc, ox+7, oy+0, oz+5, BLOCK_PLANKS, 0);
+    gen_set_block(sc, ox+7, oy+0, oz+6, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+7, oy+0, oz+7, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+7, oy+0, oz+8, BLOCK_GRASS);
+    gen_set_block(sc, ox+7, oy+0, oz+9, BLOCK_GRASS);
+    gen_set_block(sc, ox+7, oy+0, oz+10, BLOCK_GRASS);
+    gen_set_block_with_meta(sc, ox+7, oy+0, oz+11, BLOCK_LOG, 0);
+    gen_set_block(sc, ox+8, oy+0, oz+1, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+8, oy+0, oz+2, BLOCK_SLAB, 0);
+    gen_set_block_with_meta(sc, ox+8, oy+0, oz+3, BLOCK_SLAB, 0);
+    gen_set_block_with_meta(sc, ox+8, oy+0, oz+4, BLOCK_SLAB, 0);
+    gen_set_block_with_meta(sc, ox+8, oy+0, oz+5, BLOCK_PLANKS, 0);
+    gen_set_block(sc, ox+8, oy+0, oz+6, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+8, oy+0, oz+7, BLOCK_GRASS);
+    gen_set_block(sc, ox+8, oy+0, oz+8, BLOCK_GRASS);
+    gen_set_block(sc, ox+8, oy+0, oz+9, BLOCK_GRASS);
+    gen_set_block(sc, ox+8, oy+0, oz+10, BLOCK_GRASS);
+    gen_set_block_with_meta(sc, ox+8, oy+0, oz+11, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+0, oz+1, BLOCK_LOG, 0);
+    gen_set_block(sc, ox+9, oy+0, oz+2, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+9, oy+0, oz+3, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+9, oy+0, oz+4, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+9, oy+0, oz+5, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+9, oy+0, oz+6, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+0, oz+7, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+0, oz+8, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+0, oz+9, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+0, oz+10, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+0, oz+11, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+1, oy+1, oz+1, BLOCK_LOG, 0);
+    gen_set_block(sc, ox+1, oy+1, oz+2, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+1, oy+1, oz+5, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+1, oy+1, oz+6, BLOCK_LOG, 0);
+    gen_set_block(sc, ox+2, oy+1, oz+1, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+2, oy+1, oz+5, BLOCK_PLANKS, 0);
+    gen_set_block(sc, ox+2, oy+1, oz+6, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+3, oy+1, oz+1, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+3, oy+1, oz+6, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+4, oy+1, oz+1, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+4, oy+1, oz+6, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+5, oy+1, oz+1, BLOCK_LOG, 0);
+    gen_set_block(sc, ox+5, oy+1, oz+6, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+5, oy+1, oz+7, BLOCK_STONE);
+    gen_set_block(sc, ox+6, oy+1, oz+1, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+6, oy+1, oz+6, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+6, oy+1, oz+7, BLOCK_STONE);
+    gen_set_block(sc, ox+7, oy+1, oz+1, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+7, oy+1, oz+2, BLOCK_SLAB, 0);
+    gen_set_block_with_meta(sc, ox+7, oy+1, oz+3, BLOCK_SLAB, 0);
+    gen_set_block(sc, ox+8, oy+1, oz+1, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+8, oy+1, oz+6, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+9, oy+1, oz+1, BLOCK_LOG, 0);
+    gen_set_block(sc, ox+9, oy+1, oz+2, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+9, oy+1, oz+3, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+9, oy+1, oz+4, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+9, oy+1, oz+5, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+9, oy+1, oz+6, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+1, oy+2, oz+1, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+1, oy+2, oz+2, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+1, oy+2, oz+5, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+1, oy+2, oz+6, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+2, oz+1, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+2, oz+6, BLOCK_LOG, 4);
+    gen_set_block_with_meta(sc, ox+4, oy+2, oz+1, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+2, oz+1, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+2, oz+6, BLOCK_LOG, 4);
+    gen_set_block_with_meta(sc, ox+6, oy+2, oz+1, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+2, oz+6, BLOCK_LOG, 4);
+    gen_set_block_with_meta(sc, ox+8, oy+2, oz+1, BLOCK_LOG, 0);
+    gen_set_block(sc, ox+8, oy+2, oz+6, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+9, oy+2, oz+1, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+2, oz+2, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+2, oz+5, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+2, oz+6, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+1, oy+3, oz+1, BLOCK_LOG, 0);
+    gen_set_block(sc, ox+1, oy+3, oz+2, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+1, oy+3, oz+3, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+1, oy+3, oz+4, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+1, oy+3, oz+5, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+1, oy+3, oz+6, BLOCK_LOG, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+3, oz+1, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+3, oz+6, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+3, oz+1, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+3, oz+6, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+3, oz+1, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+3, oz+6, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+3, oz+1, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+3, oz+6, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+3, oz+1, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+3, oz+6, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+7, oy+3, oz+1, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+7, oy+3, oz+6, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+8, oy+3, oz+1, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+8, oy+3, oz+6, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+9, oy+3, oz+1, BLOCK_LOG, 0);
+    gen_set_block(sc, ox+9, oy+3, oz+2, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+9, oy+3, oz+3, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+9, oy+3, oz+4, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+9, oy+3, oz+5, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+9, oy+3, oz+6, BLOCK_LOG, 0);
+    gen_set_block(sc, ox+1, oy+4, oz+2, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+1, oy+4, oz+3, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+1, oy+4, oz+4, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+1, oy+4, oz+5, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+2, oy+4, oz+2, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+4, oz+5, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+4, oz+2, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+4, oz+5, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+4, oz+2, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+4, oz+5, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+4, oz+2, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+4, oz+5, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+4, oz+2, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+4, oz+5, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+7, oy+4, oz+2, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+7, oy+4, oz+5, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+8, oy+4, oz+2, BLOCK_PLANKS, 0);
+    gen_set_block(sc, ox+9, oy+4, oz+2, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+9, oy+4, oz+3, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+9, oy+4, oz+4, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+9, oy+4, oz+5, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+1, oy+5, oz+3, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+1, oy+5, oz+4, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+2, oy+5, oz+3, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+5, oz+4, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+5, oz+3, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+3, oy+5, oz+4, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+5, oz+3, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+4, oy+5, oz+4, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+5, oz+3, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+5, oy+5, oz+4, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+5, oz+3, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+6, oy+5, oz+4, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+7, oy+5, oz+3, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+7, oy+5, oz+4, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+8, oy+5, oz+3, BLOCK_PLANKS, 0);
+    gen_set_block_with_meta(sc, ox+8, oy+5, oz+4, BLOCK_PLANKS, 0);
+    gen_set_block(sc, ox+8, oy+5, oz+5, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+9, oy+5, oz+3, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+9, oy+5, oz+4, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+0, oy+0, oz+4, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block_with_meta(sc, ox+1, oy+1, oz+3, BLOCK_DOOR_WOOD, 0);
+    gen_set_block_with_meta(sc, ox+1, oy+1, oz+4, BLOCK_DOOR_WOOD, 0);
+    gen_set_block_with_meta(sc, ox+2, oy+1, oz+2, BLOCK_WOODEN_STAIRS, 1);
+    gen_set_block(sc, ox+3, oy+1, oz+2, BLOCK_FENCE);
+    gen_set_block(sc, ox+3, oy+1, oz+7, BLOCK_FENCE);
+    gen_set_block(sc, ox+3, oy+1, oz+8, BLOCK_FENCE);
+    gen_set_block(sc, ox+3, oy+1, oz+9, BLOCK_FENCE);
+    gen_set_block(sc, ox+3, oy+1, oz+10, BLOCK_FENCE);
+    gen_set_block(sc, ox+3, oy+1, oz+11, BLOCK_FENCE);
+    gen_set_block_with_meta(sc, ox+4, oy+1, oz+2, BLOCK_WOODEN_STAIRS, 0);
+    gen_set_block(sc, ox+4, oy+1, oz+11, BLOCK_FENCE);
+    gen_set_block(sc, ox+5, oy+1, oz+11, BLOCK_FENCE);
+    gen_set_block(sc, ox+6, oy+1, oz+11, BLOCK_FENCE);
+    gen_set_block_with_meta(sc, ox+7, oy+1, oz+6, BLOCK_DOOR_WOOD, 3);
+    gen_set_block(sc, ox+7, oy+1, oz+11, BLOCK_FENCE);
+    gen_set_block(sc, ox+8, oy+1, oz+11, BLOCK_FENCE);
+    gen_set_block(sc, ox+9, oy+1, oz+7, BLOCK_FENCE);
+    gen_set_block(sc, ox+9, oy+1, oz+8, BLOCK_FENCE);
+    gen_set_block(sc, ox+9, oy+1, oz+9, BLOCK_FENCE);
+    gen_set_block(sc, ox+9, oy+1, oz+10, BLOCK_FENCE);
+    gen_set_block(sc, ox+9, oy+1, oz+11, BLOCK_FENCE);
+    gen_set_block_with_meta(sc, ox+0, oy+2, oz+2, BLOCK_TORCH, 2);
+    gen_set_block_with_meta(sc, ox+0, oy+2, oz+5, BLOCK_TORCH, 2);
+    gen_set_block_with_meta(sc, ox+1, oy+2, oz+3, BLOCK_DOOR_WOOD, 8);
+    gen_set_block_with_meta(sc, ox+1, oy+2, oz+4, BLOCK_DOOR_WOOD, 8);
+    gen_set_block(sc, ox+2, oy+2, oz+5, BLOCK_STONE);
+    gen_set_block(sc, ox+3, oy+2, oz+1, BLOCK_GLASS_PANE);
+    gen_set_block(sc, ox+3, oy+2, oz+2, BLOCK_STONE);
+    gen_set_block(sc, ox+3, oy+2, oz+6, BLOCK_GLASS_PANE);
+    gen_set_block_with_meta(sc, ox+3, oy+2, oz+11, BLOCK_TORCH, 5);
+    gen_set_block(sc, ox+4, oy+2, oz+6, BLOCK_GLASS_PANE);
+    gen_set_block_with_meta(sc, ox+5, oy+2, oz+0, BLOCK_TORCH, 4);
+    gen_set_block(sc, ox+7, oy+2, oz+1, BLOCK_GLASS_PANE);
+    gen_set_block_with_meta(sc, ox+7, oy+2, oz+6, BLOCK_DOOR_WOOD, 11);
+    gen_set_block(sc, ox+8, oy+2, oz+5, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+9, oy+2, oz+3, BLOCK_GLASS_PANE);
+    gen_set_block(sc, ox+9, oy+2, oz+4, BLOCK_GLASS_PANE);
+    gen_set_block_with_meta(sc, ox+9, oy+2, oz+11, BLOCK_TORCH, 5);
+    gen_set_block_with_meta(sc, ox+0, oy+3, oz+0, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+0, oy+3, oz+1, BLOCK_WOODEN_STAIRS, 7);
+    gen_set_block_with_meta(sc, ox+0, oy+3, oz+6, BLOCK_WOODEN_STAIRS, 6);
+    gen_set_block_with_meta(sc, ox+0, oy+3, oz+7, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+1, oy+3, oz+0, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+1, oy+3, oz+7, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+2, oy+3, oz+0, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+2, oy+3, oz+7, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+3, oy+3, oz+0, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+3, oy+3, oz+2, BLOCK_TORCH, 3);
+    gen_set_block_with_meta(sc, ox+3, oy+3, oz+7, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+4, oy+3, oz+0, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+4, oy+3, oz+7, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+5, oy+3, oz+0, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+5, oy+3, oz+7, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+6, oy+3, oz+0, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+6, oy+3, oz+7, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+7, oy+3, oz+0, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+7, oy+3, oz+5, BLOCK_TORCH, 4);
+    gen_set_block_with_meta(sc, ox+7, oy+3, oz+7, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+8, oy+3, oz+0, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block(sc, ox+8, oy+3, oz+5, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+8, oy+3, oz+7, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+9, oy+3, oz+0, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+9, oy+3, oz+7, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+10, oy+3, oz+0, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+10, oy+3, oz+1, BLOCK_WOODEN_STAIRS, 7);
+    gen_set_block_with_meta(sc, ox+10, oy+3, oz+6, BLOCK_WOODEN_STAIRS, 6);
+    gen_set_block_with_meta(sc, ox+10, oy+3, oz+7, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+0, oy+4, oz+1, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+0, oy+4, oz+2, BLOCK_WOODEN_STAIRS, 7);
+    gen_set_block_with_meta(sc, ox+0, oy+4, oz+5, BLOCK_WOODEN_STAIRS, 6);
+    gen_set_block_with_meta(sc, ox+0, oy+4, oz+6, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+1, oy+4, oz+1, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+1, oy+4, oz+6, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+2, oy+4, oz+1, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+2, oy+4, oz+6, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+3, oy+4, oz+1, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+3, oy+4, oz+6, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+4, oy+4, oz+1, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+4, oy+4, oz+6, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+5, oy+4, oz+1, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+5, oy+4, oz+6, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+6, oy+4, oz+1, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+6, oy+4, oz+6, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+7, oy+4, oz+1, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+7, oy+4, oz+6, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+8, oy+4, oz+1, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block(sc, ox+8, oy+4, oz+5, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+8, oy+4, oz+6, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+9, oy+4, oz+1, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+9, oy+4, oz+6, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+10, oy+4, oz+1, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+10, oy+4, oz+2, BLOCK_WOODEN_STAIRS, 7);
+    gen_set_block_with_meta(sc, ox+10, oy+4, oz+5, BLOCK_WOODEN_STAIRS, 6);
+    gen_set_block_with_meta(sc, ox+10, oy+4, oz+6, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+0, oy+5, oz+2, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+0, oy+5, oz+3, BLOCK_WOODEN_STAIRS, 7);
+    gen_set_block_with_meta(sc, ox+0, oy+5, oz+4, BLOCK_WOODEN_STAIRS, 6);
+    gen_set_block_with_meta(sc, ox+0, oy+5, oz+5, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+1, oy+5, oz+2, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+1, oy+5, oz+5, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+2, oy+5, oz+2, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+2, oy+5, oz+5, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+3, oy+5, oz+2, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+3, oy+5, oz+5, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+4, oy+5, oz+2, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+4, oy+5, oz+5, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+5, oy+5, oz+2, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+5, oy+5, oz+5, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+6, oy+5, oz+2, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+6, oy+5, oz+5, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+7, oy+5, oz+2, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+7, oy+5, oz+5, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+8, oy+5, oz+2, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+9, oy+5, oz+2, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+9, oy+5, oz+5, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+10, oy+5, oz+2, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+10, oy+5, oz+3, BLOCK_WOODEN_STAIRS, 7);
+    gen_set_block_with_meta(sc, ox+10, oy+5, oz+4, BLOCK_WOODEN_STAIRS, 6);
+    gen_set_block_with_meta(sc, ox+10, oy+5, oz+5, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+0, oy+6, oz+3, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+0, oy+6, oz+4, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+1, oy+6, oz+3, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+1, oy+6, oz+4, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+2, oy+6, oz+3, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+2, oy+6, oz+4, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+3, oy+6, oz+3, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+3, oy+6, oz+4, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+4, oy+6, oz+3, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+4, oy+6, oz+4, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+5, oy+6, oz+3, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+5, oy+6, oz+4, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+6, oy+6, oz+3, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+6, oy+6, oz+4, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+7, oy+6, oz+3, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+7, oy+6, oz+4, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+8, oy+6, oz+3, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+8, oy+6, oz+4, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block(sc, ox+8, oy+6, oz+5, BLOCK_COBBLESTONE);
+    gen_set_block_with_meta(sc, ox+9, oy+6, oz+3, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+9, oy+6, oz+4, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block_with_meta(sc, ox+10, oy+6, oz+3, BLOCK_WOODEN_STAIRS, 2);
+    gen_set_block_with_meta(sc, ox+10, oy+6, oz+4, BLOCK_WOODEN_STAIRS, 3);
+    gen_set_block(sc, ox+8, oy+7, oz+5, BLOCK_COBBLESTONE);
+    gen_set_block(sc, ox+8, oy+1, oz+5, BLOCK_FURNACE);
+}
+
+
+
+
+
+static void gen_fill_village_chest(struct server_chunk* sc, int lx, int ly, int lz,
+                                    int64_t world_seed) {
+	/* Pruefen ob an dieser Position eine Truhe ist */
+	if(lx < 0 || lx >= CHUNK_SIZE || lz < 0 || lz >= CHUNK_SIZE) return;
+	if(gen_get_block(sc, lx, ly, lz) != BLOCK_CHEST) return;
+	/* Truhe mit zufaelligen Dorf-Items fuellen (vereinfacht) */
+	/* In CavEX werden Truheninhalte per complex_block_archive gespeichert */
+	/* Vorerst: Truhe bleibt leer -- Loot-System ist komplex */
+	(void)world_seed;
+}
+
+static void gen_place_village_house(struct server_chunk* sc,
+                                     int ox, int y, int oz,
+                                     uint8_t planks, uint8_t cobble,
+                                     bool has_library) {
+	int i, j;
+	/* Fundament (Kopfstein eine Ebene tief) */
+	for(i = -2; i <= 2; i++)
+		for(j = -1; j <= 5; j++)
+			gen_set_block(sc, ox+i, y-1, oz+j, cobble);
+
+	/* Boden (Holzplanken) */
+	for(i = -2; i <= 2; i++)
+		for(j = -1; j <= 5; j++)
+			gen_set_block(sc, ox+i, y, oz+j, planks);
+
+	/* Innenraum leeren */
+	for(i = -1; i <= 1; i++)
+		for(j = 0; j <= 4; j++)
+			for(int h = 1; h <= 4; h++)
+				gen_set_block(sc, ox+i, y+h, oz+j, BLOCK_AIR);
+
+	/* Wände — 4 Blöcke hoch */
+	for(int h = 1; h <= 4; h++) {
+		for(i = -2; i <= 2; i++) {
+			gen_set_block(sc, ox+i, y+h, oz-1, planks); /* Vorderwand */
+			gen_set_block(sc, ox+i, y+h, oz+5, planks); /* Rückwand */
+		}
+		for(j = 0; j <= 4; j++) {
+			gen_set_block(sc, ox-2, y+h, oz+j, planks); /* linke Wand */
+			gen_set_block(sc, ox+2, y+h, oz+j, planks); /* rechte Wand */
+		}
+		/* Log-Ecksäulen an allen 4 Ecken */
+		gen_set_block_with_meta(sc, ox-2, y+h, oz-1, BLOCK_LOG, 0);
+		gen_set_block_with_meta(sc, ox+2, y+h, oz-1, BLOCK_LOG, 0);
+		gen_set_block_with_meta(sc, ox-2, y+h, oz+5, BLOCK_LOG, 0);
+		gen_set_block_with_meta(sc, ox+2, y+h, oz+5, BLOCK_LOG, 0);
 	}
 
-	gen_place_small_house(sc, cx - 4, y, cz - 4, wall, roof, floor, BLOCK_GLASS_PANE);
-	gen_place_small_house(sc, cx + 4, y, cz - 4, wall, roof, floor, BLOCK_GLASS_PANE);
-	gen_place_small_house(sc, cx - 4, y, cz + 4, wall, roof, floor, BLOCK_GLASS_PANE);
+	/* Fenster (Glasscheiben) bei h=2 */
+	gen_set_block(sc, ox-1, y+2, oz-1, BLOCK_GLASS_PANE); /* Vorderwand links */
+	gen_set_block(sc, ox+1, y+2, oz-1, BLOCK_GLASS_PANE); /* Vorderwand rechts */
+	gen_set_block(sc, ox, y+2, oz+5, BLOCK_GLASS_PANE);   /* Rückwand Mitte */
+	gen_set_block(sc, ox-2, y+2, oz+2, BLOCK_GLASS_PANE); /* linke Wand */
+	gen_set_block(sc, ox+2, y+2, oz+2, BLOCK_GLASS_PANE); /* rechte Wand */
 
-	if((gen_hash3i(world_x0, 1613, world_z0, seed ^ 0x7111A63FU) & 1U) == 0U)
-		gen_place_small_house(sc, cx + 4, y, cz + 4, wall, roof, floor, BLOCK_GLASS_PANE);
+	/* Tür (zweiteilig) — vorne Mitte */
+	gen_set_block(sc, ox, y+1, oz-1, BLOCK_DOOR_WOOD);
+	gen_set_block(sc, ox, y+2, oz-1, BLOCK_AIR);
+
+	/* Dach mit Überhang (+1 Block) */
+	for(i = -3; i <= 3; i++)
+		for(j = -2; j <= 6; j++)
+			gen_set_block(sc, ox+i, y+5, oz+j, planks);
+	/* Dach-Treppe-Effekt: Plankenrand eine Ebene höher als Wände */
+	for(i = -2; i <= 2; i++)
+		for(j = -1; j <= 5; j++)
+			gen_set_block(sc, ox+i, y+5, oz+j, planks);
+
+	/* Einrichtung */
+	gen_set_block_with_meta(sc, ox, y+1, oz+4, BLOCK_TORCH, 3); /* Fackel hinten: haengt an Rueckwand oz+5, zeigt ins Zimmer */
+	gen_set_block(sc, ox-1, y+1, oz+3, BLOCK_WORKBENCH);
+	if(has_library) {
+		gen_set_block(sc, ox+1, y+1, oz+3, BLOCK_BOOKSHELF);
+		gen_set_block(sc, ox-1, y+1, oz+4, BLOCK_BOOKSHELF);
+	} else {
+		gen_set_block(sc, ox+1, y+1, oz+3, BLOCK_CHEST);
+		gen_set_block(sc, ox-1, y+1, oz+4, BLOCK_FURNACE);
+	}
+	/* Bett */
+	gen_set_block(sc, ox, y+1, oz+1, BLOCK_BED);
+}
+
+/* MC-Farm: zwei Streifen Farmland mit Wasserkanal in der Mitte */
+static void gen_place_mc_farm(struct server_chunk* sc, int cx, int y, int cz) {
+	/* Farmland: 9 breit, 5 tief (z: -2..+2) mit Wasserkanal in der Mitte (z=0) */
+	for(int x = -4; x <= 4; x++) {
+		for(int z = -3; z <= 3; z++) {
+			if(!gen_inside_chunk(cx+x, y, cz+z)) continue;
+			if(x == 0) {
+				/* Wasserkanal in der Mitte */
+				gen_set_block(sc, cx+x, y, cz+z, BLOCK_WATER_STILL);
+			} else {
+				gen_set_block(sc, cx+x, y, cz+z, BLOCK_FARMLAND);
+				if(gen_inside_chunk(cx+x, y+1, cz+z))
+					gen_set_block(sc, cx+x, y+1, cz+z, BLOCK_CROPS);
+			}
+		}
+	}
+	/* Zaun-Rand */
+	for(int x = -5; x <= 5; x++) {
+		gen_set_block(sc, cx+x, y, cz-4, BLOCK_FENCE);
+		gen_set_block(sc, cx+x, y, cz+4, BLOCK_FENCE);
+	}
+	for(int z = -4; z <= 4; z++) {
+		gen_set_block(sc, cx-5, y, cz+z, BLOCK_FENCE);
+		gen_set_block(sc, cx+5, y, cz+z, BLOCK_FENCE);
+	}
+	/* Eck-Fackeln */
+	gen_set_block(sc, cx-5, y+1, cz-4, BLOCK_TORCH);
+	gen_set_block(sc, cx+5, y+1, cz-4, BLOCK_TORCH);
+}
+
+static wgen_gen_t* server_world_wgen_gen(struct server_world* w); /* forward decl */
+static int64_t gen_mc_legacy_next_long(uint64_t* s);              /* forward decl */
+static int gen_mc_feat_int(uint64_t* s, int n);                   /* forward decl */
+
+static void gen_place_village(struct server_chunk* sc, struct server_world* w,
+							  uint32_t seed,
+							  int world_x0, int world_z0, int sea_level,
+							  Generator* biome_gen) {
+	wgen_gen_t* wg = server_world_wgen_gen(w);
+	int cur_cx = world_x0 / CHUNK_SIZE;
+	int cur_cz = world_z0 / CHUNK_SIZE;
+
+	/* Dorf-Grid: 32×32 Chunks, Offset 0..23.
+	 * Prüfe 3×3 benachbarte Grid-Zellen — jede Zelle kann genau ein Dorf haben. */
+	int base_cell_x = (cur_cx >= 0 ? cur_cx : cur_cx - 31) / 32;
+	int base_cell_z = (cur_cz >= 0 ? cur_cz : cur_cz - 31) / 32;
+
+	for(int dcell_x = -1; dcell_x <= 1; dcell_x++) {
+		for(int dcell_z = -1; dcell_z <= 1; dcell_z++) {
+			int cell_x = base_cell_x + dcell_x;
+			int cell_z = base_cell_z + dcell_z;
+
+			/* Deterministischer Zell-RNG: worldSeed ^ cellHash */
+			uint64_t cell_rng = (uint64_t)((int64_t)cell_x * 341873128712LL
+			                  + (int64_t)cell_z * 132897987541LL
+			                  + (int64_t)(int32_t)seed ^ 10387312LL)
+			                  & 0xFFFFFFFFFFFFULL;
+			cell_rng = (cell_rng ^ 25214903917LL) & 0xFFFFFFFFFFFFULL;
+
+			/* Dorf-Zentrum: Zufalls-Offset 0..23 innerhalb der 32×32-Zelle */
+			int vcx = cell_x * 32 + gen_mc_feat_int(&cell_rng, 24);
+			int vcz = cell_z * 32 + gen_mc_feat_int(&cell_rng, 24);
+
+			/* Zu weit vom aktuellen Chunk? (Dorf-Einfluss max. ~80 Blöcke = 5 Chunks) */
+			if(abs(cur_cx - vcx) > 6 || abs(cur_cz - vcz) > 6) continue;
+
+			/* Dorf-Zentrum in Weltkoordinaten */
+			int v_world_x = vcx * CHUNK_SIZE + 8;
+			int v_world_z = vcz * CHUNK_SIZE + 8;
+
+			/* Terrain-Höhe am Dorf-Zentrum direkt aus Noise */
+			int cy = wgen_gen_world_height(wg, v_world_x, v_world_z);
+			if(cy <= sea_level + 2) continue;
+
+			int biome_id = gen_biome_at_safe(biome_gen, v_world_x, v_world_z);
+			bool is_desert = (biome_id == desert || biome_id == desert_hills);
+			bool is_taiga  = (biome_id == taiga  || biome_id == taiga_hills);
+
+			uint8_t wall = is_desert ? BLOCK_SANDSTONE : BLOCK_PLANKS;
+			uint8_t path_block = is_desert ? BLOCK_SANDSTONE : BLOCK_GRAVEL;
+			uint8_t cobble_base = is_desert ? BLOCK_SANDSTONE : BLOCK_COBBLESTONE;
+
+			/* Konvertiere Weltkoordinaten -> lokale Chunk-Koordinaten
+			 * (koennen negativ oder > 15 sein - gen_set_block clippt automatisch) */
+			int ox = v_world_x - world_x0;
+			int oz = v_world_z - world_z0;
+
+			/* Organisches Dorf-Layout:
+			 * Straßen wachsen in 2-4 Richtungen vom Brunnen, zufällige Länge,
+			 * Gebäude hängen an Straßenseiten mit zufälligen Abständen. */
+
+			/* Layout-RNG aus Dorf-Position und Welt-Seed */
+			uint64_t vrng = (uint64_t)((int64_t)vcx * 341873128712LL
+			              + (int64_t)vcz * 132897987541LL + (int64_t)(int32_t)seed)
+			              & 0xFFFFFFFFFFFFULL;
+			vrng = (vrng ^ 25214903917LL) & 0xFFFFFFFFFFFFULL;
+
+			/* Brunnen exakt am Dorf-Zentrum */
+			int well_x = ox;
+			int well_z = oz;
+			if(well_x >= 0 && well_x < CHUNK_SIZE && well_z >= 0 && well_z < CHUNK_SIZE) {
+				/* Minimum-Hoehe unter dem Brunnen-Footprint (9×9) → kein Schweben */
+				int well_min = WORLD_HEIGHT;
+				for(int dx2 = 0; dx2 < 9; dx2++)
+					for(int dz2 = 0; dz2 < 9; dz2++) {
+						int flx = well_x+dx2, flz = well_z+dz2;
+						if(flx<0||flx>=CHUNK_SIZE||flz<0||flz>=CHUNK_SIZE) continue;
+						int h = gen_chunk_actual_surface_height(sc, flx, flz);
+						if(h > sea_level && h < well_min) well_min = h;
+					}
+				int well_cy = (well_min < WORLD_HEIGHT) ? well_min : 0;
+				if(well_cy >= 2 && well_cy > sea_level + 2) {
+					if(is_desert)
+						gen_place_desert_well(sc, well_x, well_cy, well_z);
+					else
+						gen_place_plains_fountain(sc, well_x, well_cy - 1, well_z);
+				}
+			}
+
+			/* Straßen-Richtungen: 4 Himmelsrichtungen (N/S/E/W).
+			 * dx/dz pro Richtung: 0=Nord, 1=Süd, 2=Ost, 3=West */
+			static const int road_dx[4] = { 0,  0,  1, -1};
+			static const int road_dz[4] = {-1,  1,  0,  0};
+
+			/* 4 Straßen-Arme */
+			for(int arm = 0; arm < 4; arm++) {
+				/* Strassen-Laenge: 7 * (3..5) = 21, 28 oder 35 Bloecke */
+				int arm_len = 7 * (3 + gen_mc_feat_int(&vrng, 3));
+				int adx = road_dx[arm];
+				int adz = road_dz[arm];
+
+				/* Strasse entlang des Arms platzieren (3 Bloecke breit) */
+				for(int step = 1; step <= arm_len; step++) {
+					int wx = v_world_x + adx * step;
+					int wz = v_world_z + adz * step;
+					for(int rw = -1; rw <= 1; rw++) {
+						int lx = wx - world_x0 + (adz != 0 ? rw : 0);
+						int lz = wz - world_z0 + (adx != 0 ? rw : 0);
+						if(lx < 0||lx>=CHUNK_SIZE||lz<0||lz>=CHUNK_SIZE) continue;
+						int surf = gen_chunk_actual_surface_height(sc, lx, lz);
+						if(surf < 1) continue;
+						gen_set_block(sc, lx, surf, lz, path_block);
+						for(int d = 1; d <= 2; d++) {
+							if(surf - d < 1) break;
+							uint8_t below = gen_get_block(sc, lx, surf-d, lz);
+							if(below==BLOCK_DIRT||below==BLOCK_GRASS||below==BLOCK_GRAVEL)
+								gen_set_block(sc, lx, surf-d, lz, path_block);
+							else break;
+						}
+					}
+					/* Laternen alle 8 Bloecke entlang Arm, 2 Bloecke seitlich */
+					if(step > 0 && step % 8 == 0) {
+						for(int side = -1; side <= 1; side += 2) {
+							int lx = wx - world_x0 + (adz != 0 ? side*2 : 0);
+							int lz = wz - world_z0 + (adx != 0 ? side*2 : 0);
+							if(lx<0||lx>=CHUNK_SIZE||lz<0||lz>=CHUNK_SIZE) continue;
+							int surf = gen_chunk_actual_surface_height(sc, lx, lz);
+							if(surf >= 1) gen_place_plains_lamp(sc, lx, surf, lz);
+						}
+					}
+				}
+
+				/* Gebaeude entlang des Arms.
+				 * Haustypen: 0=(5×5), 1=(4×5), 2=(10×7), 3=(9×12), 4=(5×9) */
+				int house_sx_t[] = {5, 4, 10, 9, 5};
+				int house_sz_t[] = {5, 5,  7,12, 9};
+				int house_h_t[]  = {6, 6,  6, 7,12}; /* Bauhoehe (uz=Turm=12) */
+
+				for(int pos = gen_mc_feat_int(&vrng, 5) + 4;
+				    pos <= arm_len - 4;
+				    pos += 2 + gen_mc_feat_int(&vrng, 5)) {
+
+					/* Gebaeude auf linker oder rechter Strassenseite */
+					for(int side = -1; side <= 1; side += 2) {
+						if(gen_mc_feat_int(&vrng, 4) > 0) continue; /* 25% Chance */
+
+						/* Gebaeude-Typ zufaellig (0=uy,1=wi,2=ko,3=tf,4=uz) */
+						int htype = gen_mc_feat_int(&vrng, 5);
+
+						/* Gebaeude-Position: 4 Bloecke seitlich der Strasse */
+						int perp = side * 5;
+						int h_wx = v_world_x + adx * pos + (adz != 0 ? perp : 0);
+						int h_wz = v_world_z + adz * pos + (adx != 0 ? perp : 0);
+
+						int hx = h_wx - world_x0;
+						int hz = h_wz - world_z0;
+
+						/* Groeße des Hauses bestimmen */
+						int sx = house_sx_t[htype], sz = house_sz_t[htype];
+
+						/* Nur platzieren wenn GESAMTER Footprint im aktuellen Chunk liegt.
+						 * Verhindert halbe Haeuser an Chunk-Grenzen. */
+						if(hx < 0 || hx + sx > CHUNK_SIZE
+						   || hz < 0 || hz + sz > CHUNK_SIZE) continue;
+
+						/* Durchschnittliche Terrain-Höhe unter dem Haus
+						 * (Summe / Anzahl).
+						 * Kein Kopfstein-Fundament — Haus sitzt auf dem Terrain. */
+						int sum_h = 0, cnt_h = 0;
+						int min_h = WORLD_HEIGHT, max_h = 0;
+						for(int dx2 = 0; dx2 < sx; dx2++)
+							for(int dz2 = 0; dz2 < sz; dz2++) {
+								int flx = hx+dx2, flz = hz+dz2;
+								if(flx<0||flx>=CHUNK_SIZE||flz<0||flz>=CHUNK_SIZE) continue;
+								int h = gen_chunk_actual_surface_height(sc, flx, flz);
+								if(h > sea_level) {
+									sum_h += h; cnt_h++;
+									if(h < min_h) min_h = h;
+									if(h > max_h) max_h = h;
+								}
+							}
+						if(cnt_h == 0) continue;
+						/* MINIMUM statt Durchschnitt: Haus beginnt immer oberhalb
+						 * des tiefsten Terrain-Punkts → keine versunkenen Wände. */
+						int house_cy = min_h;
+						if(house_cy <= sea_level + 2) continue;
+						/* Schlucht: Höhenvariation >14 Blöcke → überspringen */
+						if(max_h - min_h > 14) continue;
+
+						/* Seitenweg zur Strasse */
+						for(int sw = 1; sw <= 4; sw++) {
+							int px = h_wx - world_x0 - (adz != 0 ? (side>0?sw:-sw) : 0);
+							int pz = h_wz - world_z0 - (adx != 0 ? (side>0?sw:-sw) : 0);
+							if(px<0||px>=CHUNK_SIZE||pz<0||pz>=CHUNK_SIZE) continue;
+							int surf = gen_chunk_actual_surface_height(sc, px, pz);
+							if(surf >= 1) gen_set_block(sc, px, surf, pz, path_block);
+						}
+
+						/* Gesamten Bauraum freischaufeln: Footprint (+1 Rand) ueber die
+						 * volle Haushoehe leeren, damit nichts im Hang steckt (kein
+						 * Turm-unter-der-Erde mehr). Rand vorne (oz-1) fuer den Eingang. */
+						int clear_h = house_h_t[htype];
+						for(int clx = hx-1; clx <= hx+sx; clx++) {
+							if(clx<0||clx>=CHUNK_SIZE) continue;
+							for(int clz = hz-1; clz <= hz+sz; clz++) {
+								if(clz<0||clz>=CHUNK_SIZE) continue;
+								for(int cly = house_cy+1; cly <= house_cy+clear_h && cly < WORLD_HEIGHT; cly++) {
+									uint8_t b = gen_get_block(sc, clx, cly, clz);
+									if(b != BLOCK_AIR && b != BLOCK_WATER_STILL
+									   && b != BLOCK_WATER_FLOW)
+										gen_set_block(sc, clx, cly, clz, BLOCK_AIR);
+								}
+							}
+						}
+
+						/* Haus platzieren */
+						if(!is_desert) {
+							switch(htype) {
+							case 0: gen_mc10_house_uy(sc, hx, house_cy, hz); break;
+							case 1: gen_mc10_house_wi(sc, hx, house_cy, hz); break;
+							case 2: gen_mc10_house_ko(sc, hx, house_cy, hz); break;
+							case 3: gen_mc10_house_tf(sc, hx, house_cy, hz); break;
+							case 4: gen_mc10_house_uz(sc, hx, house_cy, hz); break;
+							}
+						} else {
+							gen_place_village_house(sc, hx, house_cy, hz, wall,
+							                        cobble_base, (htype >= 3));
+						}
+					}
+				}
+
+				/* Farm am Ende des laengsten Arms */
+				if(arm == 0) {
+					int farm_wx = v_world_x + adx * (arm_len + 8);
+					int farm_wz = v_world_z + adz * (arm_len + 8);
+					int farm_x = farm_wx - world_x0 - 6; /* -6 zentriert */
+					int farm_z = farm_wz - world_z0 - 6;
+					if(farm_x >= 0 && farm_x < CHUNK_SIZE
+					   && farm_z >= 0 && farm_z < CHUNK_SIZE) {
+						/* Durchschnittshöhe unter der Farm */
+					int farm_sum = 0, farm_cnt = 0;
+					for(int dx2 = 0; dx2 < 13; dx2++)
+						for(int dz2 = 0; dz2 < 9; dz2++) {
+							int flx = farm_x+dx2, flz = farm_z+dz2;
+							if(flx<0||flx>=CHUNK_SIZE||flz<0||flz>=CHUNK_SIZE) continue;
+							int h = gen_chunk_actual_surface_height(sc, flx, flz);
+							if(h > sea_level) { farm_sum += h; farm_cnt++; }
+						}
+					if(farm_cnt > 0) {
+						int farm_cy = farm_sum / farm_cnt;
+						if(farm_cy >= 3 && farm_cy > sea_level + 2) {
+							/* Bauraum ueber der Farm freischaufeln (13×9 × 4 hoch) */
+							for(int dx2 = -1; dx2 <= 13; dx2++) {
+								int flx = farm_x+dx2;
+								if(flx<0||flx>=CHUNK_SIZE) continue;
+								for(int dz2 = -1; dz2 <= 9; dz2++) {
+									int flz = farm_z+dz2;
+									if(flz<0||flz>=CHUNK_SIZE) continue;
+									for(int cly = farm_cy+1; cly <= farm_cy+4 && cly < WORLD_HEIGHT; cly++) {
+										uint8_t b = gen_get_block(sc, flx, cly, flz);
+										if(b != BLOCK_AIR && b != BLOCK_WATER_STILL
+										   && b != BLOCK_WATER_FLOW)
+											gen_set_block(sc, flx, cly, flz, BLOCK_AIR);
+									}
+								}
+							}
+							gen_place_plains_large_farm(sc, farm_x, farm_cy, farm_z);
+						}
+					}
+					}
+				}
+			}
+		}
+	}
 }
 
 static void gen_place_ice_surfaces(struct server_chunk* sc, uint32_t seed,
 								   int world_x0, int world_z0, int sea_level,
 								   Generator* biome_gen) {
 	(void)seed;
-	for(int lx = 1; lx < CHUNK_SIZE - 1; lx++) {
-		for(int lz = 1; lz < CHUNK_SIZE - 1; lz++) {
+	for(int lx = 0; lx < CHUNK_SIZE; lx++) {
+		for(int lz = 0; lz < CHUNK_SIZE; lz++) {
 			int wx = world_x0 + lx;
 			int wz = world_z0 + lz;
 			int biome_id = gen_biome_at_safe(biome_gen, wx, wz);
@@ -3594,7 +6379,9 @@ static bool gen_is_ore_block(uint8_t block) {
 	return (block == BLOCK_COAL_ORE)
 		|| (block == BLOCK_IRON_ORE)
 		|| (block == BLOCK_GOLD_ORE)
-		|| (block == BLOCK_DIAMOND_ORE);
+		|| (block == BLOCK_DIAMOND_ORE)
+		|| (block == BLOCK_LAPIS_ORE)
+		|| (block == BLOCK_EMERALD_ORE);
 }
 
 static void gen_cleanup_floating_ores(struct server_chunk* sc) {
@@ -3820,7 +6607,7 @@ static int gen_sample_raw_surface(Generator* biome_gen,
 	return gen_apply_river_channel(&profile, gen_args, seed, wx, wz, surface);
 }
 
-static int gen_smooth_surface_against_java_like_area(
+static int gen_smooth_surface_against_terrain_shape_area(
 	Generator* biome_gen, const struct gen_cuberite_runtime_args* gen_args,
 	uint32_t seed, int choice_octaves, int32_t wx, int32_t wz,
 	const struct gen_biome_profile* profile, int surface) {
@@ -3844,7 +6631,7 @@ static int gen_smooth_surface_against_java_like_area(
 	return surface;
 }
 
-static float gen_java_like_density(const struct gen_biome_profile* profile,
+static float gen_terrain_shape_density(const struct gen_biome_profile* profile,
 								   const struct gen_cuberite_runtime_args* gen_args,
 								   uint32_t seed, int32_t wx, int y, int32_t wz,
 								   int surface) {
@@ -3857,11 +6644,11 @@ static float gen_java_like_density(const struct gen_biome_profile* profile,
 							 (float)y * 0.026f,
 							 (float)wz * gen_args->detail_frequency_z * 0.65f,
 							 seed ^ 0xD31517E2U, 2, 2.0f, 0.5f);
-	float ridge = gen_fbm2d((float)wx * gen_args->mountain_frequency_x,
+	float rugged = gen_fbm2d((float)wx * gen_args->mountain_frequency_x,
 							(float)wz * gen_args->mountain_frequency_z,
 							seed ^ 0xD31517E3U, 2, 2.0f, 0.5f);
 	float cave_bias = (profile != NULL && profile->amplitude > 18.0f) ? 0.05f : -0.08f;
-	float density = vertical + low * 0.42f + detail * 0.18f + fmaxf(0.0f, ridge) * 0.20f
+	float density = vertical + low * 0.42f + detail * 0.18f + fmaxf(0.0f, rugged) * 0.20f
 		+ cave_bias;
 	if(y < 5)
 		density += (5.0f - (float)y) * 0.80f;
@@ -4008,6 +6795,8 @@ static bool gen_alloc_chunk_buffers(struct server_chunk* sc) {
 	return true;
 }
 
+static wgen_gen_t* server_world_wgen_gen(struct server_world* w); /* forward decl */
+
 static void gen_generate_terrain_columns(struct server_world* w,
 										 struct server_chunk* sc, int* surface_map,
 										 Generator* biome_gen,
@@ -4020,6 +6809,11 @@ static void gen_generate_terrain_columns(struct server_world* w,
 	if(end_col > CHUNK_SIZE * CHUNK_SIZE)
 		end_col = CHUNK_SIZE * CHUNK_SIZE;
 
+	/* MC-26.3-Höhen für diesen Chunk vorberechnen */
+	wgen_gen_t* wg = server_world_wgen_gen(w);
+	uint8_t wgen_heights[CHUNK_SIZE][CHUNK_SIZE];
+	wgen_gen_surface_heights(wg, (int)chunk_x, (int)chunk_z, wgen_heights);
+
 	for(int col = start_col; col < end_col; col++) {
 		int lx = col / CHUNK_SIZE;
 		int lz = col % CHUNK_SIZE;
@@ -4027,77 +6821,12 @@ static void gen_generate_terrain_columns(struct server_world* w,
 		int32_t wz = world_z0 + lz;
 		int biome_id = plains;
 		struct gen_biome_profile profile = gen_blended_profile(biome_gen, wx, wz, &biome_id);
-		int surface = gen_compute_surface_height_base(
-			&profile, biome_id, gen_args, seed, choice_octaves, wx, wz);
-		surface = gen_apply_river_channel(&profile, gen_args, seed, wx, wz, surface);
-		surface = gen_smooth_surface_against_java_like_area(
-			biome_gen, gen_args, seed, choice_octaves, wx, wz, &profile, surface);
-		surface = gen_smooth_surface_against_local_neighbors(
-			surface_map, lx, lz, surface, &profile, gen_args->sea_level);
-
-		if(GEN_ENABLE_LOWLAND_NEIGHBOR_SMOOTHING && !profile.oceanic) {
-			int avg = surface;
-			int count = 1;
-			static const int smooth_offs[4][2] = {
-				{1, 0}, {-1, 0}, {0, 1}, {0, -1},
-			};
-			for(int i = 0; i < 4; i++) {
-				int nbiome = plains;
-				struct gen_biome_profile np = gen_blended_profile(
-					biome_gen, wx + smooth_offs[i][0], wz + smooth_offs[i][1], &nbiome);
-				if(np.oceanic)
-					continue;
-				avg += gen_compute_surface_height_base(
-					&np, nbiome, gen_args, seed, choice_octaves,
-					wx + smooth_offs[i][0], wz + smooth_offs[i][1]);
-				count++;
-			}
-			avg /= count;
-
-			bool near_water_level = surface <= gen_args->sea_level + 3;
-			bool sandy_or_river = profile.riverine
-				|| profile.top_block == BLOCK_SAND
-				|| biome_id == beach
-				|| biome_id == river
-				|| biome_id == frozen_river;
-			if(surface <= avg - 4 && (near_water_level || sandy_or_river)) {
-				surface = avg - 2;
-			}
-			if(surface <= avg - 6) {
-				surface = avg - 3;
-			}
-			if(sandy_or_river && surface < gen_args->sea_level - 1) {
-				surface = gen_args->sea_level - 1;
-			}
-		}
-
-		float neigh_h = 0.0f;
-		float neigh_w = 0.0f;
-		int sample_h = 0;
-		if(lx <= 3 && gen_sample_neighbor_edge_height(w, chunk_x, chunk_z, 0, lz, &sample_h)) {
-			float k = (4.0f - (float)lx) / 4.0f;
-			neigh_h += (float)sample_h * k;
-			neigh_w += k;
-		}
-		if(lx >= CHUNK_SIZE - 4 && gen_sample_neighbor_edge_height(w, chunk_x, chunk_z, 1, lz, &sample_h)) {
-			float k = (4.0f - (float)((CHUNK_SIZE - 1) - lx)) / 4.0f;
-			neigh_h += (float)sample_h * k;
-			neigh_w += k;
-		}
-		if(lz <= 3 && gen_sample_neighbor_edge_height(w, chunk_x, chunk_z, 2, lx, &sample_h)) {
-			float k = (4.0f - (float)lz) / 4.0f;
-			neigh_h += (float)sample_h * k;
-			neigh_w += k;
-		}
-		if(lz >= CHUNK_SIZE - 4 && gen_sample_neighbor_edge_height(w, chunk_x, chunk_z, 3, lx, &sample_h)) {
-			float k = (4.0f - (float)((CHUNK_SIZE - 1) - lz)) / 4.0f;
-			neigh_h += (float)sample_h * k;
-			neigh_w += k;
-		}
-		if(GEN_ENABLE_NEIGHBOR_EDGE_BLEND && neigh_w > 0.0f) {
-			surface = (int)((float)surface * gen_args->edge_blend_weight_self
-				+ (neigh_h / neigh_w) * gen_args->edge_blend_weight_neighbor);
-		}
+		int surface = (int)wgen_heights[lx][lz];
+		/* Biom-spezifische Anpassungen: Wasser-Limit und Fluss-Absenkung */
+		if(profile.riverine && surface > gen_args->sea_level - 1)
+			surface = gen_args->sea_level - 1;
+		if(profile.oceanic && surface > gen_args->sea_level - 3)
+			surface = gen_args->sea_level - 3;
 
 		int dirt_depth = 0;
 		uint8_t top_block = BLOCK_GRASS;
@@ -4112,9 +6841,7 @@ static void gen_generate_terrain_columns(struct server_world* w,
 			if(y == 0) {
 				block = BLOCK_BEDROCK;
 			} else {
-				float density = gen_java_like_density(
-					&profile, gen_args, seed, wx, y, wz, surface);
-				if(density > 0.0f || y <= surface - 18) {
+				if(y <= surface) {
 					block = BLOCK_STONE;
 				} else if(GEN_ENABLE_WATER_FILL_TO_SEA_LEVEL
 						  && y <= gen_args->sea_level) {
@@ -4133,6 +6860,15 @@ static void gen_generate_terrain_columns(struct server_world* w,
 			surface = actual_surface;
 		surface_map[lx + lz * CHUNK_SIZE] = surface;
 
+		/* Unterwasser: Erde/Gras unter Meeresspiegel → Kies */
+		if(actual_surface > 0 && actual_surface <= gen_args->sea_level - 1) {
+			for(int uy = actual_surface; uy >= 1 && uy >= actual_surface - 3; uy--) {
+				size_t uidx = S_CHUNK_IDX(lx, uy, lz);
+				if(sc->ids[uidx] == BLOCK_DIRT || sc->ids[uidx] == BLOCK_GRASS)
+					sc->ids[uidx] = BLOCK_GRAVEL;
+			}
+		}
+
 		if(GEN_ENABLE_SNOW_SURFACE_LAYER && w->generator.finisher_snow
 		   && surface > gen_args->sea_level + 1 && isSnowy(biome_id)
 		   && surface < WORLD_HEIGHT - 1) { /* surface+1 darf nicht WORLD_HEIGHT sein */
@@ -4141,14 +6877,280 @@ static void gen_generate_terrain_columns(struct server_world* w,
 				sc->ids[top_idx] = BLOCK_SNOW;
 		}
 
+		/* Erze — Versuchszahl per Spalte y-Range */
+		/* coal_upper: 30 Versuche, mc y=136..320 → cavex y=67..128 (obere Hälfte) */
+		/* coal_lower: 20 Versuche, mc y=0..192 → cavex y=5..85 */
+		/* iron_middle: 10 Versuche, mc y=-24..56 → cavex y=13..40 */
+		/* iron_upper: viele Versuche, mc y=80..384 → cavex y=48..127 */
+		/* gold: 4 Versuche, mc y=-64..32 → cavex y=0..32 */
+		/* lapis: 2 Versuche, mc y=-32..32 → cavex y=11..32 */
+		/* diamond: 2 Versuche, mc y=-64..-4 → cavex y=0..20 */
+		/* emerald: mountains only, mc y=-16..480 → cavex y=16..127 */
 		for(int y = 5; y < surface - 3; y++) {
-			gen_set_ore_if_stone(sc, lx, y, lz, BLOCK_COAL_ORE, seed ^ 0x1111U, 0.985f);
-			if(y < 72)
-				gen_set_ore_if_stone(sc, lx, y, lz, BLOCK_IRON_ORE, seed ^ 0x2222U, 0.992f);
-			if(y < 32)
-				gen_set_ore_if_stone(sc, lx, y, lz, BLOCK_GOLD_ORE, seed ^ 0x3333U, 0.9975f);
-			if(y < 18)
-				gen_set_ore_if_stone(sc, lx, y, lz, BLOCK_DIAMOND_ORE, seed ^ 0x4444U, 0.9986f);
+			/* coal_upper: 1/3 von 30 Versuchen = 10 */
+			if(y >= 67)
+				gen_set_ore_if_stone(sc, lx, y, lz, BLOCK_COAL_ORE, seed ^ 0x1111U, 1.0f - 10.0f/256.0f);
+			/* coal_lower: 1/3 von 20 = 7 */
+			if(y >= 5 && y <= 85)
+				gen_set_ore_if_stone(sc, lx, y, lz, BLOCK_COAL_ORE, seed ^ 0x1112U, 1.0f - 7.0f/256.0f);
+			/* iron_middle: 1/3 von 10 = 3 */
+			if(y >= 13 && y <= 40)
+				gen_set_ore_if_stone(sc, lx, y, lz, BLOCK_IRON_ORE, seed ^ 0x2221U, 1.0f - 3.0f/160.0f);
+			/* iron_upper: 1/3 Spawn-Chance */
+			if(y >= 48)
+				gen_set_ore_if_stone(sc, lx, y, lz, BLOCK_IRON_ORE, seed ^ 0x2222U, 0.9883f);
+			/* gold: 1/3 */
+			if(y <= 32)
+				gen_set_ore_if_stone(sc, lx, y, lz, BLOCK_GOLD_ORE, seed ^ 0x3333U, 0.9992f);
+			/* lapis: 1/3 */
+			if(y >= 11 && y <= 32)
+				gen_set_ore_if_stone(sc, lx, y, lz, BLOCK_LAPIS_ORE, seed ^ 0x4441U, 0.9996f);
+			/* diamond: 1/3 */
+			if(y <= 20)
+				gen_set_ore_if_stone(sc, lx, y, lz, BLOCK_DIAMOND_ORE, seed ^ 0x4444U, 0.9995f);
+			/* emerald: mountains only, 1/3 */
+			if(y >= 16) {
+				int biome_e = gen_biome_at_safe(biome_gen, wx, wz);
+				if(biome_e == mountains || biome_e == wooded_mountains
+				   || biome_e == gravelly_mountains || biome_e == mountain_edge
+				   || biome_e == modified_gravelly_mountains)
+					gen_set_ore_if_stone(sc, lx, y, lz, BLOCK_EMERALD_ORE, seed ^ 0x6661U, 0.9997f);
+			}
+		}
+	}
+}
+
+/* Forward declarations for RNG helpers used below */
+static int64_t gen_mc_legacy_next_long(uint64_t* s);
+static int gen_mc_feat_int(uint64_t* s, int n);
+
+static void gen_place_dungeons(struct server_chunk* sc, int64_t world_seed,
+                                int world_x0, int world_z0) {
+	/* MC: 8 Dungeons per chunk attempt */
+	int chunk_x = world_x0 / CHUNK_SIZE;
+	int chunk_z = world_z0 / CHUNK_SIZE;
+
+	/* Large-Feature-Seed: */
+	uint64_t ls = (uint64_t)(world_seed ^ (int64_t)25214903917LL) & 0xFFFFFFFFFFFFULL;
+	int64_t S2 = gen_mc_legacy_next_long(&ls);
+	int64_t T2 = gen_mc_legacy_next_long(&ls);
+	uint64_t dungeon_seed = (uint64_t)((int64_t)chunk_x * S2 ^ (int64_t)chunk_z * T2 ^ world_seed);
+	dungeon_seed = (dungeon_seed ^ (int64_t)25214903917LL) & 0xFFFFFFFFFFFFULL;
+
+	/* 8 Versuche */
+	for(int i = 0; i < 8; i++) {
+		int lx = gen_mc_feat_int(&dungeon_seed, 16);
+		int lz = gen_mc_feat_int(&dungeon_seed, 16);
+		int ly = gen_mc_feat_int(&dungeon_seed, WORLD_HEIGHT);
+
+		/* Nur weit unter der Oberfläche — nie weniger als 15 Blöcke tief */
+		if(ly > WORLD_HEIGHT - 30) continue; /* Absoluter y-Cap */
+		/* Prüfe Oberfläche dieser Spalte */
+		bool too_close_to_surface = false;
+		for(int check_y = ly + 1; check_y < WORLD_HEIGHT - 1 && check_y <= ly + 15; check_y++) {
+			uint8_t above = gen_get_block(sc, lx, check_y, lz);
+			if(above == BLOCK_AIR || above == BLOCK_WATER_STILL) {
+				too_close_to_surface = true;
+				break;
+			}
+		}
+		if(too_close_to_surface) continue;
+
+		if(sc->ids[S_CHUNK_IDX(lx, ly, lz)] != BLOCK_AIR) continue;
+
+		/* Dungeon: 5x5 oder 7x7, aus Moos-Kopfstein */
+		int w2 = 2 + gen_mc_feat_int(&dungeon_seed, 2); /* 2 oder 3 */
+		int d2 = 2 + gen_mc_feat_int(&dungeon_seed, 2);
+
+		if(lx < w2 || lx >= CHUNK_SIZE - w2 || lz < d2 || lz >= CHUNK_SIZE - d2) continue;
+		if(ly < 3 || ly >= WORLD_HEIGHT - 3) continue;
+
+		/* Wände prüfen: genug Stein drum herum? */
+		int solid = 0;
+		for(int dx = -w2 - 1; dx <= w2 + 1; dx++)
+			for(int dz = -d2 - 1; dz <= d2 + 1; dz++) {
+				int nx = lx + dx, nz = lz + dz;
+				if(nx < 0 || nx >= CHUNK_SIZE || nz < 0 || nz >= CHUNK_SIZE) continue;
+				if(sc->ids[S_CHUNK_IDX(nx, ly, nz)] == BLOCK_STONE) solid++;
+			}
+		if(solid < 12) continue;
+
+		/* Dungeon aushöhlen */
+		for(int dx = -w2; dx <= w2; dx++)
+			for(int dz = -d2; dz <= d2; dz++)
+				for(int dy = 0; dy <= 2; dy++) {
+					int nx = lx + dx, nz = lz + dz, ny = ly + dy;
+					if(nx < 0 || nx >= CHUNK_SIZE || nz < 0 || nz >= CHUNK_SIZE) continue;
+					if(!gen_inside_chunk(nx, ny, nz)) continue;
+					uint8_t b = (dy == 0) ?
+						((gen_mc_feat_int(&dungeon_seed, 4) < 2) ? BLOCK_COBBLESTONE : BLOCK_MOSSY_COBBLE) :
+						BLOCK_AIR;
+					gen_set_block(sc, nx, ny, nz, b);
+				}
+
+		/* Spawner */
+		gen_set_block(sc, lx, ly + 1, lz, BLOCK_SPAWNER);
+
+		/* Truhen an den Ecken */
+		if(lx - w2 + 1 >= 0 && lz - d2 + 1 >= 0
+		   && lx - w2 + 1 < CHUNK_SIZE && lz - d2 + 1 < CHUNK_SIZE)
+			gen_set_block(sc, lx - w2 + 1, ly + 1, lz - d2 + 1, BLOCK_CHEST);
+		if(lx + w2 - 1 < CHUNK_SIZE && lz + d2 - 1 < CHUNK_SIZE)
+			gen_set_block(sc, lx + w2 - 1, ly + 1, lz + d2 - 1, BLOCK_CHEST);
+	}
+}
+
+static void gen_place_desert_structures(struct server_chunk* sc, int64_t world_seed,
+                                         int world_x0, int world_z0, Generator* biome_gen) {
+	int center_biome = gen_biome_at_safe(biome_gen, world_x0 + 8, world_z0 + 8);
+	if(center_biome != desert && center_biome != desert_hills
+	   && center_biome != desert_lakes)
+		return;
+
+	/* ZUSÄTZLICH: Prüfe ob wirklich Sand an der Oberfläche */
+	{
+		int cx_check = 8, cz_check = 8;
+		int sy_check = gen_chunk_actual_surface_height(sc, cx_check, cz_check);
+		if(sy_check <= 0 || sy_check >= WORLD_HEIGHT - 1) return;
+		uint8_t top_check = gen_get_block(sc, cx_check, sy_check, cz_check);
+		if(top_check != BLOCK_SAND && top_check != BLOCK_SANDSTONE) return;
+	}
+
+	/* Wüstenbrunnen: 1 per ca. 500 Chunks */
+	int chunk_x = world_x0 / CHUNK_SIZE;
+	int chunk_z = world_z0 / CHUNK_SIZE;
+	uint64_t well_rng = (uint64_t)((int64_t)chunk_x * 341873128712LL
+	                    + (int64_t)chunk_z * 132897987541LL + world_seed + 14357617LL)
+	                   & 0xFFFFFFFFFFFFULL;
+	well_rng = (well_rng ^ (int64_t)25214903917LL) & 0xFFFFFFFFFFFFULL;
+	if(gen_mc_feat_int(&well_rng, 1000) < 2) { /* ~0.2% Chance */
+		int lx = 2 + gen_mc_feat_int(&well_rng, 12);
+		int lz = 2 + gen_mc_feat_int(&well_rng, 12);
+		int sy = gen_chunk_actual_surface_height(sc, lx, lz);
+		if(sy >= 2 && sy < WORLD_HEIGHT - 5) {
+			/* Wüstenbrunnen: 3x3 Sandstein-Plattform mit Wasserloch */
+			for(int dx = -1; dx <= 1; dx++)
+				for(int dz = -1; dz <= 1; dz++) {
+					int nx = lx + dx, nz = lz + dz;
+					if(nx < 0 || nx >= CHUNK_SIZE || nz < 0 || nz >= CHUNK_SIZE) continue;
+					gen_set_block(sc, nx, sy, nz,
+					              (dx == 0 && dz == 0) ? BLOCK_AIR : BLOCK_SANDSTONE);
+				}
+			/* Wasser in der Mitte */
+			if(sy - 1 >= 0) gen_set_block(sc, lx, sy - 1, lz, BLOCK_WATER_STILL);
+			/* Wände */
+			for(int dy = 1; dy <= 2; dy++) {
+				if(!gen_inside_chunk(lx, sy + dy, lz)) break;
+				gen_set_block(sc, lx - 1, sy + dy, lz, BLOCK_SANDSTONE);
+				gen_set_block(sc, lx + 1, sy + dy, lz, BLOCK_SANDSTONE);
+				gen_set_block(sc, lx, sy + dy, lz - 1, BLOCK_SANDSTONE);
+				gen_set_block(sc, lx, sy + dy, lz + 1, BLOCK_SANDSTONE);
+			}
+		}
+	}
+}
+
+static bool gen_cave_is_carvable(uint8_t b) {
+	return b == BLOCK_STONE || b == BLOCK_DIRT || b == BLOCK_GRASS
+	    || b == BLOCK_COAL_ORE || b == BLOCK_IRON_ORE || b == BLOCK_GOLD_ORE
+	    || b == BLOCK_DIAMOND_ORE
+	    || b == BLOCK_LAPIS_ORE || b == BLOCK_EMERALD_ORE;
+}
+
+static void gen_carve_worm_caves(struct server_chunk* sc, int64_t world_seed,
+                                  int world_x0, int world_z0, int sea_level,
+                                  const int* surface_map) {
+	int cx0 = world_x0 / CHUNK_SIZE;
+	int cz0 = world_z0 / CHUNK_SIZE;
+
+	/* Nachbar-Radius 5 Chunks (Tunnel reichen selten weiter) — begrenzt Dichte */
+	for(int dcx = -5; dcx <= 5; dcx++) {
+		for(int dcz = -5; dcz <= 5; dcz++) {
+			int cx = cx0 + dcx;
+			int cz = cz0 + dcz;
+
+			uint64_t rng = (uint64_t)((int64_t)cx * 341873128712LL
+			             + (int64_t)cz * 132897987541LL + world_seed)
+			             & 0xFFFFFFFFFFFFULL;
+			rng = (rng ^ (int64_t)25214903917LL) & 0xFFFFFFFFFFFFULL;
+
+			/* Deutlich weniger Höhlen pro Chunk (0..2) → nicht mehr überfüllt */
+			int n_caves = gen_mc_feat_int(&rng, 3);
+
+			for(int c = 0; c < n_caves; c++) {
+				float sx = (float)(cx * CHUNK_SIZE + gen_mc_feat_int(&rng, CHUNK_SIZE));
+				/* Höhlen tief unten starten: y=8..50 */
+				float sy = (float)(8 + gen_mc_feat_int(&rng, 42));
+				float sz = (float)(cz * CHUNK_SIZE + gen_mc_feat_int(&rng, CHUNK_SIZE));
+
+				/* Radius 1.8..3.0: rund und gut begehbar */
+				float radius = 1.8f + (float)gen_mc_feat_int(&rng, 120) / 100.0f;
+
+				float yaw    = (float)gen_mc_feat_int(&rng, 314) / 50.0f - 3.14f;
+				/* Flacherer Pitch (±0.12) → weniger vertikale Überlappung */
+				float pitch  = ((float)gen_mc_feat_int(&rng, 100) / 100.0f - 0.5f) * 0.12f;
+
+				int max_steps = 100 + gen_mc_feat_int(&rng, 150);
+				for(int step = 0; step < max_steps; step++) {
+					float dx = cosf(yaw) * cosf(pitch);
+					float dy = sinf(pitch);
+					float dz = sinf(yaw) * cosf(pitch);
+
+					sx += dx; sy += dy; sz += dz;
+
+					yaw    += ((float)gen_mc_feat_int(&rng, 100) - 50) / 350.0f;
+					pitch  *= 0.92f;
+					pitch  += ((float)gen_mc_feat_int(&rng, 100) - 50) / 900.0f;
+					/* Pitch hart begrenzen → Tunnel bleiben flach, keine
+					 * übereinanderliegenden Parallel-Tunnel */
+					if(pitch >  0.22f) pitch =  0.22f;
+					if(pitch < -0.22f) pitch = -0.22f;
+
+					/* KEIN Schritt-Überspringen mehr → glatte, lückenlose Tunnel
+					 * (verhindert schwebende Blöcke) */
+
+					/* leichte Radius-Variation pro Schritt für natürliche Form */
+					float r = radius + sinf((float)step * 0.35f) * 0.35f;
+					float rr = r * r;
+					int ir = (int)(r * 2.0f) + 1;
+
+					for(int lx = 0; lx < CHUNK_SIZE; lx++) {
+						for(int lz2 = 0; lz2 < CHUNK_SIZE; lz2++) {
+							float wx = (float)(world_x0 + lx);
+							float wz = (float)(world_z0 + lz2);
+							float dist2 = (wx-sx)*(wx-sx) + (wz-sz)*(wz-sz);
+							if(dist2 > rr) continue;
+
+							int surf = surface_map
+							    ? surface_map[lx + lz2 * CHUNK_SIZE]
+							    : 60;
+							/* Mindestabstand 5 zur Oberfläche. Unter/nahe Wasser:
+							 * Höhle klar unter dem Meeresgrund halten, sonst sieht
+							 * man das Höhlenmuster durch den Ozeanboden. */
+							int max_y = surf - 5;
+							if(surf <= sea_level + 2) {
+								int under_sea = sea_level - 6;
+								if(max_y > under_sea) max_y = under_sea;
+							}
+							if(max_y < 5) max_y = 5;
+
+							int y0 = (int)sy - ir; if(y0 < 1) y0 = 1;
+							int y1 = (int)sy + ir; if(y1 > max_y) y1 = max_y;
+							for(int ly = y0; ly <= y1; ly++) {
+								float fy = (float)ly;
+								/* runde Kugel (vertikaler Faktor 1.0 = echte Kugel) */
+								float d3 = dist2 + (fy - sy) * (fy - sy);
+								if(d3 > rr) continue;
+								uint8_t b = gen_get_block(sc, lx, ly, lz2);
+								if(gen_cave_is_carvable(b))
+									gen_set_block(sc, lx, ly, lz2, BLOCK_AIR);
+							}
+						}
+					}
+
+					if(sy < 2.0f || sy > 54.0f) break;
+				}
+			}
 		}
 	}
 }
@@ -4164,14 +7166,20 @@ static void gen_apply_feature_step(struct server_world* w, struct server_chunk* 
 			(void)chunk_x;
 			(void)chunk_z;
 			(void)biome_gen;
-			gen_carve_density_caves(sc, seed, world_x0, world_z0, surface_map,
-									gen_args->sea_level);
+			gen_carve_worm_caves(sc, w->world_seed, world_x0, world_z0,
+								 gen_args->sea_level, surface_map);
 		}
 		return;
 	case 1:
-		if(w->generator.finisher_worm_nest_caves)
-			gen_carve_density_canyon(sc, seed, world_x0, world_z0, surface_map,
-									 gen_args->sea_level);
+		if(w->generator.finisher_worm_nest_caves) {
+			/* Schluchten nur ca. 1/3 so häufig wie vorher */
+			uint32_t ravine_check = gen_hash3i(world_x0 / CHUNK_SIZE, 0,
+			                                   world_z0 / CHUNK_SIZE,
+			                                   (uint32_t)w->world_seed ^ 0xABBA1234U);
+			if((ravine_check % 3) == 0)
+				gen_carve_density_canyon(sc, seed, world_x0, world_z0, surface_map,
+										 gen_args->sea_level);
+		}
 		return;
 	case 2:
 		if(w->generator.finisher_water_lakes)
@@ -4218,7 +7226,7 @@ static void gen_apply_feature_step(struct server_world* w, struct server_chunk* 
 		return;
 	case 10:
 		if(w->generator.finisher_villages)
-			gen_place_village(sc, seed, world_x0, world_z0, gen_args->sea_level,
+			gen_place_village(sc, w, seed, world_x0, world_z0, gen_args->sea_level,
 							  biome_gen);
 		return;
 	case 11:
@@ -4229,6 +7237,17 @@ static void gen_apply_feature_step(struct server_world* w, struct server_chunk* 
 	case 12:
 		if(w->generator.finisher_overworld_clump_flowers)
 			gen_place_flower_clumps(sc, seed, world_x0, world_z0, biome_gen);
+		return;
+	case 13:
+		gen_place_dungeons(sc, w->world_seed, world_x0, world_z0);
+		return;
+	case 14:
+		gen_place_desert_structures(sc, w->world_seed, world_x0, world_z0, biome_gen);
+		return;
+	case 15:
+		if(w->generator.finisher_worm_nest_caves)
+			gen_carve_cave_entrance_to_worm(sc, seed, chunk_x, chunk_z,
+											surface_map, gen_args->sea_level);
 		return;
 	default:
 		return;
@@ -4246,147 +7265,359 @@ static void gen_apply_feature_pass(struct server_world* w, struct server_chunk* 
 	}
 }
 
+/* ── RNG-Hilfsfunktionen ── */
+
+static int64_t gen_mc_legacy_next_long(uint64_t* s) {
+	*s = (*s * 25214903917ULL + 11ULL) & 0xFFFFFFFFFFFFULL;
+	int32_t hi = (int32_t)(*s >> 16);
+	*s = (*s * 25214903917ULL + 11ULL) & 0xFFFFFFFFFFFFULL;
+	int32_t lo = (int32_t)(*s >> 16);
+	return ((int64_t)hi << 32) + (int64_t)(int32_t)lo;
+}
+
+static int gen_mc_feat_int(uint64_t* s, int n) {
+	*s = (*s * 25214903917ULL + 11ULL) & 0xFFFFFFFFFFFFULL;
+	return (int)((uint32_t)(*s >> 17) % (unsigned)n);
+}
+
 static void gen_generate_deco_columns(struct server_world* w, struct server_chunk* sc,
 									  Generator* biome_gen,
 									  const struct gen_cuberite_runtime_args* gen_args,
 									  uint32_t seed, int32_t world_x0, int32_t world_z0,
 									  int start_col, int num_cols) {
-	int end_col = start_col + num_cols;
-	if(end_col > (CHUNK_SIZE - 2) * (CHUNK_SIZE - 2))
-		end_col = (CHUNK_SIZE - 2) * (CHUNK_SIZE - 2);
-	for(int col = start_col; col < end_col; col++) {
-		int lx = 1 + (col / (CHUNK_SIZE - 2));
-		int lz = 1 + (col % (CHUNK_SIZE - 2));
-		int y = -1;
-		for(int yy = WORLD_HEIGHT - 2; yy >= 1; yy--) {
-			uint8_t b = sc->ids[S_CHUNK_IDX(lx, yy, lz)];
-			if(b != BLOCK_AIR && b != BLOCK_WATER_STILL && b != BLOCK_WATER_FLOW) {
-				y = yy;
-				break;
-			}
-		}
-		if(y < 1)
-			continue;
-		int wx = world_x0 + lx;
-		int wz = world_z0 + lz;
-		int biome_id = gen_apply_forest_biome_variation(
-			gen_reduce_extreme_biomes(gen_biome_at_safe(biome_gen, wx, wz), wx, wz), wx, wz);
-		float deco = gen_rand01_from_hash(gen_hash3i(wx, y, wz, seed ^ 0xABCD1234U));
-		uint8_t top = sc->ids[S_CHUNK_IDX(lx, y, lz)];
-		float tree_threshold = gen_args->tree_threshold_dense;
-		if(biome_id == forest || biome_id == birch_forest
-		   || biome_id == birch_forest_hills || biome_id == wooded_hills
-		   || biome_id == flower_forest) {
-			tree_threshold = gen_args->tree_threshold_forest;
-		}
-		if(biome_id == dark_forest || biome_id == jungle || biome_id == jungle_hills
-		   || biome_id == giant_tree_taiga || biome_id == giant_tree_taiga_hills) {
-			tree_threshold = gen_args->tree_threshold_dense - 0.10f;
-			if(tree_threshold < 0.45f)
-				tree_threshold = 0.45f;
-		}
-		bool tree_candidate
-			= gen_tree_density_rule(biome_id, wx, wz, seed, deco, &tree_threshold);
+	(void)num_cols; (void)start_col; /* immer ganzen Chunk bearbeiten */
+	(void)gen_args; (void)seed;
 
-		if(w->generator.finisher_trees
-		   && (biome_id == forest || biome_id == birch_forest
-		   || biome_id == flower_forest || biome_id == dark_forest
-		   || biome_id == birch_forest_hills || biome_id == wooded_hills
-			   || biome_id == taiga
-			   || biome_id == taiga_hills || biome_id == giant_tree_taiga
-			   || biome_id == giant_tree_taiga_hills || biome_id == swamp
-			   || biome_id == jungle || biome_id == jungle_hills)
-			   && top == BLOCK_GRASS
-			   && sc->ids[S_CHUNK_IDX(lx, y + 1, lz)] == BLOCK_AIR
-			   && tree_candidate) {
-				gen_try_place_tree(sc, lx, lz, y + 1, seed, wx, wz, biome_id);
-				continue;
+	int chunk_x = (int)(world_x0 / CHUNK_SIZE);
+	int chunk_z = (int)(world_z0 / CHUNK_SIZE);
+
+	/* ── Decoration-Seed ── */
+	int64_t ws = w->world_seed;
+	uint64_t lcg = (uint64_t)(ws ^ (int64_t)25214903917LL) & 0xFFFFFFFFFFFFULL;
+	int64_t S = gen_mc_legacy_next_long(&lcg) | 1;
+	int64_t T = gen_mc_legacy_next_long(&lcg) | 1;
+	int64_t dec_seed = (int64_t)(chunk_x * 16) * S + (int64_t)(chunk_z * 16) * T ^ ws;
+
+	/* Makro: Feature-RNG initialisieren und nextInt(n) aufrufen */
+#define FEAT_RNG_INIT(step, fi) \
+	uint64_t feat_rng = (uint64_t)(((dec_seed) + (int64_t)(step) + (int64_t)10000*(fi)) \
+	                   ^ (int64_t)25214903917LL) & 0xFFFFFFFFFFFFULL
+#define FEAT_INT(n) gen_mc_feat_int(&feat_rng, (n))
+
+	wgen_gen_t* wg = server_world_wgen_gen(w);
+	uint8_t hh[CHUNK_SIZE][CHUNK_SIZE];
+	wgen_gen_surface_heights(wg, chunk_x, chunk_z, hh);
+
+	/* ── BÄUME (Feature-Step 1) — exakte MC-26.3-Versuchsanzahlen ── */
+	if(w->generator.finisher_trees) {
+		int cx_b = gen_biome_at_safe(biome_gen, world_x0 + 8, world_z0 + 8);
+		/* Gewichtete Listen */
+		FEAT_RNG_INIT(1, 0);
+		int tree_count = 0;
+		if(cx_b == dark_forest) {
+			tree_count = 16;
+		} else if(cx_b == jungle || cx_b == jungle_hills
+		          || cx_b == bamboo_jungle || cx_b == bamboo_jungle_hills) {
+			/* weighted: 9x50 + 1x51 → meist 50 */
+			tree_count = (FEAT_INT(10) == 0) ? 51 : 50;
+		} else if(cx_b == forest || cx_b == wooded_hills) {
+			/* weighted: 9x6 + 1x7 */
+			tree_count = (FEAT_INT(10) == 0) ? 7 : 6;
+		} else if(cx_b == birch_forest || cx_b == birch_forest_hills
+		          || cx_b == tall_birch_forest || cx_b == tall_birch_hills) {
+			tree_count = (FEAT_INT(10) == 0) ? 11 : 10;
+		} else if(cx_b == flower_forest) {
+			tree_count = (FEAT_INT(10) == 0) ? 7 : 6;
+		} else if(cx_b == taiga || cx_b == taiga_hills) {
+			tree_count = (FEAT_INT(10) == 0) ? 11 : 10;
+		} else if(cx_b == giant_tree_taiga || cx_b == giant_tree_taiga_hills
+		          || cx_b == giant_spruce_taiga || cx_b == giant_spruce_taiga_hills) {
+			tree_count = (FEAT_INT(10) == 0) ? 11 : 10;
+		} else if(cx_b == swamp || cx_b == swamp_hills) {
+			tree_count = (FEAT_INT(10) == 0) ? 3 : 2;
+		} else if(cx_b == snowy_tundra || cx_b == snowy_mountains || cx_b == ice_spikes) {
+			tree_count = (FEAT_INT(10) == 0) ? 1 : 0;
+		} else if(cx_b == plains || cx_b == sunflower_plains) {
+			/* 19x0 + 1x1 → seltene Bäume */
+			tree_count = (FEAT_INT(20) == 0) ? 1 : 0;
+		} else if(cx_b == savanna || cx_b == savanna_plateau
+		          || cx_b == shattered_savanna || cx_b == shattered_savanna_plateau) {
+			tree_count = (FEAT_INT(10) == 0) ? 2 : 1;
+		} else if(cx_b == mountains || cx_b == wooded_mountains
+		          || cx_b == gravelly_mountains || cx_b == modified_gravelly_mountains) {
+			tree_count = (FEAT_INT(10) == 0) ? 2 : 1;
+		} else {
+			tree_count = 0;
+		}
+
+		/* 4× mehr Bäume (User-Wunsch: dichtere Bewaldung) */
+		tree_count *= 4;
+
+		for(int t = 0; t < tree_count; t++) {
+			int lx = FEAT_INT(16);
+			int lz = FEAT_INT(16);
+			/* Blätter-Radius 2: Baum muss mindestens 2 Blöcke vom Rand entfernt sein
+			 * damit Blätter vollständig im Chunk bleiben */
+			if(lx < 2 || lx > 13 || lz < 2 || lz > 13) continue;
+			int sy = (int)hh[lx][lz];
+			if(sy < 2 || sy > 120) continue;
+			uint8_t top = sc->ids[S_CHUNK_IDX(lx, sy, lz)];
+			if(top != BLOCK_GRASS && top != BLOCK_DIRT && top != BLOCK_MYCELIUM) continue;
+			if(sc->ids[S_CHUNK_IDX(lx, sy + 1, lz)] != BLOCK_AIR) continue;
+			gen_try_place_tree(sc, lx, lz, sy + 1, (uint32_t)dec_seed,
+			                   world_x0 + lx, world_z0 + lz, cx_b);
+		}
+		/* ── GEFALLENE BÄUME (Feature-Step 1, nach Bäumen) ── */
+		/* forest/taiga haben gelegentlich liegende Baumstämme */
+		{
+			int fallen_biome = cx_b;
+			bool has_fallen = (fallen_biome == forest || fallen_biome == wooded_hills
+			    || fallen_biome == taiga || fallen_biome == taiga_hills
+			    || fallen_biome == giant_tree_taiga || fallen_biome == giant_tree_taiga_hills
+			    || fallen_biome == birch_forest || fallen_biome == birch_forest_hills);
+			if(has_fallen && FEAT_INT(8) == 0) { /* ~12.5% Chance pro Chunk */
+				int lx = 3 + FEAT_INT(10);
+				int lz = 3 + FEAT_INT(10);
+				int sy = (int)hh[lx][lz];
+				if(sy >= 2 && sy < WORLD_HEIGHT - 2
+				   && sc->ids[S_CHUNK_IDX(lx, sy, lz)] == BLOCK_GRASS
+				   && sc->ids[S_CHUNK_IDX(lx, sy + 1, lz)] == BLOCK_AIR) {
+					/* Liegender Stamm: 2-4 Blöcke lang in zufälliger Richtung */
+					int len = 2 + FEAT_INT(3);
+					int dx = 0, dz2 = 0;
+					int dir = FEAT_INT(4);
+					if(dir == 0) dx = 1;
+					else if(dir == 1) dx = -1;
+					else if(dir == 2) dz2 = 1;
+					else dz2 = -1;
+					/* CavEX-Log: kein Rotations-Support, nur Holztyp (0=Eiche,1=Fichte,2=Birke) */
+					uint8_t log_type = (fallen_biome == birch_forest
+					    || fallen_biome == birch_forest_hills) ? 2 :
+					    (fallen_biome == taiga || fallen_biome == taiga_hills
+					    || fallen_biome == giant_tree_taiga || fallen_biome == giant_tree_taiga_hills)
+					    ? 1 : 0;
+					for(int i = 0; i < len; i++) {
+						int nx = lx + dx * i, nz = lz + dz2 * i;
+						if(nx < 0 || nx >= CHUNK_SIZE || nz < 0 || nz >= CHUNK_SIZE) break;
+						uint8_t base = sc->ids[S_CHUNK_IDX(nx, sy, nz)];
+						if(base != BLOCK_GRASS && base != BLOCK_DIRT && base != BLOCK_STONE) break;
+						if(sc->ids[S_CHUNK_IDX(nx, sy + 1, nz)] != BLOCK_AIR) break;
+						gen_set_block_with_meta(sc, nx, sy + 1, nz, BLOCK_LOG, log_type);
+					}
+				}
 			}
-		if(w->generator.finisher_tall_grass
-		   && (biome_id == plains || biome_id == forest || biome_id == flower_forest)
-		   && top == BLOCK_GRASS
-		   && sc->ids[S_CHUNK_IDX(lx, y + 1, lz)] == BLOCK_AIR) {
-			if(deco > gen_args->grass_threshold)
-				gen_set_block_with_meta(sc, lx, y + 1, lz, BLOCK_TALL_GRASS, 1);
-			else if(deco > gen_args->flower_threshold)
-				sc->ids[S_CHUNK_IDX(lx, y + 1, lz)] = BLOCK_FLOWER;
-		}
-		if(w->generator.finisher_tall_grass
-		   && (biome_id == taiga || biome_id == taiga_hills || biome_id == giant_tree_taiga
-		   || biome_id == giant_tree_taiga_hills || biome_id == snowy_taiga
-		   || biome_id == snowy_taiga_hills)
-		   && top == BLOCK_GRASS
-		   && sc->ids[S_CHUNK_IDX(lx, y + 1, lz)] == BLOCK_AIR
-		   && deco > gen_args->flower_threshold) {
-			gen_set_block_with_meta(sc, lx, y + 1, lz, BLOCK_TALL_GRASS, 2);
-		}
-		if((biome_id == desert || biome_id == desert_hills)
-		   && top == BLOCK_SAND
-		   && sc->ids[S_CHUNK_IDX(lx, y + 1, lz)] == BLOCK_AIR
-		   && deco > gen_args->cactus_threshold
-		   && y + 2 < WORLD_HEIGHT) {
-			sc->ids[S_CHUNK_IDX(lx, y + 1, lz)] = BLOCK_CACTUS;
-			if(deco > gen_args->cactus_tall_threshold)
-				sc->ids[S_CHUNK_IDX(lx, y + 2, lz)] = BLOCK_CACTUS;
-		}
-		if((biome_id == desert || biome_id == desert_hills || biome_id == badlands
-		   || biome_id == badlands_plateau || biome_id == wooded_badlands_plateau)
-		   && top == BLOCK_SAND
-		   && sc->ids[S_CHUNK_IDX(lx, y + 1, lz)] == BLOCK_AIR
-		   && deco > gen_args->dead_bush_threshold) {
-			sc->ids[S_CHUNK_IDX(lx, y + 1, lz)] = 32;
-		}
-		if((biome_id == forest || biome_id == roofedForest || biome_id == swamp)
-		   && top == BLOCK_GRASS
-		   && sc->ids[S_CHUNK_IDX(lx, y + 1, lz)] == BLOCK_AIR
-		   && deco > gen_args->lily_threshold) {
-			sc->ids[S_CHUNK_IDX(lx, y + 1, lz)] = (deco > gen_args->reed_tall_threshold)
-				? BLOCK_RED_MUSHROOM : BLOCK_BROWM_MUSHROOM;
-		}
-		if(w->generator.finisher_lilypads
-		   && (biome_id == swamp || biome_id == river)
-		   && y >= gen_args->sea_level - 1 && y <= gen_args->sea_level + 1
-		   && sc->ids[S_CHUNK_IDX(lx, y, lz)] == BLOCK_WATER_STILL
-		   && sc->ids[S_CHUNK_IDX(lx, y + 1, lz)] == BLOCK_AIR
-		   && deco > gen_args->lily_threshold) {
-			sc->ids[S_CHUNK_IDX(lx, y + 1, lz)] = BLOCK_WATERLILY;
-		}
-		if((biome_id == swamp || biome_id == river || biome_id == beach)
-		   && top == BLOCK_GRASS
-		   && sc->ids[S_CHUNK_IDX(lx, y + 1, lz)] == BLOCK_AIR
-		   && (gen_is_water(sc, lx + 1, y, lz) || gen_is_water(sc, lx - 1, y, lz)
-			   || gen_is_water(sc, lx, y, lz + 1) || gen_is_water(sc, lx, y, lz - 1))
-		   && deco > gen_args->reed_threshold && y + 2 < WORLD_HEIGHT) {
-			sc->ids[S_CHUNK_IDX(lx, y + 1, lz)] = BLOCK_REED;
-			if(deco > gen_args->reed_tall_threshold && gen_is_air(sc, lx, y + 2, lz))
-				sc->ids[S_CHUNK_IDX(lx, y + 2, lz)] = BLOCK_REED;
-		}
-		if((biome_id == plains || biome_id == forest) && top == BLOCK_GRASS
-		   && sc->ids[S_CHUNK_IDX(lx, y + 1, lz)] == BLOCK_AIR
-		   && deco > gen_args->pumpkin_threshold) {
-			sc->ids[S_CHUNK_IDX(lx, y + 1, lz)] = BLOCK_PUMPKIN;
-		}
-		if((biome_id == jungle || biome_id == jungle_hills) && top == BLOCK_GRASS
-		   && sc->ids[S_CHUNK_IDX(lx, y + 1, lz)] == BLOCK_AIR
-		   && deco > gen_args->melon_threshold) {
-			sc->ids[S_CHUNK_IDX(lx, y + 1, lz)] = BLOCK_MELON;
-		}
-		if((biome_id == jungle || biome_id == jungle_hills || biome_id == swamp)
-		   && sc->ids[S_CHUNK_IDX(lx, y + 1, lz)] == BLOCK_AIR
-		   && y > gen_args->sea_level - 2 && deco > gen_args->vine_threshold) {
-			bool near_leaf_or_log
-				= (gen_get_block(sc, lx + 1, y + 1, lz) == BLOCK_LEAVES
-				   || gen_get_block(sc, lx - 1, y + 1, lz) == BLOCK_LEAVES
-				   || gen_get_block(sc, lx, y + 1, lz + 1) == BLOCK_LEAVES
-				   || gen_get_block(sc, lx, y + 1, lz - 1) == BLOCK_LEAVES
-				   || gen_get_block(sc, lx + 1, y + 1, lz) == BLOCK_LOG
-				   || gen_get_block(sc, lx - 1, y + 1, lz) == BLOCK_LOG
-				   || gen_get_block(sc, lx, y + 1, lz + 1) == BLOCK_LOG
-				   || gen_get_block(sc, lx, y + 1, lz - 1) == BLOCK_LOG);
-			if(near_leaf_or_log)
-				sc->ids[S_CHUNK_IDX(lx, y + 1, lz)] = BLOCK_VINE;
 		}
 	}
+
+	/* ── GRAS / FARN / BLUMEN (Feature-Step 2, 3) — exaktere MC-Anzahlen ── */
+	if(w->generator.finisher_tall_grass) {
+		int cx_g = gen_biome_at_safe(biome_gen, world_x0 + 8, world_z0 + 8);
+
+		/* Gras: MC hat "count"-Placements mit Noise */
+		int grass_count = 0;
+		if(cx_g == plains || cx_g == sunflower_plains) grass_count = 12;
+		else if(cx_g == forest || cx_g == wooded_hills) grass_count = 8;
+		else if(cx_g == flower_forest) grass_count = 4; /* flower forest hat stattdessen Blumen */
+		else if(cx_g == jungle || cx_g == jungle_hills
+		        || cx_g == bamboo_jungle || cx_g == bamboo_jungle_hills) grass_count = 25; /* Dschungel hat viel */
+		else if(cx_g == taiga || cx_g == taiga_hills) grass_count = 7;
+		else if(cx_g == swamp || cx_g == swamp_hills) grass_count = 12;
+		else if(cx_g == birch_forest || cx_g == birch_forest_hills) grass_count = 8;
+		else if(cx_g == dark_forest) grass_count = 8;
+		else if(cx_g == savanna || cx_g == savanna_plateau) grass_count = 10;
+		else grass_count = 3; /* Default für andere Biome */
+
+		FEAT_RNG_INIT(2, 0);
+		for(int t = 0; t < grass_count; t++) {
+			int lx = FEAT_INT(16);
+			int lz = FEAT_INT(16);
+			int sy = (int)hh[lx][lz];
+			if(sy < 1 || sy + 1 >= WORLD_HEIGHT) continue;
+			if(sc->ids[S_CHUNK_IDX(lx, sy, lz)] != BLOCK_GRASS) continue;
+			if(sc->ids[S_CHUNK_IDX(lx, sy + 1, lz)] != BLOCK_AIR) continue;
+			int bm = gen_biome_at_safe(biome_gen, world_x0 + lx, world_z0 + lz);
+			/* Taiga: Farn, sonst Gras */
+			if(bm == taiga || bm == taiga_hills || bm == giant_tree_taiga
+			   || bm == giant_tree_taiga_hills || bm == giant_spruce_taiga
+			   || bm == giant_spruce_taiga_hills)
+				gen_set_block_with_meta(sc, lx, sy + 1, lz, BLOCK_TALL_GRASS, 2); /* fern */
+			else
+				gen_set_block_with_meta(sc, lx, sy + 1, lz, BLOCK_TALL_GRASS, 1); /* grass */
+		}
+
+		/* Blumen (Feature-Step 3) */
+		{
+			int flower_count = 0;
+			if(cx_g == flower_forest) flower_count = 10; /* war 100 */
+			else if(cx_g == plains || cx_g == sunflower_plains) flower_count = 3; /* war 4 */
+			else flower_count = 1; /* war 2 */
+
+			FEAT_RNG_INIT(3, 0);
+			for(int t = 0; t < flower_count; t++) {
+				int lx = FEAT_INT(16);
+				int lz = FEAT_INT(16);
+				int sy = (int)hh[lx][lz];
+				if(sy < 1 || sy + 1 >= WORLD_HEIGHT) continue;
+				if(sc->ids[S_CHUNK_IDX(lx, sy, lz)] != BLOCK_GRASS) continue;
+				if(sc->ids[S_CHUNK_IDX(lx, sy + 1, lz)] != BLOCK_AIR) continue;
+				int r = FEAT_INT(2);
+				sc->ids[S_CHUNK_IDX(lx, sy + 1, lz)] = r ? BLOCK_FLOWER : BLOCK_ROSE;
+			}
+		}
+	}
+
+	/* ── KAKTEEN (Feature-Step 5) ── */
+	{
+		int center_biome3 = gen_biome_at_safe(biome_gen,
+		                                      world_x0 + CHUNK_SIZE / 2,
+		                                      world_z0 + CHUNK_SIZE / 2);
+		int cact_tries = (center_biome3 == desert || center_biome3 == desert_hills
+		                  || center_biome3 == desert_lakes) ? 3 : 0;
+		FEAT_RNG_INIT(5, 0);
+		for(int t = 0; t < cact_tries; t++) {
+			int lx = FEAT_INT(16);
+			int lz = FEAT_INT(16);
+			int sy = (int)hh[lx][lz];
+			if(sy < 1 || sy + 2 >= WORLD_HEIGHT) continue;
+			if(sc->ids[S_CHUNK_IDX(lx, sy, lz)] != BLOCK_SAND) continue;
+			if(sc->ids[S_CHUNK_IDX(lx, sy + 1, lz)] != BLOCK_AIR) continue;
+			/* Kaktus nur wenn keine direkten Nachbarn */
+			if(lx > 0  && sc->ids[S_CHUNK_IDX(lx - 1, sy + 1, lz)] != BLOCK_AIR) continue;
+			if(lx < 15 && sc->ids[S_CHUNK_IDX(lx + 1, sy + 1, lz)] != BLOCK_AIR) continue;
+			if(lz > 0  && sc->ids[S_CHUNK_IDX(lx, sy + 1, lz - 1)] != BLOCK_AIR) continue;
+			if(lz < 15 && sc->ids[S_CHUNK_IDX(lx, sy + 1, lz + 1)] != BLOCK_AIR) continue;
+			int h = FEAT_INT(3) + 1; /* 1..3 hoch */
+			for(int i = 0; i < h && sy + 1 + i < WORLD_HEIGHT - 1; i++)
+				sc->ids[S_CHUNK_IDX(lx, sy + 1 + i, lz)] = BLOCK_CACTUS;
+		}
+	}
+
+	/* ── SCHILF (Feature-Step 6) ── */
+	{
+		int center_biome4 = gen_biome_at_safe(biome_gen,
+		                                      world_x0 + CHUNK_SIZE / 2,
+		                                      world_z0 + CHUNK_SIZE / 2);
+		int reed_tries = (center_biome4 == swamp || center_biome4 == river
+		                  || center_biome4 == beach
+		                  || center_biome4 == frozen_river) ? 20 : 0;
+		FEAT_RNG_INIT(6, 0);
+		for(int t = 0; t < reed_tries; t++) {
+			int lx = FEAT_INT(16);
+			int lz = FEAT_INT(16);
+			int sy = (int)hh[lx][lz];
+			if(sy < 1 || sy + 2 >= WORLD_HEIGHT) continue;
+			uint8_t top = sc->ids[S_CHUNK_IDX(lx, sy, lz)];
+			if(top != BLOCK_GRASS && top != BLOCK_DIRT && top != BLOCK_SAND) continue;
+			if(sc->ids[S_CHUNK_IDX(lx, sy + 1, lz)] != BLOCK_AIR) continue;
+			bool near_water =
+				(lx > 0  && gen_is_water(sc, lx - 1, sy, lz))
+				|| (lx < 15 && gen_is_water(sc, lx + 1, sy, lz))
+				|| (lz > 0  && gen_is_water(sc, lx, sy, lz - 1))
+				|| (lz < 15 && gen_is_water(sc, lx, sy, lz + 1));
+			if(!near_water) continue;
+			int h = FEAT_INT(2) + 2; /* 2..3 hoch */
+			for(int i = 0; i < h && sy + 1 + i < WORLD_HEIGHT - 1; i++)
+				sc->ids[S_CHUNK_IDX(lx, sy + 1 + i, lz)] = BLOCK_REED;
+		}
+	}
+
+	/* ── TOTER BUSCH (Feature-Step 7, Wüste/Badlands) ── */
+	{
+		int center_biome6 = gen_biome_at_safe(biome_gen,
+		                                      world_x0 + CHUNK_SIZE / 2,
+		                                      world_z0 + CHUNK_SIZE / 2);
+		bool is_desert = (center_biome6 == desert || center_biome6 == desert_hills
+		                  || center_biome6 == badlands || center_biome6 == badlands_plateau
+		                  || center_biome6 == wooded_badlands_plateau);
+		int bush_tries = is_desert ? 4 : 0;
+		FEAT_RNG_INIT(7, 0);
+		for(int t = 0; t < bush_tries; t++) {
+			int lx = FEAT_INT(16);
+			int lz = FEAT_INT(16);
+			int sy = (int)hh[lx][lz];
+			if(sy < 1 || sy + 1 >= WORLD_HEIGHT) continue;
+			if(sc->ids[S_CHUNK_IDX(lx, sy, lz)] != BLOCK_SAND) continue;
+			if(sc->ids[S_CHUNK_IDX(lx, sy + 1, lz)] != BLOCK_AIR) continue;
+			sc->ids[S_CHUNK_IDX(lx, sy + 1, lz)] = 32; /* dead bush */
+		}
+	}
+
+	/* ── SEEROSEN (Feature-Step 8, Sumpf) ── */
+	if(w->generator.finisher_lilypads) {
+		int center_biome7 = gen_biome_at_safe(biome_gen,
+		                                      world_x0 + CHUNK_SIZE / 2,
+		                                      world_z0 + CHUNK_SIZE / 2);
+		int lily_tries = (center_biome7 == swamp || center_biome7 == mangrove_swamp)
+		                 ? 8 : 0;
+		FEAT_RNG_INIT(8, 0);
+		for(int t = 0; t < lily_tries; t++) {
+			int lx = FEAT_INT(16);
+			int lz = FEAT_INT(16);
+			int sy = (int)hh[lx][lz];
+			if(sy < 1 || sy + 1 >= WORLD_HEIGHT) continue;
+			if(sc->ids[S_CHUNK_IDX(lx, sy, lz)] != BLOCK_WATER_STILL) continue;
+			if(sc->ids[S_CHUNK_IDX(lx, sy + 1, lz)] != BLOCK_AIR) continue;
+			sc->ids[S_CHUNK_IDX(lx, sy + 1, lz)] = BLOCK_WATERLILY;
+		}
+	}
+
+	/* ── PILZE auf Myzel (Feature-Step 9) ── */
+	{
+		int center_biome8 = gen_biome_at_safe(biome_gen,
+		                                      world_x0 + CHUNK_SIZE / 2,
+		                                      world_z0 + CHUNK_SIZE / 2);
+		int mush_tries = (center_biome8 == mushroom_fields
+		                  || center_biome8 == mushroom_field_shore) ? 8 : 0;
+		FEAT_RNG_INIT(9, 0);
+		for(int t = 0; t < mush_tries; t++) {
+			int lx = FEAT_INT(16);
+			int lz = FEAT_INT(16);
+			int sy = (int)hh[lx][lz];
+			if(sy < 1 || sy + 1 >= WORLD_HEIGHT) continue;
+			if(sc->ids[S_CHUNK_IDX(lx, sy, lz)] != BLOCK_MYCELIUM) continue;
+			if(sc->ids[S_CHUNK_IDX(lx, sy + 1, lz)] != BLOCK_AIR) continue;
+			sc->ids[S_CHUNK_IDX(lx, sy + 1, lz)] = (FEAT_INT(2) == 0)
+				? BLOCK_RED_MUSHROOM : BLOCK_BROWM_MUSHROOM;
+		}
+	}
+
+	/* ── KÜRBISSE (Feature-Step 10) ── */
+	{
+		FEAT_RNG_INIT(10, 0);
+		int cx_p = gen_biome_at_safe(biome_gen, world_x0 + 8, world_z0 + 8);
+		int pumpkin_tries = (cx_p == plains || cx_p == forest
+		                     || cx_p == sunflower_plains) ? 1 : 0;
+		if(FEAT_INT(32) == 0 && pumpkin_tries > 0) {
+			int lx = FEAT_INT(16);
+			int lz = FEAT_INT(16);
+			int sy = (int)hh[lx][lz];
+			if(sy >= 1 && sy + 1 < WORLD_HEIGHT
+			   && sc->ids[S_CHUNK_IDX(lx, sy, lz)] == BLOCK_GRASS
+			   && sc->ids[S_CHUNK_IDX(lx, sy + 1, lz)] == BLOCK_AIR)
+				gen_set_block(sc, lx, sy + 1, lz, BLOCK_PUMPKIN);
+		}
+	}
+
+	/* ── MELONEN (Feature-Step 11) ── */
+	{
+		FEAT_RNG_INIT(11, 0);
+		int cx_m = gen_biome_at_safe(biome_gen, world_x0 + 8, world_z0 + 8);
+		if(cx_m == jungle || cx_m == jungle_hills || cx_m == jungle_edge
+		   || cx_m == bamboo_jungle || cx_m == bamboo_jungle_hills) {
+			if(FEAT_INT(4) == 0) {
+				int lx = FEAT_INT(16);
+				int lz = FEAT_INT(16);
+				int sy = (int)hh[lx][lz];
+				if(sy >= 1 && sy + 1 < WORLD_HEIGHT
+				   && sc->ids[S_CHUNK_IDX(lx, sy, lz)] == BLOCK_GRASS
+				   && sc->ids[S_CHUNK_IDX(lx, sy + 1, lz)] == BLOCK_AIR)
+					gen_set_block(sc, lx, sy + 1, lz, BLOCK_MELON);
+			}
+		}
+	}
+
+#undef FEAT_RNG_INIT
+#undef FEAT_INT
 }
 
 static bool gen_finalize_chunk_step(struct server_world* w, struct server_chunk* sc,
@@ -4436,6 +7667,11 @@ static bool gen_finalize_chunk_step(struct server_world* w, struct server_chunk*
 		gen_propagate_lighting(sc, w->dimension == WORLD_DIM_NETHER);
 		dict_server_chunks_set_at(w->chunks, S_CHUNK_ID(x, z), *sc);
 		*out = dict_server_chunks_get(w->chunks, S_CHUNK_ID(x, z));
+		if(*out != NULL) {
+			/* Jeder frisch generierte Chunk wird auf Disk gespeichert, damit er
+			 * beim Wiederbetreten geladen statt (teuer) neu generiert wird. */
+			(*out)->needs_save = true;
+		}
 		return *out != NULL;
 	default:
 		return false;
@@ -4572,9 +7808,21 @@ static Generator g_biome_gen;
 static bool g_biome_gen_ready = false;
 static int64_t g_biome_gen_seed = 0;
 
+static wgen_gen_t* g_wgen_gen      = NULL;
+static int64_t     g_wgen_gen_seed = 0;
+
+static wgen_gen_t* server_world_wgen_gen(struct server_world* w) {
+	if(!g_wgen_gen || g_wgen_gen_seed != w->world_seed) {
+		if(g_wgen_gen) wgen_gen_destroy(g_wgen_gen);
+		g_wgen_gen = wgen_gen_create(w->world_seed);
+		g_wgen_gen_seed = w->world_seed;
+	}
+	return g_wgen_gen;
+}
+
 static Generator* server_world_biome_gen(struct server_world* w) {
 	if(!g_biome_gen_ready || g_biome_gen_seed != w->world_seed) {
-		setupGenerator(&g_biome_gen, MC_1_7, 0);
+		setupGenerator(&g_biome_gen, MC_1_21, 0);
 		applySeed(&g_biome_gen, DIM_OVERWORLD, (uint64_t)w->world_seed);
 		g_biome_gen_seed = w->world_seed;
 		g_biome_gen_ready = true;
@@ -5315,11 +8563,13 @@ void server_world_save_chunk_obj(struct server_world* w, bool erase,
 								 struct server_chunk* c) {
 	assert(w && c);
 
-	/* Nur echte Spieleraenderungen brauchen einen Disk-Save. Rein generierte
-	 * oder von Disk geladene (unveraenderte) Chunks regenerieren identisch aus
-	 * dem Seed -> beim Entladen einfach verwerfen, KEIN malloc/Save noetig.
-	 * Das bricht den OOM-Deadlock: Speichern braucht Speicher, den es bei
-	 * vollem RAM nicht gibt, sonst blieben alle Chunks fuer immer geladen. */
+	/* Chunks mit needs_save werden beim Entladen auf Disk geschrieben:
+	 * - frisch generierte Chunks (needs_save beim Generieren gesetzt)
+	 * - vom Spieler geaenderte Chunks
+	 * So wird ein Chunk beim Wiederbetreten von Disk geladen statt teuer
+	 * neu generiert. Der Save ist best-effort: schlaegt er unter Speicher-
+	 * druck fehl, wird der Chunk trotzdem verworfen (siehe erase unten) -
+	 * das verhindert den OOM-Deadlock. */
 	if(c->needs_save) {
 		// load region archive into cache
 		struct region_archive tmp;
