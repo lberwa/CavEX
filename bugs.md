@@ -28,6 +28,8 @@
 * Blocks don't rotate when placed from a different side:
   - ~~Chests~~
   - Trapdoor
+  - Log
+  - stairs (top/bottom)
 
 * Chests can't combine into a double chest.
 
@@ -55,6 +57,7 @@
   - pumpkin stem
   - melon stem
   - vine
+  - crops
 
 * save settings in config.json
 
@@ -168,6 +171,11 @@
 
 * scroll with the mouse wheel
 
+* 2d problem:            ![./docs/bug1.png](./docs/bug1.png) ![./docs/bug2.png](./docs/bug2.png)
+
+
+
+
 
 * diff metadata:
   - torch
@@ -205,7 +213,6 @@
   - fishing_hook = uint8=255 !!
   - armor
   - collor/dye
-
 
 
 

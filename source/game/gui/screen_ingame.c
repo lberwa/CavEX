@@ -815,11 +815,12 @@ static void screen_ingame_render2D(struct screen* s, int width, int height) {
 	if(gstate.settings.debug) {
 		int sc = GFX_GUI_SCALE;
 		char gstr[64];
-		if(gstate.gen_debug.active)
+		if(gstate.gen_debug.active) {
 			snprintf(gstr, sizeof(gstr), "gen %d%% (%d, %d)  built %lu",
 					 gstate.gen_debug.percent, gstate.gen_debug.chunk_x,
 					 gstate.gen_debug.chunk_z, gstate.gen_debug.built);
-		else
+			//printf(gstr); printf("\n");
+		} else
 			snprintf(gstr, sizeof(gstr), "gen idle  built %lu",
 					 gstate.gen_debug.built);
 

@@ -38,8 +38,9 @@
 
 /* edited in place; the on-screen keyboard writes the result back here */
 static char world_name[64] = "New World";
+static char world_seed_str[32] = "";
 
-/* 0 = name field selected, 1 = "Generate" button selected */
+/* 0 = Name, 1 = Seed, 2 = Generate-Button */
 static int gui_sel;
 
 /* name field rect (must match render) */
@@ -49,7 +50,38 @@ static void name_box_rect(int width, int height, int* x, int* y, int* w,
 	*w = 220 * scale;
 	*h = 20 * scale;
 	*x = (width - *w) / 2;
-	*y = height / 2 - *h / 2;
+	*y = height / 2 - 40 * scale;
+}
+
+/* seed field rect — direkt unter dem Namensfeld */
+static void seed_box_rect(int width, int height, int* x, int* y, int* w,
+						   int* h) {
+	int scale = GFX_GUI_SCALE;
+	*w = 220 * scale;
+	*h = 20 * scale;
+	*x = (width - *w) / 2;
+	int nx, ny, nw, nh;
+	name_box_rect(width, height, &nx, &ny, &nw, &nh);
+	*y = ny + nh + 6 * scale;
+}
+
+/* Seed-String → int64:
+ * - Leer: 0 (Server leitet Seed aus Weltname ab)
+ * - Gültige Zahl: direkt als int64
+ * - Text: String-Hash */
+static int64_t parse_seed(const char* s) {
+	if(!s || s[0] == '\0')
+		return 0;
+	/* Versuche als Zahl zu parsen */
+	char* end;
+	int64_t val = (int64_t)strtoll(s, &end, 10);
+	if(*end == '\0')
+		return val; /* gültige Zahl */
+	/* Sonst: String-Hash */
+	int64_t hash = 0;
+	for(const unsigned char* p = (const unsigned char*)s; *p; p++)
+		hash = 31LL * hash + (int64_t)*p;
+	return hash;
 }
 
 /* turn a display name into a safe folder name (in place) */
@@ -222,8 +254,8 @@ static void new_world_generate(void) {
 	unique_folder(worlds, folder, chosen, sizeof(chosen));
 
 	char path[512];
-	/* seed 0 -> the server derives it from the world name on load */
-	if(!world_create_level_dat(chosen, world_name, 0, path, sizeof(path)))
+	int64_t seed = parse_seed(world_seed_str);
+	if(!world_create_level_dat(chosen, world_name, seed, path, sizeof(path)))
 		return;
 
 	struct server_rpc rpc = {0};
@@ -245,6 +277,7 @@ void screen_new_world_reset(struct screen* s, int width, int height) {
 	input_pointer_enable(true);
 	gstate_set_capture_input_all(false);
 	gui_sel = 0;
+	/* world_seed_str bleibt erhalten — wird vom Keyboard direkt beschrieben */
 }
 
 void screen_new_world_update(struct screen* s, float dt) {
@@ -261,7 +294,7 @@ void screen_new_world_update(struct screen* s, float dt) {
 		gui_sel--;
 		sound_play(pcm_click);
 	}
-	if(input_pressed(IB_GUI_DOWN, 0) && gui_sel < 1) {
+	if(input_pressed(IB_GUI_DOWN, 0) && gui_sel < 2) {
 		gui_sel++;
 		sound_play(pcm_click);
 	}
@@ -269,10 +302,11 @@ void screen_new_world_update(struct screen* s, float dt) {
 	if(input_pressed(IB_GUI_CLICK, 0)) {
 		sound_play(pcm_click);
 		if(gui_sel == 0) {
-			/* edit the name with the on-screen keyboard; it returns here and
-			 * overwrites world_name */
 			screen_keyboard_open(world_name, sizeof(world_name),
 								 "Enter world name", &screen_new_world);
+		} else if(gui_sel == 1) {
+			screen_keyboard_open(world_seed_str, sizeof(world_seed_str),
+								 "Enter seed (number or text)", &screen_new_world);
 		} else {
 			new_world_generate();
 		}
@@ -292,18 +326,30 @@ void screen_new_world_render2d(struct screen* s, int width, int height) {
 	int box_x, box_y, box_w, box_h;
 	name_box_rect(width, height, &box_x, &box_y, &box_w, &box_h);
 
-	/* name field (bright when selected) */
-	gfx_bind_texture(&texture_gui2);
-	gutil_texquad(box_x, box_y, 0, gui_sel == 0 ? 62 : 42, 200, 20, box_w,
-				  box_h);
-	gutil_text(box_x + 4 * scale, box_y + (box_h - font) / 2, world_name, font,
-			   true);
+	/* Label "World Name" */
+	gutil_text(box_x, box_y - font - 2 * scale, "World Name", font, true);
 
-	/* "Generate" button below */
-	int gen_y = box_y + box_h + 10 * scale;
+	/* Name field */
 	gfx_bind_texture(&texture_gui2);
-	gutil_texquad(box_x, gen_y, 0, gui_sel == 1 ? 62 : 42, 200, 20, box_w,
-				  box_h);
+	gutil_texquad(box_x, box_y, 0, gui_sel == 0 ? 62 : 42, 200, 20, box_w, box_h);
+	gutil_text(box_x + 4 * scale, box_y + (box_h - font) / 2, world_name, font, true);
+
+	/* Seed field */
+	int sx, sy, sw, sh;
+	seed_box_rect(width, height, &sx, &sy, &sw, &sh);
+
+	gutil_text(sx, sy - font - 2 * scale, "Seed (leer = zufaellig)", font, true);
+
+	gfx_bind_texture(&texture_gui2);
+	gutil_texquad(sx, sy, 0, gui_sel == 1 ? 62 : 42, 200, 20, sw, sh);
+	/* Zeige Seed-String oder Platzhalter */
+	const char* seed_display = world_seed_str[0] ? world_seed_str : "(zufaellig)";
+	gutil_text(sx + 4 * scale, sy + (sh - font) / 2, seed_display, font, true);
+
+	/* "Generate" button */
+	int gen_y = sy + sh + 10 * scale;
+	gfx_bind_texture(&texture_gui2);
+	gutil_texquad(box_x, gen_y, 0, gui_sel == 2 ? 62 : 42, 200, 20, box_w, box_h);
 	gutil_text((width - gutil_font_width("Generate", font)) / 2,
 			   gen_y + (box_h - font) / 2, "Generate", font, true);
 }
