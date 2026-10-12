@@ -2786,6 +2786,10 @@ unload_done:
 			.payload.chunk.dimension = WORLD_DIM_OVERWORLD,
 			});
 
+			/* Instabiles Wasser des Chunks wecken → fliesst im Hintergrund
+			 * ueber das echte onWorldTick-System (begrenzt pro Tick, kein Lag). */
+			server_world_wake_chunk_water(s, sc, cand_x, cand_z);
+
 			loaded_this_tick++;
 		} else if(server_world_pending_chunk(&s->worlds[0], NULL, NULL)) {
 			/* Generierung läuft noch (mehrstufig) → Puffer zurückgeben */

@@ -240,6 +240,8 @@ bool server_world_pending_chunk(struct server_world* w, w_coord_t* x,
 								w_coord_t* z);
 bool server_world_load_chunk(struct server_world* w, w_coord_t x, w_coord_t z,
 							 struct server_chunk** sc);
+void server_world_wake_chunk_water(struct server_local* s, struct server_chunk* sc,
+								   w_coord_t cx, w_coord_t cz);
 void server_world_save_chunk(struct server_world* w, bool erase, w_coord_t x,
 							 w_coord_t z);
 void server_world_save_chunk_obj(struct server_world* w, bool erase,

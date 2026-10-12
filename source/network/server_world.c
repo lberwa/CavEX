@@ -1561,59 +1561,87 @@ static void gen_carve_cave_entrance_to_worm(struct server_chunk* sc, uint32_t se
 		int depth = surface - cave_y;
 		float radius = 1.7f; /* Tunnel-Dicke */
 
-		/* Spiralförmiger, flach abfallender Abstieg (statt gerader Schacht).
-		 * Mittelpunkt driftet und Drehrichtung wechselt gelegentlich → es
-		 * entstehen organische Formen (Kreis, Acht, Doppelschleife, ...). */
+		/* "Turtle"-Abstieg: der Pfad bewegt sich pro Schritt konstant vorwaerts
+		 * und dreht dabei sanft. Die Drehrate oszilliert (cos) und geht durch
+		 * Null -> am Nulldurchgang laeuft der Pfad gerade, dann dreht er
+		 * andersherum: fluessiger Links-Rechts-Uebergang ohne Knick, der Anfang
+		 * der Linkskurve schliesst nahtlos an das Ende der Rechtskurve an. */
 		uint32_t h2 = gen_hash3i(chunk_x, 211 + attempt, chunk_z,
 		                         seed ^ (0xB1A5000U + (uint32_t)attempt * 71U));
-		float spiral_r = 3.0f + (float)(h2 % 600) / 100.0f; /* 3..9, ~6 im Mittel */
-		float angle = (float)(h % 628) / 100.0f;            /* Startwinkel */
-		int   dir = (h2 & 1u) ? 1 : -1;                     /* Drehrichtung */
-		int   flip_period = 10 + (int)((h2 >> 4) % 14u);    /* nach 10..23 Schritten wenden */
-		float cxf = (float)lx, czf = (float)lz;             /* wandernder Mittelpunkt */
-		float y_step = 0.4f;    /* flacher Abstieg: 0.4 Blöcke pro Schritt */
-		int steps = (int)((float)depth / y_step) + 6;
+		float heading   = (float)(h % 628) / 100.0f;             /* Start-Richtung */
+		float turn_amp  = 0.22f + (float)(h2 % 25) / 100.0f;     /* 0.22..0.47 Dreh-Amplitude */
+		float turn_freq = 0.14f + (float)((h2 >> 5) % 14) / 100.0f; /* Wende-Frequenz */
+		int   turn_dir  = (h2 & 1u) ? 1 : -1;
+		float steep_ph  = (float)((h2 >> 9) % 628) / 100.0f;     /* Phase der Steilheits-Variation */
+
+		float px = (float)lx, pz = (float)lz;
 		float cur_y = (float)(surface + 1);
+		int max_steps = depth * 4 + 24;
 
-		for(int s = 0; s < steps; s++) {
-			/* Radius pulsiert für natürliche Form (bleibt in 3..9) */
-			float sr = spiral_r + sinf((float)s * 0.18f) * 1.5f;
-			if(sr < 3.0f) sr = 3.0f;
-			if(sr > 9.0f) sr = 9.0f;
+		/* Helfer-Makro: Kugel bei (cx,cy,cz) mit Tunnel-Radius carven */
+#define WGEN_CARVE_SPHERE(CXI, CYI, CZI) do { \
+			int _ir = (int)(radius) + 1; \
+			for(int _dy = -_ir; _dy <= _ir; _dy++) \
+				for(int _dx = -_ir; _dx <= _ir; _dx++) \
+					for(int _dz = -_ir; _dz <= _ir; _dz++) { \
+						if((float)(_dx*_dx + _dy*_dy + _dz*_dz) > radius*radius + 0.5f) continue; \
+						int _nx = (CXI)+_dx, _ny = (CYI)+_dy, _nz = (CZI)+_dz; \
+						if(_nx<0||_nx>=CHUNK_SIZE||_nz<0||_nz>=CHUNK_SIZE) continue; \
+						if(_ny<1||_ny>=WORLD_HEIGHT) continue; \
+						uint8_t _b = gen_get_block(sc, _nx, _ny, _nz); \
+						if(_b!=BLOCK_BEDROCK && _b!=BLOCK_WATER_STILL && _b!=BLOCK_WATER_FLOW) \
+							gen_set_block(sc, _nx, _ny, _nz, BLOCK_AIR); \
+					} \
+		} while(0)
 
-			float px = cxf + cosf(angle) * sr;
-			float pz = czf + sinf(angle) * sr;
+		for(int s = 0; s < max_steps && cur_y > (float)cave_y; s++) {
+			WGEN_CARVE_SPHERE((int)(px + 0.5f), (int)(cur_y + 0.5f), (int)(pz + 0.5f));
 
-			int cxi = (int)(px + 0.5f);
-			int czi = (int)(pz + 0.5f);
-			int cyi = (int)(cur_y + 0.5f);
+			/* Heading sanft drehen (oszillierend → glatter Links/Rechts-Wechsel) */
+			float omega = (float)turn_dir * turn_amp * cosf((float)s * turn_freq);
+			heading += omega;
 
-			int ir = (int)(radius) + 1;
-			for(int dy = -ir; dy <= ir; dy++)
-				for(int dx = -ir; dx <= ir; dx++)
-					for(int dz = -ir; dz <= ir; dz++) {
-						if((float)(dx*dx + dy*dy + dz*dz) > radius * radius + 0.5f) continue;
-						int nx = cxi + dx, ny = cyi + dy, nz = czi + dz;
-						if(nx < 0 || nx >= CHUNK_SIZE || nz < 0 || nz >= CHUNK_SIZE) continue;
-						if(ny < 1 || ny >= WORLD_HEIGHT) continue;
-						uint8_t b = gen_get_block(sc, nx, ny, nz);
-						if(b != BLOCK_BEDROCK && b != BLOCK_WATER_STILL
-						   && b != BLOCK_WATER_FLOW)
-							gen_set_block(sc, nx, ny, nz, BLOCK_AIR);
-					}
+			/* horizontaler Schritt (konstant vorwaerts) */
+			px += cosf(heading);
+			pz += sinf(heading);
 
-			angle += (float)dir * 0.40f;  /* Drehung pro Schritt */
-			cur_y -= y_step;              /* Abstieg */
-
-			/* Richtungswechsel → Acht/Doppelschleife. Mittelpunkt an die
-			 * aktuelle Position legen, damit die neue Schleife anschließt. */
-			if(s > 0 && (s % flip_period) == 0) {
-				dir = -dir;
-				cxf = px - cosf(angle) * sr;
-				czf = pz - sinf(angle) * sr;
+			/* Je naeher am Hoehlen-Ziel, desto staerker zurueck zur gefundenen
+			 * Hoehlen-Position (lx,lz) lenken, damit der Eingang GARANTIERT dort
+			 * endet und ins Tunnelsystem muendet (nicht im Stein endet). */
+			float depth_remaining = cur_y - (float)cave_y;
+			float to_cx = (float)lx - px, to_cz = (float)lz - pz;
+			float dist2_c = to_cx*to_cx + to_cz*to_cz;
+			if(depth_remaining < 12.0f && dist2_c > 1.0f) {
+				/* direkt Richtung Ziel schreiten (Winkel-sicher, kein atan2-Wrap) */
+				float inv = 1.0f / sqrtf(dist2_c);
+				px += to_cx * inv * 0.6f;
+				pz += to_cz * inv * 0.6f;
+				heading = atan2f(to_cz, to_cx);
+			} else if(dist2_c > 49.0f) {
+				/* zu weit abgedriftet → sanft zurueck */
+				px += to_cx / sqrtf(dist2_c) * 0.3f;
+				pz += to_cz / sqrtf(dist2_c) * 0.3f;
 			}
-			if(cur_y <= (float)cave_y) break;
+
+			/* Steilheit: oben sehr steil (~1 vor, 1 runter = 45°+), unten
+			 * flacher und hin und wieder steiler/flacher (sinus-moduliert) */
+			float depth_done = (float)(surface + 1) - cur_y;
+			float y_step;
+			if(depth_done < 5.0f) {
+				y_step = 1.3f;           /* steiler Einstieg an der Oberflaeche */
+			} else {
+				y_step = 0.55f + 0.55f * (0.5f + 0.5f * sinf((float)s * 0.22f + steep_ph));
+				/* → ca. 0.55..1.1: meist flach, hin und wieder steiler */
+			}
+			cur_y -= y_step;
 		}
+
+		/* Sicherheits-Verbindung: vom Turtle-Ende gerade hinunter zur Hoehle
+		 * graben, bis echte Hoehlen-Luft getroffen ist (garantierte Mündung). */
+		for(int vy = (int)(cur_y + 0.5f) + 2; vy >= cave_y - 1 && vy >= 1; vy--) {
+			WGEN_CARVE_SPHERE(lx, vy, lz);
+		}
+#undef WGEN_CARVE_SPHERE
 		return; /* ein Eingang pro Chunk reicht */
 	}
 }
@@ -2568,16 +2596,6 @@ static void gen_set_nibble(uint8_t* data, size_t idx, uint8_t value) {
 
 static uint8_t gen_get_nibble(const uint8_t* data, size_t idx) {
 	return nibble_read(data, idx);
-}
-
-static void gen_set_ore_if_stone(struct server_chunk* sc, int x, int y, int z,
-								 uint8_t ore, uint32_t seed, float threshold) {
-	size_t idx = S_CHUNK_IDX(x, y, z);
-	if(sc->ids[idx] != BLOCK_STONE)
-		return;
-	float n = gen_rand01_from_hash(gen_hash3i(x, y, z, seed));
-	if(n > threshold)
-		sc->ids[idx] = ore;
 }
 
 static bool gen_inside_chunk(int x, int y, int z) {
@@ -6177,51 +6195,12 @@ static bool gen_is_local_fluid(uint8_t block) {
 		|| block == BLOCK_LAVA_STILL || block == BLOCK_LAVA_FLOW;
 }
 
-static void gen_try_spread_fluid_from(struct server_chunk* sc, int x, int y, int z,
-									  uint8_t source, uint8_t flowing) {
-	if(!gen_inside_chunk(x, y, z))
-		return;
-	if(gen_get_block(sc, x, y, z) != source && gen_get_block(sc, x, y, z) != flowing)
-		return;
-
-	if(gen_inside_chunk(x, y - 1, z) && gen_get_block(sc, x, y - 1, z) == BLOCK_AIR) {
-		gen_set_block(sc, x, y - 1, z, flowing);
-		return;
-	}
-
-	static const int dx[4] = {1, -1, 0, 0};
-	static const int dz[4] = {0, 0, 1, -1};
-	for(int i = 0; i < 4; i++) {
-		int nx = x + dx[i];
-		int nz = z + dz[i];
-		if(!gen_inside_chunk(nx, y, nz))
-			continue;
-		if(gen_get_block(sc, nx, y, nz) == BLOCK_AIR
-		   && gen_inside_chunk(nx, y - 1, nz)
-		   && gen_is_opaque(gen_get_block(sc, nx, y - 1, nz))) {
-			gen_set_block(sc, nx, y, nz, flowing);
-		}
-	}
-}
-
+/* Wasser-Fluss wird nach dem Laden über das echte onWorldTick-System
+ * angestossen (server_local weckt die Wasserzellen des Chunks), nicht beim
+ * Generieren simuliert. Siehe server_local_settle_chunk_water(). */
 static void gen_presimulate_fluids_local(struct server_chunk* sc,
 										 bool enable_water, bool enable_lava) {
-	if(sc == NULL || (!enable_water && !enable_lava))
-		return;
-
-	for(int pass = 0; pass < 6; pass++) {
-		for(int y = 1; y < WORLD_HEIGHT - 1; y++) {
-			for(int lx = 1; lx < CHUNK_SIZE - 1; lx++) {
-				for(int lz = 1; lz < CHUNK_SIZE - 1; lz++) {
-					uint8_t block = gen_get_block(sc, lx, y, lz);
-					if(enable_water && (block == BLOCK_WATER_STILL || block == BLOCK_WATER_FLOW))
-						gen_try_spread_fluid_from(sc, lx, y, lz, BLOCK_WATER_STILL, BLOCK_WATER_FLOW);
-					if(enable_lava && (block == BLOCK_LAVA_STILL || block == BLOCK_LAVA_FLOW))
-						gen_try_spread_fluid_from(sc, lx, y, lz, BLOCK_LAVA_STILL, BLOCK_LAVA_FLOW);
-				}
-			}
-		}
-	}
+	(void)sc; (void)enable_water; (void)enable_lava;
 }
 
 static void gen_place_lava_sources(struct server_chunk* sc, uint32_t seed,
@@ -6382,6 +6361,88 @@ static bool gen_is_ore_block(uint8_t block) {
 		|| (block == BLOCK_DIAMOND_ORE)
 		|| (block == BLOCK_LAPIS_ORE)
 		|| (block == BLOCK_EMERALD_ORE);
+}
+
+static int gen_mc_feat_int(uint64_t* s, int n); /* forward decl */
+
+/* Platziert eine Erz-Ader (Vein): eine rotierte Linie mit kugelförmigen
+ * Klumpen entlang ihr — so entstehen zusammenhängende Erz-Massen (viele
+ * Blöcke auf einmal) statt einzeln verstreuter Erze, wie in Minecraft. */
+static void gen_place_ore_vein(struct server_chunk* sc, float cx, float cy, float cz,
+                               int count, uint8_t ore, uint64_t* rng) {
+	if(count < 1) count = 1;
+	float angle = (float)gen_mc_feat_int(rng, 628) / 100.0f;
+	float len = (float)count / 8.0f;
+	float x1 = cx + sinf(angle) * len, x2 = cx - sinf(angle) * len;
+	float z1 = cz + cosf(angle) * len, z2 = cz - cosf(angle) * len;
+	float y1 = cy + (float)(gen_mc_feat_int(rng, 3) - 1);
+	float y2 = cy + (float)(gen_mc_feat_int(rng, 3) - 1);
+
+	for(int i = 0; i < count; i++) {
+		float t = (count > 1) ? (float)i / (float)(count - 1) : 0.0f;
+		float px = x1 + (x2 - x1) * t;
+		float py = y1 + (y2 - y1) * t;
+		float pz = z1 + (z2 - z1) * t;
+		/* Radius pulsiert entlang der Ader → dickere Mitte, dünnere Enden */
+		float rad = sinf(t * 3.14159265f) * ((float)count / 20.0f) + 0.6f;
+		int ir = (int)rad + 1;
+		for(int dx = -ir; dx <= ir; dx++)
+			for(int dy = -ir; dy <= ir; dy++)
+				for(int dz = -ir; dz <= ir; dz++) {
+					if((float)(dx*dx + dy*dy + dz*dz) > rad * rad + 0.3f) continue;
+					int bx = (int)(px + 0.5f) + dx;
+					int by = (int)(py + 0.5f) + dy;
+					int bz = (int)(pz + 0.5f) + dz;
+					if(bx < 0 || bx >= CHUNK_SIZE || bz < 0 || bz >= CHUNK_SIZE) continue;
+					if(by < 1 || by >= WORLD_HEIGHT) continue;
+					if(sc->ids[S_CHUNK_IDX(bx, by, bz)] == BLOCK_STONE)
+						sc->ids[S_CHUNK_IDX(bx, by, bz)] = ore;
+				}
+	}
+}
+
+/* Platziert alle Erz-Adern eines Chunks (einmal pro Chunk aufgerufen). */
+static void gen_place_ore_veins(struct server_chunk* sc, int64_t world_seed,
+                                int world_x0, int world_z0, Generator* biome_gen) {
+	int cx = world_x0 / CHUNK_SIZE;
+	int cz = world_z0 / CHUNK_SIZE;
+	uint64_t rng = (uint64_t)((int64_t)cx * 341873128712LL
+	             + (int64_t)cz * 132897987541LL + world_seed + 0x0E5A1234LL)
+	             & 0xFFFFFFFFFFFFULL;
+	rng = (rng ^ 25214903917LL) & 0xFFFFFFFFFFFFULL;
+
+	/* Erz-Typ, Adern pro Chunk, Ader-Größe, y-Bereich */
+	struct { uint8_t ore; int veins; int size; int ymin; int ymax; } T[] = {
+		{ BLOCK_COAL_ORE,    14, 17, 5,  120 },
+		{ BLOCK_IRON_ORE,    10,  9, 5,  64  },
+		{ BLOCK_GOLD_ORE,     2,  9, 5,  32  },
+		{ BLOCK_LAPIS_ORE,    1,  7, 11, 32  },
+		{ BLOCK_DIAMOND_ORE,  1,  8, 5,  16  },
+	};
+	for(size_t t = 0; t < sizeof(T) / sizeof(T[0]); t++) {
+		for(int v = 0; v < T[t].veins; v++) {
+			float px = (float)gen_mc_feat_int(&rng, CHUNK_SIZE);
+			float pz = (float)gen_mc_feat_int(&rng, CHUNK_SIZE);
+			int span = T[t].ymax - T[t].ymin;
+			float py = (float)(T[t].ymin + gen_mc_feat_int(&rng, span > 0 ? span : 1));
+			gen_place_ore_vein(sc, px, py, pz, T[t].size, T[t].ore, &rng);
+		}
+	}
+
+	/* Smaragd: einzelne Blöcke, nur in Bergen (wie in Minecraft) */
+	int cb = gen_biome_at_safe(biome_gen, world_x0 + 8, world_z0 + 8);
+	if(cb == mountains || cb == wooded_mountains || cb == gravelly_mountains
+	   || cb == mountain_edge || cb == modified_gravelly_mountains) {
+		int n_emerald = 3 + gen_mc_feat_int(&rng, 6); /* 3..8 */
+		for(int e = 0; e < n_emerald; e++) {
+			int bx = gen_mc_feat_int(&rng, CHUNK_SIZE);
+			int bz = gen_mc_feat_int(&rng, CHUNK_SIZE);
+			int by = 16 + gen_mc_feat_int(&rng, 90);
+			if(by < 1 || by >= WORLD_HEIGHT) continue;
+			if(sc->ids[S_CHUNK_IDX(bx, by, bz)] == BLOCK_STONE)
+				sc->ids[S_CHUNK_IDX(bx, by, bz)] = BLOCK_EMERALD_ORE;
+		}
+	}
 }
 
 static void gen_cleanup_floating_ores(struct server_chunk* sc) {
@@ -6839,6 +6900,13 @@ static void gen_generate_terrain_columns(struct server_world* w,
 			size_t idx = S_CHUNK_IDX(lx, y, lz);
 			uint8_t block = BLOCK_AIR;
 			if(y == 0) {
+				block = BLOCK_BEDROCK; /* unterste Schicht immer Bedrock */
+			} else if(y <= 3
+			          && gen_rand01_from_hash(
+			                 gen_hash3i(wx, y, wz, seed ^ 0xBED70C01U))
+			                 < (float)(4 - y) / 4.0f) {
+				/* bruchartige Bedrock-Schicht: y=1 ~75%, y=2 ~50%, y=3 ~25%
+				 * → Gesamtdicke variiert unregelmäßig zwischen 1 und 4 */
 				block = BLOCK_BEDROCK;
 			} else {
 				if(y <= surface) {
@@ -6877,46 +6945,8 @@ static void gen_generate_terrain_columns(struct server_world* w,
 				sc->ids[top_idx] = BLOCK_SNOW;
 		}
 
-		/* Erze — Versuchszahl per Spalte y-Range */
-		/* coal_upper: 30 Versuche, mc y=136..320 → cavex y=67..128 (obere Hälfte) */
-		/* coal_lower: 20 Versuche, mc y=0..192 → cavex y=5..85 */
-		/* iron_middle: 10 Versuche, mc y=-24..56 → cavex y=13..40 */
-		/* iron_upper: viele Versuche, mc y=80..384 → cavex y=48..127 */
-		/* gold: 4 Versuche, mc y=-64..32 → cavex y=0..32 */
-		/* lapis: 2 Versuche, mc y=-32..32 → cavex y=11..32 */
-		/* diamond: 2 Versuche, mc y=-64..-4 → cavex y=0..20 */
-		/* emerald: mountains only, mc y=-16..480 → cavex y=16..127 */
-		for(int y = 5; y < surface - 3; y++) {
-			/* coal_upper: 1/3 von 30 Versuchen = 10 */
-			if(y >= 67)
-				gen_set_ore_if_stone(sc, lx, y, lz, BLOCK_COAL_ORE, seed ^ 0x1111U, 1.0f - 10.0f/256.0f);
-			/* coal_lower: 1/3 von 20 = 7 */
-			if(y >= 5 && y <= 85)
-				gen_set_ore_if_stone(sc, lx, y, lz, BLOCK_COAL_ORE, seed ^ 0x1112U, 1.0f - 7.0f/256.0f);
-			/* iron_middle: 1/3 von 10 = 3 */
-			if(y >= 13 && y <= 40)
-				gen_set_ore_if_stone(sc, lx, y, lz, BLOCK_IRON_ORE, seed ^ 0x2221U, 1.0f - 3.0f/160.0f);
-			/* iron_upper: 1/3 Spawn-Chance */
-			if(y >= 48)
-				gen_set_ore_if_stone(sc, lx, y, lz, BLOCK_IRON_ORE, seed ^ 0x2222U, 0.9883f);
-			/* gold: 1/3 */
-			if(y <= 32)
-				gen_set_ore_if_stone(sc, lx, y, lz, BLOCK_GOLD_ORE, seed ^ 0x3333U, 0.9992f);
-			/* lapis: 1/3 */
-			if(y >= 11 && y <= 32)
-				gen_set_ore_if_stone(sc, lx, y, lz, BLOCK_LAPIS_ORE, seed ^ 0x4441U, 0.9996f);
-			/* diamond: 1/3 */
-			if(y <= 20)
-				gen_set_ore_if_stone(sc, lx, y, lz, BLOCK_DIAMOND_ORE, seed ^ 0x4444U, 0.9995f);
-			/* emerald: mountains only, 1/3 */
-			if(y >= 16) {
-				int biome_e = gen_biome_at_safe(biome_gen, wx, wz);
-				if(biome_e == mountains || biome_e == wooded_mountains
-				   || biome_e == gravelly_mountains || biome_e == mountain_edge
-				   || biome_e == modified_gravelly_mountains)
-					gen_set_ore_if_stone(sc, lx, y, lz, BLOCK_EMERALD_ORE, seed ^ 0x6661U, 0.9997f);
-			}
-		}
+		/* Erze werden als Adern (Veins) platziert, nicht per Block —
+		 * siehe gen_place_ore_veins (einmal pro Chunk in der Finalize-Phase). */
 	}
 }
 
@@ -7083,8 +7113,10 @@ static void gen_carve_worm_caves(struct server_chunk* sc, int64_t world_seed,
 				float sy = (float)(8 + gen_mc_feat_int(&rng, 42));
 				float sz = (float)(cz * CHUNK_SIZE + gen_mc_feat_int(&rng, CHUNK_SIZE));
 
-				/* Radius 1.8..3.0: rund und gut begehbar */
-				float radius = 1.8f + (float)gen_mc_feat_int(&rng, 120) / 100.0f;
+				/* Breiterer Radius 2.5..5.5 → grosse, runde (nicht eckige) Höhlen.
+				 * Gelegentlich (jede 3.) eine besonders breite Kammer. */
+				float radius = 2.5f + (float)gen_mc_feat_int(&rng, 300) / 100.0f;
+				if(c == 0) radius += 1.5f; /* erste Höhle pro Chunk = grosse Kammer */
 
 				float yaw    = (float)gen_mc_feat_int(&rng, 314) / 50.0f - 3.14f;
 				/* Flacherer Pitch (±0.12) → weniger vertikale Überlappung */
@@ -7134,12 +7166,15 @@ static void gen_carve_worm_caves(struct server_chunk* sc, int64_t world_seed,
 							}
 							if(max_y < 5) max_y = 5;
 
-							int y0 = (int)sy - ir; if(y0 < 1) y0 = 1;
-							int y1 = (int)sy + ir; if(y1 > max_y) y1 = max_y;
+							/* vertikal gestaucht (Faktor 4) → flache, breite Höhle:
+							 * halbe Höhe bei voller Breite, rundes Ellipsoid */
+							int yr = (int)(r * 0.55f) + 1; /* vertikale Reichweite ~r/2 */
+							int y0 = (int)sy - yr; if(y0 < 1) y0 = 1;
+							int y1 = (int)sy + yr; if(y1 > max_y) y1 = max_y;
 							for(int ly = y0; ly <= y1; ly++) {
 								float fy = (float)ly;
-								/* runde Kugel (vertikaler Faktor 1.0 = echte Kugel) */
-								float d3 = dist2 + (fy - sy) * (fy - sy);
+								float dyv = (fy - sy);
+								float d3 = dist2 + dyv * dyv * 4.0f; /* flaches Ellipsoid */
 								if(d3 > rr) continue;
 								uint8_t b = gen_get_block(sc, lx, ly, lz2);
 								if(gen_cave_is_carvable(b))
@@ -7162,6 +7197,9 @@ static void gen_apply_feature_step(struct server_world* w, struct server_chunk* 
 								   w_coord_t chunk_x, w_coord_t chunk_z, int step) {
 	switch(step) {
 	case 0:
+		/* Erz-Adern VOR den Höhlen → Höhlen legen die Adern frei */
+		if(w->generator.finisher_ore_nests)
+			gen_place_ore_veins(sc, w->world_seed, world_x0, world_z0, biome_gen);
 		if(w->generator.finisher_worm_nest_caves) {
 			(void)chunk_x;
 			(void)chunk_z;
@@ -8503,6 +8541,39 @@ bool server_world_is_chunk_loaded(struct server_world* w, w_coord_t x,
 								  w_coord_t z) {
 	assert(w);
 	return dict_server_chunks_get(w->chunks, S_CHUNK_ID(x, z)) != NULL;
+}
+
+/* Weckt instabiles Wasser eines frisch geladenen Chunks: jede Wasserzelle, die
+ * an Luft grenzt (unten oder seitlich), wird in die Fluid-Queue des Servers
+ * gelegt. Das echte onWorldTick-Fluss-System (server_local_tick_fluids) laesst
+ * sie dann im Hintergrund fliessen — begrenzt pro Tick, also ohne Lag.
+ * Stabiles Wasser (Ozean/See, nur von Wasser umgeben) wird NICHT geweckt. */
+void server_world_wake_chunk_water(struct server_local* s, struct server_chunk* sc,
+								   w_coord_t cx, w_coord_t cz) {
+	if(s == NULL || sc == NULL)
+		return;
+	int base_x = (int)cx * CHUNK_SIZE;
+	int base_z = (int)cz * CHUNK_SIZE;
+	for(int y = 1; y < WORLD_HEIGHT - 1; y++) {
+		for(int lx = 0; lx < CHUNK_SIZE; lx++) {
+			for(int lz = 0; lz < CHUNK_SIZE; lz++) {
+				uint8_t b = sc->ids[S_CHUNK_IDX(lx, y, lz)];
+				if(b != BLOCK_WATER_STILL && b != BLOCK_WATER_FLOW)
+					continue;
+				bool unstable = (sc->ids[S_CHUNK_IDX(lx, y - 1, lz)] == BLOCK_AIR);
+				if(!unstable && lx > 0)
+					unstable = (sc->ids[S_CHUNK_IDX(lx - 1, y, lz)] == BLOCK_AIR);
+				if(!unstable && lx < CHUNK_SIZE - 1)
+					unstable = (sc->ids[S_CHUNK_IDX(lx + 1, y, lz)] == BLOCK_AIR);
+				if(!unstable && lz > 0)
+					unstable = (sc->ids[S_CHUNK_IDX(lx, y, lz - 1)] == BLOCK_AIR);
+				if(!unstable && lz < CHUNK_SIZE - 1)
+					unstable = (sc->ids[S_CHUNK_IDX(lx, y, lz + 1)] == BLOCK_AIR);
+				if(unstable)
+					server_local_schedule_fluid(s, base_x + lx, y, base_z + lz);
+			}
+		}
+	}
 }
 
 bool server_world_load_chunk(struct server_world* w, w_coord_t x, w_coord_t z,
