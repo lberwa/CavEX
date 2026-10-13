@@ -17,6 +17,10 @@ void wgen_gen_surface_heights(wgen_gen_t* g,
                                int chunk_x, int chunk_z,
                                uint8_t heights[16][16]);
 
+void wgen_gen_surface_heights_from_raw(const uint8_t* raw, int raw_stride,
+                                       int raw_offset,
+                                       uint8_t heights[16][16]);
+
 /* Features (Baeume, Kakteen, …) in den Chunk schreiben. */
 void wgen_gen_place_features(wgen_gen_t* g,
                               struct server_chunk* sc,

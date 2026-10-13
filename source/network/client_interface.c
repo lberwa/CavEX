@@ -679,9 +679,18 @@ void clin_init() {
 
 void clin_update() {
 	void* call;
+	ptime_t update_start = time_get();
+	bool processed = false;
 	while(tchannel_receive(&clin_inbox, &call, false)) {
 		clin_process(call);
 		tchannel_send(&clin_empty_msg, call, true);
+		processed = true;
+		/* Chunk-Imports sind absichtlich über mehrere Frames verteilt.  Ohne
+		 * dieses Budget konnte eine volle RPC-Warteschlange den Renderthread
+		 * mehrere hundert Millisekunden blockieren. Mindestens eine Nachricht
+		 * wird immer verarbeitet, damit kleine RPCs nicht verhungern. */
+		if(processed && time_diff_ms(update_start, time_get()) >= 8)
+			break;
 	}
 
 	if(gstate.world_loaded && time_diff_ms(last_pos_update, time_get()) >= 50) {

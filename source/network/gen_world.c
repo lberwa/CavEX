@@ -1238,27 +1238,15 @@ int wgen_gen_world_height(wgen_gen_t* g, int wx, int wz) {
     return wgen_gen_world_height_raw(g, (double)wx, (double)wz);
 }
 
-void wgen_gen_surface_heights(wgen_gen_t* g, int cx, int cz,
-                               uint8_t h[16][16])
+void wgen_gen_surface_heights_from_raw(const uint8_t* raw, int raw_stride,
+                                       int raw_offset, uint8_t h[16][16])
 {
-    int base_x = cx * 16;
-    int base_z = cz * 16;
-    /* Berechne Höhen für 20×20-Bereich (2 Blöcke Rand) für korrektes Glätten
-     * an Chunk-Grenzen */
-    int raw[20][20];
-    for (int lx = 0; lx < 20; lx++) {
-        for (int lz = 0; lz < 20; lz++) {
-            double wx = (double)(base_x + lx - 2);
-            double wz = (double)(base_z + lz - 2);
-            raw[lx][lz] = wgen_gen_world_height_raw(g, wx, wz);
-        }
-    }
     /* Glättungspass: reduziere steile Übergänge (>6 Blöcke zu Nachbarn)
      * mit gewichtetem Durchschnitt — Flüsse formen sanftere Ufer */
     for (int lx = 0; lx < 16; lx++) {
         for (int lz = 0; lz < 16; lz++) {
-            int rx = lx + 2, rz = lz + 2; /* Index in raw[] */
-            int center = raw[rx][rz];
+            int rx = lx + raw_offset, rz = lz + raw_offset;
+            int center = raw[rx + rz * raw_stride];
             /* Berge (hoch gelegen) NICHT glätten → steile Klippen bleiben.
              * Nur Tiefland/Küsten glätten (sanfte Flussufer). */
             if (center >= 86) {
@@ -1272,8 +1260,8 @@ void wgen_gen_surface_heights(wgen_gen_t* g, int cx, int cz,
             int count = 4;
             /* 4 direkte Nachbarn */
             int neighbors[4] = {
-                raw[rx-1][rz], raw[rx+1][rz],
-                raw[rx][rz-1], raw[rx][rz+1]
+                raw[(rx-1) + rz * raw_stride], raw[(rx+1) + rz * raw_stride],
+                raw[rx + (rz-1) * raw_stride], raw[rx + (rz+1) * raw_stride]
             };
             for (int i = 0; i < 4; i++) {
                 int diff = neighbors[i] - center;
@@ -1293,6 +1281,22 @@ void wgen_gen_surface_heights(wgen_gen_t* g, int cx, int cz,
             h[lx][lz] = (uint8_t)smoothed;
         }
     }
+}
+
+void wgen_gen_surface_heights(wgen_gen_t* g, int cx, int cz,
+                               uint8_t h[16][16])
+{
+    int base_x = cx * 16;
+    int base_z = cz * 16;
+    uint8_t raw[20][20];
+    for (int lx = 0; lx < 20; lx++) {
+        for (int lz = 0; lz < 20; lz++) {
+            double wx = (double)(base_x + lx - 2);
+            double wz = (double)(base_z + lz - 2);
+            raw[lx][lz] = (uint8_t)wgen_gen_world_height_raw(g, wx, wz);
+        }
+    }
+    wgen_gen_surface_heights_from_raw(&raw[0][0], 20, 2, h);
 }
 
 /* ── Testhelfer (nur mit -DWGEN_TESTING=1 kompiliert) ── */

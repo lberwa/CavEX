@@ -90,6 +90,10 @@ static void water_try_set(struct server_local* s, w_coord_t x, w_coord_t y,
 	struct block_data cur;
 	if(!server_world_get_block(AWORLD(s), x, y, z, &cur))
 		return; // chunk not loaded: skip
+	/* Generierte Schluchten tragen auf Luft einen unsichtbaren Metadatenmarker.
+	 * Meerwasser darf diese Zellen nicht wieder auffüllen. */
+	if(cur.type == BLOCK_AIR && cur.metadata == 0xF)
+		return;
 	if(cur.type == type && cur.metadata == meta)
 		return; // already in the desired state
 	server_local_queue_fluid_change(s, x, y, z,

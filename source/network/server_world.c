@@ -21,6 +21,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "../block/blocks.h"
 #include "../lighting.h"
@@ -29,6 +30,7 @@
 #include "server_local.h"
 #include "server_world.h"
 #include "../daytime.h"
+#include "../platform/time.h"
 #include "../cubiomes/generator.h"
 #include "../cubiomes/biomes.h"
 #include "gen_world.h"
@@ -104,6 +106,63 @@ struct gen_cuberite_runtime_args {
 	float gravel_patch_threshold;
 	int sea_level;
 };
+
+enum gen_profile_phase {
+	GEN_PROFILE_TERRAIN,
+	GEN_PROFILE_FEATURES,
+	GEN_PROFILE_DECO,
+	GEN_PROFILE_FINALIZE,
+	GEN_PROFILE_PHASE_COUNT,
+};
+
+struct gen_profile_phase_stats {
+	uint64_t calls;
+	uint64_t ms;
+};
+
+struct gen_profile_stats {
+	uint64_t chunks;
+	struct gen_profile_phase_stats phase[GEN_PROFILE_PHASE_COUNT];
+};
+
+static struct gen_profile_stats g_gen_profile;
+
+static void gen_profile_phase_done(enum gen_profile_phase phase,
+								  ptime_t start) {
+	int32_t elapsed = time_diff_ms(start, time_get());
+	if(elapsed < 0)
+		elapsed = 0;
+	g_gen_profile.phase[phase].calls++;
+	g_gen_profile.phase[phase].ms += (uint64_t)elapsed;
+}
+
+void server_world_generation_profile_save(void) {
+	FILE* f = fopen("./cavex.log", "a");
+	if(!f)
+		return;
+
+	uint64_t total_ms = 0;
+	for(int i = 0; i < GEN_PROFILE_PHASE_COUNT; i++)
+		total_ms += g_gen_profile.phase[i].ms;
+
+	fprintf(f, "[GEN_PROFILE] chunks=%llu total_ms=%llu avg_chunk_ms=%.2f\n",
+			(unsigned long long)g_gen_profile.chunks,
+			(unsigned long long)total_ms,
+			g_gen_profile.chunks ?
+				(float)total_ms / (float)g_gen_profile.chunks : 0.0f);
+	static const char* names[GEN_PROFILE_PHASE_COUNT] = {
+		"terrain", "features", "deco", "finalize"
+	};
+	for(int i = 0; i < GEN_PROFILE_PHASE_COUNT; i++) {
+		struct gen_profile_phase_stats* p = &g_gen_profile.phase[i];
+		fprintf(f, "[GEN_PROFILE] %s calls=%llu total_ms=%llu avg_ms=%.2f\n",
+				names[i], (unsigned long long)p->calls,
+				(unsigned long long)p->ms,
+				p->calls ? (float)p->ms / (float)p->calls : 0.0f);
+	}
+	fclose(f);
+	memset(&g_gen_profile, 0, sizeof(g_gen_profile));
+}
 
 static float gen_inv_nonzero(float value, float fallback) {
 	return (fabsf(value) > 0.0001f) ? (1.0f / value) : fallback;
@@ -2167,6 +2226,8 @@ static bool gen_can_carve_density_block(uint8_t block) {
 		|| gen_is_ore_block(block);
 }
 
+static void gen_set_nibble(uint8_t* data, size_t idx, uint8_t value);
+
 static void gen_carve_density_block(struct server_chunk* sc, int lx, int y,
 									int lz, int sea_level) {
 	(void)sea_level;
@@ -2178,10 +2239,19 @@ static void gen_carve_density_block(struct server_chunk* sc, int lx, int y,
 }
 
 static void gen_drain_density_block(struct server_chunk* sc, int lx, int y,
-									int lz) {
+										int lz) {
 	uint8_t block = gen_get_block(sc, lx, y, lz);
 	if(block == BLOCK_WATER_STILL || block == BLOCK_WATER_FLOW)
 		gen_set_block(sc, lx, y, lz, BLOCK_AIR);
+}
+
+/* Metadaten von Luft sind für den Renderer bedeutungslos.  Der Marker hält
+ * jedoch die Wasser-Physik aus generierten Schluchten heraus. */
+static void gen_mark_density_canyon_cell(struct server_chunk* sc, int lx, int y,
+											 int lz) {
+	if(gen_inside_chunk(lx, y, lz)
+	   && gen_get_block(sc, lx, y, lz) == BLOCK_AIR)
+		gen_set_nibble(sc->metadata, S_CHUNK_IDX(lx, y, lz), 0xF);
 }
 
 static void gen_carve_air_sphere(struct server_chunk* sc, int chunk_x, int chunk_z,
@@ -2322,9 +2392,15 @@ static void gen_carve_density_caves(struct server_chunk* sc, uint32_t seed,
 										  (float)wz * 0.010f,
 										  seed ^ 0xCA6E2111U, 2, 2.0f, 0.5f);
 			float density_boost = gen_clampf((cave_region + 0.45f) * 0.78f,
-											 0.0f, 0.56f);
+																		 0.0f, 0.56f);
 			if(cave_region < -0.78f)
 				continue;
+			/* Dieser Layer-Wert hängt nur von x/z ab.  Er wurde vorher für
+			 * jede einzelne y-Stufe erneut berechnet. */
+			float layer = gen_fbm2d((float)wx * 0.017f, (float)wz * 0.017f,
+									seed ^ 0x1A7ECA6EU, 2, 2.0f, 0.5f);
+			float center_y = 22.0f + layer * 12.0f;
+			float thickness = 0.135f + density_boost * 0.15f;
 
 			for(int y = 8; y <= max_y; y += 2) {
 				float depth = (float)(surface - y);
@@ -2354,14 +2430,10 @@ static void gen_carve_density_caves(struct server_chunk* sc, uint32_t seed,
 				float noodle = gen_fbm3d((float)wx * 0.060f, (float)y * 0.065f,
 										 (float)wz * 0.060f,
 										 seed ^ 0xD00D1E5U, 1, 2.0f, 0.5f);
-				float thickness = 0.135f + density_boost * 0.15f;
 				bool carve_spaghetti = tunnel_a < thickness
 					&& tunnel_b < thickness * 1.35f
 					&& noodle > -0.48f;
 
-				float layer = gen_fbm2d((float)wx * 0.017f, (float)wz * 0.017f,
-										seed ^ 0x1A7ECA6EU, 2, 2.0f, 0.5f);
-				float center_y = 22.0f + layer * 12.0f;
 				bool carve_layer = fabsf((float)y - center_y) < 3.5f
 					&& cheese > 0.16f
 					&& tunnel_a < 0.34f;
@@ -2422,9 +2494,9 @@ static void gen_apply_density_canyon(struct server_chunk* sc, uint32_t seed,
 			int max_y = surface - 6;
 			if(max_y > WORLD_HEIGHT - 2)
 				max_y = WORLD_HEIGHT - 2;
+			float horizontal = across / width;
 			for(int y = 8; y <= max_y; y++) {
 				float vertical = ((float)y - center_y) / height;
-				float horizontal = across / width;
 				float rough = gen_fbm3d((float)(world_x0 + lx) * 0.070f,
 										(float)y * 0.060f,
 										(float)(world_z0 + lz) * 0.070f,
@@ -2436,6 +2508,7 @@ static void gen_apply_density_canyon(struct server_chunk* sc, uint32_t seed,
 						gen_drain_density_block(sc, lx, y, lz);
 					else
 						gen_carve_density_block(sc, lx, y, lz, sea_level);
+					gen_mark_density_canyon_cell(sc, lx, y, lz);
 				}
 			}
 		}
@@ -6732,20 +6805,14 @@ static void gen_recompute_height_and_skylight(struct server_chunk* sc) {
 	for(int lx = 0; lx < CHUNK_SIZE; lx++) {
 		for(int lz = 0; lz < CHUNK_SIZE; lz++) {
 			uint8_t column_height = 0;
-			for(int y = WORLD_HEIGHT - 1; y >= 0; y--) {
-				uint8_t block = sc->ids[S_CHUNK_IDX(lx, y, lz)];
-				if(block != BLOCK_AIR && block != BLOCK_WATER_FLOW
-				   && block != BLOCK_WATER_STILL) {
-					column_height = (uint8_t)(y + 1);
-					break;
-				}
-			}
-			sc->heightmap[lx + lz * CHUNK_SIZE] = column_height;
-
 			uint8_t light = 15;
 			for(int y = WORLD_HEIGHT - 1; y >= 0; y--) {
 				size_t idx = S_CHUNK_IDX(lx, y, lz);
 				uint8_t block = sc->ids[idx];
+				if(column_height == 0 && block != BLOCK_AIR
+				   && block != BLOCK_WATER_FLOW
+				   && block != BLOCK_WATER_STILL)
+					column_height = (uint8_t)(y + 1);
 				gen_set_nibble(sc->lighting_sky, idx, light);
 				if(light == 0)
 					continue;
@@ -6756,6 +6823,7 @@ static void gen_recompute_height_and_skylight(struct server_chunk* sc) {
 					light = (opacity >= light) ? 0 : (uint8_t)(light - opacity);
 				}
 			}
+			sc->heightmap[lx + lz * CHUNK_SIZE] = column_height;
 		}
 	}
 }
@@ -7098,8 +7166,22 @@ static int gen_smooth_surface_against_terrain_shape_area(
 	return surface;
 }
 
+static int gen_wgen_height_at(wgen_gen_t* wg, const uint8_t* cache,
+							 int cache_origin_x, int cache_origin_z,
+							 int wx, int wz) {
+	if(cache && wx >= cache_origin_x
+	   && wx < cache_origin_x + SERVER_WORLD_WGEN_HEIGHT_WIDTH
+	   && wz >= cache_origin_z
+	   && wz < cache_origin_z + SERVER_WORLD_WGEN_HEIGHT_WIDTH)
+		return cache[(wx - cache_origin_x)
+				 + (wz - cache_origin_z) * SERVER_WORLD_WGEN_HEIGHT_WIDTH];
+	return wgen_gen_world_height(wg, wx, wz);
+}
+
 static int gen_apply_sea_shore_lowering(wgen_gen_t* wg,
 										const struct gen_cuberite_runtime_args* gen_args,
+										const uint8_t* height_cache,
+										int cache_origin_x, int cache_origin_z,
 										int32_t wx, int32_t wz, int surface) {
 	if(!GEN_ENABLE_WATER_FILL_TO_SEA_LEVEL || wg == NULL || gen_args == NULL)
 		return surface;
@@ -7117,7 +7199,8 @@ static int gen_apply_sea_shore_lowering(wgen_gen_t* wg,
 			if(dist_sq > radius_sq)
 				continue;
 
-			int neighbor = wgen_gen_world_height(wg, wx + dx, wz + dz);
+			int neighbor = gen_wgen_height_at(wg, height_cache, cache_origin_x,
+											cache_origin_z, wx + dx, wz + dz);
 			if(neighbor > gen_args->sea_level + 2)
 				continue;
 			float dist = sqrtf((float)(dx * dx + dz * dz));
@@ -7132,6 +7215,8 @@ static int gen_apply_sea_shore_lowering(wgen_gen_t* wg,
 
 static int gen_apply_large_water_depth(wgen_gen_t* wg,
 									   const struct gen_cuberite_runtime_args* gen_args,
+									   const uint8_t* height_cache,
+									   int cache_origin_x, int cache_origin_z,
 									   int32_t wx, int32_t wz, int surface) {
 	if(!GEN_ENABLE_WATER_FILL_TO_SEA_LEVEL || wg == NULL || gen_args == NULL)
 		return surface;
@@ -7149,7 +7234,8 @@ static int gen_apply_large_water_depth(wgen_gen_t* wg,
 		for(int i = 0; i < 8; i++) {
 			int dx = dirs[i][0] * r;
 			int dz = dirs[i][1] * r;
-			int neighbor = wgen_gen_world_height(wg, wx + dx, wz + dz);
+			int neighbor = gen_wgen_height_at(wg, height_cache, cache_origin_x,
+											cache_origin_z, wx + dx, wz + dz);
 			if(neighbor > gen_args->sea_level) {
 				land_dist = sqrtf((float)(dx * dx + dz * dz));
 				found_land = true;
@@ -7168,6 +7254,81 @@ static int gen_apply_large_water_depth(wgen_gen_t* wg,
 		deep_floor = 4;
 	if(surface > deep_floor)
 		surface = deep_floor;
+	return surface;
+}
+
+/* Region-Ozeane brauchen eine eigene Bathymetrie. Die Noise-Höhe kann an
+ * derselben Stelle deutlich über dem Meeresspiegel liegen; dann darf der
+ * Region-Ozean nicht als steile Wand stehen bleiben. */
+static int gen_apply_region_ocean_depth(Generator* biome_gen,
+										const struct gen_cuberite_runtime_args* gen_args,
+										int32_t wx, int32_t wz, int surface) {
+	if(!biome_gen || !gen_args)
+		return surface;
+
+	static const int dirs[8][2] = {
+		{1, 0}, {-1, 0}, {0, 1}, {0, -1},
+		{1, 1}, {-1, 1}, {1, -1}, {-1, -1},
+	};
+	float land_dist = 10.0f;
+	bool found_land = false;
+	/* Der Biome-Cache reicht acht Blöcke über den Chunkrand. */
+	for(int r = 2; r <= GEN_BIOME_CACHE_MARGIN && !found_land; r += 2) {
+		for(int i = 0; i < 8; i++) {
+			int sample = gen_biome_at_safe(biome_gen,
+				wx + dirs[i][0] * r, wz + dirs[i][1] * r);
+			if(!isOceanic(sample)) {
+				land_dist = sqrtf((float)(dirs[i][0] * dirs[i][0]
+					+ dirs[i][1] * dirs[i][1]) * (float)(r * r));
+				found_land = true;
+				break;
+			}
+		}
+	}
+
+	int desired_depth = 4 + (int)(land_dist * 1.55f);
+	if(desired_depth > 40)
+		desired_depth = 40;
+	int floor = gen_args->sea_level - desired_depth;
+	if(floor < 4)
+		floor = 4;
+	if(surface > floor)
+		surface = floor;
+	return surface;
+}
+
+static int gen_apply_region_shore_lowering(Generator* biome_gen,
+										const struct gen_cuberite_runtime_args* gen_args,
+										int32_t wx, int32_t wz, int surface) {
+	if(!biome_gen || !gen_args)
+		return surface;
+
+	static const int dirs[8][2] = {
+		{1, 0}, {-1, 0}, {0, 1}, {0, -1},
+		{1, 1}, {-1, 1}, {1, -1}, {-1, -1},
+	};
+	float water_dist = 10.0f;
+	bool found_water = false;
+	for(int r = 2; r <= GEN_BIOME_CACHE_MARGIN && !found_water; r += 2) {
+		for(int i = 0; i < 8; i++) {
+			int sample = gen_biome_at_safe(biome_gen,
+				wx + dirs[i][0] * r, wz + dirs[i][1] * r);
+			if(isOceanic(sample)) {
+				water_dist = sqrtf((float)(dirs[i][0] * dirs[i][0]
+					+ dirs[i][1] * dirs[i][1]) * (float)(r * r));
+				found_water = true;
+				break;
+			}
+		}
+	}
+	if(!found_water)
+		return surface;
+
+	/* Küstenland steigt langsam an; niemals eine senkrechte Noise-Wand. */
+	int shore_cap = gen_args->sea_level + 1
+		+ (int)(water_dist * 0.85f);
+	if(surface > shore_cap)
+		surface = shore_cap;
 	return surface;
 }
 
@@ -7201,31 +7362,16 @@ static void gen_apply_surface_column(struct server_chunk* sc, int lx, int lz,
 									 int sea_level, int preliminary_surface,
 									 uint8_t top_block, uint8_t filler_block,
 									 int dirt_depth, int* out_surface) {
-	int surface = -1;
-	int depth_left = -1;
-	for(int y = WORLD_HEIGHT - 1; y >= 1; y--) {
-		size_t idx = S_CHUNK_IDX(lx, y, lz);
-		uint8_t block = sc->ids[idx];
-		if(block == BLOCK_AIR || block == BLOCK_WATER_STILL || block == BLOCK_WATER_FLOW) {
-			depth_left = -1;
-			continue;
-		}
-		if(block != BLOCK_STONE && !gen_is_ore_block(block))
-			continue;
-
-		if(surface < 0)
-			surface = y;
-
-		if(depth_left < 0) {
-			if(y < preliminary_surface - 8 && y < sea_level - 1)
-				continue;
-			depth_left = dirt_depth;
-			sc->ids[idx] = (y <= sea_level - 1 && top_block == BLOCK_GRASS)
-				? filler_block : top_block;
-		} else if(depth_left > 0) {
-			sc->ids[idx] = filler_block;
-			depth_left--;
-		}
+	/* This is called immediately after a fresh column was filled with stone
+	 * and water.  The top solid block is therefore already known; scanning all
+	 * 128 heights here only repeated work that the terrain pass had done. */
+	int surface = preliminary_surface;
+	if(surface >= 1 && surface < WORLD_HEIGHT) {
+		size_t idx = S_CHUNK_IDX(lx, surface, lz);
+		sc->ids[idx] = (surface <= sea_level - 1 && top_block == BLOCK_GRASS)
+			? filler_block : top_block;
+		for(int depth = 1; depth <= dirt_depth && surface - depth >= 1; depth++)
+			sc->ids[S_CHUNK_IDX(lx, surface - depth, lz)] = filler_block;
 	}
 	if(out_surface)
 		*out_surface = surface;
@@ -7339,6 +7485,9 @@ static wgen_gen_t* server_world_wgen_gen(struct server_world* w); /* forward dec
 
 static void gen_generate_terrain_columns(struct server_world* w,
 										 struct server_chunk* sc, int* surface_map,
+										 const uint8_t (*cached_wgen_heights)[CHUNK_SIZE],
+										 const uint8_t* cached_height_cache,
+										 int cache_origin_x, int cache_origin_z,
 										 Generator* biome_gen,
 										 const struct gen_cuberite_runtime_args* gen_args,
 										 uint32_t seed, int choice_octaves,
@@ -7349,10 +7498,30 @@ static void gen_generate_terrain_columns(struct server_world* w,
 	if(end_col > CHUNK_SIZE * CHUNK_SIZE)
 		end_col = CHUNK_SIZE * CHUNK_SIZE;
 
-	/* MC-26.3-Höhen für diesen Chunk vorberechnen */
+	/* MC-26.3-Höhen einmal pro Chunk berechnen.  Pending generation calls
+	 * this function many times in small column batches, so recomputing the
+	 * complete 16x16 map in every batch was needlessly expensive. */
 	wgen_gen_t* wg = server_world_wgen_gen(w);
-	uint8_t wgen_heights[CHUNK_SIZE][CHUNK_SIZE];
-	wgen_gen_surface_heights(wg, (int)chunk_x, (int)chunk_z, wgen_heights);
+	uint8_t local_wgen_heights[CHUNK_SIZE][CHUNK_SIZE];
+	uint8_t local_height_cache[SERVER_WORLD_WGEN_HEIGHT_WIDTH]
+		[SERVER_WORLD_WGEN_HEIGHT_WIDTH];
+	const uint8_t (*wgen_heights)[CHUNK_SIZE] = cached_wgen_heights;
+	const uint8_t* height_cache = cached_height_cache;
+	if(!wgen_heights) {
+		wgen_gen_surface_heights(wg, (int)chunk_x, (int)chunk_z,
+		                         local_wgen_heights);
+		wgen_heights = local_wgen_heights;
+	}
+	if(!height_cache) {
+		cache_origin_x = world_x0 - SERVER_WORLD_WGEN_HEIGHT_MARGIN;
+		cache_origin_z = world_z0 - SERVER_WORLD_WGEN_HEIGHT_MARGIN;
+		for(int cz = 0; cz < SERVER_WORLD_WGEN_HEIGHT_WIDTH; cz++)
+			for(int cx = 0; cx < SERVER_WORLD_WGEN_HEIGHT_WIDTH; cx++)
+				local_height_cache[cz][cx]
+					= (uint8_t)wgen_gen_world_height(
+						wg, cache_origin_x + cx, cache_origin_z + cz);
+		height_cache = &local_height_cache[0][0];
+	}
 
 	for(int col = start_col; col < end_col; col++) {
 		int lx = col / CHUNK_SIZE;
@@ -7361,19 +7530,31 @@ static void gen_generate_terrain_columns(struct server_world* w,
 		int32_t wz = world_z0 + lz;
 		int biome_id = plains;
 		struct gen_biome_profile profile = gen_blended_profile(biome_gen, wx, wz, &biome_id);
+		/* Die Biome-Variation darf ein echtes Region-Ozean nicht in Land
+		 * umwandeln, bevor die Küstenform berechnet wurde. */
+		bool region_ocean = isOceanic(gen_biome_at_safe(biome_gen, wx, wz));
 		int surface = (int)wgen_heights[lx][lz];
-		/* Biom-spezifische Absenkung (Fluss/Ozean) NUR wenn das Noise-Terrain
-		 * ohnehin nahe am Meeresspiegel liegt. Sonst kollidiert ein cubiomes-
-		 * Ozean-/Fluss-Biom mit einem Noise-Berg und reisst ein riesiges,
-		 * wassergefuelltes Loch mitten in die Berge. */
+		/* Flüsse und Region-Ozeane werden getrennt vom Noise-Terrain behandelt.
+		 * Region-Ozeane erhalten weiter unten eine eigene, sanfte Bathymetrie. */
 		if(profile.riverine && surface > gen_args->sea_level - 1
 		   && surface <= gen_args->sea_level + 5)
 			surface = gen_args->sea_level - 1;
-		if(profile.oceanic && surface > gen_args->sea_level - 3
+		if(region_ocean && surface > gen_args->sea_level - 3
 		   && surface <= gen_args->sea_level + 10)
 			surface = gen_args->sea_level - 3;
-		surface = gen_apply_large_water_depth(wg, gen_args, wx, wz, surface);
-		surface = gen_apply_sea_shore_lowering(wg, gen_args, wx, wz, surface);
+		surface = gen_apply_large_water_depth(wg, gen_args, height_cache,
+																		 cache_origin_x, cache_origin_z,
+																		 wx, wz, surface);
+		surface = gen_apply_sea_shore_lowering(wg, gen_args, height_cache,
+																		 cache_origin_x, cache_origin_z,
+																		 wx, wz, surface);
+		if(region_ocean || profile.oceanic) {
+			surface = gen_apply_region_ocean_depth(biome_gen, gen_args,
+																		 wx, wz, surface);
+		} else {
+			surface = gen_apply_region_shore_lowering(biome_gen, gen_args,
+																		 wx, wz, surface);
+	}
 
 		int dirt_depth = 0;
 		uint8_t top_block = BLOCK_GRASS;
@@ -7410,8 +7591,6 @@ static void gen_generate_terrain_columns(struct server_world* w,
 				}
 			}
 			sc->ids[idx] = block;
-			gen_set_nibble(sc->metadata, idx, 0);
-			gen_set_nibble(sc->lighting_torch, idx, 0);
 		}
 		int actual_surface = surface;
 		gen_apply_surface_column(sc, lx, lz, gen_args->sea_level, surface,
@@ -7641,13 +7820,27 @@ static void gen_carve_worm_caves(struct server_chunk* sc, int64_t world_seed,
 					/* KEIN Schritt-Überspringen mehr → glatte, lückenlose Tunnel
 					 * (verhindert schwebende Blöcke) */
 
-					/* leichte Radius-Variation pro Schritt für natürliche Form */
-					float r = radius + sinf((float)step * 0.35f) * 0.35f;
-					float rr = r * r;
-					int ir = (int)(r * 2.0f) + 1;
+								/* leichte Radius-Variation pro Schritt für natürliche Form */
+								float r = radius + sinf((float)step * 0.35f) * 0.35f;
+								float rr = r * r;
+								int yr = (int)(r * 0.55f) + 1;
+								int y0 = (int)sy - yr;
+								if(y0 < 1) y0 = 1;
 
-					for(int lx = 0; lx < CHUNK_SIZE; lx++) {
-						for(int lz2 = 0; lz2 < CHUNK_SIZE; lz2++) {
+					/* Nur die Spalten im tatsächlichen Radius prüfen.  Der frühere
+					 * Vollscan über 16x16 Spalten kostete bei jedem Tunnel-Schritt
+					 * Zeit, obwohl die meisten Spalten sicher außerhalb lagen. */
+					int lx0 = (int)ceilf(sx - r - (float)world_x0);
+					int lx1 = (int)floorf(sx + r - (float)world_x0);
+					int lz0 = (int)ceilf(sz - r - (float)world_z0);
+					int lz1 = (int)floorf(sz + r - (float)world_z0);
+					if(lx0 < 0) lx0 = 0;
+					if(lx1 >= CHUNK_SIZE) lx1 = CHUNK_SIZE - 1;
+					if(lz0 < 0) lz0 = 0;
+					if(lz1 >= CHUNK_SIZE) lz1 = CHUNK_SIZE - 1;
+
+					for(int lx = lx0; lx <= lx1; lx++) {
+						for(int lz2 = lz0; lz2 <= lz1; lz2++) {
 							float wx = (float)(world_x0 + lx);
 							float wz = (float)(world_z0 + lz2);
 							float dist2 = (wx-sx)*(wx-sx) + (wz-sz)*(wz-sz);
@@ -7668,8 +7861,6 @@ static void gen_carve_worm_caves(struct server_chunk* sc, int64_t world_seed,
 
 							/* vertikal gestaucht (Faktor 4) → flache, breite Höhle:
 							 * halbe Höhe bei voller Breite, rundes Ellipsoid */
-							int yr = (int)(r * 0.55f) + 1; /* vertikale Reichweite ~r/2 */
-							int y0 = (int)sy - yr; if(y0 < 1) y0 = 1;
 							int y1 = (int)sy + yr; if(y1 > max_y) y1 = max_y;
 							for(int ly = y0; ly <= y1; ly++) {
 								float fy = (float)ly;
@@ -7736,7 +7927,7 @@ static void gen_apply_feature_step(struct server_world* w, struct server_chunk* 
 								w->generator.lava_lakes_probability);
 		return;
 	case 5:
-		if(w->generator.finisher_mineshafts)
+		if(0 && w->generator.finisher_mineshafts)
 			gen_place_mineshaft(sc, seed, world_x0, world_z0);
 		return;
 	case 6:
@@ -7823,11 +8014,17 @@ static int gen_mc_feat_int(uint64_t* s, int n) {
 }
 
 static void gen_generate_deco_columns(struct server_world* w, struct server_chunk* sc,
+									  const uint8_t (*cached_wgen_heights)[CHUNK_SIZE],
 									  Generator* biome_gen,
 									  const struct gen_cuberite_runtime_args* gen_args,
 									  uint32_t seed, int32_t world_x0, int32_t world_z0,
 									  int start_col, int num_cols) {
-	(void)num_cols; (void)start_col; /* immer ganzen Chunk bearbeiten */
+	(void)num_cols;
+	/* This phase is advanced in small column-sized steps by the pending
+	 * generator, but the decoration pass itself operates on the whole chunk.
+	 * Running it for every step repeated all trees, grass and flowers ~20x. */
+	if(start_col != 0)
+		return;
 	(void)gen_args; (void)seed;
 
 	int chunk_x = (int)(world_x0 / CHUNK_SIZE);
@@ -7846,9 +8043,13 @@ static void gen_generate_deco_columns(struct server_world* w, struct server_chun
 	                   ^ (int64_t)25214903917LL) & 0xFFFFFFFFFFFFULL
 #define FEAT_INT(n) gen_mc_feat_int(&feat_rng, (n))
 
-	wgen_gen_t* wg = server_world_wgen_gen(w);
 	uint8_t hh[CHUNK_SIZE][CHUNK_SIZE];
-	wgen_gen_surface_heights(wg, chunk_x, chunk_z, hh);
+	const uint8_t (*wgen_heights)[CHUNK_SIZE] = cached_wgen_heights;
+	if(!wgen_heights) {
+		wgen_gen_t* wg = server_world_wgen_gen(w);
+		wgen_gen_surface_heights(wg, chunk_x, chunk_z, hh);
+		wgen_heights = hh;
+	}
 
 	/* ── BÄUME (Feature-Step 1) — exakte MC-26.3-Versuchsanzahlen ── */
 	if(w->generator.finisher_trees) {
@@ -7901,7 +8102,7 @@ static void gen_generate_deco_columns(struct server_world* w, struct server_chun
 			/* Blätter-Radius 2: Baum muss mindestens 2 Blöcke vom Rand entfernt sein
 			 * damit Blätter vollständig im Chunk bleiben */
 			if(lx < 2 || lx > 13 || lz < 2 || lz > 13) continue;
-			int sy = (int)hh[lx][lz];
+			int sy = (int)wgen_heights[lx][lz];
 			if(sy < 2 || sy > 120) continue;
 			uint8_t top = sc->ids[S_CHUNK_IDX(lx, sy, lz)];
 			if(top != BLOCK_GRASS && top != BLOCK_DIRT && top != BLOCK_MYCELIUM) continue;
@@ -7920,7 +8121,7 @@ static void gen_generate_deco_columns(struct server_world* w, struct server_chun
 			if(has_fallen && FEAT_INT(16) == 0) { /* halb so oft wie vorher */
 				int lx = 3 + FEAT_INT(10);
 				int lz = 3 + FEAT_INT(10);
-				int sy = (int)hh[lx][lz];
+				int sy = (int)wgen_heights[lx][lz];
 				if(sy >= 2 && sy < WORLD_HEIGHT - 2
 				   && sc->ids[S_CHUNK_IDX(lx, sy, lz)] == BLOCK_GRASS
 				   && sc->ids[S_CHUNK_IDX(lx, sy + 1, lz)] == BLOCK_AIR) {
@@ -7974,7 +8175,7 @@ static void gen_generate_deco_columns(struct server_world* w, struct server_chun
 		for(int t = 0; t < grass_count; t++) {
 			int lx = FEAT_INT(16);
 			int lz = FEAT_INT(16);
-			int sy = (int)hh[lx][lz];
+			int sy = (int)wgen_heights[lx][lz];
 			if(sy < 1 || sy + 1 >= WORLD_HEIGHT) continue;
 			if(sc->ids[S_CHUNK_IDX(lx, sy, lz)] != BLOCK_GRASS) continue;
 			if(sc->ids[S_CHUNK_IDX(lx, sy + 1, lz)] != BLOCK_AIR) continue;
@@ -8001,7 +8202,7 @@ static void gen_generate_deco_columns(struct server_world* w, struct server_chun
 			for(int t = 0; t < flower_count; t++) {
 				int lx = FEAT_INT(16);
 				int lz = FEAT_INT(16);
-				int sy = (int)hh[lx][lz];
+				int sy = (int)wgen_heights[lx][lz];
 				if(sy < 1 || sy + 1 >= WORLD_HEIGHT) continue;
 				if(sc->ids[S_CHUNK_IDX(lx, sy, lz)] != BLOCK_GRASS) continue;
 				if(sc->ids[S_CHUNK_IDX(lx, sy + 1, lz)] != BLOCK_AIR) continue;
@@ -8020,9 +8221,11 @@ static void gen_generate_deco_columns(struct server_world* w, struct server_chun
 		                  || center_biome3 == desert_lakes) ? 3 : 0;
 		FEAT_RNG_INIT(5, 0);
 		for(int t = 0; t < cact_tries; t++) {
+			if(FEAT_INT(6) != 0)
+				continue;
 			int lx = FEAT_INT(16);
 			int lz = FEAT_INT(16);
-			int sy = (int)hh[lx][lz];
+			int sy = (int)wgen_heights[lx][lz];
 			if(sy < 1 || sy + 2 >= WORLD_HEIGHT) continue;
 			if(sc->ids[S_CHUNK_IDX(lx, sy, lz)] != BLOCK_SAND) continue;
 			if(sc->ids[S_CHUNK_IDX(lx, sy + 1, lz)] != BLOCK_AIR) continue;
@@ -8049,7 +8252,7 @@ static void gen_generate_deco_columns(struct server_world* w, struct server_chun
 		for(int t = 0; t < reed_tries; t++) {
 			int lx = FEAT_INT(16);
 			int lz = FEAT_INT(16);
-			int sy = (int)hh[lx][lz];
+			int sy = (int)wgen_heights[lx][lz];
 			if(sy < 1 || sy + 2 >= WORLD_HEIGHT) continue;
 			uint8_t top = sc->ids[S_CHUNK_IDX(lx, sy, lz)];
 			if(top != BLOCK_GRASS && top != BLOCK_DIRT && top != BLOCK_SAND) continue;
@@ -8077,9 +8280,11 @@ static void gen_generate_deco_columns(struct server_world* w, struct server_chun
 		int bush_tries = is_desert ? 4 : 0;
 		FEAT_RNG_INIT(7, 0);
 		for(int t = 0; t < bush_tries; t++) {
+			if(FEAT_INT(10) != 0)
+				continue;
 			int lx = FEAT_INT(16);
 			int lz = FEAT_INT(16);
-			int sy = (int)hh[lx][lz];
+			int sy = (int)wgen_heights[lx][lz];
 			if(sy < 1 || sy + 1 >= WORLD_HEIGHT) continue;
 			if(sc->ids[S_CHUNK_IDX(lx, sy, lz)] != BLOCK_SAND) continue;
 			if(sc->ids[S_CHUNK_IDX(lx, sy + 1, lz)] != BLOCK_AIR) continue;
@@ -8098,7 +8303,7 @@ static void gen_generate_deco_columns(struct server_world* w, struct server_chun
 		for(int t = 0; t < lily_tries; t++) {
 			int lx = FEAT_INT(16);
 			int lz = FEAT_INT(16);
-			int sy = (int)hh[lx][lz];
+			int sy = (int)wgen_heights[lx][lz];
 			if(sy < 1 || sy + 1 >= WORLD_HEIGHT) continue;
 			if(sc->ids[S_CHUNK_IDX(lx, sy, lz)] != BLOCK_WATER_STILL) continue;
 			if(sc->ids[S_CHUNK_IDX(lx, sy + 1, lz)] != BLOCK_AIR) continue;
@@ -8117,7 +8322,7 @@ static void gen_generate_deco_columns(struct server_world* w, struct server_chun
 		for(int t = 0; t < mush_tries; t++) {
 			int lx = FEAT_INT(16);
 			int lz = FEAT_INT(16);
-			int sy = (int)hh[lx][lz];
+			int sy = (int)wgen_heights[lx][lz];
 			if(sy < 1 || sy + 1 >= WORLD_HEIGHT) continue;
 			if(sc->ids[S_CHUNK_IDX(lx, sy, lz)] != BLOCK_MYCELIUM) continue;
 			if(sc->ids[S_CHUNK_IDX(lx, sy + 1, lz)] != BLOCK_AIR) continue;
@@ -8135,7 +8340,7 @@ static void gen_generate_deco_columns(struct server_world* w, struct server_chun
 		if(FEAT_INT(32) == 0 && pumpkin_tries > 0) {
 			int lx = FEAT_INT(16);
 			int lz = FEAT_INT(16);
-			int sy = (int)hh[lx][lz];
+			int sy = (int)wgen_heights[lx][lz];
 			if(sy >= 1 && sy + 1 < WORLD_HEIGHT
 			   && sc->ids[S_CHUNK_IDX(lx, sy, lz)] == BLOCK_GRASS
 			   && sc->ids[S_CHUNK_IDX(lx, sy + 1, lz)] == BLOCK_AIR)
@@ -8152,7 +8357,7 @@ static void gen_generate_deco_columns(struct server_world* w, struct server_chun
 			if(FEAT_INT(4) == 0) {
 				int lx = FEAT_INT(16);
 				int lz = FEAT_INT(16);
-				int sy = (int)hh[lx][lz];
+				int sy = (int)wgen_heights[lx][lz];
 				if(sy >= 1 && sy + 1 < WORLD_HEIGHT
 				   && sc->ids[S_CHUNK_IDX(lx, sy, lz)] == BLOCK_GRASS
 				   && sc->ids[S_CHUNK_IDX(lx, sy + 1, lz)] == BLOCK_AIR)
@@ -8407,17 +8612,21 @@ static bool server_world_generate_chunk(struct server_world* w, w_coord_t x,
 	int biome_cache_origin_x = 0;
 	int biome_cache_origin_z = 0;
 	int biome_cache_ids[GEN_BIOME_CACHE_WIDTH * GEN_BIOME_CACHE_WIDTH];
+	uint8_t wgen_heights[CHUNK_SIZE][CHUNK_SIZE];
+	wgen_gen_surface_heights(server_world_wgen_gen(w), (int)x, (int)z,
+	                         wgen_heights);
 	gen_biome_cache_fill(biome_gen, world_x0, world_z0, &biome_cache_valid,
 						 &biome_cache_origin_x, &biome_cache_origin_z,
 						 biome_cache_ids);
 	gen_biome_cache_activate(biome_cache_valid, biome_cache_origin_x,
 							 biome_cache_origin_z, biome_cache_ids);
-	gen_generate_terrain_columns(w, &sc, surface_map, biome_gen, &gen_args, seed,
+	gen_generate_terrain_columns(w, &sc, surface_map, wgen_heights, NULL, 0, 0,
+								 biome_gen, &gen_args, seed,
 								 choice_octaves, world_x0, world_z0, x, z, 0,
 								 CHUNK_SIZE * CHUNK_SIZE);
 	gen_apply_feature_pass(w, &sc, surface_map, biome_gen, &gen_args, seed,
 						   world_x0, world_z0, x, z);
-	gen_generate_deco_columns(w, &sc, biome_gen, &gen_args, seed, world_x0,
+	gen_generate_deco_columns(w, &sc, wgen_heights, biome_gen, &gen_args, seed, world_x0,
 							  world_z0, 0,
 							  (CHUNK_SIZE - 2) * (CHUNK_SIZE - 2));
 	bool ok = gen_finalize_chunk(w, &sc, biome_gen, &gen_args, seed, world_x0,
@@ -8446,7 +8655,23 @@ static bool server_world_pending_start(struct server_world* w, w_coord_t x,
 	memset(w->pending_chunk.surface_map, 0, sizeof(w->pending_chunk.surface_map));
 	gen_pending_biome_cache = (struct gen_biome_cache_storage) {0};
 	if(w->dimension == WORLD_DIM_OVERWORLD) {
+		ptime_t height_cache_start = time_get();
 		Generator* biome_gen = server_world_biome_gen(w);
+		wgen_gen_t* wg = server_world_wgen_gen(w);
+		int cache_origin_x = x * CHUNK_SIZE - SERVER_WORLD_WGEN_HEIGHT_MARGIN;
+		int cache_origin_z = z * CHUNK_SIZE - SERVER_WORLD_WGEN_HEIGHT_MARGIN;
+		for(int cz = 0; cz < SERVER_WORLD_WGEN_HEIGHT_WIDTH; cz++)
+			for(int cx = 0; cx < SERVER_WORLD_WGEN_HEIGHT_WIDTH; cx++)
+				w->pending_chunk.wgen_height_cache[cz][cx]
+					= (uint8_t)wgen_gen_world_height(
+						wg, cache_origin_x + cx,
+						cache_origin_z + cz);
+		wgen_gen_surface_heights_from_raw(
+			w->pending_chunk.wgen_height_cache[0],
+			SERVER_WORLD_WGEN_HEIGHT_WIDTH,
+			SERVER_WORLD_WGEN_HEIGHT_MARGIN - 2,
+			w->pending_chunk.wgen_heights);
+		gen_profile_phase_done(GEN_PROFILE_TERRAIN, height_cache_start);
 		gen_biome_cache_fill(biome_gen, x * CHUNK_SIZE, z * CHUNK_SIZE,
 							 &gen_pending_biome_cache.valid,
 							 &gen_pending_biome_cache.origin_x,
@@ -8497,20 +8722,28 @@ static bool server_world_advance_pending(struct server_world* w,
 	/* Nether: gesamten Chunk in TERRAIN-Phase generieren, direkt finalisieren */
 	if(w->dimension == WORLD_DIM_NETHER) {
 		switch(w->pending_chunk.phase) {
-		case SERVER_WORLD_PENDING_TERRAIN:
+		case SERVER_WORLD_PENDING_TERRAIN: {
+			ptime_t phase_start = time_get();
 			gen_generate_nether_chunk(w, &w->pending_chunk.chunk,
 			                          w->pending_chunk.x, w->pending_chunk.z);
+			gen_profile_phase_done(GEN_PROFILE_TERRAIN, phase_start);
 			w->pending_chunk.phase = SERVER_WORLD_PENDING_FINALIZE;
 			w->pending_chunk.next_column = 0;
 			return false;
+		}
 		case SERVER_WORLD_PENDING_FINALIZE: {
 			int32_t wx0 = w->pending_chunk.x * CHUNK_SIZE;
 			int32_t wz0 = w->pending_chunk.z * CHUNK_SIZE;
+			ptime_t phase_start = time_get();
 			bool ok = gen_finalize_chunk_step(w, &w->pending_chunk.chunk,
 			                                  NULL, NULL, 0, wx0, wz0,
 			                                  w->pending_chunk.x,
 			                                  w->pending_chunk.z, out, 2);
-			if(ok) memset(&w->pending_chunk, 0, sizeof(w->pending_chunk));
+			gen_profile_phase_done(GEN_PROFILE_FINALIZE, phase_start);
+			if(ok) {
+				g_gen_profile.chunks++;
+				memset(&w->pending_chunk, 0, sizeof(w->pending_chunk));
+			}
 			return ok;
 		}
 		default:
@@ -8531,53 +8764,72 @@ static bool server_world_advance_pending(struct server_world* w,
 							 gen_pending_biome_cache.ids);
 
 	switch(w->pending_chunk.phase) {
-	case SERVER_WORLD_PENDING_TERRAIN:
+	case SERVER_WORLD_PENDING_TERRAIN: {
+		ptime_t phase_start = time_get();
 		gen_generate_terrain_columns(w, &w->pending_chunk.chunk,
-									 w->pending_chunk.surface_map, biome_gen,
+									 w->pending_chunk.surface_map,
+									 w->pending_chunk.wgen_heights,
+									 w->pending_chunk.wgen_height_cache[0],
+									 world_x0 - SERVER_WORLD_WGEN_HEIGHT_MARGIN,
+									 world_z0 - SERVER_WORLD_WGEN_HEIGHT_MARGIN,
+									 biome_gen,
 									 &gen_args, seed, choice_octaves, world_x0,
 									 world_z0, w->pending_chunk.x,
 									 w->pending_chunk.z,
 									 w->pending_chunk.next_column,
 									 GEN_CHUNK_COLUMNS_PER_STEP);
+		gen_profile_phase_done(GEN_PROFILE_TERRAIN, phase_start);
 		w->pending_chunk.next_column += GEN_CHUNK_COLUMNS_PER_STEP;
 		if(w->pending_chunk.next_column >= CHUNK_SIZE * CHUNK_SIZE) {
 			w->pending_chunk.phase = SERVER_WORLD_PENDING_FEATURES;
 			w->pending_chunk.next_column = 0;
 		}
 		return false;
+	}
 
-	case SERVER_WORLD_PENDING_FEATURES:
+	case SERVER_WORLD_PENDING_FEATURES: {
+		ptime_t phase_start = time_get();
 		gen_apply_feature_step(w, &w->pending_chunk.chunk,
 							   w->pending_chunk.surface_map, biome_gen,
 							   &gen_args, seed, world_x0, world_z0,
-							   w->pending_chunk.x, w->pending_chunk.z,
-							   w->pending_chunk.next_column);
+								 w->pending_chunk.x, w->pending_chunk.z,
+								 w->pending_chunk.next_column);
+		gen_profile_phase_done(GEN_PROFILE_FEATURES, phase_start);
 		w->pending_chunk.next_column++;
 		if(w->pending_chunk.next_column >= GEN_FEATURE_STEP_COUNT) {
 			w->pending_chunk.phase = SERVER_WORLD_PENDING_DECO;
 			w->pending_chunk.next_column = 0;
 		}
 		return false;
+	}
 
-	case SERVER_WORLD_PENDING_DECO:
-		gen_generate_deco_columns(w, &w->pending_chunk.chunk, biome_gen,
+	case SERVER_WORLD_PENDING_DECO: {
+		ptime_t phase_start = time_get();
+		gen_generate_deco_columns(w, &w->pending_chunk.chunk,
+								  w->pending_chunk.wgen_heights, biome_gen,
 								  &gen_args, seed, world_x0, world_z0,
 								  w->pending_chunk.next_column,
 								  GEN_CHUNK_COLUMNS_PER_STEP);
+		gen_profile_phase_done(GEN_PROFILE_DECO, phase_start);
 		w->pending_chunk.next_column += GEN_CHUNK_COLUMNS_PER_STEP;
 		if(w->pending_chunk.next_column >= (CHUNK_SIZE - 2) * (CHUNK_SIZE - 2)) {
 			w->pending_chunk.phase = SERVER_WORLD_PENDING_FINALIZE;
 			w->pending_chunk.next_column = 0;
 		}
 		return false;
+	}
 
 	case SERVER_WORLD_PENDING_FINALIZE: {
+		ptime_t phase_start = time_get();
 		bool ok = gen_finalize_chunk_step(
 			w, &w->pending_chunk.chunk, biome_gen, &gen_args, seed, world_x0, world_z0,
 			w->pending_chunk.x, w->pending_chunk.z, out,
 			w->pending_chunk.next_column);
+		gen_profile_phase_done(GEN_PROFILE_FINALIZE, phase_start);
 		w->pending_chunk.next_column++;
 		if(ok || w->pending_chunk.next_column >= GEN_FINALIZE_STEP_COUNT) {
+			if(ok)
+				g_gen_profile.chunks++;
 			memset(&w->pending_chunk, 0, sizeof(w->pending_chunk));
 			gen_biome_cache_clear_active();
 		}
