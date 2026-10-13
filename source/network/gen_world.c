@@ -1204,8 +1204,38 @@ static int wgen_offset_to_cavex_height(double offset) {
     return hi;
 }
 
+static int wgen_gen_world_height_raw(wgen_gen_t* g, double wx, double wz) {
+    double cont, eros, rugged;
+    wgen_gen_climate(g, wx, wz, &cont, &eros, NULL, NULL, &rugged);
+    double rf = wgen_fold_factor(rugged);
+    int base_height = wgen_offset_to_cavex_height(
+        -0.5 + wgen_eval_spline(OFFSET_SPLINES, 0, cont, eros, rf));
+
+    if(base_height >= 78) {
+        double high = wgen_layered_noise_sample(&g->rugged, wx * 1.10, 0.0, wz * 1.10);
+        double dir = wgen_layered_noise_sample(&g->shift, wx * 0.08, 0.0, wz * 0.08);
+        double wave = sin(wx * (0.55 + dir * 0.20) + wz * (0.30 - dir * 0.18)
+                          + high * 4.0);
+        double strength = ((double)base_height - 78.0) / 28.0;
+        if(strength < 0.0) strength = 0.0;
+        if(strength > 1.0) strength = 1.0;
+        if(rf > 0.35) strength *= 0.55 + (rf - 0.35) * 0.90;
+        if(strength > 1.0) strength = 1.0;
+        if(wave > -0.15) {
+            int lift = (int)((wave + 0.15) / 1.15 * 7.0 * strength + 0.5);
+            if(lift < 0) lift = 0;
+            if(lift > 7) lift = 7;
+            base_height += lift;
+        }
+    }
+
+    if(base_height < 1) base_height = 1;
+    if(base_height > 123) base_height = 123;
+    return base_height;
+}
+
 int wgen_gen_world_height(wgen_gen_t* g, int wx, int wz) {
-    return wgen_offset_to_cavex_height(wgen_gen_offset(g, (double)wx, (double)wz));
+    return wgen_gen_world_height_raw(g, (double)wx, (double)wz);
 }
 
 void wgen_gen_surface_heights(wgen_gen_t* g, int cx, int cz,
@@ -1220,7 +1250,7 @@ void wgen_gen_surface_heights(wgen_gen_t* g, int cx, int cz,
         for (int lz = 0; lz < 20; lz++) {
             double wx = (double)(base_x + lx - 2);
             double wz = (double)(base_z + lz - 2);
-            raw[lx][lz] = wgen_offset_to_cavex_height(wgen_gen_offset(g, wx, wz));
+            raw[lx][lz] = wgen_gen_world_height_raw(g, wx, wz);
         }
     }
     /* Glättungspass: reduziere steile Übergänge (>6 Blöcke zu Nachbarn)

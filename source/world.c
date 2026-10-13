@@ -21,6 +21,7 @@
 #include <float.h>
 #include <math.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "game/game_state.h"
 #include "graphics/render_entity.h"
@@ -459,22 +460,32 @@ void world_update_lighting(struct world* w) {
 	size_t n = stack_size(&w->lighting_updates);
 	if(n == 0)
 		return;
+	size_t process = n;
+	if(process > 4)
+		process = 4;
 
-	/* Apply ALL queued block updates this frame, in FIFO order (oldest first).
-	 * The container is a stack, but popping it LIFO applies several updates to
-	 * the SAME cell in reverse -- e.g. a water->air retreat would re-show water
-	 * and leave a stale puddle on the client even though the server cleared it.
-	 * Draining front-to-back keeps the client's final state matching the server
-	 * and makes fast bursts (flowing water) appear at once instead of trickling
-	 * one block per frame. */
-	for(size_t i = 0; i < n; i++) {
+	/* Apply queued block updates in FIFO order (oldest first), but keep a hard
+	 * per-frame budget. Large water/chunk bursts can enqueue thousands of
+	 * updates; doing all of them in one frame causes multi-second PC hitches. */
+	for(size_t i = 0; i < process; i++) {
 		struct world_modification_entry source;
 		stack_at(&w->lighting_updates, &source, i);
 		world_set_block(w, source.x, source.y, source.z, source.blk, false);
 		lighting_update_at_block(source, false, world_light_get_block,
 								 world_light_set_light, w);
 	}
-	stack_clear(&w->lighting_updates);
+
+	if(process == n) {
+		stack_clear(&w->lighting_updates);
+	} else {
+		size_t remain = n - process;
+		memmove(w->lighting_updates.data,
+				(uint8_t*)w->lighting_updates.data
+					+ process * w->lighting_updates.element_size,
+				remain * w->lighting_updates.element_size);
+		w->lighting_updates.index = remain;
+	}
+
 }
 
 struct chunk* world_find_chunk_neighbour(struct world* w, struct chunk* c,

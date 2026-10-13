@@ -76,6 +76,7 @@ struct game_state {
 		int percent;       /* progress 0..100 of the current chunk */
 		int chunk_x, chunk_z;
 		unsigned long built; /* chunks finished this session */
+		float chunks_per_sec; /* generated chunks/s while generator is busy */
 	} gen_debug;
 	sig_atomic_t quit;
 	struct random_gen rand_src;

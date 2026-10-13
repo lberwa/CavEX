@@ -32,23 +32,101 @@
 
 #ifdef PLATFORM_PC
 
+#include <limits.h>
+#include <sched.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/resource.h>
+#ifdef __linux__
+#include <sys/syscall.h>
+#endif
 #include <unistd.h>
+
+struct thread_start_args {
+	void* (*entry)(void* arg);
+	void* arg;
+	uint8_t priority;
+};
+
+static void thread_apply_current_priority(uint8_t priority) {
+	/* Wii/libogc uses the priority value directly. On PC this is best-effort:
+	 * realtime pthread priority usually needs privileges, and Linux nice only
+	 * allows raising priority when CAP_SYS_NICE is available. Failing either is
+	 * harmless; the thread still runs with default priority. */
+	if(priority == 0)
+		return;
+
+	int min_prio = sched_get_priority_min(SCHED_RR);
+	int max_prio = sched_get_priority_max(SCHED_RR);
+	if(min_prio >= 0 && max_prio >= min_prio) {
+		struct sched_param param;
+		memset(&param, 0, sizeof(param));
+		param.sched_priority = min_prio
+			+ (int)((unsigned int)(max_prio - min_prio) * priority / UINT8_MAX);
+		if(param.sched_priority < min_prio)
+			param.sched_priority = min_prio;
+		if(param.sched_priority > max_prio)
+			param.sched_priority = max_prio;
+		if(pthread_setschedparam(pthread_self(), SCHED_RR, &param) == 0)
+			return;
+	}
+
+#ifdef __linux__
+	/* Per-thread nice fallback. Without CAP_SYS_NICE Linux will not let us
+	 * boost the mesher above normal, so make lower-priority worker threads much
+	 * nicer instead. That gives the normal-priority mesher CPU first. */
+	int nice_value = (int)priority >= 16 ? 0 : (16 - (int)priority);
+	if(nice_value < -15)
+		nice_value = -15;
+	if(nice_value > 15)
+		nice_value = 15;
+	pid_t tid = (pid_t)syscall(SYS_gettid);
+	if(tid > 0)
+		(void)setpriority(PRIO_PROCESS, tid, nice_value);
+#else
+	(void)priority;
+#endif
+}
+
+static void* thread_entry_wrapper(void* user) {
+	struct thread_start_args start = *(struct thread_start_args*)user;
+	free(user);
+	thread_apply_current_priority(start.priority);
+	return start.entry(start.arg);
+}
 
 void thread_create(struct thread* t, void* (*entry)(void* arg), void* arg,
 				   uint8_t priority) {
 	assert(t && entry);
-	pthread_create(&t->native, NULL, entry, arg);
+	struct thread_start_args* start = malloc(sizeof(*start));
+	if(start) {
+		*start = (struct thread_start_args) {
+			.entry = entry,
+			.arg = arg,
+			.priority = priority,
+		};
+		pthread_create(&t->native, NULL, thread_entry_wrapper, start);
+	} else {
+		pthread_create(&t->native, NULL, entry, arg);
+	}
 }
 
 void thread_create_stack(struct thread* t, void* (*entry)(void* arg), void* arg,
 						 uint8_t priority, size_t stack_size) {
 	assert(t && entry);
-	(void)priority;
 	/* PC hat reichlich Stack; Default genügt. stack_size ignoriert. */
 	(void)stack_size;
-	pthread_create(&t->native, NULL, entry, arg);
+	struct thread_start_args* start = malloc(sizeof(*start));
+	if(start) {
+		*start = (struct thread_start_args) {
+			.entry = entry,
+			.arg = arg,
+			.priority = priority,
+		};
+		pthread_create(&t->native, NULL, thread_entry_wrapper, start);
+	} else {
+		pthread_create(&t->native, NULL, entry, arg);
+	}
 }
 
 void thread_join(struct thread* t) {

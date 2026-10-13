@@ -18,6 +18,8 @@
 */
 
 #include <assert.h>
+#include <stdlib.h>
+#include <string.h>
 
 #include "lighting.h"
 
@@ -57,6 +59,28 @@ static inline int8_t MAX_I8(int8_t a, int8_t b) {
 	return a > b ? a : b;
 }
 
+static bool lighting_queue_push_once(struct stack* queue, uint8_t* queued,
+									 int radius, struct lighting_update_entry origin,
+									 struct lighting_update_entry entry) {
+	int dx = entry.x - origin.x;
+	int dy = entry.y - origin.y;
+	int dz = entry.z - origin.z;
+	if(dx < -radius || dx > radius || dy < -radius || dy > radius
+	   || dz < -radius || dz > radius)
+		return false;
+
+	int side = radius * 2 + 1;
+	size_t idx = (size_t)(dx + radius)
+		+ (size_t)(dy + radius) * (size_t)side
+		+ (size_t)(dz + radius) * (size_t)side * (size_t)side;
+	if(queued[idx])
+		return false;
+
+	queued[idx] = 1;
+	stack_push(queue, &entry);
+	return true;
+}
+
 void lighting_update_at_block(
 	struct world_modification_entry source, bool ignore_sky_light,
 	bool (*get_block)(void* user, w_coord_t x, w_coord_t y, w_coord_t z,
@@ -66,14 +90,21 @@ void lighting_update_at_block(
 	void* user) {
 	assert(get_block && set_light);
 
+	const int radius = 18;
+	int side = radius * 2 + 1;
+	size_t queued_count = (size_t)side * (size_t)side * (size_t)side;
+	uint8_t* queued = calloc(queued_count, 1);
+	if(!queued)
+		return;
+
 	struct stack queue;
 	stack_create(&queue, 128, sizeof(struct lighting_update_entry));
-	stack_push(&queue,
-			   &(struct lighting_update_entry) {
-				   .x = source.x,
-				   .y = source.y,
-				   .z = source.z,
-			   });
+	struct lighting_update_entry origin = {
+		.x = source.x,
+		.y = source.y,
+		.z = source.z,
+	};
+	lighting_queue_push_once(&queue, queued, radius, origin, origin);
 
 	while(!stack_empty(&queue)) {
 		struct lighting_update_entry current;
@@ -131,16 +162,18 @@ void lighting_update_at_block(
 				blocks_side_offset(s, &x, &y, &z);
 
 				if(get_block(user, current.x + x, current.y + y, current.z + z,
-							 NULL, NULL))
-					stack_push(&queue,
-							   &(struct lighting_update_entry) {
-								   .x = current.x + x,
-								   .y = current.y + y,
-								   .z = current.z + z,
-							   });
+							 NULL, NULL)) {
+					lighting_queue_push_once(&queue, queued, radius, origin,
+											  (struct lighting_update_entry) {
+												  .x = current.x + x,
+												  .y = current.y + y,
+												  .z = current.z + z,
+											  });
+				}
 			}
 		}
 	}
 
 	stack_destroy(&queue);
+	free(queued);
 }

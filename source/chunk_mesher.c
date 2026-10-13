@@ -626,15 +626,14 @@ void chunk_mesher_init() {
 		tchannel_send(&mesher_empty_msg, rpc_msg + k, true);
 
 	struct thread t;
-	/* Priority 16: ABOVE the local server thread (priority 8). On the single-core
+	/* Priority 64: well ABOVE the local server thread (priority 8). On the single-core
 	 * Wii the server (chunk generation) used to preempt the mesher (was priority
 	 * 4), so the mesher starved and a backlog of dirty chunks never got rebuilt --
 	 * block break/place and freshly generated chunks stayed unrendered. Giving the
 	 * mesher the higher priority makes meshing win over generation: the worker
 	 * only blocks waiting for requests, so when there is meshing to do it preempts
-	 * generation, and generation transparently uses the leftover time. Still well
-	 * below the main/render thread, so rendering is unaffected. */
-	thread_create(&t, chunk_mesher_local_thread, NULL, 16);
+	 * generation, and generation transparently uses the leftover time. */
+	thread_create(&t, chunk_mesher_local_thread, NULL, 64);
 }
 
 void chunk_mesher_receive() {

@@ -1016,6 +1016,12 @@ static bool music_run = false;
 static wav_t bg_wav = {0};
 static float bg_volume = 1.0f;
 static pthread_mutex_t bg_mutex = PTHREAD_MUTEX_INITIALIZER;
+static bool bg_loader_active = false;
+
+struct bg_loader_req {
+    char path[256];
+    float volume;
+};
 
 //----------------------
 // WAV Loader
@@ -1597,6 +1603,59 @@ static wav_t load_mp3_file(const char *path) {
     return w;
 }
 
+static void* bg_loader_thread_main(void* user) {
+    struct bg_loader_req* req = user;
+    wav_t new_bg = load_mp3_file(req->path);
+    new_bg.vol_left  = req->volume;
+    new_bg.vol_right = req->volume;
+
+    pthread_mutex_lock(&bg_mutex);
+    if(new_bg.data) {
+        free(bg_wav.data);
+        bg_wav = new_bg;
+    } else {
+        free(new_bg.data);
+    }
+    bg_loader_active = false;
+    pthread_mutex_unlock(&bg_mutex);
+
+    free(req);
+    return NULL;
+}
+
+static void bg_load_async(const char* path, float volume) {
+    if(!path)
+        return;
+
+    pthread_mutex_lock(&bg_mutex);
+    if(bg_loader_active) {
+        pthread_mutex_unlock(&bg_mutex);
+        return;
+    }
+    bg_loader_active = true;
+    pthread_mutex_unlock(&bg_mutex);
+
+    struct bg_loader_req* req = malloc(sizeof(*req));
+    if(!req) {
+        pthread_mutex_lock(&bg_mutex);
+        bg_loader_active = false;
+        pthread_mutex_unlock(&bg_mutex);
+        return;
+    }
+    snprintf(req->path, sizeof(req->path), "%s", path);
+    req->volume = volume;
+
+    pthread_t thread;
+    if(pthread_create(&thread, NULL, bg_loader_thread_main, req) == 0) {
+        pthread_detach(thread);
+    } else {
+        free(req);
+        pthread_mutex_lock(&bg_mutex);
+        bg_loader_active = false;
+        pthread_mutex_unlock(&bg_mutex);
+    }
+}
+
 //----------------------
 // PortAudio Callback
 //----------------------
@@ -1839,35 +1898,33 @@ bool sound_play_at(enum pcm_sound sound, float wx, float wy, float wz) {
 // jeden Frame ALLES freigegeben -> der Callback las freigegebenen Speicher
 // (use-after-free) und kein Sound war je zu Ende hoerbar.
 void sound_update(void) {
-    pthread_mutex_lock(&pcm_mutex);
-    int k = 0;
-    for (int i = 0; i < pcm_playlist_num; i++) {
-        wav_t *w = &pcm_playlist[i];
-        if (w->data && w->pos < w->size) {
-            pcm_playlist[k++] = *w;   // noch am Spielen -> behalten
-        } else {
-            free(w->data);            // fertig -> Speicher freigeben
+    if(pthread_mutex_trylock(&pcm_mutex) == 0) {
+        int k = 0;
+        for (int i = 0; i < pcm_playlist_num; i++) {
+            wav_t *w = &pcm_playlist[i];
+            if (w->data && w->pos < w->size) {
+                pcm_playlist[k++] = *w;   // noch am Spielen -> behalten
+            } else {
+                free(w->data);            // fertig -> Speicher freigeben
+            }
         }
+        pcm_playlist_num = k;
+        pthread_mutex_unlock(&pcm_mutex);
     }
-    pcm_playlist_num = k;
-    pthread_mutex_unlock(&pcm_mutex);
 
     if (music_run) {
-        pthread_mutex_lock(&bg_mutex);
-        bool bg_done = !bg_wav.data || bg_wav.pos >= bg_wav.size;
-        pthread_mutex_unlock(&bg_mutex);
+        bool bg_done = false;
+        bool loader_active = false;
+        if(pthread_mutex_trylock(&bg_mutex) == 0) {
+            bg_done = !bg_wav.data || bg_wav.pos >= bg_wav.size;
+            loader_active = bg_loader_active;
+            pthread_mutex_unlock(&bg_mutex);
+        }
         if (bg_done) {
             bg_playlist_num = (bg_playlist_num + 1) % 16;
             const char *path = sound_get_bg_mp3_path(bg_playlist[bg_playlist_num]);
-            if (path) {
-                wav_t new_bg = load_mp3_file(path);
-                new_bg.vol_left  = bg_volume;
-                new_bg.vol_right = bg_volume;
-                pthread_mutex_lock(&bg_mutex);
-                free(bg_wav.data);
-                bg_wav = new_bg;
-                pthread_mutex_unlock(&bg_mutex);
-            }
+            if (path && !loader_active)
+                bg_load_async(path, bg_volume);
         }
     }
 }

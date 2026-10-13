@@ -645,6 +645,18 @@ int main(void) {
 		gstate.stats.dt = time_diff_s(last_frame, this_frame);
 		gstate.stats.fps = 1.0F / gstate.stats.dt;
 		last_frame = this_frame;
+		float hitch_clin_ms = 0.0f;
+		float hitch_tick_ms = 0.0f;
+		float hitch_world_prep_ms = 0.0f;
+		float hitch_light_ms = 0.0f;
+		float hitch_build_ms = 0.0f;
+		float hitch_screen_ms = 0.0f;
+		float hitch_flip_ms = 0.0f;
+		float hitch_render_ms = 0.0f;
+		float hitch_gui_ms = 0.0f;
+		float hitch_sound_ms = 0.0f;
+		float hitch_input_ms = 0.0f;
+		float hitch_finish_ms = 0.0f;
 
 		if(gstate.paused) {
 			/* Freeze the world clock while paused: advance world_time_start in
@@ -665,8 +677,9 @@ int main(void) {
 
 			ptime_t _prof_t0 = time_get();
 			clin_update();
+			hitch_clin_ms = time_diff_s(_prof_t0, time_get()) * 1000.0f;
 			gstate.stats.prof_clin_ms = gstate.stats.prof_clin_ms * 0.9f
-				+ time_diff_s(_prof_t0, time_get()) * 1000.0f * 0.1f;
+				+ hitch_clin_ms * 0.1f;
 
 #ifdef TEST_MULTIPLAYER_INPUT
 #ifdef PLATFORM_PC
@@ -703,8 +716,9 @@ int main(void) {
 					entities_client_tick(gstate.entities);
 				}
 			}
+			hitch_tick_ms = time_diff_s(_prof_tick0, time_get()) * 1000.0f;
 			gstate.stats.prof_tick_ms = gstate.stats.prof_tick_ms * 0.9f
-				+ time_diff_s(_prof_tick0, time_get()) * 1000.0f * 0.1f;
+				+ hitch_tick_ms * 0.1f;
 		}
 
 		render_world
@@ -921,19 +935,31 @@ int main(void) {
 		 * world_pre_render wird erst im Render-Loop aufgerufen. Bis dahin kann
 		 * die ilist Zeiger auf freigegene Chunks enthalten (z.B. nach retire
 		 * wenn kein Spieler mehr in dieser Dimension ist). */
+		ptime_t _prof_world_prep0 = time_get();
 		world_pre_render_clear(&gstate.world);
+		ptime_t _prof_light0 = time_get();
 		world_update_lighting(&gstate.world);
+		hitch_light_ms += time_diff_s(_prof_light0, time_get()) * 1000.0f;
+		ptime_t _prof_build0 = time_get();
 		world_build_chunks(&gstate.world, CHUNK_MESHER_QLENGTH);
+		hitch_build_ms += time_diff_s(_prof_build0, time_get()) * 1000.0f;
 		if(_has_nether) {
 			world_pre_render_clear(&gstate.world_nether);
+			_prof_light0 = time_get();
 			world_update_lighting(&gstate.world_nether);
+			hitch_light_ms += time_diff_s(_prof_light0, time_get()) * 1000.0f;
+			_prof_build0 = time_get();
 			world_build_chunks(&gstate.world_nether, CHUNK_MESHER_QLENGTH);
+			hitch_build_ms += time_diff_s(_prof_build0, time_get()) * 1000.0f;
 		}
+		hitch_world_prep_ms = time_diff_s(_prof_world_prep0, time_get()) * 1000.0f;
 
 		sdlog("loop: vor screen->update");
+		ptime_t _prof_screen0 = time_get();
 		if(gstate.current_screen->update)
 			gstate.current_screen->update(gstate.current_screen,
 											gstate.stats.dt);
+		hitch_screen_ms = time_diff_s(_prof_screen0, time_get()) * 1000.0f;
 		sdlog("loop: nach screen->update");
 		cdbg_flush(); /* Debug-Nachrichten vom Server-Thread senden */
 
@@ -957,7 +983,9 @@ int main(void) {
 		}
 
 		sdlog("loop: vor gfx_flip_buffers");
+		ptime_t _prof_flip0 = time_get();
 		gfx_flip_buffers(&gstate.stats.dt_gpu, &gstate.stats.dt_vsync);
+		hitch_flip_ms = time_diff_s(_prof_flip0, time_get()) * 1000.0f;
 		sdlog("loop: nach gfx_flip_buffers");
 
 		ptime_t _prof_render0 = time_get();
@@ -1330,8 +1358,9 @@ int main(void) {
 #endif // SPLITSCREEN
 		}
 
+		hitch_render_ms = time_diff_s(_prof_render0, time_get()) * 1000.0f;
 		gstate.stats.prof_render_ms = gstate.stats.prof_render_ms * 0.9f
-			+ time_diff_s(_prof_render0, time_get()) * 1000.0f * 0.1f;
+			+ hitch_render_ms * 0.1f;
 
 		ptime_t _prof_gui0 = time_get();
 		if(!rendered_2d) {
@@ -1400,19 +1429,55 @@ int main(void) {
 #ifdef PLATFORM_PC
 		pc_update();
 #endif
+		hitch_gui_ms = time_diff_s(_prof_gui0, time_get()) * 1000.0f;
 		gstate.stats.prof_gui_ms = gstate.stats.prof_gui_ms * 0.9f
-			+ time_diff_s(_prof_gui0, time_get()) * 1000.0f * 0.1f;
+			+ hitch_gui_ms * 0.1f;
 
 		sdlog("loop: vor sound_update");
+		ptime_t _prof_sound0 = time_get();
 		sound_update();
+		hitch_sound_ms = time_diff_s(_prof_sound0, time_get()) * 1000.0f;
 		sdlog("loop: vor input_poll");
+		ptime_t _prof_input0 = time_get();
 		input_poll();
+		hitch_input_ms = time_diff_s(_prof_input0, time_get()) * 1000.0f;
 		sdlog("loop: vor gfx_finish");
 		ptime_t _prof_finish0 = time_get();
 		gfx_finish(true);
+		hitch_finish_ms = time_diff_s(_prof_finish0, time_get()) * 1000.0f;
 		gstate.stats.prof_finish_ms = gstate.stats.prof_finish_ms * 0.9f
-			+ time_diff_s(_prof_finish0, time_get()) * 1000.0f * 0.1f;
+			+ hitch_finish_ms * 0.1f;
 		sdlog("loop: nach gfx_finish (Frame-Ende)");
+
+#ifdef PLATFORM_PC
+		float hitch_frame_ms = time_diff_s(this_frame, time_get()) * 1000.0f;
+		if(hitch_frame_ms >= 120.0f) {
+			float hitch_known_ms = hitch_clin_ms + hitch_tick_ms
+				+ hitch_world_prep_ms + hitch_screen_ms + hitch_flip_ms
+				+ hitch_render_ms + hitch_gui_ms + hitch_sound_ms
+				+ hitch_input_ms + hitch_finish_ms;
+			float hitch_other_ms = hitch_frame_ms - hitch_known_ms;
+			printf("[HITCH] frame=%.1f ms prev_dt=%.1f ms "
+				   "clin=%.1f tick=%.1f world=%.1f light=%.1f build=%.1f screen=%.1f "
+				   "flip=%.1f render=%.1f gui=%.1f "
+				   "sound=%.1f input=%.1f finish=%.1f other=%.1f "
+				   "server=%.1fms/%.1fTPS mesher=%.1fms %.1f/s q=%d "
+				   "sent=%lu fail=%lu built=%lu recv=%lu\n",
+				   hitch_frame_ms, gstate.stats.dt * 1000.0f,
+				   hitch_clin_ms, hitch_tick_ms, hitch_world_prep_ms,
+				   hitch_light_ms, hitch_build_ms, hitch_screen_ms,
+				   hitch_flip_ms, hitch_render_ms,
+				   hitch_gui_ms, hitch_sound_ms, hitch_input_ms,
+				   hitch_finish_ms, hitch_other_ms,
+				   gstate.stats.server_tick_ms, gstate.stats.server_tps,
+				   chunk_mesher_stat_ms_per_build,
+				   chunk_mesher_stat_builds_per_sec,
+				   chunk_mesher_stat_queue_depth,
+				   chunk_mesher_dbg_sent, chunk_mesher_dbg_failed,
+				   chunk_mesher_dbg_built, chunk_mesher_dbg_recv);
+			fflush(stdout);
+		}
+#endif
 
 //--------------------------------------------------------------------
 	#if 0

@@ -134,6 +134,7 @@
 
 * there is no item in the creative inventory:
   - fence
+  - TNT
 
 * there is superfluous item in the creative inventory:
   - boat motor
