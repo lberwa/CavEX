@@ -827,7 +827,7 @@ static void screen_ingame_render2D(struct screen* s, int width, int height) {
 
 		int tw = gutil_font_width(gstr, 8 * sc);
 		int gx = width - tw - 4 * sc;
-		int gy = 4 * sc;
+		int gy = 4 * sc + 3;
 		gutil_text(gx, gy, gstr, 8 * sc, true);
 
 		/* mesh pipeline diagnostics: dirty chunks waiting + mesher throughput.

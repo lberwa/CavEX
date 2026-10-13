@@ -65,6 +65,10 @@ enum server_world_pending_phase {
 	SERVER_WORLD_PENDING_FINALIZE,
 };
 
+#define SERVER_WORLD_WGEN_HEIGHT_MARGIN 26
+#define SERVER_WORLD_WGEN_HEIGHT_WIDTH \
+	(CHUNK_SIZE + SERVER_WORLD_WGEN_HEIGHT_MARGIN * 2)
+
 struct server_world_pending_chunk {
 	bool active;
 	w_coord_t x;
@@ -72,6 +76,9 @@ struct server_world_pending_chunk {
 	enum server_world_pending_phase phase;
 	int next_column;
 	int surface_map[CHUNK_SIZE * CHUNK_SIZE];
+	uint8_t wgen_heights[CHUNK_SIZE][CHUNK_SIZE];
+	uint8_t wgen_height_cache[SERVER_WORLD_WGEN_HEIGHT_WIDTH]
+		[SERVER_WORLD_WGEN_HEIGHT_WIDTH];
 	struct server_chunk chunk;
 };
 
@@ -214,6 +221,9 @@ void server_world_create(struct server_world* w, string_t level_name,
 void server_world_set_cuberite_defaults(struct server_world* w);
 void server_world_set_seed(struct server_world* w, int64_t seed);
 void server_world_destroy(struct server_world* w);
+
+/* Writes and resets the generator timing summary for the current world. */
+void server_world_generation_profile_save(void);
 
 bool server_world_get_block(struct server_world* w, w_coord_t x, w_coord_t y,
 							w_coord_t z, struct block_data* blk);

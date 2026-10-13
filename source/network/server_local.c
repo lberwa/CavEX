@@ -1782,6 +1782,7 @@ static void server_local_process(struct server_rpc* call, void* user) {
 			furnace_archive_write(s->furnaces, s->level_name);
 			sign_archive_write(s->sign_pos, s->sign_texts[0], s->level_name);
 			server_local_save_portal_registry(s);
+			server_world_generation_profile_save();
 
 			dict_entity_it_t it;
 			dict_entity_it(it, s->entities);
@@ -2666,6 +2667,17 @@ unload_done:
 		chunk_budget_ms = gstate.settings.chunk_build_budget_ms;
 		if(chunk_budget_ms < 1)
 			chunk_budget_ms = 1;
+		/* Preserve the 20 TPS tick while generating.  Generation may use only
+		 * the time left after normal server work, with a small reserve for the
+		 * rest of the tick.  If gameplay itself becomes expensive, the budget
+		 * naturally shrinks and the server is allowed to fall below 20 TPS due
+		 * to that gameplay load, not because generation consumed the tick. */
+		int32_t normal_work_ms = time_diff_ms(tick_begin, time_get());
+		int available_ms = 50 - normal_work_ms - 3;
+		if(available_ms < 1)
+			available_ms = 1;
+		if(chunk_budget_ms > available_ms)
+			chunk_budget_ms = available_ms;
 		load_per_tick = chunk_build;
 	} else {
 		/* LOADING SCREEN: always run at full speed, independent of the in-game
