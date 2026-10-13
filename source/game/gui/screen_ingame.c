@@ -814,15 +814,16 @@ static void screen_ingame_render2D(struct screen* s, int width, int height) {
 	/* debug overlay: live chunk generation progress (top-right) */
 	if(gstate.settings.debug) {
 		int sc = GFX_GUI_SCALE;
-		char gstr[64];
+		char gstr[96];
 		if(gstate.gen_debug.active) {
-			snprintf(gstr, sizeof(gstr), "gen %d%% (%d, %d)  built %lu",
+			snprintf(gstr, sizeof(gstr), "gen %d%% (%d, %d) %.1f c/s built %lu",
 					 gstate.gen_debug.percent, gstate.gen_debug.chunk_x,
-					 gstate.gen_debug.chunk_z, gstate.gen_debug.built);
+					 gstate.gen_debug.chunk_z, gstate.gen_debug.chunks_per_sec,
+					 gstate.gen_debug.built);
 			//printf(gstr); printf("\n");
 		} else
-			snprintf(gstr, sizeof(gstr), "gen idle  built %lu",
-					 gstate.gen_debug.built);
+			snprintf(gstr, sizeof(gstr), "gen idle %.1f c/s built %lu",
+					 gstate.gen_debug.chunks_per_sec, gstate.gen_debug.built);
 
 		int tw = gutil_font_width(gstr, 8 * sc);
 		int gx = width - tw - 4 * sc;

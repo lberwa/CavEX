@@ -2684,6 +2684,7 @@ unload_done:
 	s->loading = !finished_loading;
 
 	int loaded_this_tick = 0;
+	int generated_this_tick = 0;
 	/* true once there is no candidate chunk left to load/generate in range */
 	bool all_loaded = false;
 	ptime_t chunk_load_start = time_get();
@@ -2758,6 +2759,7 @@ unload_done:
 		}
 
 		struct server_chunk* sc;
+		bool pending_before = server_world_pending_chunk(&s->worlds[0], NULL, NULL);
 		if(server_world_load_chunk(&s->worlds[0], cand_x, cand_z, &sc)) {
 			size_t sz = CHUNK_SIZE * CHUNK_SIZE * WORLD_HEIGHT;
 
@@ -2791,6 +2793,8 @@ unload_done:
 			server_world_wake_chunk_water(s, sc, cand_x, cand_z);
 
 			loaded_this_tick++;
+			if(pending_before)
+				generated_this_tick++;
 		} else if(server_world_pending_chunk(&s->worlds[0], NULL, NULL)) {
 			/* Generierung läuft noch (mehrstufig) → Puffer zurückgeben */
 			clin_chunk_buf_return(block);
@@ -2836,6 +2840,34 @@ unload_done:
 			gstate.gen_debug.percent = 100;
 		}
 		gstate.gen_debug.built += (unsigned long)loaded_this_tick;
+
+		static bool gen_rate_started = false;
+		static ptime_t gen_rate_last;
+		static unsigned long gen_rate_count = 0;
+		ptime_t gen_rate_now = time_get();
+		if(!gen_rate_started) {
+			gen_rate_last = gen_rate_now;
+			gen_rate_started = true;
+		}
+		if(!gstate.gen_debug.active && generated_this_tick == 0) {
+			/* Do not include idle time in the next sample.  Keep the last
+			 * completed rate on screen instead of letting it decay toward 0. */
+			gen_rate_count = 0;
+			gen_rate_last = gen_rate_now;
+		} else {
+			gen_rate_count += (unsigned long)generated_this_tick;
+			int32_t gen_rate_ms = time_diff_ms(gen_rate_last, gen_rate_now);
+			if(gen_rate_ms >= 1000 && gen_rate_count > 0) {
+				float inst = (float)gen_rate_count * 1000.0f / (float)gen_rate_ms;
+				if(gstate.gen_debug.chunks_per_sec <= 0.0f)
+					gstate.gen_debug.chunks_per_sec = inst;
+				else
+					gstate.gen_debug.chunks_per_sec =
+						gstate.gen_debug.chunks_per_sec * 0.75f + inst * 0.25f;
+				gen_rate_count = 0;
+				gen_rate_last = gen_rate_now;
+			}
+		}
 	}
 
 	/* When is loading "done"?

@@ -264,8 +264,9 @@ void chunk_set_block_raw(struct chunk* c, c_coord_t x, c_coord_t y,
 bool chunk_check_built(struct chunk* c) {
 	assert(c);
 
-	if(c->rebuild_displist && chunk_mesher_send(c)) {
-		c->rebuild_displist = false;
+	if(c->rebuild_displist) {
+		if(chunk_mesher_send(c))
+			c->rebuild_displist = false;
 		return true;
 	}
 

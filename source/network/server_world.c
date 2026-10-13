@@ -1531,8 +1531,8 @@ static void gen_carve_cave_entrance_to_worm(struct server_chunk* sc, uint32_t se
 	if(sc == NULL || surface_map == NULL)
 		return;
 
-	/* ~40% der Chunks bekommen einen Eingangsversuch */
-	if((gen_hash3i(chunk_x, 941, chunk_z, seed ^ 0x3A7C001U) % 100U) >= 40U)
+	/* Selten halten: sonst wirken die Eingänge wie dauernde Schluchten. */
+	if((gen_hash3i(chunk_x, 941, chunk_z, seed ^ 0x3A7C001U) % 100U) >= 6U)
 		return;
 
 	/* Bis zu 3 Kandidaten-Positionen testen */
@@ -1544,8 +1544,8 @@ static void gen_carve_cave_entrance_to_worm(struct server_chunk* sc, uint32_t se
 		int lz = 6 + (int)((h >> 8) % 4U);
 
 		int surface = surface_map[lx + lz * CHUNK_SIZE];
-		if(surface < sea_level + 2 || surface >= WORLD_HEIGHT - 2)
-			continue; /* kein Eingang unter Wasser oder zu hoch */
+		if(surface < sea_level + 8 || surface >= WORLD_HEIGHT - 2)
+			continue; /* kein Eingang an Wasser/Küste oder zu hoch */
 
 		/* Nach unten sondieren: gibt es eine Höhle (Luft) unter der Oberfläche? */
 		int cave_y = -1;
@@ -1589,7 +1589,7 @@ static void gen_carve_cave_entrance_to_worm(struct server_chunk* sc, uint32_t se
 						if(_nx<0||_nx>=CHUNK_SIZE||_nz<0||_nz>=CHUNK_SIZE) continue; \
 						if(_ny<1||_ny>=WORLD_HEIGHT) continue; \
 						uint8_t _b = gen_get_block(sc, _nx, _ny, _nz); \
-						if(_b!=BLOCK_BEDROCK && _b!=BLOCK_WATER_STILL && _b!=BLOCK_WATER_FLOW) \
+						if(_b!=BLOCK_BEDROCK) \
 							gen_set_block(sc, _nx, _ny, _nz, BLOCK_AIR); \
 					} \
 		} while(0)
@@ -2177,6 +2177,116 @@ static void gen_carve_density_block(struct server_chunk* sc, int lx, int y,
 	gen_set_block(sc, lx, y, lz, BLOCK_AIR);
 }
 
+static void gen_drain_density_block(struct server_chunk* sc, int lx, int y,
+									int lz) {
+	uint8_t block = gen_get_block(sc, lx, y, lz);
+	if(block == BLOCK_WATER_STILL || block == BLOCK_WATER_FLOW)
+		gen_set_block(sc, lx, y, lz, BLOCK_AIR);
+}
+
+static void gen_carve_air_sphere(struct server_chunk* sc, int chunk_x, int chunk_z,
+								 int wx, int y, int wz, int radius) {
+	if(sc == NULL || radius <= 0)
+		return;
+	int base_x = chunk_x * CHUNK_SIZE;
+	int base_z = chunk_z * CHUNK_SIZE;
+	int lx0 = wx - base_x;
+	int lz0 = wz - base_z;
+	for(int dz = -radius; dz <= radius; dz++) {
+		for(int dx = -radius; dx <= radius; dx++) {
+			for(int dy = -radius; dy <= radius; dy++) {
+				float vy = (float)dy * 1.25f;
+				if((float)(dx * dx + dz * dz) + vy * vy
+				   > (float)(radius * radius) + 0.5f)
+					continue;
+				int lx = lx0 + dx;
+				int lz = lz0 + dz;
+				int ly = y + dy;
+				if(lx < 0 || lx >= CHUNK_SIZE || lz < 0 || lz >= CHUNK_SIZE
+				   || ly < 1 || ly >= WORLD_HEIGHT)
+					continue;
+				uint8_t b = gen_get_block(sc, lx, ly, lz);
+				if(b != BLOCK_BEDROCK)
+					gen_set_block(sc, lx, ly, lz, BLOCK_AIR);
+			}
+		}
+	}
+}
+
+static void gen_carve_density_canyon_bottom_caves(struct server_chunk* sc,
+												  uint32_t seed, int chunk_x,
+												  int chunk_z, int32_t world_x0,
+												  int32_t world_z0, float dx,
+												  float dz, float cx, float cz,
+												  float width, float center_y,
+												  float height) {
+	if(sc == NULL)
+		return;
+	int openings = 3 + (int)(gen_hash3i(chunk_x, 409, chunk_z,
+										seed ^ 0xB0770C4U) % 4U);
+	float ravine_len = 20.0f;
+	int bottom_y = (int)(center_y - height * 0.55f);
+	bottom_y = gen_clamp_int(bottom_y, 9, WORLD_HEIGHT - 14);
+	int hub_x = 0;
+	int hub_y = 0;
+	int hub_z = 0;
+	gen_chunk_cave_compute_hub(seed, chunk_x, chunk_z, &hub_x, &hub_y, &hub_z,
+							   NULL);
+
+	for(int i = 0; i < openings; i++) {
+		uint32_t h = gen_hash3i(chunk_x, 431 + i * 37, chunk_z,
+								seed ^ 0xB0770C5U);
+		float along = (((float)(h & 0xFFFFU) / 65535.0f) - 0.5f) * ravine_len;
+		int side = (h & 0x10000U) ? 1 : -1;
+		float wall = width * (0.72f + ((float)((h >> 17) & 255U) / 255.0f) * 0.30f);
+		int sy = gen_clamp_int(bottom_y + (int)((h >> 25) % 5U) - 2,
+							   7, WORLD_HEIGHT - 12);
+
+		int start_x = world_x0 + (int)(cx + dx * along + dz * wall * (float)side);
+		int start_z = world_z0 + (int)(cz + dz * along - dx * wall * (float)side);
+		int end_x = start_x + (int)(dz * (float)side * (8 + (int)((h >> 8) % 9U)));
+		int end_z = start_z - (int)(dx * (float)side * (8 + (int)((h >> 12) % 9U)));
+		int end_y = gen_clamp_int(sy - 1 - (int)((h >> 20) % 5U),
+								  6, WORLD_HEIGHT - 12);
+
+		int mouth_r = 2 + (int)((h >> 4) % 2U);
+		int chamber_r = ((h >> 23) & 1U) ? 5 : 3;
+		gen_carve_air_sphere(sc, chunk_x, chunk_z, start_x, sy, start_z, mouth_r);
+
+		struct gen_cave_tunnel tunnel;
+		gen_cave_init_tunnel(&tunnel, start_x, sy, start_z, mouth_r,
+							 end_x, end_y, end_z, 2,
+							 seed ^ (uint32_t)(0xB077A11U + i * 97U));
+		gen_cave_process_chunk(&tunnel, sc, chunk_x, chunk_z);
+		gen_carve_air_sphere(sc, chunk_x, chunk_z, end_x, end_y, end_z,
+							 chamber_r);
+
+		if(i < 2) {
+			int link_y = gen_clamp_int((end_y + hub_y) / 2, 6, WORLD_HEIGHT - 12);
+			gen_cave_init_tunnel(&tunnel, end_x, end_y, end_z, 2,
+								 hub_x, link_y, hub_z, 2,
+								 seed ^ (uint32_t)(0xB077D44U + i * 103U));
+			gen_cave_process_chunk(&tunnel, sc, chunk_x, chunk_z);
+			gen_carve_air_sphere(sc, chunk_x, chunk_z, hub_x, link_y, hub_z, 3);
+		}
+
+		int branches = ((h >> 27) & 1U) ? 2 : 1;
+		for(int b = 0; b < branches; b++) {
+			uint32_t bh = gen_hash3i(chunk_x, 503 + i * 43 + b * 17,
+									 chunk_z, seed ^ 0xB077B22U);
+			float a = ((float)(bh % 628U) / 100.0f);
+			int bx = end_x + (int)(cosf(a) * (10.0f + (float)((bh >> 8) % 9U)));
+			int bz = end_z + (int)(sinf(a) * (10.0f + (float)((bh >> 12) % 9U)));
+			int by = gen_clamp_int(end_y + (int)((bh >> 18) % 7U) - 3,
+								   6, WORLD_HEIGHT - 12);
+			gen_cave_init_tunnel(&tunnel, end_x, end_y, end_z, 2,
+								 bx, by, bz, 1 + (int)((bh >> 24) % 2U),
+								 seed ^ (uint32_t)(0xB077C33U + i * 101U + b * 19U));
+			gen_cave_process_chunk(&tunnel, sc, chunk_x, chunk_z);
+		}
+	}
+}
+
 static void gen_carve_density_caves(struct server_chunk* sc, uint32_t seed,
 									int32_t world_x0, int32_t world_z0,
 									const int* surface_map, int sea_level) {
@@ -2266,9 +2376,10 @@ static void gen_carve_density_caves(struct server_chunk* sc, uint32_t seed,
 	}
 }
 
-static void gen_carve_density_canyon(struct server_chunk* sc, uint32_t seed,
+static void gen_apply_density_canyon(struct server_chunk* sc, uint32_t seed,
 									 int32_t world_x0, int32_t world_z0,
-									 const int* surface_map, int sea_level) {
+									 const int* surface_map, int sea_level,
+									 bool drain_only) {
 	if(sc == NULL || surface_map == NULL)
 		return;
 	int chunk_x = gen_floor_div(world_x0, CHUNK_SIZE);
@@ -2279,7 +2390,7 @@ static void gen_carve_density_canyon(struct server_chunk* sc, uint32_t seed,
 	                       + (int64_t)chunk_x * 1664525L
 	                       + (int64_t)chunk_z * 22695477L);
 
-	if((gen_hash3i(chunk_x, 331, chunk_z, canyon_seed ^ 0xCA110A11U) % 11U) != 0U)
+	if((gen_hash3i(chunk_x, 331, chunk_z, canyon_seed ^ 0xCA110A11U) % 23U) != 0U)
 		return;
 
 	float angle = gen_rand01_from_hash(
@@ -2320,11 +2431,35 @@ static void gen_carve_density_canyon(struct server_chunk* sc, uint32_t seed,
 										canyon_seed ^ 0xCA110A18U, 1, 2.0f, 0.5f);
 				float shape = horizontal * horizontal + vertical * vertical * 0.58f
 					+ rough * 0.10f;
-				if(shape < 1.0f)
-					gen_carve_density_block(sc, lx, y, lz, sea_level);
+				if(shape < 1.0f) {
+					if(drain_only)
+						gen_drain_density_block(sc, lx, y, lz);
+					else
+						gen_carve_density_block(sc, lx, y, lz, sea_level);
+				}
 			}
 		}
 	}
+
+	if(!drain_only) {
+		gen_carve_density_canyon_bottom_caves(
+			sc, canyon_seed, chunk_x, chunk_z, world_x0, world_z0,
+			dx, dz, cx, cz, width, center_y, height);
+	}
+}
+
+static void gen_carve_density_canyon(struct server_chunk* sc, uint32_t seed,
+									 int32_t world_x0, int32_t world_z0,
+									 const int* surface_map, int sea_level) {
+	gen_apply_density_canyon(sc, seed, world_x0, world_z0, surface_map,
+							 sea_level, false);
+}
+
+static void gen_drain_density_canyon(struct server_chunk* sc, uint32_t seed,
+									 int32_t world_x0, int32_t world_z0,
+									 const int* surface_map, int sea_level) {
+	gen_apply_density_canyon(sc, seed, world_x0, world_z0, surface_map,
+							 sea_level, true);
 }
 
 struct gen_chunk_ravine_connector {
@@ -2635,6 +2770,58 @@ static bool gen_is_air(const struct server_chunk* sc, int x, int y, int z) {
 	return gen_get_block(sc, x, y, z) == BLOCK_AIR;
 }
 
+static bool gen_dungeon_has_earth_cover(const struct server_chunk* sc,
+										int x0, int x1, int y0, int y1,
+										int z0, int z1) {
+	for(int x = x0; x <= x1; x++) {
+		for(int z = z0; z <= z1; z++) {
+			for(int y = y0; y <= y1; y++) {
+				if(!gen_inside_chunk(x, y, z))
+					return false;
+				if(gen_is_water(sc, x, y, z))
+					return false;
+			}
+
+			for(int y = y1 + 1; y < WORLD_HEIGHT; y++) {
+				if(gen_is_water(sc, x, y, z))
+					return false;
+			}
+
+			for(int y = y1 + 1; y <= y1 + 4; y++) {
+				if(!gen_inside_chunk(x, y, z))
+					return false;
+				if(!gen_is_opaque(gen_get_block(sc, x, y, z)))
+					return false;
+			}
+		}
+	}
+	return true;
+}
+
+static bool gen_dungeon_connected_to_cave(const struct server_chunk* sc,
+										  int x0, int x1, int y0, int y1,
+										  int z0, int z1) {
+	for(int y = y0 + 1; y <= y1 - 1; y++) {
+		for(int x = x0; x <= x1; x++) {
+			if(gen_inside_chunk(x, y, z0 - 1)
+			   && gen_get_block(sc, x, y, z0 - 1) == BLOCK_AIR)
+				return true;
+			if(gen_inside_chunk(x, y, z1 + 1)
+			   && gen_get_block(sc, x, y, z1 + 1) == BLOCK_AIR)
+				return true;
+		}
+		for(int z = z0; z <= z1; z++) {
+			if(gen_inside_chunk(x0 - 1, y, z)
+			   && gen_get_block(sc, x0 - 1, y, z) == BLOCK_AIR)
+				return true;
+			if(gen_inside_chunk(x1 + 1, y, z)
+			   && gen_get_block(sc, x1 + 1, y, z) == BLOCK_AIR)
+				return true;
+		}
+	}
+	return false;
+}
+
 struct gen_coord2i { int dx, dz; };
 static const struct gen_coord2i GEN_BIG_O1[] = {{-1,0},{1,0},{0,-1},{0,1}};
 static const struct gen_coord2i GEN_BIG_O2[] = {
@@ -2673,6 +2860,24 @@ static bool gen_tree_space_clear(const struct server_chunk* sc, int x, int y, in
 				if(!gen_tree_can_replace(b))
 					return false;
 			}
+		}
+	}
+	return true;
+}
+
+static bool gen_tree_ground_ok(const struct server_chunk* sc, int x, int y, int z) {
+	if(!gen_inside_chunk(x, y - 1, z) || !gen_inside_chunk(x, y, z))
+		return false;
+	uint8_t ground = gen_get_block(sc, x, y - 1, z);
+	return (ground == BLOCK_GRASS || ground == BLOCK_DIRT)
+		&& gen_tree_can_replace(gen_get_block(sc, x, y, z));
+}
+
+static bool gen_tree_2x2_ground_ok(const struct server_chunk* sc, int x, int y, int z) {
+	for(int dz = 0; dz < 2; dz++) {
+		for(int dx = 0; dx < 2; dx++) {
+			if(!gen_tree_ground_ok(sc, x + dx, y, z + dz))
+				return false;
 		}
 	}
 	return true;
@@ -2882,6 +3087,8 @@ static void gen_place_acacia_tree(struct server_chunk* sc, int x, int y, int z, 
 
 static void gen_place_dark_forest_tree(struct server_chunk* sc, int x, int y, int z, uint32_t seed) {
 	int height = 5 + (abs(gen_noise_int3d(seed ^ 0xDA4B0A11U, x, y, z)) % 3);
+	if(!gen_tree_2x2_ground_ok(sc, x, y, z))
+		return;
 	if(!gen_tree_space_clear(sc, x, y, z, 4, height + 4))
 		return;
 	for(int dz = 0; dz < 2; dz++) {
@@ -3002,6 +3209,12 @@ static void gen_try_place_dungeon(struct server_chunk* sc, uint32_t seed,
 			}
 		}
 	}
+	if(!gen_dungeon_has_earth_cover(sc, cx - 2, cx + 2, cy - 2, cy + 2,
+									cz - 2, cz + 2))
+		return;
+	if(!gen_dungeon_connected_to_cave(sc, cx - 2, cx + 2, cy - 2, cy + 2,
+									  cz - 2, cz + 2))
+		return;
 
 	for(int x = cx - 2; x <= cx + 2; x++) {
 		for(int z = cz - 2; z <= cz + 2; z++) {
@@ -3225,11 +3438,11 @@ static void gen_place_small_house(struct server_chunk* sc, int cx, int y, int cz
 	}
 	gen_set_block(sc, cx, y + 1, cz - 2, BLOCK_AIR);
 	gen_set_block(sc, cx, y + 2, cz - 2, BLOCK_AIR);
-	gen_set_block(sc, cx, y + 1, cz - 1, BLOCK_TORCH);
+	gen_set_block_with_meta(sc, cx, y + 1, cz - 1, BLOCK_TORCH, 5);
 	gen_set_block(sc, cx - 2, y + 2, cz, glass);
 	gen_set_block(sc, cx + 2, y + 2, cz, glass);
 	gen_set_block(sc, cx, y + 2, cz + 2, glass);
-	gen_set_block(sc, cx, y + 1, cz, BLOCK_TORCH);
+	gen_set_block_with_meta(sc, cx, y + 1, cz, BLOCK_TORCH, 5);
 	gen_set_block(sc, cx - 1, y + 1, cz - 1, BLOCK_WORKBENCH);
 	gen_set_block(sc, cx + 1, y + 1, cz - 1, BLOCK_CHEST);
 }
@@ -4111,8 +4324,6 @@ static void gen_mc10_house_uy(struct server_chunk* sc, int ox, int oy, int oz) {
     gen_set_block(sc, ox+2, oy+2, oz+0, BLOCK_AIR);
     gen_set_block_with_meta(sc, ox+2, oy+1, oz+0, BLOCK_DOOR_WOOD, 1);
     gen_set_block_with_meta(sc, ox+2, oy+2, oz+0, BLOCK_DOOR_WOOD, 9);
-    /* Eingangsstufe */
-    gen_set_block_with_meta(sc, ox+2, oy+0, oz-1, BLOCK_STONE_STAIRS, 2);
 }
 
 /* wi — Kleine Huette (Variante), 4×6×5 */
@@ -4149,7 +4360,6 @@ static void gen_mc10_house_wi(struct server_chunk* sc, int ox, int oy, int oz) {
     gen_set_block(sc, ox+1, oy+2, oz, BLOCK_AIR);
     gen_set_block_with_meta(sc, ox+1, oy+1, oz, BLOCK_DOOR_WOOD, 1);
     gen_set_block_with_meta(sc, ox+1, oy+2, oz, BLOCK_DOOR_WOOD, 9);
-    gen_set_block_with_meta(sc, ox+1, oy+0, oz-1, BLOCK_STONE_STAIRS, 2);
 }
 
 /* ko — Haus mit Werkstatt, 10×6×7 */
@@ -4158,7 +4368,6 @@ static void gen_mc10_house_ko(struct server_chunk* sc, int ox, int oy, int oz) {
     gen_fill_box(sc, ox, oy, oz, ox+9, oy, oz+6, BLOCK_COBBLESTONE);
     gen_fill_box(sc, ox, oy+4, oz, ox+9, oy+4, oz+6, BLOCK_COBBLESTONE);
     gen_fill_box(sc, ox, oy+5, oz, ox+9, oy+5, oz+6, BLOCK_SLAB);
-    gen_fill_box(sc, ox+1, oy+5, oz+1, ox+8, oy+5, oz+5, BLOCK_AIR);
     gen_fill_box(sc, ox+1, oy+1, oz, ox+2, oy+3, oz, BLOCK_PLANKS);
     gen_fill_box(sc, ox, oy+1, oz, ox, oy+4, oz, BLOCK_LOG);
     gen_fill_box(sc, ox+3, oy+1, oz, ox+3, oy+4, oz, BLOCK_LOG);
@@ -4188,12 +4397,10 @@ static void gen_mc10_house_ko(struct server_chunk* sc, int ox, int oy, int oz) {
     /* Einrichtung: Truhe (Schmied-Loot) + Werkbank im Wohnbereich */
     gen_set_block(sc, ox+1, oy+1, oz+1, BLOCK_CHEST);
     gen_set_block(sc, ox+4, oy+1, oz+5, BLOCK_WORKBENCH);
-    gen_set_block_with_meta(sc, ox+6, oy, oz-1, BLOCK_STONE_STAIRS, 2);
-    gen_set_block_with_meta(sc, ox+7, oy, oz-1, BLOCK_STONE_STAIRS, 2);
-    gen_set_block(sc, ox+7, oy+1, oz+1, BLOCK_AIR);
-    gen_set_block(sc, ox+7, oy+2, oz+1, BLOCK_AIR);
-    gen_set_block_with_meta(sc, ox+7, oy+1, oz+1, BLOCK_DOOR_WOOD, 1);
-    gen_set_block_with_meta(sc, ox+7, oy+2, oz+1, BLOCK_DOOR_WOOD, 9);
+    gen_set_block(sc, ox+7, oy+1, oz, BLOCK_AIR);
+    gen_set_block(sc, ox+7, oy+2, oz, BLOCK_AIR);
+    gen_set_block_with_meta(sc, ox+7, oy+1, oz, BLOCK_DOOR_WOOD, 1);
+    gen_set_block_with_meta(sc, ox+7, oy+2, oz, BLOCK_DOOR_WOOD, 9);
 }
 
 /* tf — Grosses L-Haus, 9×7×12 */
@@ -4244,8 +4451,7 @@ static void gen_mc10_house_tf(struct server_chunk* sc, int ox, int oy, int oz) {
     gen_set_block_with_meta(sc, ox+2, oy+1, oz, BLOCK_DOOR_WOOD, 1);
     gen_set_block_with_meta(sc, ox+2, oy+2, oz, BLOCK_DOOR_WOOD, 9);
     /* Eingang vor der Tuer freiraeumen */
-    gen_fill_box(sc, ox+1, oy+0, oz-1, ox+3, oy+2, oz-1, BLOCK_AIR);
-    gen_set_block_with_meta(sc, ox+2, oy+0, oz-1, BLOCK_STONE_STAIRS, 2);
+    gen_fill_box(sc, ox+1, oy+1, oz-1, ox+3, oy+2, oz-1, BLOCK_AIR);
 }
 
 /* uz — Grosses Haus/Turm (2-stoeckig), 5×12×9 */
@@ -4286,25 +4492,24 @@ static void gen_mc10_house_uz(struct server_chunk* sc, int ox, int oy, int oz) {
     gen_set_block(sc, ox+2, oy+2, oz, BLOCK_AIR);
     gen_set_block_with_meta(sc, ox+2, oy+1, oz, BLOCK_DOOR_WOOD, 1);
     gen_set_block_with_meta(sc, ox+2, oy+2, oz, BLOCK_DOOR_WOOD, 9);
-    gen_set_block_with_meta(sc, ox+2, oy, oz-1, BLOCK_STONE_STAIRS, 2);
 }
 
 /* ---- Ende Dorfhaus-Strukturen ---- */
 
 /* plains_lamp: Groesse 3x4x3 */
-/* Planken-Pfahl 3 hoch, Zaun-Kopf, 4 Fackeln rundum */
+/* Zaun-Pfahl 3 hoch, Planken-Kopf, 4 Fackeln rundum */
 static void gen_place_plains_lamp(struct server_chunk* sc, int ox, int oy, int oz) {
-    /* Pfahl aus Holzplanken */
-    gen_set_block_with_meta(sc, ox, oy+0, oz, BLOCK_PLANKS, 0);
-    gen_set_block_with_meta(sc, ox, oy+1, oz, BLOCK_PLANKS, 0);
-    gen_set_block_with_meta(sc, ox, oy+2, oz, BLOCK_PLANKS, 0);
-    /* Zaun als Lampenkopf */
-    gen_set_block(sc, ox, oy+3, oz, BLOCK_FENCE);
-    /* 4 Fackeln an allen Seiten des Zauns */
-    gen_set_block_with_meta(sc, ox-1, oy+3, oz, BLOCK_TORCH, 2); /* West: lehnt Ost=Zaun */
-    gen_set_block_with_meta(sc, ox+1, oy+3, oz, BLOCK_TORCH, 1); /* Ost:  lehnt West=Zaun */
-    gen_set_block_with_meta(sc, ox, oy+3, oz-1, BLOCK_TORCH, 4); /* Nord: lehnt Sued=Zaun */
-    gen_set_block_with_meta(sc, ox, oy+3, oz+1, BLOCK_TORCH, 3); /* Sued: lehnt Nord=Zaun */
+    /* Pfahl aus Zaun */
+    gen_set_block(sc, ox, oy+0, oz, BLOCK_FENCE);
+    gen_set_block(sc, ox, oy+1, oz, BLOCK_FENCE);
+    gen_set_block(sc, ox, oy+2, oz, BLOCK_FENCE);
+    /* Holzbrett als Lampenkopf */
+    gen_set_block_with_meta(sc, ox, oy+3, oz, BLOCK_PLANKS, 0);
+    /* 4 Fackeln an allen Seiten des Lampenkopfs */
+    gen_set_block_with_meta(sc, ox-1, oy+3, oz, BLOCK_TORCH, 2); /* West: lehnt Ost=Kopf */
+    gen_set_block_with_meta(sc, ox+1, oy+3, oz, BLOCK_TORCH, 1); /* Ost:  lehnt West=Kopf */
+    gen_set_block_with_meta(sc, ox, oy+3, oz-1, BLOCK_TORCH, 4); /* Nord: lehnt Sued=Kopf */
+    gen_set_block_with_meta(sc, ox, oy+3, oz+1, BLOCK_TORCH, 3); /* Sued: lehnt Nord=Kopf */
 }
 
 /* plains_small_farm: Groesse 7x6x9 */
@@ -5688,13 +5893,95 @@ static void gen_place_mc_farm(struct server_chunk* sc, int cx, int y, int cz) {
 		gen_set_block(sc, cx+5, y, cz+z, BLOCK_FENCE);
 	}
 	/* Eck-Fackeln */
-	gen_set_block(sc, cx-5, y+1, cz-4, BLOCK_TORCH);
-	gen_set_block(sc, cx+5, y+1, cz-4, BLOCK_TORCH);
+	gen_set_block_with_meta(sc, cx-5, y+1, cz-4, BLOCK_TORCH, 5);
+	gen_set_block_with_meta(sc, cx+5, y+1, cz-4, BLOCK_TORCH, 5);
 }
 
 static wgen_gen_t* server_world_wgen_gen(struct server_world* w); /* forward decl */
 static int64_t gen_mc_legacy_next_long(uint64_t* s);              /* forward decl */
 static int gen_mc_feat_int(uint64_t* s, int n);                   /* forward decl */
+
+static bool gen_village_area_available(const bool* occupied,
+									   int x0, int z0, int sx, int sz,
+									   int margin) {
+	for(int x = x0 - margin; x < x0 + sx + margin; x++) {
+		if(x < 0 || x >= CHUNK_SIZE)
+			return false;
+		for(int z = z0 - margin; z < z0 + sz + margin; z++) {
+			if(z < 0 || z >= CHUNK_SIZE)
+				return false;
+			if(occupied[x + z * CHUNK_SIZE])
+				return false;
+		}
+	}
+	return true;
+}
+
+static void gen_village_area_mark(bool* occupied,
+								  int x0, int z0, int sx, int sz,
+								  int margin) {
+	for(int x = x0 - margin; x < x0 + sx + margin; x++) {
+		if(x < 0 || x >= CHUNK_SIZE)
+			continue;
+		for(int z = z0 - margin; z < z0 + sz + margin; z++) {
+			if(z < 0 || z >= CHUNK_SIZE)
+				continue;
+			occupied[x + z * CHUNK_SIZE] = true;
+		}
+	}
+}
+
+static void gen_village_set_path_at(struct server_chunk* sc, int lx, int lz,
+									int target_y, uint8_t path_block,
+									bool snowy_village) {
+	if(lx < 0 || lx >= CHUNK_SIZE || lz < 0 || lz >= CHUNK_SIZE
+	   || target_y < 1 || target_y >= WORLD_HEIGHT - 3)
+		return;
+
+	int surf = gen_chunk_actual_surface_height(sc, lx, lz);
+	if(surf < 1)
+		surf = target_y;
+	if(snowy_village && gen_get_block(sc, lx, surf, lz) == BLOCK_SNOW)
+		surf--;
+	if(surf < 1)
+		surf = target_y;
+
+	if(surf > target_y) {
+		for(int y = surf; y > target_y; y--)
+			gen_set_block(sc, lx, y, lz, BLOCK_AIR);
+	} else if(surf < target_y) {
+		for(int y = surf + 1; y < target_y; y++)
+			gen_set_block(sc, lx, y, lz, BLOCK_DIRT);
+	}
+
+	gen_set_block(sc, lx, target_y, lz, path_block);
+	for(int y = target_y + 1; y <= target_y + 3 && y < WORLD_HEIGHT; y++)
+		gen_set_block(sc, lx, y, lz, BLOCK_AIR);
+}
+
+static void gen_village_set_path_wave_at(struct server_chunk* sc, int lx, int lz,
+										 int door_y, uint8_t path_block,
+										 bool snowy_village) {
+	for(int dx = -3; dx <= 3; dx++) {
+		for(int dz = -2; dz <= 0; dz++) {
+			int dist = abs(dx) + abs(dz);
+			int px = lx + dx;
+			int pz = lz + dz;
+			if(px < 0 || px >= CHUNK_SIZE || pz < 0 || pz >= CHUNK_SIZE)
+				continue;
+			int normal_y = gen_chunk_actual_surface_height(sc, px, pz);
+			if(normal_y > 0 && snowy_village
+			   && gen_get_block(sc, px, normal_y, pz) == BLOCK_SNOW)
+				normal_y--;
+			if(normal_y < door_y)
+				normal_y = door_y;
+			int y = door_y + dist;
+			if(y > normal_y)
+				y = normal_y;
+			gen_village_set_path_at(sc, px, pz, y, path_block, snowy_village);
+		}
+	}
+}
 
 static void gen_place_village(struct server_chunk* sc, struct server_world* w,
 							  uint32_t seed,
@@ -5703,6 +5990,7 @@ static void gen_place_village(struct server_chunk* sc, struct server_world* w,
 	wgen_gen_t* wg = server_world_wgen_gen(w);
 	int cur_cx = world_x0 / CHUNK_SIZE;
 	int cur_cz = world_z0 / CHUNK_SIZE;
+	bool occupied[CHUNK_SIZE * CHUNK_SIZE] = {false};
 
 	/* Dorf-Grid: 32×32 Chunks, Offset 0..23.
 	 * Prüfe 3×3 benachbarte Grid-Zellen — jede Zelle kann genau ein Dorf haben. */
@@ -5739,6 +6027,7 @@ static void gen_place_village(struct server_chunk* sc, struct server_world* w,
 			int biome_id = gen_biome_at_safe(biome_gen, v_world_x, v_world_z);
 			bool is_desert = (biome_id == desert || biome_id == desert_hills);
 			bool is_taiga  = (biome_id == taiga  || biome_id == taiga_hills);
+			bool is_snowy_village = isSnowy(biome_id);
 
 			uint8_t wall = is_desert ? BLOCK_SANDSTONE : BLOCK_PLANKS;
 			uint8_t path_block = is_desert ? BLOCK_SANDSTONE : BLOCK_GRAVEL;
@@ -5771,13 +6060,14 @@ static void gen_place_village(struct server_chunk* sc, struct server_world* w,
 						if(flx<0||flx>=CHUNK_SIZE||flz<0||flz>=CHUNK_SIZE) continue;
 						int h = gen_chunk_actual_surface_height(sc, flx, flz);
 						if(h > sea_level && h < well_min) well_min = h;
-					}
+				}
 				int well_cy = (well_min < WORLD_HEIGHT) ? well_min : 0;
 				if(well_cy >= 2 && well_cy > sea_level + 2) {
 					if(is_desert)
 						gen_place_desert_well(sc, well_x, well_cy, well_z);
 					else
 						gen_place_plains_fountain(sc, well_x, well_cy - 1, well_z);
+					gen_village_area_mark(occupied, well_x, well_z, 9, 9, 1);
 				}
 			}
 
@@ -5803,23 +6093,20 @@ static void gen_place_village(struct server_chunk* sc, struct server_world* w,
 						if(lx < 0||lx>=CHUNK_SIZE||lz<0||lz>=CHUNK_SIZE) continue;
 						int surf = gen_chunk_actual_surface_height(sc, lx, lz);
 						if(surf < 1) continue;
-						gen_set_block(sc, lx, surf, lz, path_block);
+						if(is_snowy_village && surf > 1
+						   && gen_get_block(sc, lx, surf, lz) == BLOCK_SNOW) {
+							gen_set_block(sc, lx, surf, lz, BLOCK_AIR);
+							gen_set_block(sc, lx, surf - 1, lz, path_block);
+							surf--;
+						} else {
+							gen_set_block(sc, lx, surf, lz, path_block);
+						}
 						for(int d = 1; d <= 2; d++) {
 							if(surf - d < 1) break;
 							uint8_t below = gen_get_block(sc, lx, surf-d, lz);
 							if(below==BLOCK_DIRT||below==BLOCK_GRASS||below==BLOCK_GRAVEL)
 								gen_set_block(sc, lx, surf-d, lz, path_block);
 							else break;
-						}
-					}
-					/* Laternen alle 8 Bloecke entlang Arm, 2 Bloecke seitlich */
-					if(step > 0 && step % 8 == 0) {
-						for(int side = -1; side <= 1; side += 2) {
-							int lx = wx - world_x0 + (adz != 0 ? side*2 : 0);
-							int lz = wz - world_z0 + (adx != 0 ? side*2 : 0);
-							if(lx<0||lx>=CHUNK_SIZE||lz<0||lz>=CHUNK_SIZE) continue;
-							int surf = gen_chunk_actual_surface_height(sc, lx, lz);
-							if(surf >= 1) gen_place_plains_lamp(sc, lx, surf, lz);
 						}
 					}
 				}
@@ -5829,6 +6116,7 @@ static void gen_place_village(struct server_chunk* sc, struct server_world* w,
 				int house_sx_t[] = {5, 4, 10, 9, 5};
 				int house_sz_t[] = {5, 5,  7,12, 9};
 				int house_h_t[]  = {6, 6,  6, 7,12}; /* Bauhoehe (uz=Turm=12) */
+				int house_door_x_t[] = {2, 1, 7, 2, 2};
 
 				for(int pos = gen_mc_feat_int(&vrng, 5) + 4;
 				    pos <= arm_len - 4;
@@ -5836,26 +6124,36 @@ static void gen_place_village(struct server_chunk* sc, struct server_world* w,
 
 					/* Gebaeude auf linker oder rechter Strassenseite */
 					for(int side = -1; side <= 1; side += 2) {
-						if(gen_mc_feat_int(&vrng, 4) > 0) continue; /* 25% Chance */
+						if(adz != 0)
+							continue; /* Haus-Templates zeigen nur nach Norden. */
+						if(side < 0)
+							continue; /* Nur suedlich der Ost/West-Strasse passt die Front. */
+						if(gen_mc_feat_int(&vrng, 4) == 0) continue; /* 75% Chance */
 
 						/* Gebaeude-Typ zufaellig (0=uy,1=wi,2=ko,3=tf,4=uz) */
 						int htype = gen_mc_feat_int(&vrng, 5);
 
-						/* Gebaeude-Position: 4 Bloecke seitlich der Strasse */
-						int perp = side * 5;
-						int h_wx = v_world_x + adx * pos + (adz != 0 ? perp : 0);
-						int h_wz = v_world_z + adz * pos + (adx != 0 ? perp : 0);
+						/* Gebaeude so setzen, dass der echte Eingang nicht auf der
+						 * Strasse steht und der Seitenweg direkt zur Tuer fuehrt.
+						 * Alle MC10-Haeuser haben ihre Front an z=0. */
+						int sx = house_sx_t[htype], sz = house_sz_t[htype];
+						int door_x = house_door_x_t[htype];
+						int road_wx = v_world_x + adx * pos;
+						int road_wz = v_world_z + adz * pos;
+						int h_wx = road_wx;
+						int h_wz = road_wz;
+						h_wx = road_wx - door_x;
+						h_wz = road_wz + 3;
 
 						int hx = h_wx - world_x0;
 						int hz = h_wz - world_z0;
-
-						/* Groeße des Hauses bestimmen */
-						int sx = house_sx_t[htype], sz = house_sz_t[htype];
 
 						/* Nur platzieren wenn GESAMTER Footprint im aktuellen Chunk liegt.
 						 * Verhindert halbe Haeuser an Chunk-Grenzen. */
 						if(hx < 0 || hx + sx > CHUNK_SIZE
 						   || hz < 0 || hz + sz > CHUNK_SIZE) continue;
+						if(!gen_village_area_available(occupied, hx, hz, sx, sz, 0))
+							continue;
 
 						/* Durchschnittliche Terrain-Höhe unter dem Haus
 						 * (Summe / Anzahl).
@@ -5881,14 +6179,16 @@ static void gen_place_village(struct server_chunk* sc, struct server_world* w,
 						/* Schlucht: Höhenvariation >14 Blöcke → überspringen */
 						if(max_h - min_h > 14) continue;
 
-						/* Seitenweg zur Strasse */
-						for(int sw = 1; sw <= 4; sw++) {
-							int px = h_wx - world_x0 - (adz != 0 ? (side>0?sw:-sw) : 0);
-							int pz = h_wz - world_z0 - (adx != 0 ? (side>0?sw:-sw) : 0);
-							if(px<0||px>=CHUNK_SIZE||pz<0||pz>=CHUNK_SIZE) continue;
-							int surf = gen_chunk_actual_surface_height(sc, px, pz);
-							if(surf >= 1) gen_set_block(sc, px, surf, pz, path_block);
-						}
+						/* Seitenweg zur Tuer auf Tuerschwellen-Hoehe. */
+						int door_wx = h_wx + door_x;
+						int door_wz = h_wz - 1;
+						int road_y = gen_chunk_actual_surface_height(
+							sc, door_wx - world_x0, road_wz - world_z0);
+						bool entrance_needs_stair = (road_y > 0 && road_y < house_cy);
+						gen_village_set_path_wave_at(sc, door_wx - world_x0,
+													 door_wz - world_z0,
+													 house_cy, path_block,
+													 is_snowy_village);
 
 						/* Gesamten Bauraum freischaufeln: Footprint (+1 Rand) ueber die
 						 * volle Haushoehe leeren, damit nichts im Hang steckt (kein
@@ -5916,9 +6216,33 @@ static void gen_place_village(struct server_chunk* sc, struct server_world* w,
 							case 3: gen_mc10_house_tf(sc, hx, house_cy, hz); break;
 							case 4: gen_mc10_house_uz(sc, hx, house_cy, hz); break;
 							}
+							if(entrance_needs_stair)
+								gen_set_block_with_meta(sc, door_wx - world_x0, house_cy,
+														door_wz - world_z0,
+														BLOCK_STONE_STAIRS, 2);
 						} else {
 							gen_place_village_house(sc, hx, house_cy, hz, wall,
 							                        cobble_base, (htype >= 3));
+						}
+						gen_village_area_mark(occupied, hx, hz, sx, sz, 1);
+					}
+				}
+
+				/* Laternen nach den Haeusern platzieren: wenn ein Haus dort steht,
+				 * verschwindet die Laterne komplett statt halb abgeschnitten zu sein. */
+				for(int step = 8; step <= arm_len; step += 8) {
+					int wx = v_world_x + adx * step;
+					int wz = v_world_z + adz * step;
+					for(int side = -1; side <= 1; side += 2) {
+						int lx = wx - world_x0 + (adz != 0 ? side * 2 : 0);
+						int lz = wz - world_z0 + (adx != 0 ? side * 2 : 0);
+						if(!gen_village_area_available(occupied, lx - 1, lz - 1, 3, 3, 0))
+							continue;
+						int surf = gen_chunk_actual_surface_height(sc, lx, lz);
+						if(surf >= 1) {
+							int lamp_y = is_snowy_village ? surf : surf + 1;
+							gen_place_plains_lamp(sc, lx, lamp_y, lz);
+							gen_village_area_mark(occupied, lx - 1, lz - 1, 3, 3, 0);
 						}
 					}
 				}
@@ -5931,6 +6255,8 @@ static void gen_place_village(struct server_chunk* sc, struct server_world* w,
 					int farm_z = farm_wz - world_z0 - 6;
 					if(farm_x >= 0 && farm_x < CHUNK_SIZE
 					   && farm_z >= 0 && farm_z < CHUNK_SIZE) {
+						if(!gen_village_area_available(occupied, farm_x, farm_z, 13, 9, 0))
+							continue;
 						/* Durchschnittshöhe unter der Farm */
 					int farm_sum = 0, farm_cnt = 0;
 					for(int dx2 = 0; dx2 < 13; dx2++)
@@ -5958,7 +6284,24 @@ static void gen_place_village(struct server_chunk* sc, struct server_world* w,
 									}
 								}
 							}
+							for(int dx2 = 0; dx2 < 13; dx2++) {
+								int flx = farm_x + dx2;
+								if(flx < 0 || flx >= CHUNK_SIZE) continue;
+								for(int dz2 = 0; dz2 < 9; dz2++) {
+									int flz = farm_z + dz2;
+									if(flz < 0 || flz >= CHUNK_SIZE) continue;
+									int h = gen_chunk_actual_surface_height(sc, flx, flz);
+									if(h > farm_cy) {
+										for(int y = h; y > farm_cy; y--)
+											gen_set_block(sc, flx, y, flz, BLOCK_AIR);
+									} else if(h < farm_cy) {
+										for(int y = h + 1; y < farm_cy; y++)
+											gen_set_block(sc, flx, y, flz, BLOCK_DIRT);
+									}
+								}
+							}
 							gen_place_plains_large_farm(sc, farm_x, farm_cy, farm_z);
+							gen_village_area_mark(occupied, farm_x, farm_z, 13, 9, 1);
 						}
 					}
 					}
@@ -6042,54 +6385,110 @@ static void gen_place_water_lake(struct server_chunk* sc, uint32_t seed,
 		% (uint32_t)probability) != 0U)
 		return;
 
-	int cx = 4 + (int)(gen_hash3i(world_x0, 41, world_z0, seed ^ 0x6A4E1001U) % 8U);
-	int cz = 4 + (int)(gen_hash3i(world_x0, 43, world_z0, seed ^ 0x6A4E1002U) % 8U);
+	int cx = 6 + (int)(gen_hash3i(world_x0, 41, world_z0, seed ^ 0x6A4E1001U) % 4U);
+	int cz = 6 + (int)(gen_hash3i(world_x0, 43, world_z0, seed ^ 0x6A4E1002U) % 4U);
 	int surface = gen_chunk_actual_surface_height(sc, cx, cz);
 	if(surface <= sea_level + 2)
 		return;
 
-	int max_center_y = surface - 6;
-	if(max_center_y > sea_level - 4)
-		max_center_y = sea_level - 4;
-	if(max_center_y < 10)
+	/* Teich höher: Wasseroberfläche nur 1 Block unter dem Terrain (statt 3-4),
+	 * damit der Teich nicht tief in einer Grube versinkt. */
+	int water_y = surface - 1;
+	if(water_y < sea_level + 1)
+		water_y = sea_level + 1;
+	if(water_y >= WORLD_HEIGHT - 5)
 		return;
 
-	int cy = 10 + (int)(gen_hash3i(world_x0, 47, world_z0, seed ^ 0x6A4E1003U)
-		% (uint32_t)(max_center_y - 9));
-	int rx = 3 + (int)(gen_hash3i(world_x0, 53, world_z0, seed ^ 0x6A4E1004U) % 2U);
-	int rz = 3 + (int)(gen_hash3i(world_x0, 59, world_z0, seed ^ 0x6A4E1005U) % 2U);
-	int ry = 2 + (int)(gen_hash3i(world_x0, 61, world_z0, seed ^ 0x6A4E1006U) % 2U);
+	int rx = 4 + (int)(gen_hash3i(world_x0, 53, world_z0, seed ^ 0x6A4E1004U) % 2U);
+	int rz = 4 + (int)(gen_hash3i(world_x0, 59, world_z0, seed ^ 0x6A4E1005U) % 2U);
+	int max_r = (rx > rz) ? rx : rz;
 
-	for(int x = cx - rx - 1; x <= cx + rx + 1; x++) {
-		for(int z = cz - rz - 1; z <= cz + rz + 1; z++) {
-			if(!gen_inside_chunk(x, cy, z))
-				return;
-			int top = gen_chunk_actual_surface_height(sc, x, z);
-			if(top < cy + ry + 2)
+	for(int x = cx - max_r - 1; x <= cx + max_r + 1; x++) {
+		for(int z = cz - max_r - 1; z <= cz + max_r + 1; z++) {
+			if(!gen_inside_chunk(x, water_y, z))
 				return;
 		}
 	}
 
-	for(int x = cx - rx; x <= cx + rx; x++) {
-		for(int z = cz - rz; z <= cz + rz; z++) {
-			for(int y = cy - ry; y <= cy + ry; y++) {
-				float dx = (float)(x - cx) / (float)rx;
-				float dy = (float)(y - cy) / (float)ry;
-				float dz = (float)(z - cz) / (float)rz;
-				float dist = dx * dx + dy * dy + dz * dz;
-				if(dist > 1.0f)
-					continue;
+	for(int x = cx - max_r - 1; x <= cx + max_r + 1; x++) {
+		for(int z = cz - max_r - 1; z <= cz + max_r + 1; z++) {
+			if(!gen_inside_chunk(x, water_y, z))
+				continue;
 
-				uint8_t here = gen_get_block(sc, x, y, z);
-				if(!gen_is_opaque(here) && here != BLOCK_AIR)
-					continue;
+			float dx = (float)(x - cx) / (float)rx;
+			float dz = (float)(z - cz) / (float)rz;
+			float dist = dx * dx + dz * dz;
+			if(dist > 2.25f)
+				continue;
 
-				if(y <= cy) {
+			int top = gen_chunk_actual_surface_height(sc, x, z);
+			if(top < 1)
+				continue;
+
+			/* Wände flacher absenken: der Rand steigt nur sanft an, damit keine
+			 * hohen Steilwände um den Teich stehen bleiben. */
+			int target_top;
+			if(dist <= 1.0f) {
+				target_top = water_y;
+			} else if(dist <= 1.55f) {
+				target_top = water_y + (int)((dist - 1.0f) * 2.0f);
+			} else {
+				target_top = water_y + 1 + (int)((dist - 1.55f) * 2.0f);
+			}
+			if(target_top > top)
+				target_top = top;
+
+			for(int y = top; y > target_top && y < WORLD_HEIGHT; y--)
+				gen_set_block(sc, x, y, z, BLOCK_AIR);
+
+			if(dist <= 1.0f) {
+				int depth = 2 + (int)((1.0f - dist) * 3.0f);
+				int bottom = water_y - depth;
+				if(bottom < 1)
+					bottom = 1;
+				for(int y = bottom; y <= water_y; y++)
 					gen_set_block(sc, x, y, z, BLOCK_WATER_STILL);
-				} else {
-					gen_set_block(sc, x, y, z, BLOCK_AIR);
+				if(bottom > 1)
+					gen_set_block(sc, x, bottom - 1, z, BLOCK_DIRT);
+			} else {
+				uint8_t top_block = gen_get_block(sc, x, target_top, z);
+				if(top_block == BLOCK_STONE || gen_is_ore_block(top_block))
+					gen_set_block(sc, x, target_top, z, BLOCK_GRASS);
+				for(int y = target_top - 1; y >= target_top - 3 && y > 0; y--) {
+					uint8_t b = gen_get_block(sc, x, y, z);
+					if(b == BLOCK_STONE || gen_is_ore_block(b))
+						gen_set_block(sc, x, y, z, BLOCK_DIRT);
 				}
 			}
+		}
+	}
+
+	/* Erdwall direkt um die Wasserfläche: wenn der See höher liegt als ein
+	 * Randblock, darf Wasser nicht seitlich über die Kante laufen. */
+	for(int x = cx - max_r - 1; x <= cx + max_r + 1; x++) {
+		for(int z = cz - max_r - 1; z <= cz + max_r + 1; z++) {
+			if(!gen_inside_chunk(x, water_y + 1, z))
+				continue;
+			float dx = (float)(x - cx) / (float)rx;
+			float dz = (float)(z - cz) / (float)rz;
+			float dist = dx * dx + dz * dz;
+			if(dist <= 1.0f || dist > 1.42f)
+				continue;
+
+			int bank_y = water_y + 1;
+			int top = gen_chunk_actual_surface_height(sc, x, z);
+			if(top > bank_y) {
+				for(int y = top; y > bank_y && y < WORLD_HEIGHT; y--)
+					gen_set_block(sc, x, y, z, BLOCK_AIR);
+			} else {
+				for(int y = top + 1; y < bank_y; y++)
+					gen_set_block(sc, x, y, z, BLOCK_DIRT);
+			}
+			gen_set_block(sc, x, bank_y, z, BLOCK_GRASS);
+			if(bank_y > 0)
+				gen_set_block(sc, x, bank_y - 1, z, BLOCK_DIRT);
+			for(int y = bank_y + 1; y <= bank_y + 2 && y < WORLD_HEIGHT; y++)
+				gen_set_block(sc, x, y, z, BLOCK_AIR);
 		}
 	}
 }
@@ -6346,9 +6745,16 @@ static void gen_recompute_height_and_skylight(struct server_chunk* sc) {
 			uint8_t light = 15;
 			for(int y = WORLD_HEIGHT - 1; y >= 0; y--) {
 				size_t idx = S_CHUNK_IDX(lx, y, lz);
+				uint8_t block = sc->ids[idx];
 				gen_set_nibble(sc->lighting_sky, idx, light);
-				if(light > 0 && gen_is_opaque(sc->ids[idx]))
+				if(light == 0)
+					continue;
+				if(gen_is_opaque(block)) {
 					light = 0;
+				} else if(blocks[block] && blocks[block]->opacity > 0) {
+					uint8_t opacity = blocks[block]->opacity;
+					light = (opacity >= light) ? 0 : (uint8_t)(light - opacity);
+				}
 			}
 		}
 	}
@@ -6692,6 +7098,79 @@ static int gen_smooth_surface_against_terrain_shape_area(
 	return surface;
 }
 
+static int gen_apply_sea_shore_lowering(wgen_gen_t* wg,
+										const struct gen_cuberite_runtime_args* gen_args,
+										int32_t wx, int32_t wz, int surface) {
+	if(!GEN_ENABLE_WATER_FILL_TO_SEA_LEVEL || wg == NULL || gen_args == NULL)
+		return surface;
+	if(surface <= gen_args->sea_level + 3)
+		return surface;
+
+	int lowered = surface;
+	const int radius = 22;
+	const int radius_sq = radius * radius;
+	for(int dz = -radius; dz <= radius; dz += 2) {
+		for(int dx = -radius; dx <= radius; dx += 2) {
+			if(dx == 0 && dz == 0)
+				continue;
+			int dist_sq = dx * dx + dz * dz;
+			if(dist_sq > radius_sq)
+				continue;
+
+			int neighbor = wgen_gen_world_height(wg, wx + dx, wz + dz);
+			if(neighbor > gen_args->sea_level + 2)
+				continue;
+			float dist = sqrtf((float)(dx * dx + dz * dz));
+			float slope = (dist <= 8.0f) ? 0.85f : 1.45f;
+			int shore_cap = gen_args->sea_level + 1 + (int)(dist * slope);
+			if(shore_cap < lowered)
+				lowered = shore_cap;
+		}
+	}
+	return lowered;
+}
+
+static int gen_apply_large_water_depth(wgen_gen_t* wg,
+									   const struct gen_cuberite_runtime_args* gen_args,
+									   int32_t wx, int32_t wz, int surface) {
+	if(!GEN_ENABLE_WATER_FILL_TO_SEA_LEVEL || wg == NULL || gen_args == NULL)
+		return surface;
+	if(surface >= gen_args->sea_level)
+		return surface;
+
+	const int radius = 26;
+	static const int dirs[8][2] = {
+		{1, 0}, {-1, 0}, {0, 1}, {0, -1},
+		{1, 1}, {-1, 1}, {1, -1}, {-1, -1},
+	};
+	float land_dist = (float)radius;
+	bool found_land = false;
+	for(int r = 2; r <= radius && !found_land; r += 2) {
+		for(int i = 0; i < 8; i++) {
+			int dx = dirs[i][0] * r;
+			int dz = dirs[i][1] * r;
+			int neighbor = wgen_gen_world_height(wg, wx + dx, wz + dz);
+			if(neighbor > gen_args->sea_level) {
+				land_dist = sqrtf((float)(dx * dx + dz * dz));
+				found_land = true;
+				break;
+			}
+		}
+	}
+	int desired_depth = 4 + (int)(land_dist * 1.55f);
+	if(desired_depth > 40)
+		desired_depth = 40;
+	if(desired_depth < 4)
+		desired_depth = 4;
+
+	int deep_floor = gen_args->sea_level - desired_depth;
+	if(deep_floor < 4)
+		deep_floor = 4;
+	if(surface > deep_floor)
+		surface = deep_floor;
+	return surface;
+}
+
 static float gen_terrain_shape_density(const struct gen_biome_profile* profile,
 								   const struct gen_cuberite_runtime_args* gen_args,
 								   uint32_t seed, int32_t wx, int y, int32_t wz,
@@ -6883,11 +7362,18 @@ static void gen_generate_terrain_columns(struct server_world* w,
 		int biome_id = plains;
 		struct gen_biome_profile profile = gen_blended_profile(biome_gen, wx, wz, &biome_id);
 		int surface = (int)wgen_heights[lx][lz];
-		/* Biom-spezifische Anpassungen: Wasser-Limit und Fluss-Absenkung */
-		if(profile.riverine && surface > gen_args->sea_level - 1)
+		/* Biom-spezifische Absenkung (Fluss/Ozean) NUR wenn das Noise-Terrain
+		 * ohnehin nahe am Meeresspiegel liegt. Sonst kollidiert ein cubiomes-
+		 * Ozean-/Fluss-Biom mit einem Noise-Berg und reisst ein riesiges,
+		 * wassergefuelltes Loch mitten in die Berge. */
+		if(profile.riverine && surface > gen_args->sea_level - 1
+		   && surface <= gen_args->sea_level + 5)
 			surface = gen_args->sea_level - 1;
-		if(profile.oceanic && surface > gen_args->sea_level - 3)
+		if(profile.oceanic && surface > gen_args->sea_level - 3
+		   && surface <= gen_args->sea_level + 10)
 			surface = gen_args->sea_level - 3;
+		surface = gen_apply_large_water_depth(wg, gen_args, wx, wz, surface);
+		surface = gen_apply_sea_shore_lowering(wg, gen_args, wx, wz, surface);
 
 		int dirt_depth = 0;
 		uint8_t top_block = BLOCK_GRASS;
@@ -6895,6 +7381,13 @@ static void gen_generate_terrain_columns(struct server_world* w,
 		gen_choose_surface_materials(&profile, biome_id, gen_args, seed, wx, wz,
 									 surface, &top_block, &filler_block,
 									 &dirt_depth);
+		if(surface <= gen_args->sea_level + 3 && !profile.riverine
+		   && top_block == BLOCK_GRASS) {
+			top_block = BLOCK_GRAVEL;
+			filler_block = BLOCK_DIRT;
+			if(dirt_depth < 3)
+				dirt_depth = 3;
+		}
 
 		for(int y = 0; y < WORLD_HEIGHT; y++) {
 			size_t idx = S_CHUNK_IDX(lx, y, lz);
@@ -6994,6 +7487,12 @@ static void gen_place_dungeons(struct server_chunk* sc, int64_t world_seed,
 
 		if(lx < w2 || lx >= CHUNK_SIZE - w2 || lz < d2 || lz >= CHUNK_SIZE - d2) continue;
 		if(ly < 3 || ly >= WORLD_HEIGHT - 3) continue;
+		if(!gen_dungeon_has_earth_cover(sc, lx - w2, lx + w2, ly, ly + 2,
+										lz - d2, lz + d2))
+			continue;
+		if(!gen_dungeon_connected_to_cave(sc, lx - w2, lx + w2, ly, ly + 2,
+										  lz - d2, lz + d2))
+			continue;
 
 		/* Wände prüfen: genug Stein drum herum? */
 		int solid = 0;
@@ -7104,19 +7603,20 @@ static void gen_carve_worm_caves(struct server_chunk* sc, int64_t world_seed,
 			             & 0xFFFFFFFFFFFFULL;
 			rng = (rng ^ (int64_t)25214903917LL) & 0xFFFFFFFFFFFFULL;
 
-			/* Deutlich weniger Höhlen pro Chunk (0..2) → nicht mehr überfüllt */
-			int n_caves = gen_mc_feat_int(&rng, 3);
+			/* Wenige Höhlen pro Chunk (0..1) → nicht überfüllt */
+			int n_caves = gen_mc_feat_int(&rng, 2);
 
 			for(int c = 0; c < n_caves; c++) {
 				float sx = (float)(cx * CHUNK_SIZE + gen_mc_feat_int(&rng, CHUNK_SIZE));
-				/* Höhlen tief unten starten: y=8..50 */
-				float sy = (float)(8 + gen_mc_feat_int(&rng, 42));
+				/* Höhlen tief unten starten: y=8..45 */
+				float sy = (float)(8 + gen_mc_feat_int(&rng, 37));
 				float sz = (float)(cz * CHUNK_SIZE + gen_mc_feat_int(&rng, CHUNK_SIZE));
 
-				/* Breiterer Radius 2.5..5.5 → grosse, runde (nicht eckige) Höhlen.
-				 * Gelegentlich (jede 3.) eine besonders breite Kammer. */
-				float radius = 2.5f + (float)gen_mc_feat_int(&rng, 300) / 100.0f;
-				if(c == 0) radius += 1.5f; /* erste Höhle pro Chunk = grosse Kammer */
+				/* Radius 2.5..5.0 → runde Höhlen. Grosse Kammern (Radius bis 7)
+				 * nur selten (~1/8) und nur tief unten (y<30), damit sie nicht
+				 * zur Oberfläche durchbrechen. */
+				float radius = 2.5f + (float)gen_mc_feat_int(&rng, 250) / 100.0f;
+				if(gen_mc_feat_int(&rng, 8) == 0 && sy < 30.0f) radius += 2.0f;
 
 				float yaw    = (float)gen_mc_feat_int(&rng, 314) / 50.0f - 3.14f;
 				/* Flacherer Pitch (±0.12) → weniger vertikale Überlappung */
@@ -7210,11 +7710,12 @@ static void gen_apply_feature_step(struct server_world* w, struct server_chunk* 
 		return;
 	case 1:
 		if(w->generator.finisher_worm_nest_caves) {
-			/* Schluchten nur ca. 1/3 so häufig wie vorher */
+			/* Schluchten selten halten: sie sind auffällig und sollen nicht
+			 * jeden zweiten See/Meer-Einschnitt dominieren. */
 			uint32_t ravine_check = gen_hash3i(world_x0 / CHUNK_SIZE, 0,
 			                                   world_z0 / CHUNK_SIZE,
 			                                   (uint32_t)w->world_seed ^ 0xABBA1234U);
-			if((ravine_check % 3) == 0)
+			if((ravine_check % 6) == 0)
 				gen_carve_density_canyon(sc, seed, world_x0, world_z0, surface_map,
 										 gen_args->sea_level);
 		}
@@ -7244,6 +7745,9 @@ static void gen_apply_feature_step(struct server_world* w, struct server_chunk* 
 			gen_presimulate_fluids_local(sc, w->generator.pre_simulator_water,
 										 w->generator.pre_simulator_lava);
 		}
+		if(w->generator.finisher_worm_nest_caves)
+			gen_drain_density_canyon(sc, seed, world_x0, world_z0, surface_map,
+									 gen_args->sea_level);
 		return;
 	case 7:
 		if(w->generator.finisher_pre_simulator
@@ -7259,8 +7763,9 @@ static void gen_apply_feature_step(struct server_world* w, struct server_chunk* 
 		gen_cleanup_floating_ores(sc);
 		return;
 	case 9:
-		if(w->generator.finisher_single_piece_structures)
-			gen_place_single_piece_structure(sc, seed, world_x0, world_z0, biome_gen);
+		if(w->generator.finisher_worm_nest_caves)
+			gen_carve_cave_entrance_to_worm(sc, seed, chunk_x, chunk_z,
+											surface_map, gen_args->sea_level);
 		return;
 	case 10:
 		if(w->generator.finisher_villages)
@@ -7268,24 +7773,23 @@ static void gen_apply_feature_step(struct server_world* w, struct server_chunk* 
 							  biome_gen);
 		return;
 	case 11:
+		if(w->generator.finisher_single_piece_structures)
+			gen_place_single_piece_structure(sc, seed, world_x0, world_z0, biome_gen);
+		return;
+	case 12:
 		if(w->generator.finisher_ice)
 			gen_place_ice_surfaces(sc, seed, world_x0, world_z0,
 								   gen_args->sea_level, biome_gen);
 		return;
-	case 12:
+	case 13:
 		if(w->generator.finisher_overworld_clump_flowers)
 			gen_place_flower_clumps(sc, seed, world_x0, world_z0, biome_gen);
 		return;
-	case 13:
+	case 14:
 		gen_place_dungeons(sc, w->world_seed, world_x0, world_z0);
 		return;
-	case 14:
-		gen_place_desert_structures(sc, w->world_seed, world_x0, world_z0, biome_gen);
-		return;
 	case 15:
-		if(w->generator.finisher_worm_nest_caves)
-			gen_carve_cave_entrance_to_worm(sc, seed, chunk_x, chunk_z,
-											surface_map, gen_args->sea_level);
+		gen_place_desert_structures(sc, w->world_seed, world_x0, world_z0, biome_gen);
 		return;
 	default:
 		return;
@@ -7388,8 +7892,8 @@ static void gen_generate_deco_columns(struct server_world* w, struct server_chun
 			tree_count = 0;
 		}
 
-		/* 4× mehr Bäume (User-Wunsch: dichtere Bewaldung) */
-		tree_count *= 4;
+		/* 8× Vanilla-Versuche: doppelt so viele Baeume wie vorher. */
+		tree_count *= 8;
 
 		for(int t = 0; t < tree_count; t++) {
 			int lx = FEAT_INT(16);
@@ -7413,7 +7917,7 @@ static void gen_generate_deco_columns(struct server_world* w, struct server_chun
 			    || fallen_biome == taiga || fallen_biome == taiga_hills
 			    || fallen_biome == giant_tree_taiga || fallen_biome == giant_tree_taiga_hills
 			    || fallen_biome == birch_forest || fallen_biome == birch_forest_hills);
-			if(has_fallen && FEAT_INT(8) == 0) { /* ~12.5% Chance pro Chunk */
+			if(has_fallen && FEAT_INT(16) == 0) { /* halb so oft wie vorher */
 				int lx = 3 + FEAT_INT(10);
 				int lz = 3 + FEAT_INT(10);
 				int sy = (int)hh[lx][lz];
@@ -7464,6 +7968,7 @@ static void gen_generate_deco_columns(struct server_world* w, struct server_chun
 		else if(cx_g == dark_forest) grass_count = 8;
 		else if(cx_g == savanna || cx_g == savanna_plateau) grass_count = 10;
 		else grass_count = 3; /* Default für andere Biome */
+		grass_count *= 2;
 
 		FEAT_RNG_INIT(2, 0);
 		for(int t = 0; t < grass_count; t++) {
@@ -7491,6 +7996,8 @@ static void gen_generate_deco_columns(struct server_world* w, struct server_chun
 			else flower_count = 1; /* war 2 */
 
 			FEAT_RNG_INIT(3, 0);
+			flower_count = flower_count / 2
+				+ (((flower_count & 1) && FEAT_INT(2) == 0) ? 1 : 0);
 			for(int t = 0; t < flower_count; t++) {
 				int lx = FEAT_INT(16);
 				int lz = FEAT_INT(16);

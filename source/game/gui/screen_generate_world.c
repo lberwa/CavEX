@@ -30,6 +30,7 @@ static void screen_gworld_reset(struct screen* s, int width, int height) {
 
 	gstate_set_capture_input_all(false);
 	gstate.gen_debug.built = 0;
+	gstate.gen_debug.chunks_per_sec = 0.0f;
 	gstate.gen_debug.percent = 0;
 	gstate.gen_debug.active = false;
 
