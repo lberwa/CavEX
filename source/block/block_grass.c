@@ -76,14 +76,9 @@ static void onRightClick(struct server_local* s, struct item_data* it,
         }
     }
 
-    // Fallback: if it's not a hoe.. just place what you wanted to place
-    if (it && items[it->id] && items[it->id]->onItemPlace) {
-		if (items[it->id]->onItemPlace(s, it, where, on, on_side)) {
-			/* item was placed by the item handler: consume one from the
-			 * player's hotbar and notify the client about the changed slot */
-			place_block = true;
-		}
-    }
+    // Fallback: let the server run normal placement after this interaction.
+    if (it && items[it->id] && items[it->id]->onItemPlace)
+		place_block = true;
 }
 
 static void onRandomTick(struct server_local* s, struct block_info* this) {

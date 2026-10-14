@@ -20,8 +20,15 @@
 #include <assert.h>
 #include <float.h>
 #include <math.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#if 0
+#define CAVEX_DEBUG_PRINTF(...) printf(__VA_ARGS__)
+#else
+#define CAVEX_DEBUG_PRINTF(...) ((void)0)
+#endif
 
 #include "game/game_state.h"
 #include "graphics/render_entity.h"
@@ -39,6 +46,20 @@
 		 (vec2) {(c)->x + CHUNK_SIZE / 2, (c)->z + CHUNK_SIZE / 2},            \
 		 (vec2) {gstate.camera.x, gstate.camera.z})                            \
 	 <= glm_pow2((dist) * gstate.config.fog_distance))
+
+#define REDSTONE_VISUAL_REBUILD_DELAY_MS 90
+
+static bool world_is_redstone_visual_block(uint8_t type) {
+	return type == BLOCK_REDSTONE_WIRE || type == BLOCK_REDSTONE_TORCH
+		   || type == BLOCK_REDSTONE_TORCH_LIT || type == BLOCK_REPEATER_OFF
+		   || type == BLOCK_REPEATER_ON;
+}
+
+static bool world_is_redstone_visual_update(struct block_data old_blk,
+											struct block_data new_blk) {
+	return world_is_redstone_visual_block(old_blk.type)
+		   && world_is_redstone_visual_block(new_blk.type);
+}
 
 void world_unload_section(struct world* w, w_coord_t x, w_coord_t z) {
 	assert(w);
@@ -344,7 +365,17 @@ void world_set_block(struct world* w, w_coord_t x, w_coord_t y, w_coord_t z,
 			s->column[cy] = c;
 		}
 
-		chunk_set_block(c, W2C_COORD(x), W2C_COORD(y), W2C_COORD(z), blk);
+		struct block_data old_blk = chunk_get_block(
+			c, W2C_COORD(x), W2C_COORD(y), W2C_COORD(z));
+		if(world_is_redstone_visual_update(old_blk, blk)) {
+			blk.sky_light = old_blk.sky_light;
+			blk.torch_light = old_blk.torch_light;
+			chunk_set_block_deferred(c, W2C_COORD(x), W2C_COORD(y),
+									 W2C_COORD(z), blk,
+									 REDSTONE_VISUAL_REBUILD_DELAY_MS);
+		} else {
+			chunk_set_block(c, W2C_COORD(x), W2C_COORD(y), W2C_COORD(z), blk);
+		}
 		lighting_heightmap_update(s->heightmap, W2C_COORD(x), y, W2C_COORD(z),
 								  blk.type, wsection_heightmap_get_block, s);
 	}
@@ -1215,7 +1246,7 @@ static void world_render_enchanting_books(struct world* w, struct camera* c) {
 									DRAW_PAGE_RANGE_SWING(0.0f, -page_len, swing_fold, 0.004f, color_pages);
 
 									/*if(!debug_printed_this_frame) {
-										printf(
+										CAVEX_DEBUG_PRINTF(
 											"[BOOK DBG] frame_ms=%d pos=(%.3f,%.3f,%.3f) "
 											"page1{angle=%.6f,lx0=%.3f,lx1=%.3f} "
 											"page2{angle=%.6f,lx0=%.3f,lx1=%.3f} "

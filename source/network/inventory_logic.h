@@ -26,6 +26,7 @@ bool inventory_collect(struct inventory* inv, struct item_data* item,
 
 extern struct inventory_logic inventory_logic_player;
 extern struct inventory_logic inventory_logic_crafting;
+extern struct inventory_logic inventory_logic_dispenser;
 extern struct inventory_logic inventory_logic_furnace;
 extern struct inventory_logic inventory_logic_chest;
 extern struct inventory_logic inventory_logic_ender_chest;

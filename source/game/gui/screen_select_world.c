@@ -17,6 +17,14 @@
 	along with CavEX.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <stdio.h>
+
+#if 0
+#define CAVEX_DEBUG_PRINTF(...) printf(__VA_ARGS__)
+#else
+#define CAVEX_DEBUG_PRINTF(...) ((void)0)
+#endif
+
 #include "../../graphics/gui_util.h"
 #include "../../graphics/gfx_settings.h"
 #include "../../network/level_archive.h"
@@ -100,18 +108,18 @@ static void screen_sworld_reset(struct screen* s, int width, int height) {
 				struct world_option opt;
 				string_init_printf(opt.path, "%s/%s", saves_path, dir->d_name);
 #ifdef DEBUG_SCREEN_SELECT_WORLD
-				printf("[DEBUG screen_select_world] scanning '%s'\n", string_get_cstr(opt.path));
+				CAVEX_DEBUG_PRINTF("[DEBUG screen_select_world] scanning '%s'\n", string_get_cstr(opt.path));
 #endif
 				struct level_archive la;
 				if(level_archive_create(&la, opt.path)) {
 #ifdef DEBUG_SCREEN_SELECT_WORLD
-					printf("[DEBUG screen_select_world] create OK for '%s'\n", string_get_cstr(opt.path));
+					CAVEX_DEBUG_PRINTF("[DEBUG screen_select_world] create OK for '%s'\n", string_get_cstr(opt.path));
 #endif
 					char name[64];
 
 					if(!level_archive_read(&la, LEVEL_NAME, name, sizeof(name))) {
 #ifdef DEBUG_SCREEN_SELECT_WORLD
-						printf("[DEBUG screen_select_world] LEVEL_NAME read failed\n");
+						CAVEX_DEBUG_PRINTF("[DEBUG screen_select_world] LEVEL_NAME read failed\n");
 #endif
 						strcpy(name, "Missing name");
 					}

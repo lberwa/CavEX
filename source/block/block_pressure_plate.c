@@ -20,6 +20,10 @@
 #include "../network/server_local.h"
 #include "blocks.h"
 
+#include <math.h>
+
+#define PRESSURE_PLATE_DEBUG 0
+
 static enum block_material getMaterial1(struct block_info* this) {
 	return MATERIAL_STONE;
 }
@@ -66,7 +70,65 @@ static bool onItemPlace(struct server_local* s, struct item_data* it,
 	if(!blocks[blk.type] || blocks[blk.type]->can_see_through)
 		return false;
 
-	return block_place_default(s, it, where, on, on_side);
+	bool placed = block_place_default(s, it, where, on, on_side);
+#if PRESSURE_PLATE_DEBUG
+	printf("[PLATE_DEBUG] place type=%u pos=%d,%d,%d result=%d\n",
+		   (unsigned)it->id, (int)where->x, (int)where->y,
+		   (int)where->z, placed ? 1 : 0);
+#endif
+	return placed;
+}
+
+static bool pressure_plate_triggered_by_entities(struct server_local* s,
+														 struct block_info* info) {
+	struct AABB hitbox;
+	dict_entity_it_t it;
+
+	aabb_setsize_centered(&hitbox, 0.875F, 0.125F, 0.875F);
+	aabb_translate(&hitbox, info->x + 0.5F, info->y + 0.0625F,
+					info->z + 0.5F);
+
+	dict_entity_it(it, s->entities);
+	while(!dict_entity_end_p(it)) {
+		struct entity* e = dict_entity_ref(it)->value;
+		struct AABB entity_box;
+		dict_entity_next(it);
+
+		if(!e || e->type == ENTITY_LOCAL_PLAYER)
+			continue;
+		if(e->type == ENTITY_ITEM) {
+			/* Drops have no usable block collision box here. Compare their
+			 * current world cell with the wooden plate directly. */
+			bool same_block = info->block->type == BLOCK_WOOD_PRESSURE_PLATE
+				&& (w_coord_t)floorf(e->pos[0]) == info->x
+				&& (w_coord_t)floorf(e->pos[1]) == info->y
+				&& (w_coord_t)floorf(e->pos[2]) == info->z;
+			if(e->pos[0] >= info->x - 2.0F
+			   && e->pos[0] < info->x + 3.0F
+			   && e->pos[2] >= info->z - 2.0F
+			   && e->pos[2] < info->z + 3.0F) {
+#if PRESSURE_PLATE_DEBUG
+				printf("[PLATE_DEBUG] plate=%u at %d,%d,%d item=%u "
+					   "id=%u pos=%.3f,%.3f,%.3f same=%d\n",
+					   info->block->type, (int)info->x, (int)info->y,
+					   (int)info->z, (unsigned)e->id,
+					   (unsigned)e->data.item.item.id, e->pos[0], e->pos[1],
+					   e->pos[2], same_block ? 1 : 0);
+#endif
+			}
+			if(same_block)
+				return true;
+			continue;
+		}
+		if(!e->getBoundingBox)
+			continue;
+		if(e->getBoundingBox(e, &entity_box) == 0)
+			continue;
+		if(aabb_intersection(&hitbox, &entity_box))
+			return true;
+	}
+
+	return false;
 }
 
 
@@ -91,9 +153,17 @@ static void onWorldTick(struct server_local* s, struct block_info* info) {
 		}
 	}
 
+	if(!onPlate)
+		onPlate = pressure_plate_triggered_by_entities(s, info);
+
     uint8_t newState = onPlate ? 1 : 0;
 
     if ((cur.metadata & 0x01) != newState) {
+#if PRESSURE_PLATE_DEBUG
+		printf("[PLATE_DEBUG] state type=%u pos=%d,%d,%d on=%u\n",
+			   (unsigned)cur.type, (int)info->x, (int)info->y,
+			   (int)info->z, (unsigned)newState);
+#endif
         cur.metadata = (cur.metadata & ~0x01) | newState;
         server_world_set_block(s,
                                info->x, info->y, info->z,

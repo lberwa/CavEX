@@ -30,7 +30,7 @@ static bool hook_has_support(struct server_local* s, struct block_info* this) {
 	if(!server_world_get_block(AWORLD(s), this->x + ox, this->y + oy,
 							   this->z + oz, &support))
 		return false;
-	return blocks[support.type] && !blocks[support.type]->can_see_through;
+	return block_can_support_attachment(support.type);
 }
 
 static size_t getBoundingBox(struct block_info* this, bool entity,
@@ -162,7 +162,7 @@ static bool onItemPlace(struct server_local* s, struct item_data* it,
 	struct block_data blk;
 	struct block_info blk_info = *where;
 
-	if(!blocks[on->block->type] || blocks[on->block->type]->can_see_through)
+	if(!block_can_support_attachment(on->block->type))
 		return false;
 
 	switch(on_side) {

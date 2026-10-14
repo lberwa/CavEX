@@ -25,6 +25,12 @@
 #include <sys/stat.h>
 #include <time.h>
 
+#if 1
+#define CAVEX_DEBUG_PRINTF(...) printf(__VA_ARGS__)
+#else
+#define CAVEX_DEBUG_PRINTF(...) ((void)0)
+#endif
+
 #ifdef PLATFORM_WII
 	#include "fat.h"
 	#include <gccore.h>
@@ -67,7 +73,7 @@
 #include "lodepng/lodepng.h"
 
 #ifdef CAMERA_DEBUG
-#define CAMERA_DBG_PRINTF(...) printf(__VA_ARGS__)
+#define CAMERA_DBG_PRINTF(...) CAVEX_DEBUG_PRINTF(__VA_ARGS__)
 #else
 #define CAMERA_DBG_PRINTF(...) ((void)0)
 #endif
@@ -248,6 +254,7 @@ void sdlog(const char *msg) {
 	}
 #endif
 #if defined(PLATFORM_WII) && defined(SD_LOG)
+#if 0
 	if(g_sdtrace) {
 		FILE *f = fopen("sd:/cavexlog.txt", "a");
 		if(f) {
@@ -257,16 +264,20 @@ void sdlog(const char *msg) {
 		}
 	}
 #endif
+#endif
 }
 
 #if defined(PLATFORM_WII) && defined(CP_TRACE)
 static void cp_write(const char *m) {
+	(void)m;
+#if 0
 	FILE *f = fopen("sd:/cptrace.txt", "a");
 	if(f) {
 		fputs(m, f);
 		fputc('\n', f);
 		fclose(f);
 	}
+#endif
 }
 static void *cp_logger(void *arg) {
 	(void)arg;
@@ -275,6 +286,7 @@ static void *cp_logger(void *arg) {
 	while(1) {
 		/* durchgehend flushen (libfat serialisiert; kein Gate mehr) */
 		if(ridx < g_cp_widx) {
+#if 0
 			FILE *f = fopen("sd:/cptrace.txt", "a");
 			if(f) {
 				while(ridx < g_cp_widx) {
@@ -285,6 +297,9 @@ static void *cp_logger(void *arg) {
 				}
 				fclose(f);
 			}
+#else
+			ridx = g_cp_widx;
+#endif
 		}
 		thread_msleep(16);
 	}
@@ -390,7 +405,7 @@ int load_config(void) {
     // Pfad der eigenen Executable holen
     ssize_t len = readlink("/proc/self/exe", exe_path, sizeof(exe_path) - 1);
     if (len == -1) {
-        printf("Failed to get exe path\n");
+        CAVEX_DEBUG_PRINTF("Failed to get exe path\n");
         return 0;
     }
     exe_path[len] = '\0';
@@ -406,7 +421,7 @@ int load_config(void) {
 
     // config laden
     if (!config_create(&gstate.config_user, config_path)) {
-        printf("Failed to load config: %s\n", config_path);
+        CAVEX_DEBUG_PRINTF("Failed to load config: %s\n", config_path);
         return 0;
     }
 
@@ -510,7 +525,7 @@ int main(void) {
 
 #ifdef PLATFORM_WII
 	if (!config_create(&gstate.config_user, "config_wii.json")) {
-		printf("Failed to load config.json\n");
+		CAVEX_DEBUG_PRINTF("Failed to load config.json\n");
 	}
 #else
 	load_config();
@@ -654,6 +669,10 @@ int main(void) {
 		float hitch_flip_ms = 0.0f;
 		float hitch_render_ms = 0.0f;
 		float hitch_gui_ms = 0.0f;
+		float hitch_gui_screen_ms = 0.0f;
+		float hitch_gui_split_ms = 0.0f;
+		float hitch_gui_screenshot_ms = 0.0f;
+		float hitch_gui_pc_update_ms = 0.0f;
 		float hitch_sound_ms = 0.0f;
 		float hitch_input_ms = 0.0f;
 		float hitch_finish_ms = 0.0f;
@@ -690,7 +709,7 @@ int main(void) {
 			if(time_diff_ms(last_lp_dbg, now_lp_dbg) >= 1000) {
 				struct entity* p0 = gstate.local_players[0];
 				struct entity* p1 = gstate.local_players[1];
-				printf("[splitscreen] p0=%p id=%u pidx=%d | p1=%p id=%u pidx=%d | same_ptr=%d\n",
+				CAVEX_DEBUG_PRINTF("[splitscreen] p0=%p id=%u pidx=%d | p1=%p id=%u pidx=%d | same_ptr=%d\n",
 					   (void*)p0,
 					   p0 ? (unsigned)p0->id : 0u,
 					   p0 ? p0->data.local_player.player_index : -1,
@@ -1364,6 +1383,7 @@ int main(void) {
 
 		ptime_t _prof_gui0 = time_get();
 		if(!rendered_2d) {
+			ptime_t _prof_gui_screen0 = time_get();
 			struct screen* active_screen = gstate.current_screen == &screen_ingame ?
 				screen_get_player(0) :
 				gstate.current_screen;
@@ -1390,15 +1410,21 @@ int main(void) {
 				active_screen->render2D(active_screen, gfx_width(),
 										gfx_height());
 			}
+			hitch_gui_screen_ms
+				= time_diff_s(_prof_gui_screen0, time_get()) * 1000.0f;
 		}
 
 #ifdef SPLITSCREEN
 		if(splitscreen_enabled() && render_world) {
+			ptime_t _prof_gui_split0 = time_get();
 			splitscreen_load_player(0);
+			hitch_gui_split_ms
+				= time_diff_s(_prof_gui_split0, time_get()) * 1000.0f;
 		}
 #endif
 
 		if(input_pressed(IB_SCREENSHOT, 0)) {
+			ptime_t _prof_gui_screenshot0 = time_get();
 			size_t width, height;
 			gfx_copy_framebuffer(NULL, &width, &height);
 
@@ -1424,10 +1450,15 @@ int main(void) {
 				lodepng_encode32_file(name, image, width, height);
 				free(image);
 			}
+			hitch_gui_screenshot_ms
+				= time_diff_s(_prof_gui_screenshot0, time_get()) * 1000.0f;
 		}
 
 #ifdef PLATFORM_PC
+		ptime_t _prof_gui_pc_update0 = time_get();
 		pc_update();
+		hitch_gui_pc_update_ms
+			= time_diff_s(_prof_gui_pc_update0, time_get()) * 1000.0f;
 #endif
 		hitch_gui_ms = time_diff_s(_prof_gui0, time_get()) * 1000.0f;
 		gstate.stats.prof_gui_ms = gstate.stats.prof_gui_ms * 0.9f
@@ -1457,7 +1488,7 @@ int main(void) {
 				+ hitch_render_ms + hitch_gui_ms + hitch_sound_ms
 				+ hitch_input_ms + hitch_finish_ms;
 			float hitch_other_ms = hitch_frame_ms - hitch_known_ms;
-			printf("[HITCH] frame=%.1f ms prev_dt=%.1f ms "
+			CAVEX_DEBUG_PRINTF("[HITCH] frame=%.1f ms prev_dt=%.1f ms "
 				   "clin=%.1f tick=%.1f world=%.1f light=%.1f build=%.1f screen=%.1f "
 				   "flip=%.1f render=%.1f gui=%.1f "
 				   "sound=%.1f input=%.1f finish=%.1f other=%.1f "
@@ -1475,6 +1506,11 @@ int main(void) {
 				   chunk_mesher_stat_queue_depth,
 				   chunk_mesher_dbg_sent, chunk_mesher_dbg_failed,
 				   chunk_mesher_dbg_built, chunk_mesher_dbg_recv);
+			CAVEX_DEBUG_PRINTF("[HITCH_GUI] screen=%.1f split=%.1f screenshot=%.1f "
+				   "pc_update=%.1f gui_total=%.1f\n",
+				   hitch_gui_screen_ms, hitch_gui_split_ms,
+				   hitch_gui_screenshot_ms, hitch_gui_pc_update_ms,
+				   hitch_gui_ms);
 			fflush(stdout);
 		}
 #endif
@@ -1562,17 +1598,17 @@ int main(void) {
     int malloc_used = mi.uordblks;
     int malloc_free_internal = mi.fordblks;
 /*
-    printf("Arena1 (MEM1): lo=0x%08X hi=0x%08X total=%u bytes\n", a1lo, a1hi, a1_total);
-    printf("Arena2 (MEM2): lo=0x%08X hi=0x%08X total=%u bytes\n", a2lo, a2hi, a2_total);
+    CAVEX_DEBUG_PRINTF("Arena1 (MEM1): lo=0x%08X hi=0x%08X total=%u bytes\n", a1lo, a1hi, a1_total);
+    CAVEX_DEBUG_PRINTF("Arena2 (MEM2): lo=0x%08X hi=0x%08X total=%u bytes\n", a2lo, a2hi, a2_total);
 
-    printf("\nmalloc (default heap): used (uordblks) = %d bytes\n", malloc_used);
-    printf("malloc internal free (fordblks) = %d bytes\n", malloc_free_internal);
+    CAVEX_DEBUG_PRINTF("\nmalloc (default heap): used (uordblks) = %d bytes\n", malloc_used);
+    CAVEX_DEBUG_PRINTF("malloc internal free (fordblks) = %d bytes\n", malloc_free_internal);
 
     // Abschätzung: wieviel von Arena1 noch 'verfügbar' (sehr grobe Schätzung):
     // available_in_arena1 = a1_total - malloc_used
     // (Hinweis: das ist nur eine Näherung; malloc hat Overhead/Fragmentierung und andere Komponenten können Arena belegen)
     if (a1_total >= (u32)malloc_used)
-        printf("geschätzter freier Platz in Arena1 = %u bytes\n", a1_total - (u32)malloc_used);
+        CAVEX_DEBUG_PRINTF("geschätzter freier Platz in Arena1 = %u bytes\n", a1_total - (u32)malloc_used);
     else
         debug_send("geschätzter freier Platz in Arena1 = 0 (oder malloc > arena)\n");
 */

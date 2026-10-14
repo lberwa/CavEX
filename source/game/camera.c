@@ -21,6 +21,11 @@
 #include <float.h>
 #ifdef CAMERA_DEBUG
 #include <stdio.h>
+#if 0
+#define CAVEX_DEBUG_PRINTF(...) printf(__VA_ARGS__)
+#else
+#define CAVEX_DEBUG_PRINTF(...) ((void)0)
+#endif
 #endif
 
 #include "../platform/gfx.h"
@@ -255,7 +260,7 @@ void camera_attach(struct camera* c, struct entity* e, float tick_delta,
 	c->rx = e->orient[0];
 	c->ry = e->orient[1];
 
-	//printf("c%.03f %.03f %.03f\n", c->x, c->y, c->z);
+	//CAVEX_DEBUG_PRINTF("c%.03f %.03f %.03f\n", c->x, c->y, c->z);
 
 	float jdx, jdy;
 #ifdef SPLITSCREEN
@@ -287,7 +292,7 @@ void camera_attach(struct camera* c, struct entity* e, float tick_delta,
 		float rx_after = c->rx;
 		float ry_after = c->ry;
 #ifdef PLATFORM_PC
-		printf("[camera_attach p=%d eid=%u cap=%d joy=%d] pos=(%.2f %.2f %.2f) "
+		CAVEX_DEBUG_PRINTF("[camera_attach p=%d eid=%u cap=%d joy=%d] pos=(%.2f %.2f %.2f) "
 			   "ent=(%.2f %.2f %.2f old=(%.2f %.2f %.2f) td=%.2f) "
 			   "j=(%.5f %.5f) ddeg=(%.2f %.2f) "
 			   "rx=%.2f->%.2f ry=%.2f->%.2f clamp(%.2f->%.2f)\n",

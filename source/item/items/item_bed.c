@@ -17,6 +17,8 @@
 	along with CavEX.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <math.h>
+
 #include "../../block/blocks_data.h"
 #include "../../cglm/types.h"
 #include "../../entity/entity.h"
@@ -29,32 +31,36 @@
 static bool onItemPlace(struct server_local* s, struct item_data* it,
                         struct block_info* where, struct block_info* on,
                         enum side on_side) {
-    // Check directions: +Z, -Z, +X, -X
-    const int dir[4][3] = {
-        {0, 0, 1},   // +Z (metadata 0)
-        {0, 0, -1},  // -Z (metadata 2)
-        {1, 0, 0},   // +X (metadata 4)
-        {-1, 0, 0},  // -X (metadata 6)
-    };
-
-    struct block_data blk;
-    int metadata = -1;
+    struct server_player* player = &s->players[s->active_player_id];
+    float rx = glm_rad(player->rx);
+    float look_x = -sinf(rx);
+    float look_z = cosf(rx);
     int dx = 0, dz = 0;
+    uint8_t metadata = 0;
 
-    for (int i = 0; i < 4; i++) {
-        int tx = where->x + dir[i][0];
-        int ty = where->y + dir[i][1];
-        int tz = where->z + dir[i][2];
-        if (!server_world_get_block(AWORLD(s), tx, ty, tz, &blk)) continue;
-        if (blk.type == 0) {
-            metadata = i * 2;
-            dx = dir[i][0];
-            dz = dir[i][2];
-            break;
+    if(fabsf(look_x) > fabsf(look_z)) {
+        if(look_x > 0.0F) {
+            dx = 1;
+            metadata = 1;
+        } else {
+            dx = -1;
+            metadata = 3;
+        }
+    } else {
+        if(look_z > 0.0F) {
+            dz = 1;
+            metadata = 0;
+        } else {
+            dz = -1;
+            metadata = 2;
         }
     }
 
-    if (metadata == -1) return false; // No space for bed head
+    struct block_data blk;
+    if(!server_world_get_block(AWORLD(s), where->x + dx, where->y,
+                               where->z + dz, &blk)
+       || blk.type != BLOCK_AIR)
+        return false;
 
     struct block_data foot = {
         .type = BLOCK_BED,
@@ -69,20 +75,23 @@ static bool onItemPlace(struct server_local* s, struct item_data* it,
         .torch_light = 0,
     };
 
-    // Collision check with foot
-    struct block_info blk2_info = *where;
-    blk2_info.block = &foot;
-    if (entity_local_player_block_collide(
-			(vec3) {s->players[s->active_player_id].x,
-					s->players[s->active_player_id].y,
-					s->players[s->active_player_id].z},
-			&blk2_info)) {
+    struct block_info foot_info = *where;
+    foot_info.block = &foot;
+    if(entity_local_player_block_collide(
+           (vec3) {player->x, player->y, player->z}, &foot_info)) {
         return false;
     }
 
-    // Place foot
+    struct block_info head_info = *where;
+    head_info.x += dx;
+    head_info.z += dz;
+    head_info.block = &head;
+    if(entity_local_player_block_collide(
+           (vec3) {player->x, player->y, player->z}, &head_info)) {
+        return false;
+    }
+
     server_world_set_block(s, where->x, where->y, where->z, foot);
-    // Place head
     server_world_set_block(s, where->x + dx, where->y, where->z + dz, head);
 
     return true;

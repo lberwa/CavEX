@@ -24,6 +24,14 @@
 
 #include <stdio.h>
 
+#define PRESSURE_PLATE_DEBUG 0
+
+#if 0
+#define CAVEX_DEBUG_PRINTF(...) printf(__VA_ARGS__)
+#else
+#define CAVEX_DEBUG_PRINTF(...) ((void)0)
+#endif
+
 #include "../cglm/cglm.h"
 
 #include "../item/window_container.h"
@@ -38,6 +46,12 @@
 #include "inventory_logic.h"
 #include "server_interface.h"
 #include "server_local.h"
+
+#ifdef BLOCK_LAT_DEBUG
+#define BLOCK_LAT_PRINTF(...) printf(__VA_ARGS__)
+#else
+#define BLOCK_LAT_PRINTF(...)
+#endif
 #include "server_world.h"
 #include "complex_block_archive.h"
 #include "../parson/parson.h"
@@ -535,7 +549,7 @@ void server_local_collapse_portal(struct server_local* s, int x, int y, int z) {
 		if(rx >= min_x - 1 && rx <= max_x + 1
 		   && rz >= min_z - 1 && rz <= max_z + 1) {
 #ifdef PORTAL_DEBUG
-			printf("[PORTAL] collapse: entferne slot=%d x=%d y=%d z=%d dim=%s "
+			CAVEX_DEBUG_PRINTF("[PORTAL] collapse: entferne slot=%d x=%d y=%d z=%d dim=%s "
 			       "(in kollabierter Region x[%d..%d] z[%d..%d])\n",
 			       i, rx, s->portal_registry[di][i].y, rz, di ? "NETHER" : "OW",
 			       min_x, max_x, min_z, max_z);
@@ -555,7 +569,7 @@ void server_local_dump_portal_registry(struct server_local* s, const char* tag) 
 	const char* dim_name[2] = {"OW    ", "NETHER"};
 
 #ifdef PORTAL_DEBUG
-	printf("[PORTAL] ===== Registry-Dump (%s) =====\n", tag ? tag : "");
+	CAVEX_DEBUG_PRINTF("[PORTAL] ===== Registry-Dump (%s) =====\n", tag ? tag : "");
 #endif
 
 	for(int di = 0; di < 2; di++) {
@@ -563,7 +577,7 @@ void server_local_dump_portal_registry(struct server_local* s, const char* tag) 
 		for(int i = 0; i < MAX_PORTAL_ENTRIES; i++) {
 			if(!s->portal_registry[di][i].valid) continue;
 #ifdef PORTAL_DEBUG
-			printf("[PORTAL]   %s [%d] x=%d y=%d z=%d\n",
+			CAVEX_DEBUG_PRINTF("[PORTAL]   %s [%d] x=%d y=%d z=%d\n",
 			       dim_name[di], i,
 			       s->portal_registry[di][i].x,
 			       s->portal_registry[di][i].y,
@@ -573,11 +587,11 @@ void server_local_dump_portal_registry(struct server_local* s, const char* tag) 
 		}
 #ifdef PORTAL_DEBUG
 		if(count == 0)
-			printf("[PORTAL]   %s (leer)\n", dim_name[di]);
+			CAVEX_DEBUG_PRINTF("[PORTAL]   %s (leer)\n", dim_name[di]);
 #endif
 	}
 #ifdef PORTAL_DEBUG
-	printf("[PORTAL] ================================\n");
+	CAVEX_DEBUG_PRINTF("[PORTAL] ================================\n");
 #endif
 }
 
@@ -591,7 +605,7 @@ void server_local_register_portal(struct server_local* s,
 		if(abs(s->portal_registry[di][i].x - x) <= 4
 		   && abs(s->portal_registry[di][i].z - z) <= 4) {
 #ifdef PORTAL_DEBUG
-			printf("[PORTAL] register SKIP (Duplikat von x=%d z=%d) "
+			CAVEX_DEBUG_PRINTF("[PORTAL] register SKIP (Duplikat von x=%d z=%d) "
 			       "neu x=%d y=%d z=%d dim=%s\n",
 			       s->portal_registry[di][i].x, s->portal_registry[di][i].z,
 			       x, y, z, di ? "NETHER" : "OW");
@@ -607,14 +621,14 @@ void server_local_register_portal(struct server_local* s,
 			s->portal_registry[di][i].z     = z;
 			s->portal_registry[di][i].valid = true;
 #ifdef PORTAL_DEBUG
-			printf("[PORTAL] register OK slot=%d x=%d y=%d z=%d dim=%s\n",
+			CAVEX_DEBUG_PRINTF("[PORTAL] register OK slot=%d x=%d y=%d z=%d dim=%s\n",
 			       i, x, y, z, di ? "NETHER" : "OW");
 #endif
 			return;
 		}
 	}
 #ifdef PORTAL_DEBUG
-	printf("[PORTAL] register FEHLGESCHLAGEN (kein freier Slot) "
+	CAVEX_DEBUG_PRINTF("[PORTAL] register FEHLGESCHLAGEN (kein freier Slot) "
 	       "x=%d y=%d z=%d dim=%s\n", x, y, z, di ? "NETHER" : "OW");
 #endif
 }
@@ -630,7 +644,7 @@ void server_local_unregister_portal(struct server_local* s,
 		if(abs(s->portal_registry[di][i].x - x) <= 8
 		   && abs(s->portal_registry[di][i].z - z) <= 8) {
 #ifdef PORTAL_DEBUG
-			printf("[PORTAL] unregister slot=%d x=%d y=%d z=%d dim=%s "
+			CAVEX_DEBUG_PRINTF("[PORTAL] unregister slot=%d x=%d y=%d z=%d dim=%s "
 			       "(nahe x=%d z=%d)\n",
 			       i, s->portal_registry[di][i].x, s->portal_registry[di][i].y,
 			       s->portal_registry[di][i].z, di ? "NETHER" : "OW", x, z);
@@ -880,7 +894,7 @@ static int server_local_place_destination_portal(struct server_local* s,
 				break;
 			server_world_set_block(s, best_x, fy, best_z, platform);
 		}
-		printf("[PORTAL] kein Untergrund bei x=%d z=%d (r=%d) — Plattform bei y=%d\n",
+		CAVEX_DEBUG_PRINTF("[PORTAL] kein Untergrund bei x=%d z=%d (r=%d) — Plattform bei y=%d\n",
 		       origin_x, origin_z, PORTAL_PLACE_RADIUS, py);
 	}
 
@@ -948,7 +962,7 @@ static void server_local_switch_dimension(struct server_local* s, int player_id)
 	 * falls das gefundene Portal fehlt, wird ein anderes in der Nähe gesucht
 	 * (z.B. N2 wenn N1 kaputt), bevor ein neues gebaut wird. */
 #ifdef PORTAL_DEBUG
-	printf("[PORTAL] switch_dimension p%d: von=(%.1f,%.1f,%.1f) dim=%s -> "
+	CAVEX_DEBUG_PRINTF("[PORTAL] switch_dimension p%d: von=(%.1f,%.1f,%.1f) dim=%s -> "
 	       "dest=(%d,%d) dim=%s radius=%d\n",
 	       player_id, sp->x, sp->y, sp->z,
 	       (dest_dim == WORLD_DIM_NETHER) ? "OW" : "NETHER",
@@ -964,10 +978,10 @@ static void server_local_switch_dimension(struct server_local* s, int player_id)
 
 #ifdef PORTAL_DEBUG
 	if(reg_found)
-		printf("[PORTAL] Registry-Treffer bei x=%d y=%d z=%d "
+		CAVEX_DEBUG_PRINTF("[PORTAL] Registry-Treffer bei x=%d y=%d z=%d "
 		       "(wird beim Ankommen verifiziert)\n", found_x, found_y, found_z);
 	else
-		printf("[PORTAL] kein registriertes Portal im Radius -> "
+		CAVEX_DEBUG_PRINTF("[PORTAL] kein registriertes Portal im Radius -> "
 		       "neues wird am Zielpunkt (%d,%d) gebaut\n", dest_x, dest_z);
 #endif
 
@@ -1096,6 +1110,11 @@ struct entity* server_local_spawn_item(vec3 pos, struct item_data* it,
 
 	entity_item(entity_id, e, true, AWORLD(s), *it);
 	e->teleport(e, pos);
+#if PRESSURE_PLATE_DEBUG
+	printf("[PLATE_DEBUG] spawn_item entity=%u item=%u pos=%.3f,%.3f,%.3f throw=%d\n",
+		   (unsigned)e->id, (unsigned)it->id, e->pos[0], e->pos[1],
+		   e->pos[2], throw ? 1 : 0);
+#endif
 
 	if(throw) {
 #ifdef SPLITSCREEN
@@ -1122,6 +1141,31 @@ struct entity* server_local_spawn_item(vec3 pos, struct item_data* it,
 		glm_vec3_scale(
 			e->vel, (2.0F * rand_gen_flt(&s->rand_src) + 0.5F) * 0.1F, e->vel);
 	}
+
+	clin_rpc_send(&(struct client_rpc) {
+		.type = CRPC_SPAWN_ITEM,
+		.payload.spawn_item.entity_id = e->id,
+		.payload.spawn_item.item = e->data.item.item,
+		.payload.spawn_item.pos = {e->pos[0], e->pos[1], e->pos[2]},
+		.payload.spawn_item.vel = {e->vel[0], e->vel[1], e->vel[2]},
+		.payload.spawn_item.dimension = s->players[s->active_player_id].dimension,
+	});
+
+	return e;
+}
+
+struct entity* server_local_spawn_item_velocity(vec3 pos, struct item_data* it,
+											 vec3 velocity,
+											 struct server_local* s) {
+	uint32_t entity_id = entity_gen_id(s->entities);
+	struct entity** e_ptr = dict_entity_safe_get(s->entities, entity_id);
+	*e_ptr = malloc(sizeof(struct entity));
+	struct entity* e = *e_ptr;
+	assert(e);
+
+	entity_item(entity_id, e, true, AWORLD(s), *it);
+	e->teleport(e, pos);
+	glm_vec3_copy(velocity, e->vel);
 
 	clin_rpc_send(&(struct client_rpc) {
 		.type = CRPC_SPAWN_ITEM,
@@ -1593,6 +1637,11 @@ static void server_local_process(struct server_rpc* call, void* user) {
 			break;
 		}
 		case SRPC_BLOCK_DIG:
+			BLOCK_LAT_PRINTF("[BLOCK_LAT] SERVER_RECV dig p=%d pos=%d,%d,%d finished=%d\n",
+				   (int)pid, (int)call->payload.block_dig.x,
+				   (int)call->payload.block_dig.y,
+				   (int)call->payload.block_dig.z,
+				   (int)call->payload.block_dig.finished);
 			if(player->has_pos && call->payload.block_dig.y >= 0
 			   && call->payload.block_dig.y < WORLD_HEIGHT
 			   && call->payload.block_dig.finished) {
@@ -1610,6 +1659,12 @@ static void server_local_process(struct server_rpc* call, void* user) {
 						    call->payload.block_dig.z);
 					}
 
+					BLOCK_LAT_PRINTF("[BLOCK_LAT] SERVER_SET dig_air p=%d pos=%d,%d,%d "
+						   "old=%u:%u\n",
+						   (int)pid, (int)call->payload.block_dig.x,
+						   (int)call->payload.block_dig.y,
+						   (int)call->payload.block_dig.z, blk.type,
+						   blk.metadata);
 					server_world_set_block(s, call->payload.block_dig.x,
 										   call->payload.block_dig.y,
 										   call->payload.block_dig.z,
@@ -1661,7 +1716,12 @@ static void server_local_process(struct server_rpc* call, void* user) {
 			}
 			break;
 		case SRPC_BLOCK_PLACE:
-			//printf("srpc_block_place");
+			//CAVEX_DEBUG_PRINTF("srpc_block_place");
+			BLOCK_LAT_PRINTF("[BLOCK_LAT] SERVER_RECV place p=%d pos=%d,%d,%d side=%d\n",
+				   (int)pid, (int)call->payload.block_place.x,
+				   (int)call->payload.block_place.y,
+				   (int)call->payload.block_place.z,
+				   (int)call->payload.block_place.side);
 			if(player->has_pos && call->payload.block_place.y >= 0
 			   && call->payload.block_place.y < WORLD_HEIGHT) {
 				int x, y, z;
@@ -1676,7 +1736,7 @@ static void server_local_process(struct server_rpc* call, void* user) {
 					   AWORLD(s), call->payload.block_place.x,
 					   call->payload.block_place.y, call->payload.block_place.z,
 					   &blk_on)) {
-					//printf("true 1");
+					//CAVEX_DEBUG_PRINTF("true 1");
 					struct block_info where = (struct block_info) {
 						.block = &blk_where,
 						.neighbours = NULL,
@@ -1697,38 +1757,46 @@ static void server_local_process(struct server_rpc* call, void* user) {
 					inventory_get_hotbar_item(&player->inventory, &it_data);
 					struct item* it = item_get(&it_data);
 					bool placed = false;
+					bool target_replaceable = !blocks[blk_where.type]
+						|| blocks[blk_where.type]->place_ignore;
 
 					if(blocks[blk_on.type]
 					   && blocks[blk_on.type]->onRightClick) {
-						//printf("true 2");
+						//CAVEX_DEBUG_PRINTF("true 2");
 						blocks[blk_on.type]->onRightClick(
 							s, &it_data, &where, &on,
 							call->payload.block_place.side);
 						bool do_place = place_block;
 						place_block = false;
-						if (do_place && it && it->onItemPlace)
+						if (do_place && target_replaceable && it
+							&& it->onItemPlace)
 							placed = it->onItemPlace(
 								s, &it_data, &where, &on,
 								call->payload.block_place.side);
-					} else if((!blocks[blk_where.type]
-							   || blocks[blk_where.type]->place_ignore)
+					} else if(target_replaceable
 							  && it && it->onItemPlace
 							  && (placed = it->onItemPlace(
 								  s, &it_data, &where, &on,
 								  call->payload.block_place.side))) {
-						//printf("false2");
+						//CAVEX_DEBUG_PRINTF("false2");
 					}
 
 					if(placed) {
 						struct block_data placed_blk;
 						if(server_world_get_block(AWORLD(s), where.x, where.y,
-						                          where.z, &placed_blk)
-						   && placed_blk.type != BLOCK_AIR)
+						                          where.z, &placed_blk)) {
+							BLOCK_LAT_PRINTF("[BLOCK_LAT] SERVER_SET place p=%d pos=%d,%d,%d "
+								   "new=%u:%u\n",
+								   (int)pid, (int)where.x, (int)where.y,
+								   (int)where.z, placed_blk.type,
+								   placed_blk.metadata);
+							if(placed_blk.type != BLOCK_AIR)
 							play_dig_sound_at(placed_blk.type,
 							                  (float)where.x,
 							                  (float)where.y,
 							                  (float)where.z,
 							                  1.0f);
+						}
 
 						size_t slot
 							= inventory_get_hotbar(&player->inventory);
@@ -1779,6 +1847,7 @@ static void server_local_process(struct server_rpc* call, void* user) {
 			level_archive_write(&s->level, LEVEL_PLAYER_HEALTH, &player->health);
 
 			chest_archive_write(s->chest_pos, s->chest_items[0], s->level_name);
+			dispenser_archive_write(s->dispenser_pos, s->dispenser_items[0], s->level_name);
 			furnace_archive_write(s->furnaces, s->level_name);
 			sign_archive_write(s->sign_pos, s->sign_texts[0], s->level_name);
 			server_local_save_portal_registry(s);
@@ -1823,11 +1892,16 @@ static void server_local_process(struct server_rpc* call, void* user) {
 		    e->health -= 5;    // damage per hit
 		    if (e->health <= 0) {
 		      if (e->type == ENTITY_MINECART) {
+		        // Server entity stays at spawn position; use client entity for real pos.
+		        struct entity** ce = dict_entity_get(gstate.entities, id);
 		        vec3 pos = { e->pos[0], e->pos[1], e->pos[2] };
+		        if (ce && *ce) { pos[0] = (*ce)->pos[0]; pos[1] = (*ce)->pos[1]; pos[2] = (*ce)->pos[2]; }
 		        server_local_spawn_item(pos, &e->data.minecart.item, true, s);
 		        e->delay_destroy = 0;
 		      } else if (e->type == ENTITY_BOAT) {
+		        struct entity** ce = dict_entity_get(gstate.entities, id);
 		        vec3 pos = { e->pos[0], e->pos[1], e->pos[2] };
+		        if (ce && *ce) { pos[0] = (*ce)->pos[0]; pos[1] = (*ce)->pos[1]; pos[2] = (*ce)->pos[2]; }
 		        server_local_spawn_item(pos, &e->drop_item, true, s);
 		        e->delay_destroy = 0;
 		      } else if (e->type == ENTITY_MONSTER) {
@@ -1975,7 +2049,7 @@ static void server_local_process(struct server_rpc* call, void* user) {
 			string_clear(call->payload.load_world.name);
 			s->find_spawn = call->payload.load_world.find_spawn;
 #ifdef SRPC_LOAD_WORLD_DEBUG
-			printf("[DEBUG server_local SRPC_LOAD_WORLD] name='%s'\n", string_get_cstr(s->level_name));
+			CAVEX_DEBUG_PRINTF("[DEBUG server_local SRPC_LOAD_WORLD] name='%s'\n", string_get_cstr(s->level_name));
 #endif
 			if(level_archive_create(&s->level, s->level_name)) {
 				vec3 base_pos = {0.0f, 80.0f, 0.0f};
@@ -2078,6 +2152,14 @@ static void server_local_process(struct server_rpc* call, void* user) {
 					}
 
 				chest_archive_read(s->chest_pos, s->chest_items[0], s->level_name);
+				dispenser_archive_read(s->dispenser_pos, s->dispenser_items[0], s->level_name);
+				/* A powered dispenser loaded from disk has no rising edge. */
+				for(int i = 0; i < MAX_DISPENSERS; i++) {
+					if(s->dispenser_pos[i].y >= 0)
+						s->dispenser_powered[i] = block_redstone_is_powered(
+							s, s->dispenser_pos[i].x, s->dispenser_pos[i].y,
+							s->dispenser_pos[i].z);
+				}
 				furnace_archive_read(s->furnaces, s->level_name);
 				sign_archive_read(s->sign_pos, s->sign_texts[0], s->level_name);
 				server_local_load_portal_registry(s);
@@ -2152,7 +2234,7 @@ static void server_local_update(struct server_local* s) {
 	float dt = time_diff_s(s->last_tick, this_tick);
 	float tps = 1.0F / dt;
 	s->last_tick = this_tick;
-	printf("%f\n", tps);
+	CAVEX_DEBUG_PRINTF("%f\n", tps);
 	#endif
 
 	svin_process_messages(server_local_process, s, false);
@@ -2933,7 +3015,7 @@ unload_done:
 			});
 
 #ifdef SRPC_LOAD_WORLD_DEBUG
-			printf("[server_local] finished loading for player %d near %d,%d (loaded_chunks=%zu)\n",
+			CAVEX_DEBUG_PRINTF("[server_local] finished loading for player %d near %d,%d (loaded_chunks=%zu)\n",
 				   i, (int)WCOORD_CHUNK_OFFSET(floor(player->x)),
 				   (int)WCOORD_CHUNK_OFFSET(floor(player->z)), loaded_chunks);
 #endif
@@ -3012,7 +3094,7 @@ unload_done:
 			.payload.time_set = s->world_time,
 		});
 #ifdef SRPC_LOAD_WORLD_DEBUG
-		printf("[server_local] no disk chunk candidate found near player %d,%d (loaded_chunks=%zu)\n",
+		CAVEX_DEBUG_PRINTF("[server_local] no disk chunk candidate found near player %d,%d (loaded_chunks=%zu)\n",
 			   (int)px, (int)pz, loaded_chunks);
 #endif
 
@@ -3084,7 +3166,7 @@ for (int i = 0; i < 4; i++) {
 			int fall_blocks = (int)player->fall_distance;
 
 #ifdef FALL_HEALTH_DEBUG
-			if(i == 0) printf("[LAND p%d] fall_dist=%.2f (%d Bloecke) wasser=%s -> schaden=%d Herzen\n",
+			if(i == 0) CAVEX_DEBUG_PRINTF("[LAND p%d] fall_dist=%.2f (%d Bloecke) wasser=%s -> schaden=%d Herzen\n",
 				i, player->fall_distance, fall_blocks,
 				landed_in_water ? "JA" : "nein",
 				(fall_blocks >= 4 && !landed_in_water) ? fall_blocks-3 : 0);
@@ -3113,7 +3195,7 @@ for (int i = 0; i < 4; i++) {
 		}
 
 #ifdef FALL_HEALTH_DEBUG
-		if(i == 0) printf("[FALL p%d] pos=(%.2f,%.2f,%.2f) feet_y=%d blk=%d/%d vel_y=%.3f fall_dist=%.2f | falle=%s leiter=%s wasser=%s\n",
+		if(i == 0) CAVEX_DEBUG_PRINTF("[FALL p%d] pos=(%.2f,%.2f,%.2f) feet_y=%d blk=%d/%d vel_y=%.3f fall_dist=%.2f | falle=%s leiter=%s wasser=%s\n",
 			i, player->x, player->y, player->z,
 			feet_y, blk_climb.type, blk_climb2.type,
 			player->vel_y, player->fall_distance,
@@ -3162,12 +3244,12 @@ for (int i = 0; i < 4; i++) {
 #ifdef PORTAL_DEBUG
 					/* Jede volle Sekunde (20 Ticks) hochzählen: 1,2,3,4 */
 					if(player->portal_ticks % 20 == 0)
-						printf("[PORTAL] p%d Teleport-Zähler: %d/4 s\n",
+						CAVEX_DEBUG_PRINTF("[PORTAL] p%d Teleport-Zähler: %d/4 s\n",
 						       i, player->portal_ticks / 20);
 #endif
 					if(player->portal_ticks >= 80) {
 #ifdef PORTAL_DEBUG
-						printf("[PORTAL] p%d -> teleportiert!\n", i);
+						CAVEX_DEBUG_PRINTF("[PORTAL] p%d -> teleportiert!\n", i);
 #endif
 						server_local_switch_dimension(s, i);
 						break;
@@ -3210,7 +3292,7 @@ for (int i = 0; i < 4; i++) {
 		int fall_blocks = (int)s->player.fall_distance;
 
 #ifdef FALL_HEALTH_DEBUG
-		printf("[LAND] fall_dist=%.2f (%d Bloecke) wasser=%s -> schaden=%d Herzen\n",
+		CAVEX_DEBUG_PRINTF("[LAND] fall_dist=%.2f (%d Bloecke) wasser=%s -> schaden=%d Herzen\n",
 			s->player.fall_distance, fall_blocks,
 			landed_in_water ? "JA" : "nein",
 			(fall_blocks >= 4 && !landed_in_water) ? fall_blocks-3 : 0);
@@ -3239,7 +3321,7 @@ for (int i = 0; i < 4; i++) {
 	}
 
 #ifdef FALL_HEALTH_DEBUG
-	printf("[FALL] pos=(%.2f,%.2f,%.2f) feet_y=%d blk=%d/%d vel_y=%.3f fall_dist=%.2f | falle=%s leiter=%s wasser=%s\n",
+	CAVEX_DEBUG_PRINTF("[FALL] pos=(%.2f,%.2f,%.2f) feet_y=%d blk=%d/%d vel_y=%.3f fall_dist=%.2f | falle=%s leiter=%s wasser=%s\n",
 		s->player.x, s->player.y, s->player.z,
 		feet_y, blk_climb.type, blk_climb2.type,
 		s->player.vel_y, s->player.fall_distance,
@@ -3301,7 +3383,7 @@ for (int i = 0; i < 4; i++) {
 			if(_pp->portal_pending_respawn) {
 				_pp->portal_pending_respawn = false;
 #ifdef PORTAL_DEBUG
-				printf("[RESPAWN] p%d -> Spawnpunkt x=%.1f y=%.1f z=%.1f dim=OW\n",
+				CAVEX_DEBUG_PRINTF("[RESPAWN] p%d -> Spawnpunkt x=%.1f y=%.1f z=%.1f dim=OW\n",
 				       _pi, _pp->x, _pp->y, _pp->z);
 #endif
 				goto portal_pending_send_pos;
@@ -3329,7 +3411,7 @@ for (int i = 0; i < 4; i++) {
 				if(_loaded && _cv.type == BLOCK_PORTAL) {
 					/* Gültiges Portal gefunden */
 #ifdef PORTAL_DEBUG
-					printf("[PORTAL] verify OK: Portal-Block bei x=%d y=%d z=%d "
+					CAVEX_DEBUG_PRINTF("[PORTAL] verify OK: Portal-Block bei x=%d y=%d z=%d "
 					       "vorhanden -> ausgewählt\n", _fx, _fy, _fz);
 #endif
 					found_x = _fx; found_y = _fy; found_z = _fz;
@@ -3341,7 +3423,7 @@ for (int i = 0; i < 4; i++) {
 					 * NUR den exakten Registry-Eintrag löschen (nicht per Radius,
 					 * sonst würden benachbarte gültige Portale mit entfernt). */
 #ifdef PORTAL_DEBUG
-					printf("[PORTAL] verify KAPUTT: x=%d y=%d z=%d ist block=%d "
+					CAVEX_DEBUG_PRINTF("[PORTAL] verify KAPUTT: x=%d y=%d z=%d ist block=%d "
 					       "(kein Portal) -> exakten Eintrag löschen, weitersuchen\n",
 					       _fx, _fy, _fz, _cv.type);
 #endif
@@ -3358,7 +3440,7 @@ for (int i = 0; i < 4; i++) {
 					/* Chunk (noch) nicht geladen → nicht löschen. Koordinaten
 					 * trotzdem verwenden; Chunks streamen beim Ankommen nach. */
 #ifdef PORTAL_DEBUG
-					printf("[PORTAL] verify WARTE: Chunk bei x=%d y=%d z=%d nicht "
+					CAVEX_DEBUG_PRINTF("[PORTAL] verify WARTE: Chunk bei x=%d y=%d z=%d nicht "
 					       "geladen -> Koordinaten trotzdem verwenden\n",
 					       _fx, _fy, _fz);
 #endif
@@ -3371,7 +3453,7 @@ for (int i = 0; i < 4; i++) {
 			if(_reg) {
 				/* Gültiges registriertes Portal gefunden */
 #ifdef PORTAL_DEBUG
-				printf("[PORTAL] ENTSCHEIDUNG p%d: benutze bestehendes Portal "
+				CAVEX_DEBUG_PRINTF("[PORTAL] ENTSCHEIDUNG p%d: benutze bestehendes Portal "
 				       "x=%d y=%d z=%d\n", _pi, found_x, found_y, found_z);
 #endif
 				_pp->x = found_x + 0.5;
@@ -3380,7 +3462,7 @@ for (int i = 0; i < 4; i++) {
 			} else {
 				/* Kein bekanntes Portal: neues bauen */
 #ifdef PORTAL_DEBUG
-				printf("[PORTAL] ENTSCHEIDUNG p%d: baue NEUES Portal bei "
+				CAVEX_DEBUG_PRINTF("[PORTAL] ENTSCHEIDUNG p%d: baue NEUES Portal bei "
 				       "x=%d z=%d\n", _pi,
 				       _pp->portal_pending_x, _pp->portal_pending_z);
 #endif
@@ -3396,7 +3478,7 @@ for (int i = 0; i < 4; i++) {
 				_pp->y = portal_y + 1.62;
 				_pp->z = _dest_z + 0.5;
 #ifdef PORTAL_DEBUG
-				printf("[PORTAL] neues Portal gebaut, Spieler bei "
+				CAVEX_DEBUG_PRINTF("[PORTAL] neues Portal gebaut, Spieler bei "
 				       "x=%.1f y=%.1f z=%.1f\n", _pp->x, _pp->y, _pp->z);
 #endif
 			}
@@ -3578,8 +3660,13 @@ void server_local_create(struct server_local* s) {
 
 	dict_entity_init(s->entities);
 	memset(s->chest_pos, -1, MAX_CHESTS * 3 * sizeof(int));
+	memset(s->dispenser_pos, -1, MAX_DISPENSERS * 3 * sizeof(int));
+	memset(s->dispenser_items, 0, sizeof(s->dispenser_items));
+	memset(s->dispenser_powered, 0, sizeof(s->dispenser_powered));
 	memset(s->buttons, -1, sizeof(s->buttons));
 	memset(s->repeaters, -1, sizeof(s->repeaters));
+	memset(s->noteblocks, -1, sizeof(s->noteblocks));
+	memset(s->redstone_openables, -1, sizeof(s->redstone_openables));
 	memset(s->sign_pos, -1, MAX_SIGNS * 3 * sizeof(int));
 	memset(s->brewing_stands, 0, sizeof(s->brewing_stands));
 	memset(s->enchanting_tables, 0, sizeof(s->enchanting_tables));

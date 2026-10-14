@@ -160,6 +160,10 @@
       "../assets/gui/chest.png"
     ],
     [
+      "assets/gui/dispenser.png",
+      "../assets/gui/dispenser.png"
+    ],
+    [
       "assets/gui/inventory.png",
       "../assets/gui/inventory.png"
     ],
@@ -3456,6 +3460,10 @@
       "source/network/inventory_chest.c"
     ],
     [
+      "source/network/inventory_dispenser.c",
+      "source/network/inventory_dispenser.c"
+    ],
+    [
       "source/network/server_local.c",
       "source/network/server_local.c"
     ],
@@ -4339,6 +4347,10 @@
     [
       "assets/gui/chest.png",
       "../assets/gui/chest.png"
+    ],
+    [
+      "assets/gui/dispenser.png",
+      "../assets/gui/dispenser.png"
     ],
     [
       "assets/gui/inventory.png",

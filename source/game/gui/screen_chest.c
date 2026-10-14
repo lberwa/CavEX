@@ -47,13 +47,21 @@ static size_t selected_slot[4];
 static uint8_t chest_container[4];
 static int gui_scale[4];
 static bool chest_is_ender[4];
+static bool chest_is_dispenser[4];
 
 void screen_chest_set_windowc(int player, uint8_t container) {
 	chest_container[player] = container;
+	chest_is_dispenser[player] = false;
 }
 
 void screen_chest_set_ender(int player, bool is_ender) {
 	chest_is_ender[player] = is_ender;
+}
+
+void screen_dispenser_set_windowc(int player, uint8_t container) {
+	chest_container[player] = container;
+	chest_is_ender[player] = false;
+	chest_is_dispenser[player] = true;
 }
 
 static void screen_chest_reset(struct screen* s, int width, int height) {
@@ -77,7 +85,8 @@ static void screen_chest_reset(struct screen* s, int width, int height) {
 		slots[slots_index++] = (struct inv_slot) {
 			.x = (8 + (k % INVENTORY_SIZE_HOTBAR) * 18) * scale,
 			.y = (84 + (k / INVENTORY_SIZE_HOTBAR) * 18) * scale,
-			.slot = k + CHEST_SLOT_MAIN,
+			.slot = k + (chest_is_dispenser[player]
+													? DISPENSER_SLOT_MAIN : CHEST_SLOT_MAIN),
 		};
 	}
 
@@ -90,15 +99,21 @@ static void screen_chest_reset(struct screen* s, int width, int height) {
 		slots[slots_index++] = (struct inv_slot) {
 			.x = (8 + k * 18) * scale,
 			.y = (84 + 3 * 18 + 4) * scale,
-			.slot = k + CHEST_SLOT_HOTBAR,
+			.slot = k + (chest_is_dispenser[player]
+													? DISPENSER_SLOT_HOTBAR : CHEST_SLOT_HOTBAR),
 		};
 	}
 
-	for(int k = 0; k < CHEST_SIZE_STORAGE; k++) {
+	int storage_count = chest_is_dispenser[player]
+		? DISPENSER_SIZE_STORAGE : CHEST_SIZE_STORAGE;
+	for(int k = 0; k < storage_count; k++) {
 		slots[slots_index++] = (struct inv_slot) {
-			.x = (8 + (k % INVENTORY_SIZE_HOTBAR) * 18) * scale,
-			.y = (16 + (k / INVENTORY_SIZE_HOTBAR) * 18) * scale,
-			.slot = k + CHEST_SLOT_STORAGE,
+			.x = (chest_is_dispenser[player] ? 62 + (k % 3) * 18
+										 : 8 + (k % INVENTORY_SIZE_HOTBAR) * 18) * scale,
+			.y = (16 + (k / (chest_is_dispenser[player] ? 3
+														: INVENTORY_SIZE_HOTBAR)) * 18) * scale,
+			.slot = k + (chest_is_dispenser[player]
+													? DISPENSER_SLOT_STORAGE : CHEST_SLOT_STORAGE),
 		};
 	}
 }
@@ -237,11 +252,17 @@ static void screen_chest_render2D(struct screen* s, int width, int height) {
 	int off_y = (height - GUI_HEIGHT * scale) / 2;
 
 	// draw inventory
-	gfx_bind_texture(&texture_gui_chest);
-	gutil_texquad(off_x, off_y, 0, 0, GUI_WIDTH, GUI_HEIGHT, GUI_WIDTH * scale,
-				  GUI_HEIGHT * scale);
+	gfx_bind_texture(chest_is_dispenser[player]
+		? &texture_gui_dispenser : &texture_gui_chest);
+	if(chest_is_dispenser[player])
+		gutil_texquad(off_x, off_y, 0, 0, GUI_WIDTH * 2, GUI_HEIGHT * 2,
+					  GUI_WIDTH * scale, GUI_HEIGHT * scale);
+	else
+		gutil_texquad(off_x, off_y, 0, 0, GUI_WIDTH, GUI_HEIGHT,
+					  GUI_WIDTH * scale, GUI_HEIGHT * scale);
 	gutil_text(off_x + 8 * scale, off_y + 6 * scale,
-			   chest_is_ender[player] ? "\2478Ender Chest" : "\2478Chest",
+			   chest_is_dispenser[player] ? "\2478Dispenser"
+					: (chest_is_ender[player] ? "\2478Ender Chest" : "\2478Chest"),
 			   8 * scale, false);
 
 	struct inv_slot* selection = slots + selected_slot[player];
@@ -309,6 +330,14 @@ static void screen_chest_render2D(struct screen* s, int width, int height) {
 }
 
 struct screen screen_chest = {
+	.reset = screen_chest_reset,
+	.update = screen_chest_update,
+	.render2D = screen_chest_render2D,
+	.render3D = NULL,
+	.render_world = true,
+};
+
+struct screen screen_dispenser = {
 	.reset = screen_chest_reset,
 	.update = screen_chest_update,
 	.render2D = screen_chest_render2D,

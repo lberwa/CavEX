@@ -115,40 +115,44 @@ static bool onItemPlace(struct server_local* s, struct item_data* it,
 	return true;
 }
 
+static struct redstone_openable_state*
+trapdoor_power_state_get(struct server_local* s, w_coord_t x, w_coord_t y,
+						 w_coord_t z, bool create, bool initial_powered) {
+	struct redstone_openable_state* free_slot = NULL;
+
+	for(size_t i = 0; i < MAX_REDSTONE_OPENABLES; i++) {
+		struct redstone_openable_state* st = &s->redstone_openables[i];
+		if(st->pos.x == x && st->pos.y == y && st->pos.z == z)
+			return st;
+		if(!free_slot && st->pos.x == -1)
+			free_slot = st;
+	}
+
+	if(!create || !free_slot)
+		return NULL;
+
+	free_slot->pos.x = x;
+	free_slot->pos.y = y;
+	free_slot->pos.z = z;
+	free_slot->powered = initial_powered;
+	return free_slot;
+}
 
 static void onNeighbourBlockChange(struct server_local* s, struct block_info* info) {
     struct block_data cur = *info->block;
-    if (!info->neighbours) return;
+    bool powered = block_redstone_is_powered(s, info->x, info->y, info->z);
 
-    bool powered = false;
-    for (int side = 0; side < SIDE_MAX; ++side) {
-        struct block_data nb = info->neighbours[side];
-        uint8_t m = nb.metadata & 0x0F;
-        if ((nb.type == BLOCK_REDSTONE_WIRE && m > 0) ||
-            nb.type == BLOCK_REDSTONE_TORCH_LIT ||
-           (nb.type == BLOCK_LEVER && (m & 0x08)) ||
-           (nb.type == BLOCK_STONE_BUTTON && (m & 0x04)) ||
-           (nb.type == BLOCK_TRIPWIRE_HOOK && (m & 0x08)) ||
-           nb.type == BLOCK_REPEATER_ON ||
-           ((nb.type == BLOCK_STONE_PRESSURE_PLATE ||
-             nb.type == BLOCK_WOOD_PRESSURE_PLATE) &&
-            (m & 0x01))) {
-            powered = true;
-            break;
-        }
-    }
+	struct redstone_openable_state* st = trapdoor_power_state_get(
+		s, info->x, info->y, info->z, powered, false);
+	if(!st)
+		return;
 
-    uint8_t facing = cur.metadata & 0x03;
-    uint8_t newMeta = facing | (powered ? 0x04 : 0x00);
-
-    if (newMeta != cur.metadata) {
-        cur.metadata = newMeta;
-        server_world_set_block(s,
-                               info->x, info->y, info->z,
-                               cur);
-        // <-- trigger alleen bij echte state-change
-        notifyNeighbours(s, info->x, info->y, info->z);
-    }
+	if(st->powered != powered) {
+		st->powered = powered;
+		cur.metadata = (cur.metadata & 0x03) | (powered ? 0x04 : 0x00);
+		server_world_set_block(s, info->x, info->y, info->z, cur);
+		notifyNeighbours(s, info->x, info->y, info->z);
+	}
 }
 
 
@@ -156,6 +160,9 @@ static void onRightClick(struct server_local* s, struct item_data* it,
                          struct block_info* where, struct block_info* on,
                          enum side on_side) {
     struct block_data cur = *on->block;
+	bool powered = block_redstone_is_powered(s, on->x, on->y, on->z);
+	trapdoor_power_state_get(s, on->x, on->y, on->z, true, powered)->powered
+		= powered;
     cur.metadata ^= 0x04;
     server_world_set_block(s,
                            on->x, on->y, on->z,

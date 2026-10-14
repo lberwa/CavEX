@@ -106,6 +106,7 @@ void chunk_init(struct chunk* c, struct world* world, w_coord_t x, w_coord_t y,
 	for(int k = 0; k < 13; k++)
 		c->has_displist[k] = false;
 	c->rebuild_displist = false;
+	c->rebuild_displist_deferred = false;
 	c->has_spawner = false;
 	c->has_enchanting_table = false;
 	c->world = world;
@@ -221,6 +222,39 @@ static void chunk_trigger_neighbour_update(struct chunk* c, c_coord_t x,
 	}
 }
 
+static void chunk_schedule_deferred_rebuild(struct chunk* c,
+											unsigned int delay_ms) {
+	if(c->rebuild_displist)
+		return;
+
+	ptime_t due = time_add_ms(time_get(), delay_ms);
+	if(!c->rebuild_displist_deferred
+	   || time_diff_ms(due, c->rebuild_displist_deferred_at) > 0)
+		c->rebuild_displist_deferred_at = due;
+	c->rebuild_displist_deferred = true;
+}
+
+static void chunk_trigger_neighbour_update_deferred(struct chunk* c, c_coord_t x,
+													c_coord_t y, c_coord_t z,
+													unsigned int delay_ms) {
+	bool cond[6] = {x == 0,		   x == CHUNK_SIZE - 1, y == 0,
+					y == CHUNK_SIZE - 1, z == 0,			 z == CHUNK_SIZE - 1};
+	int offset[6][3] = {
+		{-CHUNK_SIZE, 0, 0}, {CHUNK_SIZE, 0, 0}, {0, -CHUNK_SIZE, 0},
+		{0, CHUNK_SIZE, 0}, {0, 0, -1},			{0, 0, CHUNK_SIZE},
+	};
+
+	for(int k = 0; k < 6; k++) {
+		if(cond[k]) {
+			struct chunk* other
+				= world_find_chunk(c->world, c->x + offset[k][0],
+								   c->y + offset[k][1], c->z + offset[k][2]);
+			if(other)
+				chunk_schedule_deferred_rebuild(other, delay_ms);
+		}
+	}
+}
+
 void chunk_set_light(struct chunk* c, c_coord_t x, c_coord_t y, c_coord_t z,
 					 uint8_t light) {
 	assert(c && x < CHUNK_SIZE && y < CHUNK_SIZE && z < CHUNK_SIZE);
@@ -244,6 +278,16 @@ void chunk_set_block(struct chunk* c, c_coord_t x, c_coord_t y, c_coord_t z,
 	chunk_trigger_neighbour_update(c, x, y, z);
 }
 
+void chunk_set_block_deferred(struct chunk* c, c_coord_t x, c_coord_t y,
+							  c_coord_t z, struct block_data blk,
+							  unsigned int delay_ms) {
+	assert(c && x < CHUNK_SIZE && y < CHUNK_SIZE && z < CHUNK_SIZE);
+
+	chunk_set_block_raw(c, x, y, z, blk);
+	chunk_schedule_deferred_rebuild(c, delay_ms);
+	chunk_trigger_neighbour_update_deferred(c, x, y, z, delay_ms);
+}
+
 void chunk_set_block_raw(struct chunk* c, c_coord_t x, c_coord_t y,
 						 c_coord_t z, struct block_data blk) {
 	assert(c && x < CHUNK_SIZE && y < CHUNK_SIZE && z < CHUNK_SIZE);
@@ -263,6 +307,12 @@ void chunk_set_block_raw(struct chunk* c, c_coord_t x, c_coord_t y,
 
 bool chunk_check_built(struct chunk* c) {
 	assert(c);
+
+	if(!c->rebuild_displist && c->rebuild_displist_deferred
+	   && time_diff_ms(c->rebuild_displist_deferred_at, time_get()) >= 0) {
+		c->rebuild_displist = true;
+		c->rebuild_displist_deferred = false;
+	}
 
 	if(c->rebuild_displist) {
 		if(chunk_mesher_send(c))
@@ -308,32 +358,59 @@ void chunk_render(struct chunk* c, bool pass, float x, float y, float z) {
 		displaylist_render(c->mesh + SIDE_TOP + offset);
 	}
 
-	if(x < c->x + CHUNK_SIZE && c->has_displist[SIDE_LEFT + offset]) {
-		check_matrix_set(c, &needs_matrix);
-		displaylist_render(c->mesh + SIDE_LEFT + offset);
+	/* Draw the farther horizontal faces first.  This matters for the
+	 * thin/double-sided geometry used by redstone and repeaters. */
+	const bool camera_left = x < c->x + CHUNK_SIZE / 2.0f;
+	const bool camera_front = z < c->z + CHUNK_SIZE / 2.0f;
+	const enum side x_first = camera_left ? SIDE_RIGHT : SIDE_LEFT;
+	const enum side z_first = camera_front ? SIDE_BACK : SIDE_FRONT;
+
+	if(x_first == SIDE_LEFT) {
+		if(x < c->x + CHUNK_SIZE && c->has_displist[SIDE_LEFT + offset]) {
+			check_matrix_set(c, &needs_matrix);
+			displaylist_render(c->mesh + SIDE_LEFT + offset);
+		}
+		if(x > c->x && c->has_displist[SIDE_RIGHT + offset]) {
+			check_matrix_set(c, &needs_matrix);
+			displaylist_render(c->mesh + SIDE_RIGHT + offset);
+		}
+	} else {
+		if(x > c->x && c->has_displist[SIDE_RIGHT + offset]) {
+			check_matrix_set(c, &needs_matrix);
+			displaylist_render(c->mesh + SIDE_RIGHT + offset);
+		}
+		if(x < c->x + CHUNK_SIZE && c->has_displist[SIDE_LEFT + offset]) {
+			check_matrix_set(c, &needs_matrix);
+			displaylist_render(c->mesh + SIDE_LEFT + offset);
+		}
 	}
 
-	if(x > c->x && c->has_displist[SIDE_RIGHT + offset]) {
-		check_matrix_set(c, &needs_matrix);
-		displaylist_render(c->mesh + SIDE_RIGHT + offset);
-	}
-
-	if(z < c->z + CHUNK_SIZE && c->has_displist[SIDE_FRONT + offset]) {
-		check_matrix_set(c, &needs_matrix);
-		displaylist_render(c->mesh + SIDE_FRONT + offset);
-	}
-
-	if(z > c->z && c->has_displist[SIDE_BACK + offset]) {
-		check_matrix_set(c, &needs_matrix);
-		displaylist_render(c->mesh + SIDE_BACK + offset);
+	if(z_first == SIDE_FRONT) {
+		if(z < c->z + CHUNK_SIZE && c->has_displist[SIDE_FRONT + offset]) {
+			check_matrix_set(c, &needs_matrix);
+			displaylist_render(c->mesh + SIDE_FRONT + offset);
+		}
+		if(z > c->z && c->has_displist[SIDE_BACK + offset]) {
+			check_matrix_set(c, &needs_matrix);
+			displaylist_render(c->mesh + SIDE_BACK + offset);
+		}
+	} else {
+		if(z > c->z && c->has_displist[SIDE_BACK + offset]) {
+			check_matrix_set(c, &needs_matrix);
+			displaylist_render(c->mesh + SIDE_BACK + offset);
+		}
+		if(z < c->z + CHUNK_SIZE && c->has_displist[SIDE_FRONT + offset]) {
+			check_matrix_set(c, &needs_matrix);
+			displaylist_render(c->mesh + SIDE_FRONT + offset);
+		}
 	}
 
 	#ifdef GFX_DOUBLESIDED
 	if(!pass && c->has_displist[12]) {
 		check_matrix_set(c, &needs_matrix);
-		gfx_blending(MODE_BLEND);
+		gfx_blending(MODE_OFF);
 		gfx_fog(false);
-		gfx_write_buffers(true, false, true);
+		gfx_write_buffers(true, true, true);
 		gfx_cull_func(MODE_NONE);
 		displaylist_render(c->mesh + 12);
 		gfx_cull_func(MODE_BACK);

@@ -285,6 +285,12 @@ int debug_close() {
 #define DEBUG_SERVER_PORT 12344
 #define BUF_SIZE 20456
 
+#if 0
+#define CAVEX_DEBUG_PRINTF(...) printf(__VA_ARGS__)
+#else
+#define CAVEX_DEBUG_PRINTF(...) ((void)0)
+#endif
+
 /* ----------------------------------
    Server socket
 ---------------------------------- */
@@ -308,13 +314,13 @@ bool server_init(int a, int b, int c, int d)
 
     if (inet_pton(AF_INET, ip, &server.sin_addr) != 1) {
         close(sock);
-        printf("init failed: 1");
+        CAVEX_DEBUG_PRINTF("init failed: 1");
         return false;
     }
 
     if (connect(sock, (struct sockaddr *)&server, sizeof(server)) < 0) {
         close(sock);
-        printf("init failed: 2");
+        CAVEX_DEBUG_PRINTF("init failed: 2");
         return false;
     }
 

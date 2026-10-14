@@ -45,6 +45,12 @@
 #define M_PI 3.14159265358979323846f
 #endif
 
+static bool server_world_is_redstone_visual_block(uint8_t type) {
+	return type == BLOCK_REDSTONE_WIRE || type == BLOCK_REDSTONE_TORCH
+		   || type == BLOCK_REDSTONE_TORCH_LIT || type == BLOCK_REPEATER_OFF
+		   || type == BLOCK_REPEATER_ON;
+}
+
 #define CHUNK_DIST2(x1, x2, z1, z2)                                            \
 	(((x1) - (x2)) * ((x1) - (x2)) + ((z1) - (z2)) * ((z1) - (z2)))
 
@@ -137,6 +143,7 @@ static void gen_profile_phase_done(enum gen_profile_phase phase,
 }
 
 void server_world_generation_profile_save(void) {
+#if 0
 	FILE* f = fopen("./cavex.log", "a");
 	if(!f)
 		return;
@@ -161,6 +168,7 @@ void server_world_generation_profile_save(void) {
 				p->calls ? (float)p->ms / (float)p->calls : 0.0f);
 	}
 	fclose(f);
+#endif
 	memset(&g_gen_profile, 0, sizeof(g_gen_profile));
 }
 
@@ -9199,8 +9207,26 @@ bool server_world_set_block(struct server_local* s, w_coord_t x, w_coord_t y, w_
 
 	if(sc) {
 		size_t idx = S_CHUNK_IDX(x, y, z);
+		struct block_data old_blk = {
+			.type = sc->ids[idx],
+			.metadata = nibble_read(sc->metadata, idx),
+			.sky_light = nibble_read(sc->lighting_sky, idx),
+			.torch_light = nibble_read(sc->lighting_torch, idx),
+		};
+		bool redstone_visual_update
+			= server_world_is_redstone_visual_block(old_blk.type)
+			  && server_world_is_redstone_visual_block(blk.type);
+
+		if(old_blk.type == blk.type
+		   && old_blk.metadata == (blk.metadata & 0x0F))
+			return true;
+
 		sc->modified = true;
 		sc->needs_save = true; /* echte Spieleraenderung -> muss auf Disk */
+		if(redstone_visual_update) {
+			blk.sky_light = old_blk.sky_light;
+			blk.torch_light = old_blk.torch_light;
+		}
 		sc->ids[idx] = blk.type;
 		nibble_write(sc->metadata, idx, blk.metadata);
 		sc->tick_valid = false; /* tick_count neu zaehlen beim naechsten Tick */
@@ -9210,24 +9236,29 @@ bool server_world_set_block(struct server_local* s, w_coord_t x, w_coord_t y, w_
 									  W2C_COORD(z), blk.type,
 									  server_chunk_get_block, sc);
 
-		lighting_update_at_block(
-			(struct world_modification_entry) {
-				.x = x,
-				.y = y,
-				.z = z,
-				.blk = blk,
-			},
-			w->dimension == WORLD_DIM_NETHER, server_world_light_get_block,
-			server_world_light_set_light, w);
+		if(!redstone_visual_update)
+			lighting_update_at_block(
+				(struct world_modification_entry) {
+					.x = x,
+					.y = y,
+					.z = z,
+					.blk = blk,
+				},
+				w->dimension == WORLD_DIM_NETHER, server_world_light_get_block,
+				server_world_light_set_light, w);
 
-		clin_rpc_send(&(struct client_rpc) {
+		struct client_rpc set_block_call = {
 			.type = CRPC_SET_BLOCK,
 			.payload.set_block.x = x,
 			.payload.set_block.y = y,
 			.payload.set_block.z = z,
 			.payload.set_block.block = blk,
 			.payload.set_block.dimension = w->dimension,
-		});
+		};
+		if(redstone_visual_update)
+			clin_rpc_try_send(&set_block_call);
+		else
+			clin_rpc_send(&set_block_call);
 	}
 
     static const int dx[6] = {  1, -1,  0,  0,  0,  0 };

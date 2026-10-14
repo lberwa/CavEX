@@ -22,6 +22,13 @@
 #include "../graphics/render_model.h"
 #include "../platform/input.h"
 #include "../platform/gfx.h"
+#include <stdio.h>
+
+#if 0
+#define CAVEX_DEBUG_PRINTF(...) printf(__VA_ARGS__)
+#else
+#define CAVEX_DEBUG_PRINTF(...) ((void)0)
+#endif
 #include "../game/game_state.h"
 #include "../network/server_local.h"
 #include "../network/server_interface.h"
@@ -36,6 +43,24 @@
 #define PLAYER_BODY_FOLLOW_IDLE 0.18F
 #define PLAYER_BODY_FOLLOW_MOVING 0.28F
 #define FLY_SPEED 0.4F
+
+static void minecart_rider_slope_offset(const struct entity* cart,
+										float* x, float* z) {
+	/* The minecart model is 5/16 blocks high at its centre and is rotated
+	 * around its bottom edge.  Projecting that centre through a 45 degree
+	 * slope gives the exact horizontal midpoint offset. */
+	const float centre_offset = 0.3125f * 0.70710678f;
+	*x = 0.0f;
+	*z = 0.0f;
+
+	switch(cart->data.minecart.rail_meta & 0x07) {
+		case 2: *x = -centre_offset; break; /* rises east */
+		case 3: *x =  centre_offset; break; /* rises west */
+		case 4: *z =  centre_offset; break; /* rises north */
+		case 5: *z = -centre_offset; break; /* rises south */
+		default: break;
+	}
+}
 
 bool detect_double_tap(bool pressed, int* window) {
 	if(!pressed) {
@@ -230,7 +255,7 @@ static bool entity_tick(struct entity* e) {
 		bool l = input_held(IB_LEFT, player_index);
 		bool r = input_held(IB_RIGHT, player_index);
 		if(f || b || l || r) {
-			printf("[entity_local_player tick] ent=%u pidx=%d held F=%d B=%d L=%d R=%d\n",
+			CAVEX_DEBUG_PRINTF("[entity_local_player tick] ent=%u pidx=%d held F=%d B=%d L=%d R=%d\n",
 				   (unsigned)e->id, player_index, (int)f, (int)b, (int)l,
 				   (int)r);
 		}
@@ -249,8 +274,14 @@ static bool entity_tick(struct entity* e) {
 		   cart->data.minecart.occupant_id == e->id) {
 
 			// Only allow control if we're really the rider
-			if(input_held(IB_FORWARD, player_index))  cart->data.minecart.speed += 0.01f;
-			if(input_held(IB_BACKWARD, player_index)) cart->data.minecart.speed -= 0.01f;
+			bool accelerate = input_held(IB_FORWARD, player_index);
+			bool brake_or_reverse = input_held(IB_BACKWARD, player_index);
+			if(accelerate)
+				cart->data.minecart.speed += 0.01f;
+			if(brake_or_reverse)
+				cart->data.minecart.speed -= 0.01f;
+			if(accelerate || brake_or_reverse)
+				cart->data.minecart.slope_restarts = 0;
 
 			// Clamp speed to a safe limit
 			if(cart->data.minecart.speed >  0.3f) cart->data.minecart.speed =  0.3f;
@@ -264,11 +295,18 @@ static bool entity_tick(struct entity* e) {
 				e->pos[1] += 1.2f;
 			}
 
-			// Follow cart position (simple, cheap copy)
-			e->pos[0] = cart->pos[0];
-			e->pos[1] = cart->pos[1] + 1.0f;
-			e->pos[2] = cart->pos[2];
-			glm_vec3_copy(e->pos, e->pos_old);
+			// Follow both interpolation endpoints so the camera stays centered
+			// over the cart instead of jumping once per simulation tick.
+			float rider_x, rider_z;
+			minecart_rider_slope_offset(cart, &rider_x, &rider_z);
+			glm_vec3_copy(cart->pos_old, e->pos_old);
+			glm_vec3_copy(cart->pos, e->pos);
+			e->pos_old[0] += rider_x;
+			e->pos_old[2] += rider_z;
+			e->pos[0] += rider_x;
+			e->pos[2] += rider_z;
+			e->pos_old[1] += 1.0f;
+			e->pos[1] += 1.0f;
 
 			return false; // skip walking physics when riding
 		}
@@ -407,7 +445,7 @@ static bool entity_tick(struct entity* e) {
 	if(player_index >= 0 && player_index < 4
 	   && time_diff_ms(last_move_dbg[player_index], move_dbg_now) >= 200
 	   && (forward != 0 || strafe != 0 || jumping)) {
-		printf("[entity_move] pidx=%d capture=%d forward=%d strafe=%d jump=%d orient=(%.3f, %.3f)\n",
+		CAVEX_DEBUG_PRINTF("[entity_move] pidx=%d capture=%d forward=%d strafe=%d jump=%d orient=(%.3f, %.3f)\n",
 			   player_index, (int)e->data.local_player.capture_input, forward,
 			   strafe, (int)jumping, e->orient[0], e->orient[1]);
 		last_move_dbg[player_index] = move_dbg_now;

@@ -133,6 +133,7 @@ extern struct block block_rail;
 extern struct block block_powered_rail;
 extern struct block block_detector_rail;
 extern struct block block_piston;
+extern struct block block_sticky_piston;
 extern struct block block_piston_head;
 extern struct block block_redstone_torch;
 extern struct block block_redstone_torch_lit;
@@ -223,9 +224,21 @@ bool block_place_default(struct server_local* s, struct item_data* it,
 						 enum side on_side);
 size_t block_drop_default(struct block_info* this, struct item_data* it,
 						  struct random_gen* g, struct server_local* s);
+bool block_can_support_attachment(uint8_t type);
 
 
 void notifyNeighbours(struct server_local* s, w_coord_t x, w_coord_t y, w_coord_t z);
+bool block_redstone_powers_side(const struct block_data* blk,
+								enum side side_to_target);
+bool block_redstone_powers_wire(const struct block_data* blk,
+								enum side side_to_wire);
+bool block_redstone_is_button_powered_block(struct server_local* s, w_coord_t x,
+											w_coord_t y, w_coord_t z);
+bool block_redstone_wire_points_to_side(struct server_local* s, w_coord_t x,
+										w_coord_t y, w_coord_t z,
+										enum side side_to_target);
+bool block_redstone_is_powered(struct server_local* s, w_coord_t x,
+							   w_coord_t y, w_coord_t z);
 
 /* one cellular-automaton step for a single water cell (see block_water.c) */
 void block_water_flow_update(struct server_local* s, struct block_info* info);

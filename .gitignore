@@ -65,6 +65,7 @@ a.out
 
 .claude/
 CLAUDE.md
+AGENTS.md
 
 assets/sound/**.wav
 assets/sound/**.pcm

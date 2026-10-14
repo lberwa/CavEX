@@ -33,6 +33,14 @@ static bool piston_is_extended(const struct block_data* blk) {
 	return (blk->metadata & PISTON_EXTENDED) != 0;
 }
 
+static bool piston_is_sticky(const struct block_data* blk) {
+	return blk->type == BLOCK_STICKY_PISTON;
+}
+
+static bool piston_is_base(struct block_data blk) {
+	return blk.type == BLOCK_PISTON || blk.type == BLOCK_STICKY_PISTON;
+}
+
 static void piston_front_pos(const struct block_data* blk, w_coord_t x,
 							 w_coord_t y, w_coord_t z, w_coord_t* fx,
 							 w_coord_t* fy, w_coord_t* fz) {
@@ -51,20 +59,6 @@ static void piston_get_block(struct server_local* s, w_coord_t x, w_coord_t y,
 		out->sky_light = 0;
 		out->torch_light = 0;
 	}
-}
-
-static bool piston_is_power_source(struct block_data blk) {
-	uint8_t meta = blk.metadata & 0x0F;
-
-	return (blk.type == BLOCK_REDSTONE_WIRE && meta > 0)
-		   || blk.type == BLOCK_REDSTONE_TORCH_LIT
-		   || (blk.type == BLOCK_LEVER && (meta & 0x08))
-		   || (blk.type == BLOCK_STONE_BUTTON && (meta & 0x04))
-		   || (blk.type == BLOCK_TRIPWIRE_HOOK && (meta & 0x08))
-		   || blk.type == BLOCK_REPEATER_ON
-		   || ((blk.type == BLOCK_STONE_PRESSURE_PLATE
-				|| blk.type == BLOCK_WOOD_PRESSURE_PLATE)
-			   && (meta & 0x01));
 }
 
 static enum side piston_relative_left(enum side facing) {
@@ -107,7 +101,15 @@ static bool piston_is_powered(struct server_local* s, struct block_info* info) {
 		int ox, oy, oz;
 		blocks_side_offset(checks[i], &ox, &oy, &oz);
 		piston_get_block(s, info->x + ox, info->y + oy, info->z + oz, &tmp);
-		if(piston_is_power_source(tmp))
+		enum side side_to_piston = blocks_side_opposite(checks[i]);
+		if(tmp.type == BLOCK_REDSTONE_WIRE) {
+			if(block_redstone_wire_points_to_side(s, info->x + ox,
+												 info->y + oy, info->z + oz,
+												 side_to_piston))
+				return true;
+			continue;
+		}
+		if(block_redstone_powers_side(&tmp, side_to_piston))
 			return true;
 	}
 
@@ -121,6 +123,7 @@ static bool piston_is_pushable(struct block_data blk) {
 		case BLOCK_OBSIDIAN:
 		case BLOCK_PORTAL:
 		case BLOCK_PISTON:
+		case BLOCK_STICKY_PISTON:
 		case BLOCK_PISTON_HEAD:
 			return false;
 		default: return true;
@@ -212,15 +215,20 @@ static uint16_t getTextureIndex(struct block_info* this, enum side side) {
 	if(side == blocks_side_opposite(facing))
 		return tex_atlas_lookup(TEXAT_PISTON_BACK);
 	if(side == facing)
-		return tex_atlas_lookup(piston_is_extended(this->block) ?
+		return tex_atlas_lookup(piston_is_extended(this->block) &&
+						piston_is_sticky(this->block) ?
+									TEXAT_PISTON_FRONT_STICKY :
+						piston_is_extended(this->block) ?
 									TEXAT_PISTON_FRONT_EXTENDED :
 									TEXAT_PISTON_PLATE);
 
 	return tex_atlas_lookup(TEXAT_PISTON_SIDE);
 }
 
-static bool piston_head_matches(struct block_data blk, enum side facing) {
-	return blk.type == BLOCK_PISTON_HEAD && piston_facing(&blk) == facing;
+static bool piston_head_matches(struct block_data blk, enum side facing,
+								bool sticky) {
+	return blk.type == BLOCK_PISTON_HEAD && piston_facing(&blk) == facing
+		   && (!sticky || (blk.metadata & PISTON_EXTENDED));
 }
 
 static bool piston_base_valid(struct server_local* s, struct block_info* info) {
@@ -230,7 +238,8 @@ static bool piston_base_valid(struct server_local* s, struct block_info* info) {
 	piston_get_block(s, fx, fy, fz, &front);
 
 	return !piston_is_extended(info->block)
-		   || piston_head_matches(front, piston_facing(info->block));
+		   || piston_head_matches(front, piston_facing(info->block),
+								  piston_is_sticky(info->block));
 }
 
 static bool piston_head_valid(struct server_local* s, struct block_info* info) {
@@ -241,8 +250,10 @@ static bool piston_head_valid(struct server_local* s, struct block_info* info) {
 	struct block_data base;
 	piston_get_block(s, info->x - ox, info->y - oy, info->z - oz, &base);
 
-	return base.type == BLOCK_PISTON && piston_is_extended(&base)
-		   && piston_facing(&base) == facing;
+	return piston_is_base(base) && piston_is_extended(&base)
+		   && piston_facing(&base) == facing
+		   && (!piston_is_sticky(&base)
+			   || (info->block->metadata & PISTON_EXTENDED));
 }
 
 static size_t piston_head_drop(struct block_info* this, struct item_data* it,
@@ -252,7 +263,8 @@ static size_t piston_head_drop(struct block_info* this, struct item_data* it,
 	(void)s;
 
 	if(it) {
-		it->id = BLOCK_PISTON;
+		it->id = (this->block->metadata & PISTON_EXTENDED)
+			? BLOCK_STICKY_PISTON : BLOCK_PISTON;
 		it->durability = 0;
 		it->count = 1;
 	}
@@ -332,9 +344,9 @@ static void onWorldTick(struct server_local* s, struct block_info* info) {
 		server_world_set_block(s, info->x, info->y, info->z, cur);
 		server_world_set_block(s, fx, fy, fz,
 							   (struct block_data) {
-								   .type = BLOCK_PISTON_HEAD,
-								   .metadata = (cur.metadata & 0x7)
-									   | PISTON_EXTENDED,
+									   .type = BLOCK_PISTON_HEAD,
+									   .metadata = (cur.metadata & 0x7)
+										   | (piston_is_sticky(&cur) ? PISTON_EXTENDED : 0),
 								   .sky_light = 0,
 								   .torch_light = 0,
 							   });
@@ -348,7 +360,7 @@ static void onWorldTick(struct server_local* s, struct block_info* info) {
 								   (struct block_data) {
 									   .type = BLOCK_PISTON_HEAD,
 									   .metadata = (cur.metadata & 0x7)
-										   | PISTON_EXTENDED,
+										   | (piston_is_sticky(&cur) ? PISTON_EXTENDED : 0),
 									   .sky_light = 0,
 									   .torch_light = 0,
 								   });
@@ -362,13 +374,67 @@ static void onWorldTick(struct server_local* s, struct block_info* info) {
 		server_world_set_block(s, info->x, info->y, info->z, cur);
 		if(front.type == BLOCK_PISTON_HEAD) {
 			server_world_set_block(s, fx, fy, fz,
-								   (struct block_data) {.type = BLOCK_AIR});
+							   (struct block_data) {.type = BLOCK_AIR});
+
+			if(piston_is_sticky(&cur)) {
+				int ox, oy, oz;
+				blocks_side_offset(piston_facing(&cur), &ox, &oy, &oz);
+				w_coord_t px = fx + ox;
+				w_coord_t py = fy + oy;
+				w_coord_t pz = fz + oz;
+				struct block_data pulled;
+				piston_get_block(s, px, py, pz, &pulled);
+				if(pulled.type != BLOCK_AIR && piston_is_pushable(pulled)) {
+					server_world_set_block(s, fx, fy, fz, pulled);
+					server_world_set_block(s, px, py, pz,
+									   (struct block_data) {.type = BLOCK_AIR});
+				}
+			}
 		}
 	}
 }
 
 struct block block_piston = {
 	.name = "Piston",
+	.getSideMask = getSideMask,
+	.getBoundingBox = getBoundingBox,
+	.getMaterial = getMaterial,
+	.getTextureIndex = getTextureIndex,
+	.getDroppedItem = block_drop_default,
+	.onRandomTick = NULL,
+	.onRightClick = NULL,
+	.onWorldTick = onWorldTick,
+	.onNeighbourBlockChange = piston_onNeighbourBlockChange,
+	.transparent = false,
+	.renderBlock = render_block_piston,
+	.renderBlockAlways = render_block_piston_always,
+	.luminance = 0,
+	.double_sided = false,
+	.can_see_through = false,
+	.opacity = 15,
+	.ignore_lighting = false,
+	.flammable = false,
+	.place_ignore = false,
+	.digging.hardness = 7500,
+	.digging.tool = TOOL_TYPE_PICKAXE,
+	.digging.min = TOOL_TIER_WOOD,
+	.digging.best = TOOL_TIER_ANY,
+	.block_item = {
+		.has_damage = false,
+		.max_stack = 64,
+		.renderItem = render_item_block,
+		.onItemPlace = onItemPlace,
+		.fuel = 0,
+		.render_data.block.has_default = true,
+		.render_data.block.default_metadata = SIDE_FRONT,
+		.render_data.block.default_rotation = 0,
+		.armor.is_armor = false,
+		.tool.type = TOOL_TYPE_ANY,
+	},
+};
+
+struct block block_sticky_piston = {
+	.name = "Sticky Piston",
 	.getSideMask = getSideMask,
 	.getBoundingBox = getBoundingBox,
 	.getMaterial = getMaterial,

@@ -56,44 +56,9 @@ bool redstone_lamp_on_item_place(struct server_local* s, struct item_data* it,
 	return block_place_default(s, it, where, on, on_side);
 }
 
-static bool redstone_lamp_repeater_powers_from(enum side side, uint8_t metadata) {
-	switch(metadata & 0x03) {
-		case 0: return side == SIDE_FRONT;
-		case 1: return side == SIDE_RIGHT;
-		case 2: return side == SIDE_BACK;
-		default: return side == SIDE_LEFT;
-	}
-}
-
 static bool redstone_lamp_is_powered(struct server_local* s,
 									 struct block_info* info) {
-	for(int side = 0; side < SIDE_MAX; side++) {
-		int ox, oy, oz;
-		struct block_data nb;
-		uint8_t m;
-
-		blocks_side_offset((enum side) side, &ox, &oy, &oz);
-		if(!server_world_get_block(AWORLD(s), info->x + ox, info->y + oy,
-								   info->z + oz, &nb))
-			continue;
-
-		m = nb.metadata & 0x0F;
-		if((nb.type == BLOCK_REDSTONE_WIRE && m > 0)
-		   || nb.type == BLOCK_REDSTONE_TORCH_LIT
-		   || (nb.type == BLOCK_LEVER && (m & 0x08))
-		   || (nb.type == BLOCK_STONE_BUTTON && (m & 0x04))
-		   || (nb.type == BLOCK_TRIPWIRE_HOOK && (m & 0x08))
-		   || ((nb.type == BLOCK_STONE_PRESSURE_PLATE
-				|| nb.type == BLOCK_WOOD_PRESSURE_PLATE)
-			   && (m & 0x01)))
-			return true;
-
-		if(nb.type == BLOCK_REPEATER_ON
-		   && redstone_lamp_repeater_powers_from((enum side) side, nb.metadata))
-			return true;
-	}
-
-	return false;
+	return block_redstone_is_powered(s, info->x, info->y, info->z);
 }
 
 static void redstone_lamp_sync_state(struct server_local* s, struct block_info* info) {

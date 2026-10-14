@@ -64,8 +64,7 @@ static uint16_t getTextureIndex3(struct block_info* this, enum side side) {
 static bool onItemPlace(struct server_local* s, struct item_data* it,
 						struct block_info* where, struct block_info* on,
 						enum side on_side) {
-	if(on_side == SIDE_BOTTOM || !blocks[on->block->type]
-	   || blocks[on->block->type]->can_see_through)
+	if(on_side == SIDE_BOTTOM || !block_can_support_attachment(on->block->type))
 		return false;
 
 	int metadata = 0;
@@ -98,6 +97,63 @@ static size_t drop_redstone_torch(struct block_info* this, struct item_data* it,
 	}
 
 	return 1;
+}
+
+static size_t render_block_none(struct displaylist* d, struct block_info* this,
+								enum side side, struct block_info* it,
+								uint8_t* vertex_light, bool count_only) {
+	(void)d;
+	(void)this;
+	(void)side;
+	(void)it;
+	(void)vertex_light;
+	(void)count_only;
+	return 0;
+}
+
+static bool torch_support_pos(struct block_info* blk, w_coord_t* sx,
+							  w_coord_t* sy, w_coord_t* sz) {
+	*sx = blk->x;
+	*sy = blk->y;
+	*sz = blk->z;
+
+	switch(blk->block->metadata & 0x7) {
+		case 1: (*sx)--; return true;
+		case 2: (*sx)++; return true;
+		case 3: (*sz)--; return true;
+		case 4: (*sz)++; return true;
+		default: (*sy)--; return true;
+	}
+}
+
+static void redstone_torch_sync(struct server_local* s, struct block_info* blk) {
+	w_coord_t sx, sy, sz;
+	struct block_data support;
+	bool support_powered;
+	struct block_data next = *blk->block;
+
+	if(!torch_support_pos(blk, &sx, &sy, &sz))
+		return;
+	if(!server_world_get_block(AWORLD(s), sx, sy, sz, &support))
+		return;
+
+	support_powered = block_redstone_is_powered(s, sx, sy, sz);
+	next.type = support_powered ? BLOCK_REDSTONE_TORCH : BLOCK_REDSTONE_TORCH_LIT;
+
+	if(next.type != blk->block->type) {
+		server_world_set_block(s, blk->x, blk->y, blk->z, next);
+		notifyNeighbours(s, blk->x, blk->y, blk->z);
+	}
+}
+
+static void redstone_torch_onWorldTick(struct server_local* s,
+									   struct block_info* blk) {
+	redstone_torch_sync(s, blk);
+}
+
+static void redstone_torch_onNeighbourBlockChange(struct server_local* s,
+												  struct block_info* blk) {
+	redstone_torch_sync(s, blk);
 }
 
 static void onWorldTick(struct server_local* s, struct block_info* blk) {
@@ -189,14 +245,15 @@ struct block block_redstone_torch = {
 	.getMaterial = getMaterial,
 	.getTextureIndex = getTextureIndex2,
 	.getDroppedItem = drop_redstone_torch,
-	.onWorldTick = onWorldTick,
+	.onWorldTick = redstone_torch_onWorldTick,
+	.onNeighbourBlockChange = redstone_torch_onNeighbourBlockChange,
 	.onRandomTick = NULL,
 	.onRightClick = NULL,
 	.transparent = false,
-	.renderBlock = render_block_torch,
-	.renderBlockAlways = NULL,
+	.renderBlock = render_block_none,
+	.renderBlockAlways = render_block_torch,
 	.luminance = 7,
-	.double_sided = false,
+	.double_sided = true,
 	.can_see_through = true,
 	.opacity = 0,
 	.ignore_lighting = false,
@@ -226,12 +283,13 @@ struct block block_redstone_torch_lit = {
 	.getDroppedItem = drop_redstone_torch,
 	.onRandomTick = NULL,
 	.onRightClick = NULL,
-	.onWorldTick = onWorldTick,
+	.onWorldTick = redstone_torch_onWorldTick,
+	.onNeighbourBlockChange = redstone_torch_onNeighbourBlockChange,
 	.transparent = false,
-	.renderBlock = render_block_torch,
-	.renderBlockAlways = NULL,
+	.renderBlock = render_block_none,
+	.renderBlockAlways = render_block_torch,
 	.luminance = 7,
-	.double_sided = false,
+	.double_sided = true,
 	.can_see_through = true,
 	.opacity = 0,
 	.ignore_lighting = false,

@@ -18,6 +18,19 @@
 */
 
 #include <stddef.h>
+#include <stdio.h>
+
+#if 0
+#define CAVEX_DEBUG_PRINTF(...) printf(__VA_ARGS__)
+#else
+#define CAVEX_DEBUG_PRINTF(...) ((void)0)
+#endif
+
+#ifdef BLOCK_LAT_DEBUG
+#define BLOCK_LAT_PRINTF(...) printf(__VA_ARGS__)
+#else
+#define BLOCK_LAT_PRINTF(...)
+#endif
 
 #include "../../block/blocks.h"
 #include "../../graphics/gfx_util.h"
@@ -278,6 +291,10 @@ void screen_ingame_render3D(struct screen* s, mat4 view) {
 	// block place
 	if(gstate.camera_hit.hit && input_pressed(IB_ACTION2, gstate_active_player())
 	   && !gstate.digging.active) {
+		BLOCK_LAT_PRINTF("[BLOCK_LAT] CLIENT_SEND place p=%d pos=%d,%d,%d side=%d\n",
+			   gstate_active_player(), (int)gstate.camera_hit.x,
+			   (int)gstate.camera_hit.y, (int)gstate.camera_hit.z,
+			   (int)gstate.camera_hit.side);
 		svin_rpc_try_send(&(struct server_rpc) {
 			RPC_PLAYER_ID(gstate_active_player())
 			.type = SRPC_BLOCK_PLACE,
@@ -368,6 +385,11 @@ void screen_ingame_render3D(struct screen* s, mat4 view) {
 
 		if(delay >= 0
 		   && time_diff_ms(gstate.digging.start, time_get()) >= delay) {
+			BLOCK_LAT_PRINTF("[BLOCK_LAT] CLIENT_SEND dig_finish p=%d pos=%d,%d,%d "
+				   "delay=%d elapsed=%d\n",
+				   gstate_active_player(), (int)gstate.digging.x,
+				   (int)gstate.digging.y, (int)gstate.digging.z,
+				   delay, (int)time_diff_ms(gstate.digging.start, time_get()));
 			svin_rpc_try_send(&(struct server_rpc) {
 				RPC_PLAYER_ID(gstate_active_player())
 				.type = SRPC_BLOCK_DIG,
@@ -396,6 +418,11 @@ void screen_ingame_render3D(struct screen* s, mat4 view) {
 				gstate.digging.x = gstate.camera_hit.x;
 				gstate.digging.y = gstate.camera_hit.y;
 				gstate.digging.z = gstate.camera_hit.z;
+				BLOCK_LAT_PRINTF("[BLOCK_LAT] CLIENT_SEND dig_start p=%d pos=%d,%d,%d "
+					   "cooldown_elapsed=%d\n",
+					   gstate_active_player(), (int)gstate.digging.x,
+					   (int)gstate.digging.y, (int)gstate.digging.z,
+					   (int)time_diff_ms(gstate.digging.cooldown, time_get()));
 
 			svin_rpc_try_send(&(struct server_rpc) {
 				RPC_PLAYER_ID(gstate_active_player())
@@ -795,7 +822,7 @@ static void screen_ingame_render2D(struct screen* s, int width, int height) {
 			if(ap >= 0 && ap < 4
 			   && time_diff_ms(last_dbg_by_player[ap], now_dbg) >= 250) {
 #ifdef PLATFORM_PC
-				printf("[dig p=%d] hit=%d ent=%d active=%d start_age=%dms cd_age=%dms pos=(%d %d %d) cur=(%d %d %d)\n",
+				CAVEX_DEBUG_PRINTF("[dig p=%d] hit=%d ent=%d active=%d start_age=%dms cd_age=%dms pos=(%d %d %d) cur=(%d %d %d)\n",
 					   ap,
 					   (int)gstate.camera_hit.hit,
 					   (int)gstate.camera_hit.entity_hit,
@@ -820,7 +847,7 @@ static void screen_ingame_render2D(struct screen* s, int width, int height) {
 					 gstate.gen_debug.percent, gstate.gen_debug.chunk_x,
 					 gstate.gen_debug.chunk_z, gstate.gen_debug.chunks_per_sec,
 					 gstate.gen_debug.built);
-			//printf(gstr); printf("\n");
+			//CAVEX_DEBUG_PRINTF(gstr); CAVEX_DEBUG_PRINTF("\n");
 		} else
 			snprintf(gstr, sizeof(gstr), "gen idle %.1f c/s built %lu",
 					 gstate.gen_debug.chunks_per_sec, gstate.gen_debug.built);

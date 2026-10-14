@@ -22,6 +22,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+#if 0
+#define CAVEX_DEBUG_PRINTF(...) printf(__VA_ARGS__)
+#else
+#define CAVEX_DEBUG_PRINTF(...) ((void)0)
+#endif
+
 #include "../platform/texture.h"
 #include "texture_atlas.h"
 
@@ -32,6 +38,7 @@
 #if defined(PLATFORM_WII) && defined(TEX_ATLAS_SDLOG)
 #include <stdarg.h>
 static void tex_atlas_log(const char* fmt, ...) {
+#if 0
 	char buf[256];
 	va_list ap;
 	va_start(ap, fmt);
@@ -43,6 +50,9 @@ static void tex_atlas_log(const char* fmt, ...) {
 		fputc('\n', f);
 		fclose(f);
 	}
+#else
+	(void)fmt;
+#endif
 }
 #define TEX_ATLAS_LOG(...) tex_atlas_log(__VA_ARGS__)
 #else
@@ -164,15 +174,15 @@ void* tex_atlas_compute(dict_atlas_src_t atlas, uint16_t* atlas_dst,
 
 #if 0
 	if (!image) {
-	    printf("Error: image is NULL\n");
+	    CAVEX_DEBUG_PRINTF("Error: image is NULL\n");
 	    return NULL;
 	}
 	if (width < 16) {
-	    printf("Error: image width too small (%zu)\n", width);
+	    CAVEX_DEBUG_PRINTF("Error: image width too small (%zu)\n", width);
 	    return NULL;
 	}
 	if (width != height) {
-	    printf("Error: image not square (%zu x %zu)\n", width, height);
+	    CAVEX_DEBUG_PRINTF("Error: image not square (%zu x %zu)\n", width, height);
 	    return NULL;
 	}
 #endif
@@ -656,6 +666,7 @@ void* tex_atlas_block(const char* filename, size_t* width, size_t* height) {
 		tex_atlas_reg(atlas, TEXAT_PISTON_SIDE, 12, 6);
 		tex_atlas_reg(atlas, TEXAT_PISTON_BACK, 13, 6);
 		tex_atlas_reg(atlas, TEXAT_PISTON_FRONT_EXTENDED, 14, 6);
+		tex_atlas_reg(atlas, TEXAT_PISTON_FRONT_STICKY, 10, 6);
 
 		tex_atlas_reg(atlas, TEXAT_WOOL_0, 0, 4);   // White
 	tex_atlas_reg(atlas, TEXAT_WOOL_1, 2, 13);  // Orange

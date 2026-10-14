@@ -25,6 +25,8 @@
 #include "entity.h"
 #include "../graphics/gfx_settings.h"
 
+#define PRESSURE_PLATE_DEBUG 0
+
 static bool entity_client_tick(struct entity* e) {
 	assert(e);
 
@@ -91,6 +93,27 @@ static size_t getBoundingBox(const struct entity *e, struct AABB *out) {
     return 1;
 }
 
+static void item_update_wooden_pressure_plate(struct entity* e,
+														 struct server_local* s) {
+	w_coord_t x = (w_coord_t)floorf(e->pos[0]);
+	w_coord_t y = (w_coord_t)floorf(e->pos[1]);
+	w_coord_t z = (w_coord_t)floorf(e->pos[2]);
+	struct block_data plate;
+
+	if(!server_world_get_block(AWORLD(s), x, y, z, &plate)
+	   || plate.type != BLOCK_WOOD_PRESSURE_PLATE
+	   || (plate.metadata & 0x01) != 0)
+		return;
+
+	plate.metadata |= 0x01;
+	server_world_set_block(s, x, y, z, plate);
+	notifyNeighbours(s, x, y, z);
+#if PRESSURE_PLATE_DEBUG
+	printf("[PLATE_DEBUG] item_activate entity=%u plate=%d,%d,%d\n",
+		   (unsigned)e->id, (int)x, (int)y, (int)z);
+#endif
+}
+
 
 static bool entity_server_tick(struct entity* e, struct server_local* s) {
 	assert(e);
@@ -148,6 +171,17 @@ static bool entity_server_tick(struct entity* e, struct server_local* s) {
 	e->vel[1] *= 0.98F;
 
 	e->data.item.age++;
+	item_update_wooden_pressure_plate(e, s);
+
+#if PRESSURE_PLATE_DEBUG
+	if((e->data.item.age % 10) == 0)
+		printf("[PLATE_DEBUG] item_tick server=%d entity=%u item=%u "
+			   "pos=%.3f,%.3f,%.3f vel=%.3f,%.3f,%.3f age=%d\n",
+			   e->on_server ? 1 : 0,
+			   (unsigned)e->id, (unsigned)e->data.item.item.id,
+			   e->pos[0], e->pos[1], e->pos[2], e->vel[0], e->vel[1],
+			   e->vel[2], e->data.item.age);
+#endif
 
 	if(e->delay_destroy > 0) {
 		e->delay_destroy--;

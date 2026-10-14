@@ -63,7 +63,7 @@ static uint16_t getTextureIndex(struct block_info* this, enum side side) {
 static bool onItemPlace(struct server_local* s, struct item_data* it,
 						struct block_info* where, struct block_info* on,
 						enum side on_side) {
-	if(!blocks[on->block->type] || blocks[on->block->type]->can_see_through)
+	if(!block_can_support_attachment(on->block->type))
 		return false;
 
 	int metadata = 0;

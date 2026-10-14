@@ -93,26 +93,7 @@ void tnt_explode(struct server_local* s,
 static void onWorldTick(struct server_local* s, struct block_info* info) {
     uint8_t fuse = info->block->metadata;
     if (fuse == 0) {
-        bool powered = false;
-        for (int side = 0; side < SIDE_MAX; ++side) {
-            if (!info->neighbours) break;
-            struct block_data nb = info->neighbours[side];
-            uint8_t m = nb.metadata & 0x0F;
-            if ((nb.type == BLOCK_REDSTONE_WIRE && m > 0) ||
-                nb.type == BLOCK_REDSTONE_TORCH_LIT ||
-                (nb.type == BLOCK_LEVER && (m & 0x08)) ||
-                (nb.type == BLOCK_STONE_BUTTON && (m & 0x04)) ||
-                (nb.type == BLOCK_TRIPWIRE_HOOK && (m & 0x08)) ||
-                nb.type == BLOCK_REPEATER_ON ||
-                ((nb.type == BLOCK_STONE_PRESSURE_PLATE ||
-                  nb.type == BLOCK_WOOD_PRESSURE_PLATE) &&
-                 (m & 0x01)))
-            {
-                powered = true;
-                break;
-            }
-        }
-        if (powered) {
+        if (block_redstone_is_powered(s, info->x, info->y, info->z)) {
             server_world_set_block(s, info->x, info->y, info->z,
                 (struct block_data){ .type = BLOCK_TNT, .metadata = TNT_FUSE_TICKS });
         }

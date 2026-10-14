@@ -69,12 +69,15 @@ void cdbg_flush(void);
 #define MAX_HIGH_DETAIL_CHUNKS ((MAX_HIGH_DETAIL_VIEW_DISTANCE * 2 + 2) * (MAX_HIGH_DETAIL_VIEW_DISTANCE * 2 + 2))
 #define MAX_CHESTS 256
 #define MAX_CHEST_SLOTS 54
+#define MAX_DISPENSERS 256
 #define MAX_FURNACES 256
 #define MAX_BREWING_STANDS 256
 #define MAX_ENCHANTING_TABLES 256
 #define MAX_SIGNS 256
 #define MAX_BUTTONS 256
 #define MAX_REPEATERS 256
+#define MAX_REDSTONE_OPENABLES 256
+#define MAX_NOTEBLOCKS 256
 
 #define MAX_OXYGEN 351
 #define OXYGEN_THRESHOLD 0
@@ -138,6 +141,16 @@ struct repeater_state {
 	uint8_t target_type;
 };
 
+struct redstone_openable_state {
+	struct complex_block_pos pos;
+	bool powered;
+};
+
+struct noteblock_state {
+	struct complex_block_pos pos;
+	bool powered;
+};
+
 struct server_player {
 	double x, y, z;
 	float rx, ry;
@@ -193,11 +206,16 @@ struct server_local {
 	dict_entity_t entities;
 	struct complex_block_pos chest_pos[MAX_CHESTS];
 	struct item_data chest_items[MAX_CHESTS][MAX_CHEST_SLOTS];
+	struct complex_block_pos dispenser_pos[MAX_DISPENSERS];
+	struct item_data dispenser_items[MAX_DISPENSERS][DISPENSER_SIZE_STORAGE];
+	bool dispenser_powered[MAX_DISPENSERS];
 	struct furnace_data furnaces[MAX_FURNACES];
 	struct brewing_stand_data brewing_stands[MAX_BREWING_STANDS];
 	struct enchanting_table_data enchanting_tables[MAX_ENCHANTING_TABLES];
 	struct button_state buttons[MAX_BUTTONS];
 	struct repeater_state repeaters[MAX_REPEATERS];
+	struct redstone_openable_state redstone_openables[MAX_REDSTONE_OPENABLES];
+	struct noteblock_state noteblocks[MAX_NOTEBLOCKS];
 	struct complex_block_pos sign_pos[MAX_SIGNS];
 	char sign_texts[MAX_SIGNS][SIGN_SIZE];
 	uint64_t world_time;
@@ -244,6 +262,9 @@ struct entity* server_local_spawn_fishing_hook(vec3 pos, float rx, float ry,
                                                struct server_local* s);
 struct entity* server_local_spawn_item(vec3 pos, struct item_data* it,
 									   bool throw, struct server_local* s);
+struct entity* server_local_spawn_item_velocity(vec3 pos, struct item_data* it,
+											 vec3 velocity,
+											 struct server_local* s);
 struct entity* server_local_spawn_monster(vec3 pos, int monster_id,
 									   struct server_local* s);
 void server_local_spawn_block_drops(struct server_local* s,

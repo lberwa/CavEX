@@ -33,7 +33,7 @@
 
 ### Planned features <span style="font-size: 16px; font-weight: normal;">*(in no particular order, not complete)*</span>
 
-* Sounds in the game
+* ~~Sounds in the game~~
 * Server multiplayer
 * Block gravity: sand and gravel drop down when there's nothing underneath them to support
 * ~~Water/~~ lava flow: once a block has been removed next to, or underneath a liquid, it will flow there
@@ -50,12 +50,12 @@
 
 ### Known issues
 
-* Texture orientation for blocks that have a specific "direction"
-	- Bed placement isn't correct yet
+* ~~Texture orientation for blocks that have a specific "direction"~~
+	- ~~Bed placement isn't correct yet~~
 * ~~Random crashes, once in a while.~~ Maybe I'll implement an optional auto-save, to prevent some headaches and tears
 * ~~Particles already spark fire before the torch is showing, after placing a torch~~
 * ~~If you jump into water or climb down the ladder, you take damage~~
-* Redstone doesn't really work
+* ~~Redstone doesn't really work~~
 * If you jump into a block, you will get stuck and won't be able to move.
 * All bugs from [bugs.md](./bugs.md)
 

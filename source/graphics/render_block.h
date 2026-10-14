@@ -221,6 +221,11 @@ size_t render_block_repeater(struct displaylist* d, struct block_info* this,
 							 enum side side, struct block_info* it,
 							 uint8_t* vertex_light, bool count_only);
 
+size_t render_block_repeater_torches(struct displaylist* d,
+									 struct block_info* this, enum side side,
+									 struct block_info* it,
+									 uint8_t* vertex_light, bool count_only);
+
 size_t render_block_waterlily(struct displaylist* d, struct block_info* this,
 							  enum side side, struct block_info* it,
 							  uint8_t* vertex_light, bool count_only);

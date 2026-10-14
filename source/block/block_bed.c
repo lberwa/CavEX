@@ -47,38 +47,32 @@ getSideMask(struct block_info* this, enum side side, struct block_info* it) {
 	}
 }
 
-static uint16_t getTextureIndex(struct block_info* this, enum side side) {
-	if (this->block->metadata & 0x8) {  // Check of het het hoofdbord is
-		switch(side) {
-			case SIDE_TOP: return tex_atlas_lookup(TEXAT_BED_TOP_2);
-			case SIDE_LEFT:
-			case SIDE_RIGHT:
-				return (this->block->metadata & 0x1) ?
-					tex_atlas_lookup(TEXAT_BED_FRONT) :
-					tex_atlas_lookup(TEXAT_BED_SIDE_2);
-			case SIDE_FRONT:
-			case SIDE_BACK:
-				return (this->block->metadata & 0x1) ?
-					tex_atlas_lookup(TEXAT_BED_SIDE_2) :
-					tex_atlas_lookup(TEXAT_BED_FRONT);
-			default: return tex_atlas_lookup(TEXAT_PLANKS);
-		}
-	} else {
-		switch(side) {
-			case SIDE_TOP: return tex_atlas_lookup(TEXAT_BED_TOP_1);
-			case SIDE_LEFT:
-			case SIDE_RIGHT:
-				return (this->block->metadata & 0x1) ?
-					tex_atlas_lookup(TEXAT_BED_BACK) :
-					tex_atlas_lookup(TEXAT_BED_SIDE_1);
-			case SIDE_FRONT:
-			case SIDE_BACK:
-				return (this->block->metadata & 0x1) ?
-					tex_atlas_lookup(TEXAT_BED_SIDE_1) :
-					tex_atlas_lookup(TEXAT_BED_BACK);
-			default: return tex_atlas_lookup(TEXAT_PLANKS);
-		}
+static enum side bed_head_side(uint8_t metadata) {
+	switch(metadata & 0x3) {
+		default:
+		case 0: return SIDE_BACK;
+		case 1: return SIDE_RIGHT;
+		case 2: return SIDE_FRONT;
+		case 3: return SIDE_LEFT;
 	}
+}
+
+static uint16_t getTextureIndex(struct block_info* this, enum side side) {
+	bool head = (this->block->metadata & 0x8) != 0;
+	enum side head_side = bed_head_side(this->block->metadata);
+
+	if(side == SIDE_TOP)
+		return tex_atlas_lookup(head ? TEXAT_BED_TOP_2 : TEXAT_BED_TOP_1);
+	if(side == SIDE_BOTTOM)
+		return tex_atlas_lookup(TEXAT_PLANKS);
+
+	if(head)
+		return side == head_side ? tex_atlas_lookup(TEXAT_BED_FRONT)
+		                         : tex_atlas_lookup(TEXAT_BED_SIDE_2);
+
+	return side == blocks_side_opposite(head_side)
+	         ? tex_atlas_lookup(TEXAT_BED_BACK)
+	         : tex_atlas_lookup(TEXAT_BED_SIDE_1);
 }
 
 static size_t getDroppedItem(struct block_info* this, struct item_data* it,

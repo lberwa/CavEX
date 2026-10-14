@@ -21,7 +21,15 @@
 #include "../particle.h"
 #endif
 
+#include <stdio.h>
+
 #include "client_interface.h"
+
+#ifdef BLOCK_LAT_DEBUG
+#define BLOCK_LAT_PRINTF(...) printf(__VA_ARGS__)
+#else
+#define BLOCK_LAT_PRINTF(...)
+#endif
 #include "../game/game_state.h"
 #include "../particle.h"
 #include "../platform/thread.h"
@@ -80,6 +88,12 @@ static void clin_windows_destroy_table(struct window_container** table) {
 
 static struct world* world_for_dim(enum world_dim dim) {
 	return (dim == WORLD_DIM_NETHER) ? &gstate.world_nether : &gstate.world;
+}
+
+static bool clin_is_redstone_visual_block(uint8_t type) {
+	return type == BLOCK_REDSTONE_WIRE || type == BLOCK_REDSTONE_TORCH
+		   || type == BLOCK_REDSTONE_TORCH_LIT || type == BLOCK_REPEATER_OFF
+		   || type == BLOCK_REPEATER_ON;
 }
 
 void clin_chunk(w_coord_t x, w_coord_t y, w_coord_t z, w_coord_t sx,
@@ -374,7 +388,11 @@ void clin_process(struct client_rpc* call) {
 							   call->payload.window_open.type,
 							   call->payload.window_open.slot_count);
 
-				switch(call->payload.window_open.type) {
+					switch(call->payload.window_open.type) {
+					case WINDOW_TYPE_DISPENSER:
+						screen_dispenser_set_windowc(pid, window);
+						screen_set_player(pid, &screen_dispenser);
+						break;
 					case WINDOW_TYPE_WORKBENCH:
 						screen_crafting_set_windowc(pid, window);
 						screen_set_player(pid, &screen_crafting);
@@ -428,6 +446,33 @@ void clin_process(struct client_rpc* call) {
 		case CRPC_SET_BLOCK:
 		{
 			struct world* sbw = world_for_dim(call->payload.set_block.dimension);
+			struct block_data old_blk = world_get_block(
+				sbw, call->payload.set_block.x, call->payload.set_block.y,
+				call->payload.set_block.z);
+			bool redstone_visual_update
+				= clin_is_redstone_visual_block(old_blk.type)
+				  && clin_is_redstone_visual_block(
+					  call->payload.set_block.block.type);
+			if(call->payload.set_block.block.type != BLOCK_REDSTONE_WIRE
+			   && call->payload.set_block.block.type != BLOCK_REDSTONE_TORCH
+			   && call->payload.set_block.block.type
+					  != BLOCK_REDSTONE_TORCH_LIT) {
+				BLOCK_LAT_PRINTF("[BLOCK_LAT] CLIENT_APPLY set_block dim=%d pos=%d,%d,%d "
+					   "new=%u:%u\n",
+					   (int)call->payload.set_block.dimension,
+					   (int)call->payload.set_block.x,
+					   (int)call->payload.set_block.y,
+					   (int)call->payload.set_block.z,
+					   call->payload.set_block.block.type,
+					   call->payload.set_block.block.metadata);
+			}
+			if(redstone_visual_update) {
+				world_set_block(sbw, call->payload.set_block.x,
+								call->payload.set_block.y,
+								call->payload.set_block.z,
+								call->payload.set_block.block, false);
+				break;
+			}
 			if(call->payload.set_block.block.type == BLOCK_AIR) {
 				struct block_data blk = world_get_block(
 					sbw, call->payload.set_block.x,
@@ -739,4 +784,18 @@ void clin_rpc_send(struct client_rpc* call) {
 	tchannel_receive(&clin_empty_msg, (void**)&empty, true);
 	*empty = *call;
 	tchannel_send(&clin_inbox, empty, true);
+}
+
+bool clin_rpc_try_send(struct client_rpc* call) {
+	struct client_rpc* empty;
+	if(!tchannel_receive(&clin_empty_msg, (void**)&empty, false))
+		return false;
+
+	*empty = *call;
+	if(!tchannel_send(&clin_inbox, empty, false)) {
+		tchannel_send(&clin_empty_msg, empty, true);
+		return false;
+	}
+
+	return true;
 }

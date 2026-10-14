@@ -18,8 +18,15 @@
 */
 
 #include <assert.h>
+#include <stdio.h>
 #include "../m-lib/m-string.h"
 #include <stdlib.h>
+
+#if 0
+#define CAVEX_DEBUG_PRINTF(...) printf(__VA_ARGS__)
+#else
+#define CAVEX_DEBUG_PRINTF(...) ((void)0)
+#endif
 
 #include "../config.h"
 #include "../game/game_state.h"
@@ -52,6 +59,7 @@ struct tex_gfx texture_anim;
 struct tex_gfx texture_gui_inventory;
 struct tex_gfx texture_gui_creative_inventory;
 struct tex_gfx texture_gui_crafting;
+struct tex_gfx texture_gui_dispenser;
 struct tex_gfx texture_gui_furnace;
 struct tex_gfx texture_gui_brewing_stand;
 struct tex_gfx texture_gui_chest;
@@ -213,11 +221,11 @@ void tex_init() {
     size_t pw, ph;
     void* pout = tex_atlas_particles("particles.png", &pw, &ph);
 #ifdef PARTICLES_PNG_DEBUG
-	printf("\n?\n\n");
+	CAVEX_DEBUG_PRINTF("\n?\n\n");
 #endif
 	    if(pout) {
 	#ifdef PARTICLES_PNG_DEBUG
-			printf("pout is not NULL \n");
+			CAVEX_DEBUG_PRINTF("pout is not NULL \n");
 	#endif
 	        tex_gfx_load(&texture_particles, pout, pw, ph, TEX_FMT_RGBA16, false);
 	    } else {
@@ -233,6 +241,8 @@ void tex_init() {
 	tex_gfx_load_file(&texture_gui_creative_inventory,
 					  "gui/inventory_creative.png", TEX_FMT_RGBA16, false);
 	tex_gfx_load_file(&texture_gui_crafting, "gui/crafting.png", TEX_FMT_RGBA16,
+					  false);
+	tex_gfx_load_file(&texture_gui_dispenser, "gui/dispenser.png", TEX_FMT_RGBA16,
 					  false);
 	tex_gfx_load_file(&texture_gui_furnace, "gui/furnace.png", TEX_FMT_RGBA16,
 					  false);
