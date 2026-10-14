@@ -49,6 +49,13 @@
 #define CRAFTING_SLOT_MAIN 10
 #define CRAFTING_SLOT_HOTBAR 37
 
+// dispenser (3 x 3 container slots)
+#define DISPENSER_SIZE 45
+#define DISPENSER_SIZE_STORAGE 9
+#define DISPENSER_SLOT_STORAGE 0
+#define DISPENSER_SLOT_MAIN 9
+#define DISPENSER_SLOT_HOTBAR 36
+
 // furnace
 #define FURNACE_SIZE 39
 #define FURNACE_SIZE_INPUT 2

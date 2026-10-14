@@ -1,7 +1,8 @@
 # Bugs/Todos:
 
 * Texture orientation for blocks that have a specific "direction"
-  - Bed placement isn't correct yet
+  - ~~Bed placement isn't correct yet~~
+  - door placement isn't correct yet
 
 * ~~Random crashes, once in a while.~~ Maybe I'll implement an optional auto-save, to prevent some headaches and tears
 
@@ -9,13 +10,29 @@
 
 * ~~If you jump into water or climb down the ladder, you take damage~~
 
-* if you place a block and there is already a stair block or a torch, the block despawn and there is the new block
-  - torch
-  - stair
-  - rose
-  - flower
+* ~~if you place a block and there is already a stair block or a torch, the block despawn and there is the new block~~
+  - ~~torch~~
+  - ~~stair~~
+  - ~~rose~~
+  - ~~flower~~
 
-* Redstone doesn't really work
+* ~~Redstone doesn't really work:~~
+  - ~~Redstone Dust~~
+  - ~~Redstone Torch~~
+  - ~~Redstone Repeater~~
+  - ~~Lever~~
+  - ~~Stone Button~~
+  - ~~Wooden/Stone Pressure Plate~~
+  - ~~Detector Rail~~
+  - ~~Iron Door~~
+  - ~~Wooden Door~~
+  - ~~Trapdoor~~
+  - ~~Piston~~
+  - ~~Sticky Piston~~
+  - ~~Dispenser~~
+  - ~~Note Block~~
+  - ~~TNT~~
+  - ~~Powered Rail~~
 
 * If you jump into a block, you will get stuck and won't be able to move.
 
@@ -24,6 +41,10 @@
 * ~~Stair and fence hitboxes are incorrect.~~
 
 * Furnace output items despawn when moving an item.
+
+* if you destroy one part of the block, the other doesn't despawn_
+  - bed
+  - door
 
 * Blocks don't rotate when placed from a different side:
   - ~~Chests~~
@@ -52,6 +73,7 @@
 * Buttons like in settings in main menu
 
 * visibility bug like vine
+  (--> gfx_write_buffers(true, true, true) and MODE_OFF)
   - Waterlilies 
   - glass_pane
   - pumpkin stem
@@ -128,13 +150,14 @@
 
 * compatibility with Mac OS and Windows
 
-* the head of the men in the inventory is behind the body
+* the head of the men in the inventory is behind the body on PC
 
 * the inventory item of chests isn't correct
 
 * there is no item in the creative inventory:
   - fence
-  - TNT
+  - door
+  - iron door
 
 * there is superfluous item in the creative inventory:
   - boat motor
@@ -169,10 +192,17 @@
   - red mushroom
   - torch
   - snow
+  - door
 
 * scroll with the mouse wheel
 
+* bg sound on the wii is quiet if you play an other sound
+
 * 2d problem:            ![./docs/bug1.png](./docs/bug1.png) ![./docs/bug2.png](./docs/bug2.png)
+
+
+
+
 
 
 

@@ -492,6 +492,12 @@ void recipe_init() {
 		(struct item_data) {.id = ITEM_REDSTONE}, false);
 	recipe_add(
 		recipes_crafting,
+		(struct item_data) {.id = BLOCK_STICKY_PISTON, .durability = 0, .count = 1},
+		1, 2, (uint8_t[]) {1, 1},
+		(struct item_data) {.id = BLOCK_PISTON}, false,
+		(struct item_data) {.id = ITEM_SLIME_BALL}, false);
+	recipe_add(
+		recipes_crafting,
 		(struct item_data) {.id = BLOCK_FENCE, .durability = 0, .count = 2}, 3,
 		2, (uint8_t[]) {1, 1, 1, 1, 1, 1},
 		(struct item_data) {.id = ITEM_STICK}, false);

@@ -82,33 +82,26 @@ static bool repeater_supports(struct server_local* s, struct block_info* this) {
 
 	if(!server_world_get_block(AWORLD(s), this->x, this->y - 1, this->z, &below))
 		return false;
-	return blocks[below.type] && !blocks[below.type]->can_see_through;
-}
-
-static bool repeater_input_powered(struct block_data blk) {
-	uint8_t meta = blk.metadata & 0x0F;
-
-	return (blk.type == BLOCK_REDSTONE_WIRE && meta > 0)
-		   || blk.type == BLOCK_REDSTONE_TORCH_LIT
-		   || (blk.type == BLOCK_LEVER && (meta & 0x08))
-		   || (blk.type == BLOCK_STONE_BUTTON && (meta & 0x04))
-		   || (blk.type == BLOCK_TRIPWIRE_HOOK && (meta & 0x08))
-		   || blk.type == BLOCK_REPEATER_ON
-		   || ((blk.type == BLOCK_STONE_PRESSURE_PLATE
-				|| blk.type == BLOCK_WOOD_PRESSURE_PLATE)
-			   && (meta & 0x01));
+	return block_can_support_attachment(below.type);
 }
 
 static bool repeater_has_input(struct server_local* s, struct block_info* this) {
 	struct block_data src;
 	int ox, oy, oz;
+	enum side input_side = repeater_input_side(this->block);
 
-	blocks_side_offset(repeater_input_side(this->block), &ox, &oy, &oz);
+	blocks_side_offset(input_side, &ox, &oy, &oz);
 	if(!server_world_get_block(AWORLD(s), this->x + ox, this->y + oy,
 							   this->z + oz, &src))
 		return false;
 
-	return repeater_input_powered(src);
+	if(src.type == BLOCK_REDSTONE_WIRE)
+		return (src.metadata & 0x0F)
+			   && block_redstone_wire_points_to_side(
+				   s, this->x + ox, this->y + oy, this->z + oz,
+				   blocks_side_opposite(input_side));
+
+	return block_redstone_powers_wire(&src, blocks_side_opposite(input_side));
 }
 
 static size_t getBoundingBox(struct block_info* this, bool entity,
@@ -150,10 +143,14 @@ static size_t repeater_drop(struct block_info* this, struct item_data* it,
 static uint8_t repeater_place_dir(struct server_local* s, struct block_info* where) {
 	double dx = s->players[s->active_player_id].x - (where->x + 0.5);
 	double dz = s->players[s->active_player_id].z - (where->z + 0.5);
+	uint8_t dir;
 
 	if(fabs(dx) > fabs(dz))
-		return dx >= 0.0 ? 1 : 3;
-	return dz >= 0.0 ? 2 : 0;
+		dir = dx >= 0.0 ? 1 : 3;
+	else
+		dir = dz >= 0.0 ? 2 : 0;
+
+	return (dir + 2) & 0x03;
 }
 
 static bool onItemPlace(struct server_local* s, struct item_data* it,
@@ -166,7 +163,7 @@ static bool onItemPlace(struct server_local* s, struct item_data* it,
 	(void)on_side;
 
 	if(!server_world_get_block(AWORLD(s), where->x, where->y - 1, where->z, &below)
-	   || !blocks[below.type] || blocks[below.type]->can_see_through)
+	   || !block_can_support_attachment(below.type))
 		return false;
 
 	blk = (struct block_data) {
@@ -265,7 +262,7 @@ struct block block_repeater_off = {
 	.onNight = NULL,
 	.transparent = false,
 	.renderBlock = render_block_repeater,
-	.renderBlockAlways = NULL,
+	.renderBlockAlways = render_block_repeater_torches,
 	.luminance = 0,
 	.double_sided = false,
 	.can_see_through = true,
@@ -306,7 +303,7 @@ struct block block_repeater_on = {
 	.onNight = NULL,
 	.transparent = false,
 	.renderBlock = render_block_repeater,
-	.renderBlockAlways = NULL,
+	.renderBlockAlways = render_block_repeater_torches,
 	.luminance = 7,
 	.double_sided = false,
 	.can_see_through = true,

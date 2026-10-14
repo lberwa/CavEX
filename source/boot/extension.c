@@ -23,6 +23,12 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#if 0
+#define CAVEX_DEBUG_PRINTF(...) printf(__VA_ARGS__)
+#else
+#define CAVEX_DEBUG_PRINTF(...) ((void)0)
+#endif
+
 #include <ogc/system.h>
 #include <ogc/cache.h>
 #include <ogc/machine/processor.h>
@@ -98,7 +104,7 @@ static char ext_last_msg[96] = "";
 static void ext_netdbg(const char *msg) {
 	char line[192];
 	snprintf(line, sizeof(line), "%s\n", msg ? msg : "(null)");
-	printf("%s", line);
+	CAVEX_DEBUG_PRINTF("%s", line);
 }
 
 static void ext_log_cb(const char *msg) {
@@ -129,7 +135,7 @@ bool ext_load(const char *path) {
 	int i;
 
 	if(ext.loaded) {
-		printf("[ext] already loaded\n");
+		CAVEX_DEBUG_PRINTF("[ext] already loaded\n");
 		return false;
 	}
 
@@ -148,19 +154,19 @@ bool ext_load(const char *path) {
 	}
 
 	if(EXT_CODE_BASE < lo || EXT_CODE_BASE >= hi) {
-		printf("[ext] EXT_CODE_BASE 0x%08x outside free MEM2 -- adjust it\n",
+		CAVEX_DEBUG_PRINTF("[ext] EXT_CODE_BASE 0x%08x outside free MEM2 -- adjust it\n",
 			   EXT_CODE_BASE);
 		return false;
 	}
 
 	fd = open(path, O_RDONLY);
 	if(fd < 0) {
-		printf("[ext] open failed: %s\n", path);
+		CAVEX_DEBUG_PRINTF("[ext] open failed: %s\n", path);
 		return false;
 	}
 
 	if(read(fd, &hdr, sizeof(hdr)) != (int)sizeof(hdr)) {
-		printf("[ext] header read failed\n");
+		CAVEX_DEBUG_PRINTF("[ext] header read failed\n");
 		close(fd);
 		return false;
 	}
@@ -178,11 +184,11 @@ bool ext_load(const char *path) {
 		if(!sz)
 			continue;
 		if(s < EXT_CODE_BASE || s + sz > hi || s + sz < s) {
-			printf("[ext] text %d @0x%08x sz 0x%x outside region\n", i, s, sz);
+			CAVEX_DEBUG_PRINTF("[ext] text %d @0x%08x sz 0x%x outside region\n", i, s, sz);
 			goto fail;
 		}
 		if(!read_section(fd, hdr.text_pos[i], (void *)s, sz)) {
-			printf("[ext] text %d read failed\n", i);
+			CAVEX_DEBUG_PRINTF("[ext] text %d read failed\n", i);
 			goto fail;
 		}
 		DCFlushRange((void *)s, sz);
@@ -197,11 +203,11 @@ bool ext_load(const char *path) {
 		if(!sz)
 			continue;
 		if(s < EXT_CODE_BASE || s + sz > hi || s + sz < s) {
-			printf("[ext] data %d @0x%08x sz 0x%x outside region\n", i, s, sz);
+			CAVEX_DEBUG_PRINTF("[ext] data %d @0x%08x sz 0x%x outside region\n", i, s, sz);
 			goto fail;
 		}
 		if(!read_section(fd, hdr.data_pos[i], (void *)s, sz)) {
-			printf("[ext] data %d read failed\n", i);
+			CAVEX_DEBUG_PRINTF("[ext] data %d read failed\n", i);
 			goto fail;
 		}
 		DCFlushRange((void *)s, sz);
@@ -217,7 +223,7 @@ bool ext_load(const char *path) {
 	if(hdr.bss_size) {
 		u32 s = hdr.bss_start, sz = hdr.bss_size;
 		if(s < EXT_CODE_BASE || s + sz > hi || s + sz < s) {
-			printf("[ext] bss @0x%08x sz 0x%x outside region\n", s, sz);
+			CAVEX_DEBUG_PRINTF("[ext] bss @0x%08x sz 0x%x outside region\n", s, sz);
 			goto fail;
 		}
 		memset((void *)s, 0, sz);
@@ -231,12 +237,12 @@ bool ext_load(const char *path) {
 	ext.arena_end = hi; /* Arena spannt bis zum alten MEM2-Top */
 	ext.loaded = true;
 
-	printf("[ext] loaded '%s'\n", path);
-	printf("[ext]   code  0x%08x .. 0x%08x (%u KB)\n", EXT_CODE_BASE, max_end,
+	CAVEX_DEBUG_PRINTF("[ext] loaded '%s'\n", path);
+	CAVEX_DEBUG_PRINTF("[ext]   code  0x%08x .. 0x%08x (%u KB)\n", EXT_CODE_BASE, max_end,
 		   (max_end - EXT_CODE_BASE) / 1024);
-	printf("[ext]   arena 0x%08x .. 0x%08x (%u KB free)\n", ext.arena_ptr,
+	CAVEX_DEBUG_PRINTF("[ext]   arena 0x%08x .. 0x%08x (%u KB free)\n", ext.arena_ptr,
 		   ext.arena_end, (ext.arena_end - ext.arena_ptr) / 1024);
-	printf("[ext]   entry 0x%08x\n", (u32)ext.entry);
+	CAVEX_DEBUG_PRINTF("[ext]   entry 0x%08x\n", (u32)ext.entry);
 	return true;
 
 fail:
@@ -253,7 +259,7 @@ int ext_run(void *user) {
 	ext_api_t api;
 
 	if(!ext.loaded || !ext.entry) {
-		printf("[ext] run: nothing loaded\n");
+		CAVEX_DEBUG_PRINTF("[ext] run: nothing loaded\n");
 		return -1;
 	}
 
@@ -280,7 +286,7 @@ void ext_unload(void) {
 
 	/* Ein einziger Handgriff gibt Code + saemtliche Modul-Variablen frei. */
 	SYS_SetArena2Hi(ext.old_arena2hi);
-	printf("[ext] unloaded, MEM2 top restored to 0x%08x\n",
+	CAVEX_DEBUG_PRINTF("[ext] unloaded, MEM2 top restored to 0x%08x\n",
 		   (u32)ext.old_arena2hi);
 	memset(&ext, 0, sizeof(ext));
 }

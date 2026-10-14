@@ -523,13 +523,20 @@ static void chunk_mesher_rebuild(struct block_data* bd, w_coord_t cx,
 									   count_only)
 								* 4;
 
-						if(blocks[local.type]->renderBlockAlways)
-							vertices[dp_index]
+						if(blocks[local.type]->renderBlockAlways) {
+							int always_dp_index = dp_index;
+							if(blocks[local.type]->double_sided
+							   || local.type == BLOCK_REPEATER_OFF
+							   || local.type == BLOCK_REPEATER_ON)
+								always_dp_index = 12;
+
+							vertices[always_dp_index]
 								+= blocks[local.type]->renderBlockAlways(
-									   d + dp_index, &local_info, s,
+									   d + always_dp_index, &local_info, s,
 									   neighbours_info + k, vertex_light,
 									   count_only)
 								* 4;
+						}
 
 							if(blocks[local.type]->renderBlockAlwaysTransparent) {
 								const int dp_trans = k + 6;

@@ -49,6 +49,7 @@ extern struct screen screen_controllerauswahl;
 extern struct screen screen_server;
 extern struct screen screen_inventory;
 extern struct screen screen_crafting;
+extern struct screen screen_dispenser;
 extern struct screen screen_furnace;
 extern struct screen screen_brewing_stand;
 extern struct screen screen_chest;
@@ -78,6 +79,7 @@ bool screen_pointer_local(int player, int view_width, int view_height,
 
 
 void screen_crafting_set_windowc(int player, uint8_t container);
+void screen_dispenser_set_windowc(int player, uint8_t container);
 void screen_furnace_set_windowc(int player, uint8_t container);
 void screen_furnace_set_state(int player, uint16_t burn_time,
 							  uint16_t burn_total, uint16_t cook_time,

@@ -122,7 +122,7 @@ void blocks_init() {
 	blocks[26] = &block_bed;
 	blocks[27] = &block_powered_rail;
 	blocks[28] = &block_detector_rail;
-	// sticky piston
+	blocks[29] = &block_sticky_piston;
 	blocks[30] = &block_gobweb;
 	blocks[31] = &block_tallgrass;
 	blocks[32] = &block_deadbush;
@@ -335,6 +335,272 @@ size_t block_drop_default(struct block_info* this, struct item_data* it,
 	}
 
 	return 1;
+}
+
+bool block_can_support_attachment(uint8_t type) {
+	return blocks[type] && (!blocks[type]->can_see_through || type == BLOCK_GLASS);
+}
+
+static enum side redstone_torch_support_side(const struct block_data* blk) {
+	switch(blk->metadata & 0x7) {
+		case 1: return SIDE_LEFT;
+		case 2: return SIDE_RIGHT;
+		case 3: return SIDE_FRONT;
+		case 4: return SIDE_BACK;
+		default: return SIDE_BOTTOM;
+	}
+}
+
+static enum side repeater_output_side(const struct block_data* blk) {
+	switch(blk->metadata & 0x03) {
+		case 0: return SIDE_FRONT;
+		case 1: return SIDE_RIGHT;
+		case 2: return SIDE_BACK;
+		default: return SIDE_LEFT;
+	}
+}
+
+static bool redstone_button_support_matches(const struct block_data* blk,
+														 enum side side_to_support);
+static bool redstone_lever_support_matches(const struct block_data* blk,
+														  enum side side_to_support);
+
+static bool redstone_connectable_to_wire(uint8_t type, uint8_t meta,
+										 enum side side_to_wire) {
+	if(type == BLOCK_REDSTONE_WIRE)
+		return true;
+	if(type == BLOCK_REDSTONE_TORCH || type == BLOCK_REDSTONE_TORCH_LIT) {
+		struct block_data blk = { .type = type, .metadata = meta };
+		return side_to_wire != redstone_torch_support_side(&blk);
+	}
+	if(type == BLOCK_REPEATER_OFF || type == BLOCK_REPEATER_ON) {
+		struct block_data blk = { .type = type, .metadata = meta };
+		enum side out = repeater_output_side(&blk);
+		return side_to_wire == out || side_to_wire == blocks_side_opposite(out);
+	}
+	if(type == BLOCK_LEVER)
+		return true;
+	if(type == BLOCK_STONE_PRESSURE_PLATE
+	   || type == BLOCK_WOOD_PRESSURE_PLATE)
+		return true;
+	if(type == BLOCK_DETECTOR_RAIL)
+		return true;
+	if(type == BLOCK_STONE_BUTTON)
+		return true;
+	return false;
+}
+
+static int redstone_wire_side_index(enum side side_to_target) {
+	switch(side_to_target) {
+		case SIDE_RIGHT: return 0;
+		case SIDE_LEFT: return 1;
+		case SIDE_FRONT: return 2;
+		case SIDE_BACK: return 3;
+		default: return -1;
+	}
+}
+
+bool block_redstone_wire_points_to_side(struct server_local* s, w_coord_t x,
+										w_coord_t y, w_coord_t z,
+										enum side side_to_target) {
+	struct block_data cur;
+	if(!server_world_get_block(AWORLD(s), x, y, z, &cur)
+	   || cur.type != BLOCK_REDSTONE_WIRE)
+		return false;
+	if((cur.metadata & 0x0F) == 0)
+		return false;
+
+	int target_index = redstone_wire_side_index(side_to_target);
+	if(target_index < 0)
+		return true;
+
+	const struct { int dx, dz; enum side side; } dirs[4] = {
+		{ +1,  0, SIDE_RIGHT },
+		{ -1,  0, SIDE_LEFT },
+		{  0, -1, SIDE_FRONT },
+		{  0, +1, SIDE_BACK },
+	};
+	uint8_t dir_state[4] = { 0, 0, 0, 0 };
+	struct block_data above;
+	bool above_air = server_world_get_block(AWORLD(s), x, y + 1, z, &above)
+					 && above.type == BLOCK_AIR;
+
+	for(int i = 0; i < 4; i++) {
+		struct block_data nb;
+		if(!server_world_get_block(AWORLD(s), x + dirs[i].dx, y,
+								   z + dirs[i].dz, &nb))
+			nb = (struct block_data){ .type = BLOCK_AIR, .metadata = 0 };
+
+		if(redstone_connectable_to_wire(nb.type, nb.metadata & 0x0F,
+										blocks_side_opposite(dirs[i].side))) {
+			dir_state[i] = 1;
+			continue;
+		}
+
+		if(nb.type == BLOCK_AIR) {
+			struct block_data lower;
+			if(server_world_get_block(AWORLD(s), x + dirs[i].dx, y - 1,
+									  z + dirs[i].dz, &lower)
+			   && lower.type == BLOCK_REDSTONE_WIRE) {
+				dir_state[i] = 1;
+				continue;
+			}
+		}
+
+		if(above_air && blocks[nb.type] && !blocks[nb.type]->can_see_through) {
+			struct block_data upper;
+			if(server_world_get_block(AWORLD(s), x + dirs[i].dx, y + 1,
+									  z + dirs[i].dz, &upper)
+			   && upper.type == BLOCK_REDSTONE_WIRE)
+				dir_state[i] = 2;
+		}
+	}
+
+	bool has_x = dir_state[0] != 0 || dir_state[1] != 0;
+	bool has_z = dir_state[2] != 0 || dir_state[3] != 0;
+	if(has_x && !has_z)
+		return side_to_target == SIDE_RIGHT || side_to_target == SIDE_LEFT;
+	if(has_z && !has_x)
+		return side_to_target == SIDE_FRONT || side_to_target == SIDE_BACK;
+	return dir_state[target_index] != 0;
+}
+
+bool block_redstone_powers_side(const struct block_data* blk,
+								enum side side_to_target) {
+	uint8_t meta = blk->metadata & 0x0F;
+
+	switch(blk->type) {
+		case BLOCK_REDSTONE_WIRE:
+			return meta > 0;
+		case BLOCK_REDSTONE_TORCH_LIT:
+			return side_to_target != redstone_torch_support_side(blk);
+		case BLOCK_LEVER:
+			return (meta & 0x08) != 0
+				&& !redstone_lever_support_matches(blk, side_to_target);
+		case BLOCK_STONE_BUTTON:
+			return (meta & 0x08) != 0
+				&& redstone_button_support_matches(blk, side_to_target);
+		case BLOCK_STONE_PRESSURE_PLATE:
+		case BLOCK_WOOD_PRESSURE_PLATE:
+			return (meta & 0x01) != 0;
+		case BLOCK_DETECTOR_RAIL:
+			return (meta & 0x08) != 0;
+		case BLOCK_TRIPWIRE_HOOK:
+			return (meta & 0x08) != 0;
+		case BLOCK_REPEATER_ON:
+			return repeater_output_side(blk) == side_to_target;
+		default:
+			return false;
+	}
+}
+
+bool block_redstone_powers_wire(const struct block_data* blk,
+								enum side side_to_wire) {
+	return block_redstone_powers_side(blk, side_to_wire);
+}
+
+static bool redstone_button_support_matches(const struct block_data* blk,
+													   enum side side_to_support) {
+	switch(blk->metadata & 0x07) {
+		case 1: return side_to_support == SIDE_LEFT;
+		case 2: return side_to_support == SIDE_RIGHT;
+		case 3: return side_to_support == SIDE_FRONT;
+		case 4: return side_to_support == SIDE_BACK;
+		case 5: return side_to_support == SIDE_BOTTOM;
+		case 6: return side_to_support == SIDE_TOP;
+		default: return false;
+	}
+}
+
+static bool redstone_lever_support_matches(const struct block_data* blk,
+																	  enum side side_to_support) {
+	switch(blk->metadata & 0x07) {
+		case 1: return side_to_support == SIDE_LEFT;
+		case 2: return side_to_support == SIDE_RIGHT;
+		case 3: return side_to_support == SIDE_FRONT;
+		case 4: return side_to_support == SIDE_BACK;
+		/* Both top-mounted lever variants are supported from below. */
+		case 5:
+		case 6: return side_to_support == SIDE_BOTTOM;
+		case 7: return side_to_support == SIDE_TOP;
+		default: return false;
+	}
+}
+
+static bool redstone_pressure_plate_support_matches(
+														const struct block_data* blk,
+														 enum side side_to_support) {
+	(void)blk;
+	/* Pressure plates are mounted on the top face of their support block. */
+	return side_to_support == SIDE_BOTTOM;
+}
+
+bool block_redstone_is_button_powered_block(struct server_local* s, w_coord_t x,
+											w_coord_t y, w_coord_t z) {
+	for(int side = 0; side < SIDE_MAX; side++) {
+		int ox, oy, oz;
+		struct block_data nb;
+
+		blocks_side_offset((enum side)side, &ox, &oy, &oz);
+		if(!server_world_get_block(AWORLD(s), x + ox, y + oy, z + oz, &nb))
+			continue;
+		if((nb.type != BLOCK_STONE_BUTTON && nb.type != BLOCK_LEVER
+			&& nb.type != BLOCK_STONE_PRESSURE_PLATE
+			&& nb.type != BLOCK_WOOD_PRESSURE_PLATE
+			&& nb.type != BLOCK_DETECTOR_RAIL))
+			continue;
+		bool powered = (nb.type == BLOCK_STONE_PRESSURE_PLATE
+			|| nb.type == BLOCK_WOOD_PRESSURE_PLATE)
+			? (nb.metadata & 0x01) != 0
+			: (nb.metadata & 0x08) != 0;
+		if(!powered)
+			continue;
+		bool matches;
+		if(nb.type == BLOCK_LEVER)
+			matches = redstone_lever_support_matches(&nb,
+					blocks_side_opposite((enum side)side));
+		else if(nb.type == BLOCK_STONE_BUTTON)
+			matches = redstone_button_support_matches(&nb,
+					blocks_side_opposite((enum side)side));
+		else
+			matches = redstone_pressure_plate_support_matches(&nb,
+					blocks_side_opposite((enum side)side));
+		if(matches)
+			return true;
+	}
+
+	return false;
+}
+
+bool block_redstone_is_powered(struct server_local* s, w_coord_t x,
+							   w_coord_t y, w_coord_t z) {
+	for(int side = 0; side < SIDE_MAX; side++) {
+		int ox, oy, oz;
+		struct block_data nb;
+
+		blocks_side_offset((enum side)side, &ox, &oy, &oz);
+		if(!server_world_get_block(AWORLD(s), x + ox, y + oy, z + oz, &nb))
+			continue;
+
+		enum side side_to_target = blocks_side_opposite((enum side)side);
+		if(nb.type == BLOCK_REDSTONE_WIRE) {
+			if(block_redstone_wire_points_to_side(s, x + ox, y + oy, z + oz,
+														 side_to_target))
+				return true;
+			continue;
+		}
+
+		/* A lever/button/pressure plate powers its own solid support block. */
+		if(blocks[nb.type] && !blocks[nb.type]->can_see_through
+		   && block_redstone_is_button_powered_block(
+				s, x + ox, y + oy, z + oz))
+			return true;
+
+		if(block_redstone_powers_side(&nb, side_to_target))
+			return true;
+	}
+
+	return false;
 }
 
 static const int dx[6] = {  1, -1,  0,  0,  0,  0 };

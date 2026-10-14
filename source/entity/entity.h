@@ -119,9 +119,10 @@ struct entity {
 			bool shared;
 			bool shared_now;
 		} monster;
-        struct entity_minecart {
+		struct entity_minecart {
 			float speed;
 			uint8_t rail_meta; // metadata of rail underneath
+			uint8_t slope_restarts; // prevents endless back-and-forth rolling
 			bool occupied;
 			uint8_t occupant_id;
 		    int8_t hx, hz;         // cart-heading in XZ (unit grid: -1,0,+1)

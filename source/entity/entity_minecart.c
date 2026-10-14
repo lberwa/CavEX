@@ -16,10 +16,6 @@
 	You should have received a copy of the GNU General Public License
 	along with CavEX.  If not, see <http://www.gnu.org/licenses/>.
 */
-
-// todo: Powered rails with redstone logic
-// todo: Detector rails
-// todo: Polish the movement
 // todo: Bounding box behavior (not clipping through blocks and such
 
 #include "../block/blocks_data.h"
@@ -43,6 +39,7 @@
 
 
 #define MC_EPS 0.02f
+#define MINECART_RENDER_Y_OFFSET 0.05f
 
 static inline float tile_center(float v) {
     // Center of current tile
@@ -57,6 +54,12 @@ static inline int is_near_center_axis(float pos, int axis_is_x) {
 
 static inline int is_near_center2(float x, float z) {
     return fabsf(x - tile_center(x)) < MC_EPS && fabsf(z - tile_center(z)) < MC_EPS;
+}
+
+static inline bool is_rail_type(uint8_t type) {
+    return type == BLOCK_RAIL
+        || type == BLOCK_POWERED_RAIL
+        || type == BLOCK_DETECTOR_RAIL;
 }
 
 // Turn table for curved rails (6..9) based on *effective* incoming dir (dx,dz).
@@ -112,15 +115,15 @@ static inline void seed_heading(uint8_t meta, float px, float pz, float spd, int
 static inline int get_rail_with_y_fallback(int bx, int by, int bz,
                                            struct block_data* out, int* out_by) {
     struct block_data b0 = world_get_block(&gstate.world, bx, by, bz);
-    if (b0.type == BLOCK_RAIL || b0.type == BLOCK_POWERED_RAIL) {
+    if (is_rail_type(b0.type)) {
         *out = b0; *out_by = by; return 1;
     }
     struct block_data b1 = world_get_block(&gstate.world, bx, by + 1, bz);
-    if (b1.type == BLOCK_RAIL || b1.type == BLOCK_POWERED_RAIL) {
+    if (is_rail_type(b1.type)) {
         *out = b1; *out_by = by + 1; return 1;
     }
     struct block_data b2 = world_get_block(&gstate.world, bx, by - 1, bz);
-    if (b2.type == BLOCK_RAIL || b2.type == BLOCK_POWERED_RAIL) {
+    if (is_rail_type(b2.type)) {
         *out = b2; *out_by = by - 1; return 1;
     }
     return 0;
@@ -164,30 +167,70 @@ static bool minecart_server_tick(struct entity* e, struct server_local* s) {
     float cx = (float)bx + 0.5f;
     float cz = (float)bz + 0.5f;
 
-    uint8_t meta = below.metadata & 0xF;
+    // Regular rails: bits 0-3 = shape (0-9). Powered/detector: bits 0-2 = shape, bit 3 = on/activated.
+    uint8_t meta = below.metadata & (below.type == BLOCK_RAIL ? 0x0F : 0x07);
 
-    // Powered rail boost/limit (unchanged)
+    // Powered rail: boost when powered, extra braking when unpowered.
+    bool on_active_powered_rail = false;
     if (below.type == BLOCK_POWERED_RAIL) {
-        if (e->data.minecart.speed < 0.01f) {
-            e->data.minecart.speed = 0.05f;
+        if (below.metadata & 0x08) {
+            // Powered rails restart the allowed slope oscillation cycle.
+            e->data.minecart.slope_restarts = 0;
+            // Only accelerate when already moving, always in the current direction.
+            // Cap is 0.4 (double the normal rolling max) to reward powered rail use.
+            float spd = e->data.minecart.speed;
+            if (spd != 0.0f) {
+                float dir = (spd > 0.0f) ? 1.0f : -1.0f;
+                spd += dir * 0.01f;
+                if (fabsf(spd) > 0.4f) spd = dir * 0.4f;
+                e->data.minecart.speed = spd;
+                on_active_powered_rail = true;
+            }
         } else {
-            e->data.minecart.speed += 0.01f;
-            if (e->data.minecart.speed > 0.2f)
-                e->data.minecart.speed = 0.2f;
+            // Unpowered: act as brake rail (higher friction, but cart keeps moving)
+            e->data.minecart.speed *= 0.5f;
         }
     }
 
-    // Friction
-    e->data.minecart.speed *= 0.97f;
+    // Friction — skipped on active powered rails so nothing can counteract the boost.
+    if (!on_active_powered_rail)
+        e->data.minecart.speed *= 0.97f;
     if (fabsf(e->data.minecart.speed) < 0.001f)
         e->data.minecart.speed = 0.0f;
 
     float spd = e->data.minecart.speed;
     if (spd == 0.0f) {
-        // Keep meta and exit; do NOT touch rider here.
-        e->data.minecart.rail_meta = meta;
-        e->data.minecart.last_meta = meta;
-        return false;
+        /* A cart resting on a slope starts rolling downhill by itself. */
+        if(e->data.minecart.slope_restarts >= 2) {
+            e->data.minecart.rail_meta = meta;
+            e->data.minecart.last_meta = meta;
+            return false;
+        }
+        switch(meta) {
+            case 2: /* rises east, roll west */
+                e->data.minecart.hx = -1;
+                e->data.minecart.hz = 0;
+                break;
+            case 3: /* rises west, roll east */
+                e->data.minecart.hx = 1;
+                e->data.minecart.hz = 0;
+                break;
+            case 4: /* rises north, roll south */
+                e->data.minecart.hx = 0;
+                e->data.minecart.hz = 1;
+                break;
+            case 5: /* rises south, roll north */
+                e->data.minecart.hx = 0;
+                e->data.minecart.hz = -1;
+                break;
+            default:
+                e->data.minecart.rail_meta = meta;
+                e->data.minecart.last_meta = meta;
+                return false;
+        }
+        e->data.minecart.slope_restarts++;
+        e->data.minecart.speed = 0.0025f;
+        spd = e->data.minecart.speed;
     }
 
     // Ensure heading exists; use the persistent hx,hz in entity.h
@@ -198,6 +241,22 @@ static bool minecart_server_tick(struct entity* e, struct server_local* s) {
     int sgn    = (spd >= 0.0f) ? +1 : -1;
     int cur_dx = e->data.minecart.hx * sgn;
     int cur_dz = e->data.minecart.hz * sgn;
+
+    /* Slopes change the rolling speed: uphill costs a little speed, while
+     * downhill movement gives the cart a small additional push. */
+    bool uphill = (meta == 2 && cur_dx > 0)
+        || (meta == 3 && cur_dx < 0)
+        || (meta == 4 && cur_dz < 0)
+        || (meta == 5 && cur_dz > 0);
+    if(meta >= 2 && meta <= 5) {
+        float slope_speed = fabsf(spd) + (uphill ? -0.0025f : 0.0025f);
+        if(slope_speed < 0.0f)
+            slope_speed = 0.0f;
+        if(slope_speed > 0.4f)
+            slope_speed = 0.4f;
+        spd = copysignf(slope_speed, spd);
+        e->data.minecart.speed = spd;
+    }
 
     // Cheap helpers
     #define MOVE_ALONG_X(amount) do { e->pos[0] += (amount) * (float)cur_dx; } while (0)
@@ -318,28 +377,42 @@ static void entity_minecart_render(struct entity* e, mat4 view, float tick_delta
     float yaw_deg = 0.0f;
     float pitch_deg = 0.0f;
     float y_offset = 0.0f;
-    if (rail_block.type == BLOCK_RAIL) {
-        uint8_t meta = rail_block.metadata & 0xF;
 
-        switch (meta) {
-            case 0:  yaw_deg =   0.0f; break;   // NS
-            case 1:  yaw_deg =  90.0f; break;   // EW
-            case 2:  yaw_deg =  90.0f; pitch_deg =  45.0f; y_offset = 0.1f; break; // slope E
-            case 3:  yaw_deg =  90.0f; pitch_deg = -45.0f; y_offset = 0.1f; break; // slope W
-            case 4:  yaw_deg =   0.0f; pitch_deg =  45.0f; y_offset = 0.1f; break; // slope S
-            case 5:  yaw_deg =   0.0f; pitch_deg = -45.0f; y_offset = 0.1f; break; // slope N
-            case 9:  yaw_deg =  135.0f; break; // SE curve
-            case 8:  yaw_deg = -135.0f; break; // SW curve
-            case 7:  yaw_deg =  -45.0f; break; // NW curve
-            case 6:  yaw_deg =   45.0f; break; // NE curve
-            default: break;
-        }
+    // Prefer live block lookup; fall back to last-known meta stored by server tick.
+    uint8_t meta;
+    if (is_rail_type(rail_block.type))
+        meta = rail_block.metadata & (rail_block.type == BLOCK_RAIL ? 0x0F : 0x07);
+    else
+        meta = e->data.minecart.rail_meta;
+
+    int8_t hx = e->data.minecart.hx;
+    int8_t hz = e->data.minecart.hz;
+
+    switch (meta) {
+        // Slopes: yaw is always axis-aligned (EW or NS), pitch sign encodes which end
+        // is higher. This never depends on movement direction — the terrain is fixed.
+        case 2: yaw_deg =  90.0f; pitch_deg = +45.0f; y_offset = 0.1f; break; // E up
+        case 3: yaw_deg =  90.0f; pitch_deg = -45.0f; y_offset = 0.1f; break; // W up
+        case 4: yaw_deg =   0.0f; pitch_deg = +45.0f; y_offset = 0.1f; break; // N up
+        case 5: yaw_deg =   0.0f; pitch_deg = -45.0f; y_offset = 0.1f; break; // S up
+        // Curves: hx/hz are always cardinal (never diagonal), so use fixed bisector.
+        case 6: yaw_deg =  45.0f;   break;
+        case 7: yaw_deg = -45.0f;   break;
+        case 8: yaw_deg = -135.0f;  break;
+        case 9: yaw_deg =  135.0f;  break;
+        // Straight rails: follow heading when moving, meta when stationary.
+        default:
+            if (hx != 0 || hz != 0)
+                yaw_deg = glm_deg(atan2f((float)hx, (float)hz));
+            else
+                yaw_deg = (meta == 1) ? 90.0f : 0.0f;
+            break;
     }
 
     mat4 model, mv;
     glm_translate_make(model, (vec3){
         pos_lerp[0],
-        pos_lerp[1] + y_offset,
+        pos_lerp[1] + y_offset + MINECART_RENDER_Y_OFFSET,
         pos_lerp[2]
     });
 
@@ -362,15 +435,18 @@ static void entity_minecart_render(struct entity* e, mat4 view, float tick_delta
 
 static size_t getBoundingBox(const struct entity *e, struct AABB *out) {
     assert(e && out);
-    aabb_setsize_centered_offset(
-        out,
-        0.5f,   // sx
-        0.5f,   // sy
-        0.5f,   // sz
-        0.0f,   // ox
-        0.25f,  // oy
-        0.0f    // oz
-    );
+    // Keep strictly inside one tile: < 1.0 in X and Z so the AABB never touches
+    // a neighbour block boundary. aabb_intersection uses <=, so exact touching
+    // would block a 3x3 area around the cart during block placement checks.
+	aabb_setsize_centered_offset(
+		out,
+		0.98f,  // sx
+		0.625f, // sy
+		0.98f,  // sz: was 1.25, overflowed 0.125 into N/S tiles
+		0.0f,
+		0.3125f,
+		0.0f
+	);
     aabb_translate(out, e->pos[0], e->pos[1], e->pos[2]);
     return 1;
 }
@@ -413,6 +489,8 @@ static bool onLeftClick(struct entity *e) {
 }
 
 void entity_minecart(uint32_t id, struct entity* e, bool server, void* world) {
+    entity_default_init(e, server, world);
+
     e->name 	   = "Minecart";
     e->id          = id;
     e->tick_server = minecart_server_tick;
@@ -437,6 +515,7 @@ void entity_minecart(uint32_t id, struct entity* e, bool server, void* world) {
     e->data.minecart.hx = 0;
     e->data.minecart.hz = 0;
     e->data.minecart.last_meta = 0xFF;
+	 e->data.minecart.slope_restarts = 0;
 
     e->data.minecart.item.id         = ITEM_MINECART;
     e->data.minecart.item.durability = 0;
@@ -446,5 +525,4 @@ void entity_minecart(uint32_t id, struct entity* e, bool server, void* world) {
     e->data.minecart.occupied = false;
     e->data.minecart.occupant_id = 0;
 
-    entity_default_init(e, server, world);
 }

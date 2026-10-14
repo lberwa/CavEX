@@ -120,6 +120,7 @@ TextureMap texture_map[] = {
     {"texture_anim", &texture_anim},
     {"texture_gui_inventory", &texture_gui_inventory},
     {"texture_gui_crafting", &texture_gui_crafting},
+    {"texture_gui_dispenser", &texture_gui_dispenser},
     {"texture_gui_furnace", &texture_gui_furnace},
     {"texture_gui_brewing_stand", &texture_gui_brewing_stand},
     {"texture_gui_chest", &texture_gui_chest},

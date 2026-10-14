@@ -19,6 +19,14 @@
 
 #include <assert.h>
 #include <math.h>
+#include <stdio.h>
+
+#if 0
+#define CAVEX_DEBUG_PRINTF(...) printf(__VA_ARGS__)
+#else
+#define CAVEX_DEBUG_PRINTF(...) ((void)0)
+#endif
+
 #include "entity.h"
 #include "entity_monster.h"
 #include "../block/blocks_data.h"
@@ -117,7 +125,7 @@ static bool server_tick_creeper(struct entity* e, struct server_local* s) {
 
     if (e->data.monster.fuse >= 0) {
 #ifdef CREEPER_DEBUG
-        printf("[DEBUG] Creeper %u fuse remaining: %d ticks\n",
+        CAVEX_DEBUG_PRINTF("[DEBUG] Creeper %u fuse remaining: %d ticks\n",
                (unsigned)e->id,
                e->data.monster.fuse);
 #endif

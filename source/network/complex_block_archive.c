@@ -97,12 +97,70 @@ void chest_archive_read(struct complex_block_pos* pos, struct item_data* items, 
 	if(!f) return;
 
 	uint8_t format_version = fgetc(f);
-	if(format_version != 0) puts("Warning: chests.dat uses a newer format");
+	if(format_version != 0) {
+#if 0
+		puts("Warning: chests.dat uses a newer format");
+#endif
+	}
 	fread(pos, 1, MAX_CHESTS*sizeof(struct complex_block_pos), f);
 	fread(items, 1, MAX_CHEST_SLOTS*MAX_CHESTS*sizeof(struct item_data), f);
 	fclose(f);
 
 	swap_endianness(pos, items);
+}
+
+static void swap_dispenser_endianness(struct complex_block_pos* pos,
+										  struct item_data* items) {
+	if(!is_little_endian())
+		return;
+	for(int i = 0; i < MAX_DISPENSERS; i++) {
+		pos[i].x = swap_int32(pos[i].x);
+		pos[i].y = swap_int32(pos[i].y);
+		pos[i].z = swap_int32(pos[i].z);
+		for(int j = 0; j < DISPENSER_SIZE_STORAGE; j++)
+			items[i * DISPENSER_SIZE_STORAGE + j].id =
+				swap_uint16(items[i * DISPENSER_SIZE_STORAGE + j].id);
+	}
+}
+
+void dispenser_archive_write(struct complex_block_pos* pos,
+								 struct item_data* items, string_t path) {
+	assert(pos && items && path);
+	swap_dispenser_endianness(pos, items);
+	string_t filename;
+	string_init_printf(filename, "%s/dispenser.dat", string_get_cstr(path));
+	FILE* f = fopen(string_get_cstr(filename), "wb");
+	string_clear(filename);
+	if(!f)
+		return;
+	fputc(0, f);
+	fwrite(pos, 1, MAX_DISPENSERS * sizeof(struct complex_block_pos), f);
+	fwrite(items, 1, MAX_DISPENSERS * DISPENSER_SIZE_STORAGE *
+							 sizeof(struct item_data), f);
+	fclose(f);
+}
+
+void dispenser_archive_read(struct complex_block_pos* pos,
+								struct item_data* items, string_t path) {
+	assert(pos && items && path);
+	memset(pos, -1, MAX_DISPENSERS * sizeof(struct complex_block_pos));
+	memset(items, 0, MAX_DISPENSERS * DISPENSER_SIZE_STORAGE *
+			 sizeof(struct item_data));
+	string_t filename;
+	string_init_printf(filename, "%s/dispenser.dat", string_get_cstr(path));
+	FILE* f = fopen(string_get_cstr(filename), "rb");
+	string_clear(filename);
+	if(!f)
+		return;
+	if(fgetc(f) != 0) {
+		fclose(f);
+		return;
+	}
+	fread(pos, 1, MAX_DISPENSERS * sizeof(struct complex_block_pos), f);
+	fread(items, 1, MAX_DISPENSERS * DISPENSER_SIZE_STORAGE *
+			 sizeof(struct item_data), f);
+	fclose(f);
+	swap_dispenser_endianness(pos, items);
 }
 
 void furnace_archive_write(struct furnace_data* furnaces, string_t path) {
@@ -142,7 +200,11 @@ void furnace_archive_read(struct furnace_data* furnaces, string_t path) {
 	if(!f) return;
 
 	uint8_t format_version = fgetc(f);
-	if(format_version != 0) puts("Warning: furnaces.dat uses a newer format");
+	if(format_version != 0) {
+#if 0
+		puts("Warning: furnaces.dat uses a newer format");
+#endif
+	}
 	fread(furnaces, 1, MAX_FURNACES * sizeof(struct furnace_data), f);
 	fclose(f);
 
@@ -180,11 +242,14 @@ void sign_archive_read(struct complex_block_pos* pos, char* texts, string_t path
 	if(!f) return;
 
 	uint8_t format_version = fgetc(f);
-	if(format_version != 0) puts("Warning: signs.dat uses a newer format");
+	if(format_version != 0) {
+#if 0
+		puts("Warning: signs.dat uses a newer format");
+#endif
+	}
 	fread(pos, 1, MAX_CHESTS*sizeof(struct complex_block_pos), f);
 	fread(texts, 1, MAX_CHEST_SLOTS*MAX_CHESTS*sizeof(struct item_data), f);
 	fclose(f);
 
 	swap_endianness(pos, NULL);
 }
-

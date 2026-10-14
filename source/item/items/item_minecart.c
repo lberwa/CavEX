@@ -26,7 +26,11 @@ static bool onItemPlace(struct server_local* s, struct item_data* it,
                         enum side on_side)
 {
     // only place on rails
-    if (!on || on->block->type != BLOCK_RAIL) return false;
+    if (!on
+        || (on->block->type != BLOCK_RAIL
+            && on->block->type != BLOCK_POWERED_RAIL
+            && on->block->type != BLOCK_DETECTOR_RAIL))
+        return false;
 
     // compute spawn position: center of rail
     uint8_t meta = on->block->metadata & 0xF;

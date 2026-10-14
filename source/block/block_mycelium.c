@@ -66,12 +66,9 @@ static void onRightClick(struct server_local* s, struct item_data* it,
 		}
 	}
 
-	// Fallback: normal item placement
-	if(it && items[it->id] && items[it->id]->onItemPlace) {
-		if(items[it->id]->onItemPlace(s, it, where, on, on_side)) {
-			place_block = true;
-		}
-	}
+	// Fallback: let the server run normal placement after this interaction.
+	if(it && items[it->id] && items[it->id]->onItemPlace)
+		place_block = true;
 }
 
 static void onRandomTick(struct server_local* s, struct block_info* this) {
@@ -148,4 +145,3 @@ struct block block_mycelium = {
 		.tool.type = TOOL_TYPE_ANY,
 	},
 };
-

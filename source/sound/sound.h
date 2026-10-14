@@ -172,6 +172,8 @@ bool sound_play_bg(enum mp3_sound sound[16]);
 bool sound_play(enum pcm_sound sound);
 bool sound_play_at(enum pcm_sound sound, float wx, float wy, float wz);
 bool sound_play_at_vol(enum pcm_sound sound, float wx, float wy, float wz, float vol_scale);
+bool sound_play_at_pitch(enum pcm_sound sound, float wx, float wy, float wz,
+                         float vol_scale, float pitch);
 void sound_stop_bg(void);
 void sound_resume_bg(void);
 void sound_set_volume_bg(float volume);

@@ -30,6 +30,7 @@
 #include "block/blocks.h"
 #include "chunk_mesher.h"
 #include "platform/displaylist.h"
+#include "platform/time.h"
 #include "world.h"
 
 #define CHUNK_SIZE_BITS 0xF
@@ -51,6 +52,8 @@ struct chunk {
 	struct displaylist mesh[13];
 	bool has_displist[13];
 	bool rebuild_displist;
+	bool rebuild_displist_deferred;
+	ptime_t rebuild_displist_deferred_at;
 	bool has_spawner;
 	bool has_enchanting_table;
 	struct world* world;
@@ -91,6 +94,9 @@ struct block_data chunk_lookup_block(struct chunk* c, w_coord_t x, w_coord_t y,
 									 w_coord_t z);
 void chunk_set_block(struct chunk* c, c_coord_t x, c_coord_t y, c_coord_t z,
 					 struct block_data blk);
+void chunk_set_block_deferred(struct chunk* c, c_coord_t x, c_coord_t y,
+							  c_coord_t z, struct block_data blk,
+							  unsigned int delay_ms);
 void chunk_set_block_raw(struct chunk* c, c_coord_t x, c_coord_t y,
 						 c_coord_t z, struct block_data blk);
 bool chunk_check_built(struct chunk* c);

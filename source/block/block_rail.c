@@ -18,6 +18,8 @@
 */
 
 #include "../network/server_local.h"
+#include "../entity/entity.h"
+#include "../game/game_state.h"
 #include "blocks.h"
 
 static enum block_material getMaterial(struct block_info* this) {
@@ -140,6 +142,8 @@ static bool onItemPlace(struct server_local* s, struct item_data* it,
     }
 
     uint8_t meta = calcRailMeta(s, where->x, where->y, where->z);
+    if (it->id != BLOCK_RAIL && meta > 5)
+        meta = 0;
     bool lower_e = false, lower_w = false, lower_n = false, lower_s = false;
     struct block_data neighbor;
     if (server_world_get_block(AWORLD(s), where->x + 1, where->y - 1, where->z, &neighbor) && isRail(neighbor.type)) {
@@ -193,17 +197,150 @@ static void onNeighbourBlockChange(struct server_local* s,
                            info->x, info->y, info->z,
                            &cur);
 
-    uint8_t oldMeta = cur.metadata & 0xF;
-    uint8_t newMeta = calcRailMeta(s,
-                                   info->x,
-                                   info->y,
-                                   info->z) & 0xF;
-    if (newMeta == oldMeta) return;
+    // Regular rails use bits 0–3 for shape (0–9, incl. curves).
+    // Powered/detector rails use only bits 0–2 for shape (0–5, no curves);
+    // bit 3 is the powered/activated flag and must not be overwritten here.
+    bool is_regular = (cur.type == BLOCK_RAIL);
+    uint8_t shape_mask = is_regular ? 0x0F : 0x07;
 
-    cur.metadata = (cur.metadata & ~0xF) | newMeta;
-    server_world_set_block(s,
-                           info->x, info->y, info->z,
-                           cur);
+    uint8_t old_shape = cur.metadata & shape_mask;
+    uint8_t new_shape = calcRailMeta(s, info->x, info->y, info->z);
+
+    if (!is_regular && new_shape > 5)
+        new_shape = old_shape;
+
+    new_shape &= shape_mask;
+    if (new_shape == old_shape) return;
+
+    cur.metadata = (cur.metadata & ~shape_mask) | new_shape;
+    server_world_set_block(s, info->x, info->y, info->z, cur);
+}
+
+struct powered_rail_node {
+    w_coord_t x, y, z;
+    uint8_t distance;
+};
+
+static bool powered_rail_chain_has_source(struct server_local* s,
+                                          w_coord_t x, w_coord_t y,
+                                          w_coord_t z) {
+    struct powered_rail_node queue[32];
+    struct powered_rail_node seen[32];
+    int head = 0;
+    int tail = 0;
+    int seen_count = 0;
+
+    queue[tail++] = (struct powered_rail_node) {x, y, z, 0};
+    seen[seen_count++] = queue[0];
+
+    while(head < tail) {
+        struct powered_rail_node node = queue[head++];
+        struct block_data rail;
+
+        if(!server_world_get_block(AWORLD(s), node.x, node.y, node.z,
+                                    &rail)
+           || rail.type != BLOCK_POWERED_RAIL)
+            continue;
+
+        /* Only a non-rail redstone source can start the chain. */
+        if(block_redstone_is_powered(s, node.x, node.y, node.z))
+            return true;
+
+        if(node.distance >= 8)
+            continue;
+
+        // Only propagate along the rail's own axis (EW: shape 1/2/3, NS: shape 0/4/5).
+        // Perpendicular neighbours (parallel tracks) must not receive power.
+        uint8_t shape = rail.metadata & 0x07;
+        bool is_ew = (shape == 1 || shape == 2 || shape == 3);
+
+        for(int side = 0; side < SIDE_MAX; side++) {
+            int ox, oy, oz;
+            blocks_side_offset((enum side)side, &ox, &oy, &oz);
+            if (is_ew ? (ox == 0) : (oz == 0)) continue;
+            w_coord_t nx = node.x + ox;
+            w_coord_t ny = node.y + oy;
+            w_coord_t nz = node.z + oz;
+            struct block_data neighbour;
+
+            if(!server_world_get_block(AWORLD(s), nx, ny, nz, &neighbour)
+               || neighbour.type != BLOCK_POWERED_RAIL)
+                continue;
+
+            bool already_seen = false;
+            for(int i = 0; i < seen_count; i++) {
+                if(seen[i].x == nx && seen[i].y == ny && seen[i].z == nz) {
+                    already_seen = true;
+                    break;
+                }
+            }
+            if(already_seen || tail >= (int)(sizeof(queue) / sizeof(queue[0])))
+                continue;
+
+            struct powered_rail_node next = {
+                nx, ny, nz, (uint8_t)(node.distance + 1)
+            };
+            queue[tail++] = next;
+            seen[seen_count++] = next;
+        }
+    }
+
+    return false;
+}
+
+static bool detector_rail_has_minecart(struct server_local* s,
+                                       struct block_info* info) {
+    struct AABB rail_box;
+    aabb_setsize_centered(&rail_box, 1.0F, 0.125F, 1.0F);
+    aabb_translate(&rail_box, info->x + 0.5F, info->y + 0.0625F,
+                   info->z + 0.5F);
+
+    // Client entities have current positions (client runs minecart physics).
+    // Server entities stay at their spawn position, so s->entities is useless here.
+    dict_entity_it_t it;
+    dict_entity_it(it, gstate.entities);
+    while(!dict_entity_end_p(it)) {
+        struct entity* e = dict_entity_ref(it)->value;
+        dict_entity_next(it);
+
+        if(!e || e->type != ENTITY_MINECART || !e->getBoundingBox)
+            continue;
+
+        struct AABB entity_box;
+        if(e->getBoundingBox(e, &entity_box) != 0
+           && aabb_intersection(&rail_box, &entity_box))
+            return true;
+    }
+    return false;
+}
+
+static void powered_rail_onWorldTick(struct server_local* s,
+                                     struct block_info* info) {
+    struct block_data cur = *info->block;
+    bool powered = powered_rail_chain_has_source(s, info->x, info->y,
+                                                 info->z);
+    uint8_t state = powered ? 0x08 : 0;
+
+    if((cur.metadata & 0x08) == state)
+        return;
+
+    cur.metadata = (cur.metadata & 0x07) | state;
+    server_world_set_block(s, info->x, info->y, info->z, cur);
+    notifyNeighbours(s, info->x, info->y, info->z);
+}
+
+static void detector_rail_onWorldTick(struct server_local* s,
+                                      struct block_info* info) {
+    struct block_data cur = *info->block;
+    bool occupied = detector_rail_has_minecart(s, info);
+    uint8_t state = occupied ? 0x08 : 0;
+
+    if((cur.metadata & 0x08) == state)
+        return;
+
+    cur.metadata = (cur.metadata & 0x07) | state;
+    server_world_set_block(s, info->x, info->y, info->z, cur);
+    notifyNeighbours(s, info->x, info->y, info->z);
 }
 
 
@@ -216,6 +353,7 @@ struct block block_rail = {
 	.getDroppedItem = block_drop_default,
 	.onNeighbourBlockChange = onNeighbourBlockChange,
 	.onRandomTick = NULL,
+	.onWorldTick = NULL,
 	.onRightClick = NULL,
 	.transparent = false,
 	.renderBlock = render_block_rail,
@@ -251,6 +389,7 @@ struct block block_powered_rail = {
 	.getDroppedItem = block_drop_default,
 	.onNeighbourBlockChange = onNeighbourBlockChange,
 	.onRandomTick = NULL,
+	.onWorldTick = powered_rail_onWorldTick,
 	.onRightClick = NULL,
 	.transparent = false,
 	.renderBlock = render_block_rail,
@@ -286,6 +425,7 @@ struct block block_detector_rail = {
 	.getDroppedItem = block_drop_default,
 	.onNeighbourBlockChange = onNeighbourBlockChange,
 	.onRandomTick = NULL,
+	.onWorldTick = detector_rail_onWorldTick,
 	.onRightClick = NULL,
 	.transparent = false,
 	.renderBlock = render_block_rail,

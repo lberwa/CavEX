@@ -21,6 +21,12 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#if 0
+#define CAVEX_DEBUG_PRINTF(...) printf(__VA_ARGS__)
+#else
+#define CAVEX_DEBUG_PRINTF(...) ((void)0)
+#endif
+
 #include "../block/blocks.h"
 #include "../chunk.h"
 #include "../game/game_state.h"
@@ -2270,18 +2276,145 @@ static size_t render_repeater_box(struct displaylist* d, struct block_info* this
 							  z0, x1, y1, z1, tex, tex_rotate);
 }
 
+static size_t render_repeater_torch(struct displaylist* d,
+									struct block_info* this, enum side side,
+									uint8_t* vertex_light, bool count_only,
+									uint8_t dir, int16_t front_offset,
+									uint16_t tex) {
+	if(!count_only) {
+		int16_t x = W2C_COORD(this->x) * BLK_LEN;
+		int16_t y = W2C_COORD(this->y) * BLK_LEN;
+		int16_t z = W2C_COORD(this->z) * BLK_LEN;
+		int16_t cx = 128;
+		int16_t cz = front_offset + 16;
+		int16_t y0 = 32 - 5 * 16;
+		int16_t y1 = y0 + 256;
+		int16_t top_y = y0 + 160;
+		uint16_t tex_x = TEX_OFFSET(TEXTURE_X(tex));
+		uint16_t tex_y = TEX_OFFSET(TEXTURE_Y(tex));
+		uint8_t light = (MAX_U8(this->block->torch_light,
+								blocks[this->block->type]->luminance)
+						 << 4)
+			| this->block->sky_light;
+
+#define REPEATER_TORCH_POS(px, py, pz)                                         \
+	do {                                                                       \
+		int16_t rx = (px);                                                     \
+		int16_t rz = (pz);                                                     \
+		switch(dir & 0x03) {                                                   \
+			case 1: rx = 256 - (pz); rz = (px); break;                         \
+			case 2: rx = 256 - (px); rz = 256 - (pz); break;                   \
+			case 3: rx = (pz); rz = 256 - (px); break;                         \
+			default: break;                                                    \
+		}                                                                      \
+		displaylist_pos(d, x + rx, y + (py), z + rz);                          \
+	} while(0)
+
+		switch(side == SIDE_LEFT ? SIDE_RIGHT :
+			   side == SIDE_RIGHT ? SIDE_LEFT : side) {
+			case SIDE_LEFT:
+				REPEATER_TORCH_POS(cx - 16, y0, cz - 128);
+				displaylist_color(d, DIM_LIGHT(light, level_table_1, true, 0));
+				displaylist_texcoord(d, tex_x, tex_y + 16);
+				REPEATER_TORCH_POS(cx - 16, y1, cz - 128);
+				displaylist_color(d, DIM_LIGHT(light, level_table_1, true, 0));
+				displaylist_texcoord(d, tex_x, tex_y);
+				REPEATER_TORCH_POS(cx - 16, y1, cz + 128);
+				displaylist_color(d, DIM_LIGHT(light, level_table_1, true, 0));
+				displaylist_texcoord(d, tex_x + 16, tex_y);
+				REPEATER_TORCH_POS(cx - 16, y0, cz + 128);
+				displaylist_color(d, DIM_LIGHT(light, level_table_1, true, 0));
+				displaylist_texcoord(d, tex_x + 16, tex_y + 16);
+				break;
+			case SIDE_RIGHT:
+				REPEATER_TORCH_POS(cx + 16, y0, cz - 128);
+				displaylist_color(d, DIM_LIGHT(light, level_table_1, true, 0));
+				displaylist_texcoord(d, tex_x + 16, tex_y + 16);
+				REPEATER_TORCH_POS(cx + 16, y0, cz + 128);
+				displaylist_color(d, DIM_LIGHT(light, level_table_1, true, 0));
+				displaylist_texcoord(d, tex_x, tex_y + 16);
+				REPEATER_TORCH_POS(cx + 16, y1, cz + 128);
+				displaylist_color(d, DIM_LIGHT(light, level_table_1, true, 0));
+				displaylist_texcoord(d, tex_x, tex_y);
+				REPEATER_TORCH_POS(cx + 16, y1, cz - 128);
+				displaylist_color(d, DIM_LIGHT(light, level_table_1, true, 0));
+				displaylist_texcoord(d, tex_x + 16, tex_y);
+				break;
+			case SIDE_BACK:
+				REPEATER_TORCH_POS(cx - 128, y0, cz + 16);
+				displaylist_color(d, DIM_LIGHT(light, level_table_2, true, 0));
+				displaylist_texcoord(d, tex_x, tex_y + 16);
+				REPEATER_TORCH_POS(cx - 128, y1, cz + 16);
+				displaylist_color(d, DIM_LIGHT(light, level_table_2, true, 0));
+				displaylist_texcoord(d, tex_x, tex_y);
+				REPEATER_TORCH_POS(cx + 128, y1, cz + 16);
+				displaylist_color(d, DIM_LIGHT(light, level_table_2, true, 0));
+				displaylist_texcoord(d, tex_x + 16, tex_y);
+				REPEATER_TORCH_POS(cx + 128, y0, cz + 16);
+				displaylist_color(d, DIM_LIGHT(light, level_table_2, true, 0));
+				displaylist_texcoord(d, tex_x + 16, tex_y + 16);
+				break;
+			case SIDE_FRONT:
+				REPEATER_TORCH_POS(cx - 128, y0, cz - 16);
+				displaylist_color(d, DIM_LIGHT(light, level_table_2, true, 0));
+				displaylist_texcoord(d, tex_x + 16, tex_y + 16);
+				REPEATER_TORCH_POS(cx + 128, y0, cz - 16);
+				displaylist_color(d, DIM_LIGHT(light, level_table_2, true, 0));
+				displaylist_texcoord(d, tex_x, tex_y + 16);
+				REPEATER_TORCH_POS(cx + 128, y1, cz - 16);
+				displaylist_color(d, DIM_LIGHT(light, level_table_2, true, 0));
+				displaylist_texcoord(d, tex_x, tex_y);
+				REPEATER_TORCH_POS(cx - 128, y1, cz - 16);
+				displaylist_color(d, DIM_LIGHT(light, level_table_2, true, 0));
+				displaylist_texcoord(d, tex_x + 16, tex_y);
+				break;
+			case SIDE_TOP:
+				REPEATER_TORCH_POS(cx - 16, top_y, cz - 16);
+				displaylist_color(d, light);
+				displaylist_texcoord(d, tex_x + 7, tex_y + 6);
+				REPEATER_TORCH_POS(cx + 16, top_y, cz - 16);
+				displaylist_color(d, light);
+				displaylist_texcoord(d, tex_x + 9, tex_y + 6);
+				REPEATER_TORCH_POS(cx + 16, top_y, cz + 16);
+				displaylist_color(d, light);
+				displaylist_texcoord(d, tex_x + 9, tex_y + 8);
+				REPEATER_TORCH_POS(cx - 16, top_y, cz + 16);
+				displaylist_color(d, light);
+				displaylist_texcoord(d, tex_x + 7, tex_y + 8);
+				break;
+			case SIDE_BOTTOM:
+				REPEATER_TORCH_POS(cx - 16, y0, cz - 16);
+				displaylist_color(d, light);
+				displaylist_texcoord(d, tex_x + 7, tex_y + 16);
+				REPEATER_TORCH_POS(cx - 16, y0, cz + 16);
+				displaylist_color(d, light);
+				displaylist_texcoord(d, tex_x + 7, tex_y + 14);
+				REPEATER_TORCH_POS(cx + 16, y0, cz + 16);
+				displaylist_color(d, light);
+				displaylist_texcoord(d, tex_x + 9, tex_y + 14);
+				REPEATER_TORCH_POS(cx + 16, y0, cz - 16);
+				displaylist_color(d, light);
+				displaylist_texcoord(d, tex_x + 9, tex_y + 16);
+				break;
+			default: break;
+		}
+
+#undef REPEATER_TORCH_POS
+	}
+
+	(void)vertex_light;
+	return 1;
+}
+
 size_t render_block_repeater(struct displaylist* d, struct block_info* this,
 							 enum side side, struct block_info* it,
 							 uint8_t* vertex_light, bool count_only) {
 	uint8_t dir = this->block->metadata & 0x03;
-	uint8_t delay = (this->block->metadata >> 2) & 0x03;
 	uint16_t top_tex = blocks[this->block->type]->getTextureIndex(this, side);
-	uint16_t lamp_tex = tex_atlas_lookup(this->block->type == BLOCK_REPEATER_ON ?
-											TEXAT_REDSTONE_TORCH_LIT :
-											TEXAT_REDSTONE_TORCH);
 	size_t count = 0;
 	int tex_rotate = dir & 0x03;
-	int16_t x0, z0, x1, z1;
+	if(dir == 1 || dir == 3)
+		tex_rotate = (tex_rotate + 2) & 0x03;
 
 	if(side == SIDE_TOP) {
 		count += render_repeater_box(d, this, side, vertex_light, count_only, 0,
@@ -2296,30 +2429,31 @@ size_t render_block_repeater(struct displaylist* d, struct block_info* this,
 									 tex_atlas_lookup(TEXAT_STONE), 0);
 	}
 
-	x0 = 64; z0 = 176; x1 = 96; z1 = 208;
-	repeater_orient_box(dir, &x0, &z0, &x1, &z1);
-	count += render_repeater_box(d, this, side, vertex_light, count_only, x0, 32,
-								 z0, x1, 80, z1, lamp_tex, 0);
+	return count;
+}
 
-	x0 = 160; z0 = 176; x1 = 192; z1 = 208;
-	repeater_orient_box(dir, &x0, &z0, &x1, &z1);
-	count += render_repeater_box(d, this, side, vertex_light, count_only, x0, 32,
-								 z0, x1, 80, z1, lamp_tex, 0);
+size_t render_block_repeater_torches(struct displaylist* d,
+									 struct block_info* this, enum side side,
+									 struct block_info* it,
+									 uint8_t* vertex_light, bool count_only) {
+	uint8_t dir = this->block->metadata & 0x03;
+	uint8_t delay = (this->block->metadata >> 2) & 0x03;
+	uint16_t lamp_tex = tex_atlas_lookup(this->block->type == BLOCK_REPEATER_ON ?
+											TEXAT_REDSTONE_TORCH_LIT :
+											TEXAT_REDSTONE_TORCH);
+	size_t count = 0;
+	(void)it;
 
-	x0 = 112; z0 = 64 + delay * 24; x1 = 144; z1 = 96 + delay * 24;
-	repeater_orient_box(dir, &x0, &z0, &x1, &z1);
-	count += render_repeater_box(d, this, side, vertex_light, count_only, x0, 32,
-								 z0, x1, 80, z1, lamp_tex, 0);
-
+	count += render_repeater_torch(d, this, side, vertex_light, count_only,
+								   dir, 32, lamp_tex);
+	count += render_repeater_torch(d, this, side, vertex_light, count_only,
+								   dir, 96 + delay * 32, lamp_tex);
 	return count;
 }
 
 size_t render_block_torch(struct displaylist* d, struct block_info* this,
 						  enum side side, struct block_info* it,
 						  uint8_t* vertex_light, bool count_only) {
-	if(side == SIDE_BOTTOM)
-		return 0;
-
 	if(!count_only) {
 		int16_t x = W2C_COORD(this->x);
 		int16_t y = W2C_COORD(this->y);
@@ -2364,7 +2498,8 @@ size_t render_block_torch(struct displaylist* d, struct block_info* this,
 			default: s1x = s1y = s2x = s2y = s3 = 0; break;
 		}
 
-		switch(side) {
+		switch(side == SIDE_LEFT ? SIDE_RIGHT :
+			   side == SIDE_RIGHT ? SIDE_LEFT : side) {
 			case SIDE_LEFT:
 				displaylist_pos(d, x * BLK_LEN + 112 + s1x, y * BLK_LEN + s3,
 								z * BLK_LEN + s1y);
@@ -2467,6 +2602,28 @@ size_t render_block_torch(struct displaylist* d, struct block_info* this,
 				displaylist_color(d, light);
 				displaylist_texcoord(d, tex_x + 7, tex_y + 8);
 				break;
+			case SIDE_BOTTOM:
+				displaylist_pos(d, x * BLK_LEN + 112 + s1x,
+								y * BLK_LEN + s3,
+								z * BLK_LEN + 112 + s1y);
+				displaylist_color(d, light);
+				displaylist_texcoord(d, tex_x + 7, tex_y + 16);
+				displaylist_pos(d, x * BLK_LEN + 112 + s1x,
+								y * BLK_LEN + s3,
+								z * BLK_LEN + 144 + s1y);
+				displaylist_color(d, light);
+				displaylist_texcoord(d, tex_x + 7, tex_y + 14);
+				displaylist_pos(d, x * BLK_LEN + 144 + s1x,
+								y * BLK_LEN + s3,
+								z * BLK_LEN + 144 + s1y);
+				displaylist_color(d, light);
+				displaylist_texcoord(d, tex_x + 9, tex_y + 14);
+				displaylist_pos(d, x * BLK_LEN + 144 + s1x,
+								y * BLK_LEN + s3,
+								z * BLK_LEN + 112 + s1y);
+				displaylist_color(d, light);
+				displaylist_texcoord(d, tex_x + 9, tex_y + 16);
+				break;
 			default: break;
 		}
 	}
@@ -2528,7 +2685,9 @@ size_t render_block_piston(struct displaylist* d, struct block_info* this,
 		if(side == facing) {
 			return render_cuboid_side(
 				d, this, side, vertex_light, count_only, x0, y0, z0, x1, y1, z1,
-				tex_atlas_lookup(TEXAT_PISTON_FRONT_EXTENDED), tex_rotate);
+				tex_atlas_lookup(this->block->type == BLOCK_STICKY_PISTON
+					? TEXAT_PISTON_FRONT_STICKY
+					: TEXAT_PISTON_FRONT_EXTENDED), tex_rotate);
 		}
 
 		if(side != blocks_side_opposite(facing)) {
@@ -2586,7 +2745,12 @@ size_t render_block_piston_head(struct displaylist* d, struct block_info* this,
 	}
 
 	if(side == facing || side == blocks_side_opposite(facing)) {
-		uint16_t tex = tex_atlas_lookup(TEXAT_PISTON_PLATE);
+		uint16_t tex = tex_atlas_lookup(
+			(side == facing && this->neighbours
+			 && this->neighbours[blocks_side_opposite(facing)].type
+				== BLOCK_STICKY_PISTON)
+				? TEXAT_PISTON_FRONT_STICKY
+				: TEXAT_PISTON_PLATE);
 		return render_cuboid_side(d, this, side, vertex_light, count_only, x0,
 								  y0, z0, x1, y1, z1, tex,
 								  piston_head_side_rotate(facing, side));
@@ -2707,7 +2871,10 @@ size_t render_block_rail(struct displaylist* dl,
     uint16_t tex       = blocks[this->block->type]->getTextureIndex(this, side);
     uint8_t luminance = blocks[this->block->type]->luminance;
 
-    uint8_t shape     = this->block->metadata & 0xF;
+    // Regular rails: bits 0-3 = shape (0-9 incl. curves).
+    // Powered/detector rails: bits 0-2 = shape (0-5), bit 3 = on/activated.
+    uint8_t shape_mask = (this->block->type == BLOCK_RAIL) ? 0x0F : 0x07;
+    uint8_t shape     = this->block->metadata & shape_mask;
     bool    is_slope  = (shape >= 2 && shape <= 5);
     int     tex_rotate;
 
@@ -2796,12 +2963,43 @@ static inline bool neighbours_ext_get(struct block_info* info,
 	*out = info->neighbours_ext[idx];
 	return true;
 }
-static inline bool is_redstone_source(uint8_t type, uint8_t meta) {
+static enum side render_redstone_torch_support_side(uint8_t meta) {
+	switch(meta & 0x7) {
+		case 1: return SIDE_LEFT;
+		case 2: return SIDE_RIGHT;
+		case 3: return SIDE_FRONT;
+		case 4: return SIDE_BACK;
+		default: return SIDE_BOTTOM;
+	}
+}
+
+static enum side render_repeater_output_side(uint8_t meta) {
+	switch(meta & 0x03) {
+		case 0: return SIDE_FRONT;
+		case 1: return SIDE_RIGHT;
+		case 2: return SIDE_BACK;
+		default: return SIDE_LEFT;
+	}
+}
+
+static inline bool is_redstone_connectable(uint8_t type, uint8_t meta,
+										   enum side side_to_wire) {
 	if (type == BLOCK_REDSTONE_WIRE) return true;
-	if (type == BLOCK_REDSTONE_TORCH || type == BLOCK_REDSTONE_TORCH_LIT)
+	if (type == BLOCK_REDSTONE_TORCH || type == BLOCK_REDSTONE_TORCH_LIT) {
+		return side_to_wire != render_redstone_torch_support_side(meta);
+	}
+	if (type == BLOCK_REPEATER_OFF || type == BLOCK_REPEATER_ON) {
+		enum side out = render_repeater_output_side(meta);
+		return side_to_wire == out || side_to_wire == blocks_side_opposite(out);
+	}
+	if (type == BLOCK_LEVER) return true;
+	if (type == BLOCK_STONE_PRESSURE_PLATE
+		|| type == BLOCK_WOOD_PRESSURE_PLATE) {
 		return true;
-	if ((type == BLOCK_STONE_PRESSURE_PLATE || type == BLOCK_WOOD_PRESSURE_PLATE)
-		&& (meta & 0x0F) == 1) {
+	}
+	if (type == BLOCK_DETECTOR_RAIL)
+		return true;
+	if (type == BLOCK_STONE_BUTTON) {
 		return true;
 	}
 	return false;
@@ -3006,7 +3204,7 @@ size_t render_block_redstone_wire(struct displaylist* dl, struct block_info* thi
 						 uint8_t* vertex_light, bool count_only) {
 	if(side != SIDE_TOP && side != SIDE_BOTTOM) {
 		#ifdef REDSTONE_CASE_DEBUG
-		printf("return 0;\n");
+		CAVEX_DEBUG_PRINTF("return 0;\n");
 		#endif
 		return 0;
 	}
@@ -3022,14 +3220,14 @@ size_t render_block_redstone_wire(struct displaylist* dl, struct block_info* thi
 		{
 		struct block_data above;
 		if (neighbours_ext_get(this, 0, +1, 0, &above)) {
-		    printf("above: type=%u meta=%u at %d,%d,%d\n",
+		    CAVEX_DEBUG_PRINTF("above: type=%u meta=%u at %d,%d,%d\n",
 		           above.type, above.metadata, this->x, this->y + 1, this->z);
 		} else {
-		    printf("above: (no data)\n");
+		    CAVEX_DEBUG_PRINTF("above: (no data)\n");
 		}
 		}
 		
-		printf(above_air ? "above_air = true\n" : "above_air = false\n");
+		CAVEX_DEBUG_PRINTF(above_air ? "above_air = true\n" : "above_air = false\n");
 		#endif
 
 		const struct { int dx, dz; enum side side; uint8_t bit; } dirs[4] = {
@@ -3046,7 +3244,8 @@ size_t render_block_redstone_wire(struct displaylist* dl, struct block_info* thi
 			uint8_t nmeta = this->neighbours ? (this->neighbours[sdir].metadata & 0x0F) : 0;
 
 			bool dir_near = false;
-			if (is_redstone_source(ntype, nmeta)) {
+			if (is_redstone_connectable(ntype, nmeta,
+										blocks_side_opposite(sdir))) {
 				dir_near = true;
 			}
 
@@ -3054,17 +3253,19 @@ size_t render_block_redstone_wire(struct displaylist* dl, struct block_info* thi
 			if (!dir_near && ntype == BLOCK_AIR) {
 				struct block_data btmp;
 				if (neighbours_ext_get(this, dirs[i].dx, -1, dirs[i].dz, &btmp)) {
-					if (is_redstone_source(btmp.type, btmp.metadata)) {
+					if (btmp.type == BLOCK_REDSTONE_WIRE) {
 						dir_near = true;
 					}
 				}
 			}
 
-			// up-diagonal if block above current is air (regardless of side block)
-			if (!dir_near && above_air) {
+			// Upward dust only connects when there is a solid side block whose
+			// face the lower dust can climb. It must not "reach up" through air.
+			if (!dir_near && above_air && blocks[ntype]
+				&& !blocks[ntype]->can_see_through) {
 				struct block_data btmp;
 				if (neighbours_ext_get(this, dirs[i].dx, +1, dirs[i].dz, &btmp)) {
-					if (is_redstone_source(btmp.type, btmp.metadata)) {
+					if (btmp.type == BLOCK_REDSTONE_WIRE) {
 						dir_near = true;
 					}
 				}
@@ -3079,47 +3280,48 @@ size_t render_block_redstone_wire(struct displaylist* dl, struct block_info* thi
 		// Zusatzliste: 0 = nix, 1 = direkt/unter, 2 = oben (bei Luft ueber dem Block)
 		uint8_t dir_state[4] = {0, 0, 0, 0};
 		#ifdef REDSTONE_CASE_DEBUG
-		printf("wo ist der block\n");
+		CAVEX_DEBUG_PRINTF("wo ist der block\n");
 		#endif
 		for (int i = 0; i < 4; ++i) {
 			enum side sdir = dirs[i].side;
 			uint8_t ntype = this->neighbours ? this->neighbours[sdir].type : BLOCK_AIR;
 			uint8_t nmeta = this->neighbours ? (this->neighbours[sdir].metadata & 0x0F) : 0;
 
-			if (is_redstone_source(ntype, nmeta)) {
+			if (is_redstone_connectable(ntype, nmeta,
+										blocks_side_opposite(sdir))) {
 				dir_state[i] = 1;
 				continue;
 				#ifdef REDSTONE_CASE_DEBUG
-				printf("1\n");
+				CAVEX_DEBUG_PRINTF("1\n");
 				#endif
 			}
 
 			if (ntype == BLOCK_AIR) {
 				struct block_data btmp;
 				if (neighbours_ext_get(this, dirs[i].dx, -1, dirs[i].dz, &btmp)) {
-					if (is_redstone_source(btmp.type, btmp.metadata)) {
+					if (btmp.type == BLOCK_REDSTONE_WIRE) {
 						dir_state[i] = 1;
 						continue;
 						#ifdef REDSTONE_CASE_DEBUG
-						printf("2\n");
+						CAVEX_DEBUG_PRINTF("2\n");
 						#endif
 					}
 				}
 			}
 
-			if (above_air) {
+			if (above_air && blocks[ntype] && !blocks[ntype]->can_see_through) {
 				struct block_data btmp;
 				if (neighbours_ext_get(this, dirs[i].dx, +1, dirs[i].dz, &btmp)) {
-					if (is_redstone_source(btmp.type, btmp.metadata)) {
+					if (btmp.type == BLOCK_REDSTONE_WIRE) {
 						dir_state[i] = 2;
 						#ifdef REDSTONE_CASE_DEBUG
-						printf("3\n");
+						CAVEX_DEBUG_PRINTF("3\n");
 						#endif
 					}
 				}
 			}
 			#ifdef REDSTONE_CASE_DEBUG
-			printf("nix da\n");
+			CAVEX_DEBUG_PRINTF("nix da\n");
 			#endif
 		}
 		
@@ -3134,7 +3336,7 @@ size_t render_block_redstone_wire(struct displaylist* dl, struct block_info* thi
 		}
 
 		#ifdef REDSTONE_CASE_DEBUG
-		printf("%d    %d    %d    %d\n", dir_state[0], dir_state[1], dir_state[2], dir_state[3]);
+		CAVEX_DEBUG_PRINTF("%d    %d    %d    %d\n", dir_state[0], dir_state[1], dir_state[2], dir_state[3]);
 		#endif
 
 		uint16_t tex;
@@ -3263,7 +3465,7 @@ size_t render_block_redstone_wire(struct displaylist* dl, struct block_info* thi
 		uint8_t variant;
 		//cases = 5;
 		#ifdef REDSTONE_CASE_DEBUG
-		printf("cases=%d\n", cases);
+		CAVEX_DEBUG_PRINTF("cases=%d\n", cases);
 		#endif
 
 		size_t quad_count = 1;
@@ -3271,27 +3473,27 @@ size_t render_block_redstone_wire(struct displaylist* dl, struct block_info* thi
 		switch (cases) {
 			case 0: { // ----------------------- 0 ------------
 				#ifdef REDSTONE_CASE_DEBUG
-				printf("case 0\n");
+				CAVEX_DEBUG_PRINTF("case 0\n");
 				#endif
 				variant = 2; // 0..3: 0=redstone,1=middle,2=wire,3=stock
 
 				tex = tex_atlas_lookup(redstone_variant_base(variant));
 
 				#ifdef REDSTONE_CASE_DEBUG
-				printf("pos=%d,%d,%d side=%d above_air=%d  ds=%d %d %d %d\n",
+				CAVEX_DEBUG_PRINTF("pos=%d,%d,%d side=%d above_air=%d  ds=%d %d %d %d\n",
            			this->x,this->y,this->z, side, above_air,
            			dir_state[0],dir_state[1],dir_state[2],dir_state[3]);
-				printf("case=%d variant=%d tex=%u tx=%u ty=%u rot=%d\n",
+				CAVEX_DEBUG_PRINTF("case=%d variant=%d tex=%u tx=%u ty=%u rot=%d\n",
        				cases, variant, tex, TEXTURE_X(tex), TEXTURE_Y(tex), tex_rotate);
-				printf("zusatz:\n");
-				printf("case=%d variant=%d base=%d tex=%u tx=%u ty=%u\n",
+				CAVEX_DEBUG_PRINTF("zusatz:\n");
+				CAVEX_DEBUG_PRINTF("case=%d variant=%d base=%d tex=%u tx=%u ty=%u\n",
        				cases, variant, redstone_variant_base(variant),
        				tex, TEXTURE_X(tex), TEXTURE_Y(tex));
-				printf("OFF  : %u %u\n", TEXTURE_X(tex_atlas_lookup(TEXAT_REDSTONE_OFF)), 
+				CAVEX_DEBUG_PRINTF("OFF  : %u %u\n", TEXTURE_X(tex_atlas_lookup(TEXAT_REDSTONE_OFF)), 
 						TEXTURE_Y(tex_atlas_lookup(TEXAT_REDSTONE_OFF)));
-				printf("WIRE : %u %u\n", TEXTURE_X(tex_atlas_lookup(TEXAT_REDSTONE_WIRE_OFF)), 
+				CAVEX_DEBUG_PRINTF("WIRE : %u %u\n", TEXTURE_X(tex_atlas_lookup(TEXAT_REDSTONE_WIRE_OFF)), 
 						TEXTURE_Y(tex_atlas_lookup(TEXAT_REDSTONE_WIRE_OFF)));
-				printf("MIDDLE: %u %u\n\n", TEXTURE_X(tex_atlas_lookup(TEXAT_REDSTONE_MIDDLE_OFF)), 
+				CAVEX_DEBUG_PRINTF("MIDDLE: %u %u\n\n", TEXTURE_X(tex_atlas_lookup(TEXAT_REDSTONE_MIDDLE_OFF)), 
 						TEXTURE_Y(tex_atlas_lookup(TEXAT_REDSTONE_MIDDLE_OFF)));
 				#endif
 
@@ -3308,27 +3510,27 @@ size_t render_block_redstone_wire(struct displaylist* dl, struct block_info* thi
 				break;
 			} case 1: { // ----------------------- 1 ------------
 				#ifdef REDSTONE_CASE_DEBUG
-				printf("case 1\n");
+				CAVEX_DEBUG_PRINTF("case 1\n");
 				#endif
 				variant = 3; // 0..3: 0=redstone,1=middle,2=wire,3=stock
 
 				tex = tex_atlas_lookup(redstone_variant_base(variant));
 
 				#ifdef REDSTONE_CASE_DEBUG
-				printf("pos=%d,%d,%d side=%d above_air=%d  ds=%d %d %d %d\n",
+				CAVEX_DEBUG_PRINTF("pos=%d,%d,%d side=%d above_air=%d  ds=%d %d %d %d\n",
            			this->x,this->y,this->z, side, above_air,
            			dir_state[0],dir_state[1],dir_state[2],dir_state[3]);
-				printf("case=%d variant=%d tex=%u tx=%u ty=%u rot=%d\n",
+				CAVEX_DEBUG_PRINTF("case=%d variant=%d tex=%u tx=%u ty=%u rot=%d\n",
        				cases, variant, tex, TEXTURE_X(tex), TEXTURE_Y(tex), tex_rotate);
-				printf("zusatz:\n");
-				printf("case=%d variant=%d base=%d tex=%u tx=%u ty=%u\n",
+				CAVEX_DEBUG_PRINTF("zusatz:\n");
+				CAVEX_DEBUG_PRINTF("case=%d variant=%d base=%d tex=%u tx=%u ty=%u\n",
        				cases, variant, redstone_variant_base(variant),
        				tex, TEXTURE_X(tex), TEXTURE_Y(tex));
-				printf("OFF  : %u %u\n", TEXTURE_X(tex_atlas_lookup(TEXAT_REDSTONE_OFF)), 
+				CAVEX_DEBUG_PRINTF("OFF  : %u %u\n", TEXTURE_X(tex_atlas_lookup(TEXAT_REDSTONE_OFF)), 
 						TEXTURE_Y(tex_atlas_lookup(TEXAT_REDSTONE_OFF)));
-				printf("WIRE : %u %u\n", TEXTURE_X(tex_atlas_lookup(TEXAT_REDSTONE_WIRE_OFF)), 
+				CAVEX_DEBUG_PRINTF("WIRE : %u %u\n", TEXTURE_X(tex_atlas_lookup(TEXAT_REDSTONE_WIRE_OFF)), 
 						TEXTURE_Y(tex_atlas_lookup(TEXAT_REDSTONE_WIRE_OFF)));
-				printf("MIDDLE: %u %u\n\n", TEXTURE_X(tex_atlas_lookup(TEXAT_REDSTONE_MIDDLE_OFF)), 
+				CAVEX_DEBUG_PRINTF("MIDDLE: %u %u\n\n", TEXTURE_X(tex_atlas_lookup(TEXAT_REDSTONE_MIDDLE_OFF)), 
 						TEXTURE_Y(tex_atlas_lookup(TEXAT_REDSTONE_MIDDLE_OFF)));
 				#endif
 				
@@ -3346,27 +3548,27 @@ size_t render_block_redstone_wire(struct displaylist* dl, struct block_info* thi
 				break;
 			} case 2: { // ----------------------- 2 ------------
 				#ifdef REDSTONE_CASE_DEBUG
-				printf("case 1\n");
+				CAVEX_DEBUG_PRINTF("case 1\n");
 				#endif
 				variant = 1; // 0..3: 0=redstone,1=middle,2=wire,3=stock
 
 				tex = tex_atlas_lookup(redstone_variant_base(variant));
 				
 				#ifdef REDSTONE_CASE_DEBUG
-				printf("pos=%d,%d,%d side=%d above_air=%d  ds=%d %d %d %d\n",
+				CAVEX_DEBUG_PRINTF("pos=%d,%d,%d side=%d above_air=%d  ds=%d %d %d %d\n",
            			this->x,this->y,this->z, side, above_air,
            			dir_state[0],dir_state[1],dir_state[2],dir_state[3]);
-				printf("case=%d variant=%d tex=%u tx=%u ty=%u rot=%d\n",
+				CAVEX_DEBUG_PRINTF("case=%d variant=%d tex=%u tx=%u ty=%u rot=%d\n",
        				cases, variant, tex, TEXTURE_X(tex), TEXTURE_Y(tex), tex_rotate);
-				printf("zusatz:\n");
-				printf("case=%d variant=%d base=%d tex=%u tx=%u ty=%u\n",
+				CAVEX_DEBUG_PRINTF("zusatz:\n");
+				CAVEX_DEBUG_PRINTF("case=%d variant=%d base=%d tex=%u tx=%u ty=%u\n",
        				cases, variant, redstone_variant_base(variant),
        				tex, TEXTURE_X(tex), TEXTURE_Y(tex));
-				printf("OFF  : %u %u\n", TEXTURE_X(tex_atlas_lookup(TEXAT_REDSTONE_OFF)), 
+				CAVEX_DEBUG_PRINTF("OFF  : %u %u\n", TEXTURE_X(tex_atlas_lookup(TEXAT_REDSTONE_OFF)), 
 						TEXTURE_Y(tex_atlas_lookup(TEXAT_REDSTONE_OFF)));
-				printf("WIRE : %u %u\n", TEXTURE_X(tex_atlas_lookup(TEXAT_REDSTONE_WIRE_OFF)), 
+				CAVEX_DEBUG_PRINTF("WIRE : %u %u\n", TEXTURE_X(tex_atlas_lookup(TEXAT_REDSTONE_WIRE_OFF)), 
 						TEXTURE_Y(tex_atlas_lookup(TEXAT_REDSTONE_WIRE_OFF)));
-				printf("MIDDLE: %u %u\n\n", TEXTURE_X(tex_atlas_lookup(TEXAT_REDSTONE_MIDDLE_OFF)), 
+				CAVEX_DEBUG_PRINTF("MIDDLE: %u %u\n\n", TEXTURE_X(tex_atlas_lookup(TEXAT_REDSTONE_MIDDLE_OFF)), 
 						TEXTURE_Y(tex_atlas_lookup(TEXAT_REDSTONE_MIDDLE_OFF)));
 				#endif
 				
@@ -3389,26 +3591,26 @@ size_t render_block_redstone_wire(struct displaylist* dl, struct block_info* thi
 				variant = 0; // 0..3: 0=redstone,1=middle,2=wire,3=stock
 
 				#ifdef REDSTONE_CASE_DEBUG
-				printf("default\n");
+				CAVEX_DEBUG_PRINTF("default\n");
 				#endif
 
 				tex = tex_atlas_lookup(redstone_variant_base(variant));
 
 				#ifdef REDSTONE_CASE_DEBUG
-				printf("pos=%d,%d,%d side=%d above_air=%d  ds=%d %d %d %d\n",
+				CAVEX_DEBUG_PRINTF("pos=%d,%d,%d side=%d above_air=%d  ds=%d %d %d %d\n",
            			this->x,this->y,this->z, side, above_air,
            			dir_state[0],dir_state[1],dir_state[2],dir_state[3]);
-				printf("case=%d variant=%d tex=%u tx=%u ty=%u rot=%d\n",
+				CAVEX_DEBUG_PRINTF("case=%d variant=%d tex=%u tx=%u ty=%u rot=%d\n",
        				cases, variant, tex, TEXTURE_X(tex), TEXTURE_Y(tex), tex_rotate);
-				printf("zusatz:\n");
-				printf("case=%d variant=%d base=%d tex=%u tx=%u ty=%u\n",
+				CAVEX_DEBUG_PRINTF("zusatz:\n");
+				CAVEX_DEBUG_PRINTF("case=%d variant=%d base=%d tex=%u tx=%u ty=%u\n",
        				cases, variant, redstone_variant_base(variant),
        				tex, TEXTURE_X(tex), TEXTURE_Y(tex));
-				printf("OFF  : %u %u\n", TEXTURE_X(tex_atlas_lookup(TEXAT_REDSTONE_OFF)), 
+				CAVEX_DEBUG_PRINTF("OFF  : %u %u\n", TEXTURE_X(tex_atlas_lookup(TEXAT_REDSTONE_OFF)), 
 						TEXTURE_Y(tex_atlas_lookup(TEXAT_REDSTONE_OFF)));
-				printf("WIRE : %u %u\n", TEXTURE_X(tex_atlas_lookup(TEXAT_REDSTONE_WIRE_OFF)), 
+				CAVEX_DEBUG_PRINTF("WIRE : %u %u\n", TEXTURE_X(tex_atlas_lookup(TEXAT_REDSTONE_WIRE_OFF)), 
 						TEXTURE_Y(tex_atlas_lookup(TEXAT_REDSTONE_WIRE_OFF)));
-				printf("MIDDLE: %u %u\n\n", TEXTURE_X(tex_atlas_lookup(TEXAT_REDSTONE_MIDDLE_OFF)), 
+				CAVEX_DEBUG_PRINTF("MIDDLE: %u %u\n\n", TEXTURE_X(tex_atlas_lookup(TEXAT_REDSTONE_MIDDLE_OFF)), 
 						TEXTURE_Y(tex_atlas_lookup(TEXAT_REDSTONE_MIDDLE_OFF)));
 				#endif
 				
@@ -3443,12 +3645,15 @@ size_t render_block_redstone_wire(struct displaylist* dl, struct block_info* thi
 				for (int i = 0; i < 4; ++i) {
 					struct block_data btmp;
 					#ifdef REDSTONE_CASE_DEBUG
-					printf("?\n");
+					CAVEX_DEBUG_PRINTF("?\n");
 					#endif
-					if (neighbours_ext_get(this, dirs[i].dx, +1, dirs[i].dz, &btmp)
-						&& is_redstone_source(btmp.type, btmp.metadata)) {
+					uint8_t ntype = this->neighbours ?
+						this->neighbours[dirs[i].side].type : BLOCK_AIR;
+					if (blocks[ntype] && !blocks[ntype]->can_see_through
+						&& neighbours_ext_get(this, dirs[i].dx, +1, dirs[i].dz, &btmp)
+						&& btmp.type == BLOCK_REDSTONE_WIRE) {
 						#ifdef REDSTONE_CASE_DEBUG
-						printf("yes\n");
+						CAVEX_DEBUG_PRINTF("yes\n");
 						#endif
 						const int dir_rot[4] = {0, 2, 1, 3}; // +X, -X, +Z, -Z
 						int slope_rotate = dir_rot[i & 3];
@@ -3459,7 +3664,7 @@ size_t render_block_redstone_wire(struct displaylist* dl, struct block_info* thi
 					}
 					#ifdef REDSTONE_CASE_DEBUG
 					bool ok = neighbours_ext_get(this, dirs[i].dx, +1, dirs[i].dz, &btmp);
-					printf("above_ok=%d above_type=%u above_meta=%u pos=%d,%d,%d\n",
+					CAVEX_DEBUG_PRINTF("above_ok=%d above_type=%u above_meta=%u pos=%d,%d,%d\n",
     						ok, btmp.type, btmp.metadata, this->x, this->y, this->z);
 					#endif
 					
@@ -3468,7 +3673,7 @@ size_t render_block_redstone_wire(struct displaylist* dl, struct block_info* thi
 	//#undef REDSTONE_CASE_DEBUG
 	#ifdef REDSTONE_CASE_DEBUG
 	else {
-		printf("no redstone rendering\n");
+		CAVEX_DEBUG_PRINTF("no redstone rendering\n");
 	}
 	#endif
 	return quad_count;
@@ -3842,18 +4047,23 @@ size_t render_block_stairs(struct displaylist* d, struct block_info* this,
 size_t render_block_bed(struct displaylist* d, struct block_info* this,
 						enum side side, struct block_info* it,
 						uint8_t* vertex_light, bool count_only) {
+	uint8_t meta = this->block->metadata & 0x3;
+	uint8_t texture_rotation = 3 - meta;
+	if(meta == 1 || meta == 3)
+		texture_rotation = (texture_rotation + 2) & 0x3;
+
 	if(!count_only)
 		render_block_side(
 			d, W2C_COORD(this->x), W2C_COORD(this->y), W2C_COORD(this->z), 0,
 			144, blocks[this->block->type]->getTextureIndex(this, side),
 			blocks[this->block->type]->luminance, true,
 			(side == SIDE_BOTTOM) ? 48 : 0,
-			(side == SIDE_RIGHT && (this->block->metadata & 0x3) == 0)
-				|| (side == SIDE_BACK && (this->block->metadata & 0x3) == 1)
-				|| (side == SIDE_LEFT && (this->block->metadata & 0x3) == 2)
-				|| (side == SIDE_FRONT && (this->block->metadata & 0x3) == 3),
+			(side == SIDE_RIGHT && meta == 0)
+				|| (side == SIDE_FRONT && meta == 1)
+				|| (side == SIDE_LEFT && meta == 2)
+				|| (side == SIDE_BACK && meta == 3),
 			(side == SIDE_TOP || side == SIDE_BOTTOM) ?
-				(3 - (this->block->metadata & 0x3)) :
+				texture_rotation :
 				0,
 			side, vertex_light);
 	return 1;

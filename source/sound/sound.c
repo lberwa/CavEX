@@ -806,7 +806,17 @@ static void sound_calc_spatial_wii(float sx, float sy, float sz, struct camera *
     float dz = sz - cam->z;
     float dist = sqrtf(dx*dx + dy*dy + dz*dz);
 
-    float vol = 1.0f - dist / 16.0f;
+    bool runtime_split = false;
+#ifdef SPLITSCREEN
+    runtime_split = splitscreen_enabled() && splitscreen_player_count() > 1;
+#endif
+    float vol;
+    if(runtime_split)
+        vol = 1.0f - dist / 16.0f;
+    else
+    /* In single-player, next to a block is full volume and 16 blocks away is
+     * silent. Keep the existing split-screen attenuation unchanged. */
+        vol = 1.0f - fmaxf(0.0f, dist - 1.0f) / 15.0f;
     if(vol < 0.0f) vol = 0.0f;
 
     float pan = 0.0f;
@@ -843,17 +853,21 @@ static void do_play_wii(int sound_id, u8 *data, u32 size,
         vol_L = 0.0f; vol_R = 0.0f;
         int actual = 0;
 #ifdef SPLITSCREEN
-        int cnt = splitscreen_player_count();
-        for (int i = 0; i < cnt; i++) {
-            if (!gstate.local_players[i]) continue;
-            struct camera *cam = (i == gstate.active_player)
-                ? &gstate.camera : &gstate.cameras[i];
-            float pL, pR;
-            sound_calc_spatial_wii(wx, wy, wz, cam, &pL, &pR);
-            vol_L += pL; vol_R += pR; actual++;
+        if(splitscreen_enabled() && splitscreen_player_count() > 1) {
+            int cnt = splitscreen_player_count();
+            for (int i = 0; i < cnt; i++) {
+                if (!gstate.local_players[i]) continue;
+                struct camera *cam = (i == gstate.active_player)
+                    ? &gstate.camera : &gstate.cameras[i];
+                float pL, pR;
+                sound_calc_spatial_wii(wx, wy, wz, cam, &pL, &pR);
+                if (pL > vol_L) vol_L = pL;
+                if (pR > vol_R) vol_R = pR;
+                actual++;
+            }
+        } else {
+            sound_calc_spatial_wii(wx, wy, wz, &gstate.camera, &vol_L, &vol_R);
         }
-        if (actual > 0) { vol_L /= actual; vol_R /= actual; }
-        else            { vol_L = 1.0f;    vol_R = 1.0f;    }
 #else
         sound_calc_spatial_wii(wx, wy, wz, &gstate.camera, &vol_L, &vol_R);
 #endif
@@ -959,6 +973,12 @@ bool sound_play_at_vol(enum pcm_sound sound, float wx, float wy, float wz,
     return true;
 }
 
+bool sound_play_at_pitch(enum pcm_sound sound, float wx, float wy, float wz,
+                         float vol_scale, float pitch) {
+	(void)pitch;
+	return sound_play_at_vol(sound, wx, wy, wz, vol_scale);
+}
+
 bool sound_play_at(enum pcm_sound sound, float wx, float wy, float wz) {
     return sound_play_at_vol(sound, wx, wy, wz, 1.0f);
 }
@@ -990,6 +1010,8 @@ typedef struct {
     uint8_t *data;
     size_t size;
     size_t pos;
+    float sample_pos;
+    float step;
     int channels;
     int sample_rate;
     float vol_left;
@@ -1086,6 +1108,8 @@ static wav_t load_wav_file(const char *path) {
     fclose(f);
 
     w.pos = 0;
+    w.sample_pos = 0.0f;
+    w.step = 1.0f;
     w.channels = channels;
     w.sample_rate = sample_rate;
 
@@ -1684,18 +1708,23 @@ static int pa_callback(const void *inputBuffer, void *outputBuffer,
             continue; // nur 16-bit-Stereo (siehe load_wav_file)
 
         const int16_t *data16 = (const int16_t*)w->data;
-        size_t total_samples = w->size / sizeof(int16_t);
-        size_t s = w->pos / sizeof(int16_t); // aktueller Sample-Index (alle Kanaele)
-
-        // Ab aktueller Position ins Ausgabe-Frame mischen (additiv + clampen).
-        for (unsigned long j = 0; j < total && s < total_samples; j++, s++) {
-            float gain = (j % 2 == 0) ? w->vol_left : w->vol_right;
-            float v = out[j] + (data16[s] / 32768.0f) * gain;
-            if (v > 1.0f) v = 1.0f;
-            else if (v < -1.0f) v = -1.0f;
-            out[j] = v;
+        size_t total_frames = w->size / (sizeof(int16_t) * OUT_CHANNELS);
+        float step = w->step > 0.0f ? w->step : 1.0f;
+        for (unsigned long frame = 0; frame < framesPerBuffer; frame++) {
+            size_t source_frame = (size_t)w->sample_pos;
+            if(source_frame >= total_frames)
+                break;
+            size_t source = source_frame * OUT_CHANNELS;
+            size_t output = frame * OUT_CHANNELS;
+            float left = out[output]
+                + (data16[source] / 32768.0f) * w->vol_left;
+            float right = out[output + 1]
+                + (data16[source + 1] / 32768.0f) * w->vol_right;
+            out[output] = left > 1.0f ? 1.0f : left < -1.0f ? -1.0f : left;
+            out[output + 1] = right > 1.0f ? 1.0f : right < -1.0f ? -1.0f : right;
+            w->sample_pos += step;
         }
-        w->pos = s * sizeof(int16_t); // Position fuer naechsten Callback merken
+        w->pos = (size_t)w->sample_pos * OUT_CHANNELS * sizeof(int16_t);
     }
     pthread_mutex_unlock(&pcm_mutex);
 
@@ -1811,7 +1840,18 @@ static void sound_calc_spatial(float sx, float sy, float sz, struct camera *cam,
     float dz = sz - cam->z;
     float dist = sqrtf(dx*dx + dy*dy + dz*dz);
 
-    float vol = 1.0f - dist / SOUND_MAX_DIST;
+    bool runtime_split = false;
+#ifdef SPLITSCREEN
+    runtime_split = splitscreen_enabled() && splitscreen_player_count() > 1;
+#endif
+    float vol;
+    if(runtime_split)
+        vol = 1.0f - dist / SOUND_MAX_DIST;
+    else
+    /* Keep a block-sized source at full volume when the player stands beside
+     * it, and fade linearly to silence at SOUND_MAX_DIST. */
+        vol = 1.0f - fmaxf(0.0f, dist - 1.0f)
+            / (SOUND_MAX_DIST - 1.0f);
     if(vol < 0.0f) vol = 0.0f;
 
     float pan = 0.0f;
@@ -1853,6 +1893,11 @@ bool sound_play(enum pcm_sound sound) {
 
 bool sound_play_at_vol(enum pcm_sound sound, float wx, float wy, float wz,
                        float vol_scale) {
+	return sound_play_at_pitch(sound, wx, wy, wz, vol_scale, 1.0f);
+}
+
+bool sound_play_at_pitch(enum pcm_sound sound, float wx, float wy, float wz,
+                         float vol_scale, float pitch) {
     const char *path = sound_get_pcm_path(sound);
     if(!path) return false;
 
@@ -1861,23 +1906,43 @@ bool sound_play_at_vol(enum pcm_sound sound, float wx, float wy, float wz,
 
     float vol_L = 0.0f, vol_R = 0.0f;
 #ifdef SPLITSCREEN
-    int cnt = splitscreen_player_count();
-    int actual = 0;
-    for(int i = 0; i < cnt; i++) {
-        if(!gstate.local_players[i]) continue;
-        struct camera *cam = (i == gstate.active_player)
-            ? &gstate.camera : &gstate.cameras[i];
-        float pL, pR;
-        sound_calc_spatial(wx, wy, wz, cam, &pL, &pR);
-        vol_L += pL; vol_R += pR; actual++;
+    if(splitscreen_enabled() && splitscreen_player_count() > 1) {
+        int cnt = splitscreen_player_count();
+        int actual = 0;
+        for(int i = 0; i < cnt; i++) {
+            if(!gstate.local_players[i]) continue;
+            struct camera *cam = (i == gstate.active_player)
+                ? &gstate.camera : &gstate.cameras[i];
+            float pL, pR;
+            sound_calc_spatial(wx, wy, wz, cam, &pL, &pR);
+            if (pL > vol_L) vol_L = pL;
+            if (pR > vol_R) vol_R = pR;
+            actual++;
+        }
+        if(actual == 0) { vol_L = 1.0f; vol_R = 1.0f; }
+    } else {
+        sound_calc_spatial(wx, wy, wz, &gstate.camera, &vol_L, &vol_R);
     }
-    if(actual > 0) { vol_L /= (float)actual; vol_R /= (float)actual; }
 #else
     sound_calc_spatial(wx, wy, wz, &gstate.camera, &vol_L, &vol_R);
 #endif
     float mv = gstate.settings.max_volume * vol_scale;
     w.vol_left  = vol_L * mv;
     w.vol_right = vol_R * mv;
+    if(sound == pcm_note_harp || sound == pcm_note_pling
+       || sound == pcm_note_bass) {
+        float dx = wx - gstate.camera.x;
+        float dy = wy - gstate.camera.y;
+        float dz = wz - gstate.camera.z;
+#if 0
+        printf("[NOTE_VOL] sound=%d dist=%.2f spatial_l=%.3f spatial_r=%.3f master=%.3f final_l=%.3f final_r=%.3f pitch=%.3f\n",
+               (int)sound, sqrtf(dx * dx + dy * dy + dz * dz),
+               vol_L, vol_R, gstate.settings.max_volume,
+               w.vol_left, w.vol_right, pitch);
+#endif
+    }
+    w.step = pitch > 0.05f ? pitch : 0.05f;
+    w.sample_pos = 0.0f;
 
     pthread_mutex_lock(&pcm_mutex);
     if(pcm_playlist_num >= MAX_PCM_PLAYLIST) {

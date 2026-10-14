@@ -107,6 +107,45 @@ static size_t getDroppedItem2(struct block_info* this, struct item_data* it,
 	return 0;
 }
 
+static struct redstone_openable_state*
+door_power_state_get(struct server_local* s, w_coord_t x, w_coord_t y,
+					 w_coord_t z, bool create, bool initial_powered) {
+	struct redstone_openable_state* free_slot = NULL;
+
+	for(size_t i = 0; i < MAX_REDSTONE_OPENABLES; i++) {
+		struct redstone_openable_state* st = &s->redstone_openables[i];
+		if(st->pos.x == x && st->pos.y == y && st->pos.z == z)
+			return st;
+		if(!free_slot && st->pos.x == -1)
+			free_slot = st;
+	}
+
+	if(!create || !free_slot)
+		return NULL;
+
+	free_slot->pos.x = x;
+	free_slot->pos.y = y;
+	free_slot->pos.z = z;
+	free_slot->powered = initial_powered;
+	return free_slot;
+}
+
+static void setDoorOpen(struct server_local* s, w_coord_t x, w_coord_t y,
+						w_coord_t z, uint8_t doorType, bool open) {
+	struct block_data bd;
+	if(!server_world_get_block(AWORLD(s), x, y, z, &bd))
+		return;
+
+	uint8_t newMeta = (bd.metadata & 0x03) | (open ? 0x04 : 0x00);
+
+	server_world_set_block(s, x, y, z,
+						   (struct block_data) {.type = doorType,
+												.metadata = newMeta});
+	server_world_set_block(s, x, y + 1, z,
+						   (struct block_data) {.type = doorType,
+												.metadata = newMeta | 0x08});
+}
+
 static void toggleDoor(struct server_local* s,
                        w_coord_t x, w_coord_t y, w_coord_t z,
                        uint8_t doorType)
@@ -114,10 +153,7 @@ static void toggleDoor(struct server_local* s,
     struct block_data bd;
     if (!server_world_get_block(AWORLD(s), x, y, z, &bd)) return;
 
-    // flip the manual-open bit, preserve redstone bit
-    uint8_t manual = bd.metadata & 0x01;
-    uint8_t newMeta = (bd.metadata & ~0x01) | (manual ^ 0x01);
-    newMeta |= bd.metadata & 0x04;
+    uint8_t newMeta = (bd.metadata & 0x03) | ((bd.metadata & 0x04) ? 0 : 0x04);
 
     // ——— NUDGE PLAYER IF THE DOOR SWINGS INTO THEM ———
     // handle both opening (0→1) and closing (1→0)
@@ -149,7 +185,6 @@ s->players[pid].z = z + 0.5 + push;
     }
     // ————————————————————————————————————————————
 
-    // now actually flip the door blocks
     server_world_set_block(s, x,   y,   z,
         (struct block_data){ .type = doorType, .metadata = newMeta });
     server_world_set_block(s, x, y+1, z,
@@ -162,11 +197,18 @@ static void onRightClick(struct server_local* s,
                               struct block_info* on,
                               enum side on_side)
 {
+	if(blocks[on->block->type] == &block_iron_door)
+		return;
+
     struct block_data cur = *on->block;
     bool topHalf = (cur.metadata & 0x08) != 0;
     w_coord_t bx = on->x;
     w_coord_t by = on->y - (topHalf ? 1 : 0);
     w_coord_t bz = on->z;
+
+	bool powered = block_redstone_is_powered(s, bx, by, bz)
+		|| block_redstone_is_powered(s, bx, by + 1, bz);
+	door_power_state_get(s, bx, by, bz, true, powered)->powered = powered;
 
     toggleDoor(s, bx, by, bz, cur.type);
 }
@@ -179,51 +221,18 @@ static void onNeighbourBlockChange(struct server_local* s,
     // alleen bottom half
     if (cur.metadata & 0x08) return;
 
-    // bepaal of we nu power hebben
-    const int dx[6] = {  1, -1,  0,  0,  0,  0 };
-    const int dy[6] = {  0,  0,  0,  0,  1, -1 };
-    const int dz[6] = {  0,  0,  1, -1,  0,  0 };
-    bool powered = false;
+    bool powered = block_redstone_is_powered(s, info->x, info->y, info->z)
+		|| block_redstone_is_powered(s, info->x, info->y + 1, info->z);
 
-    for (int i = 0; i < 6; i++) {
-        w_coord_t nx = info->x + dx[i];
-        w_coord_t ny = info->y + dy[i];
-        w_coord_t nz = info->z + dz[i];
+	struct redstone_openable_state* st = door_power_state_get(
+		s, info->x, info->y, info->z, powered, false);
+	if(!st)
+		return;
 
-        struct block_data nb;
-        if (!server_world_get_block(AWORLD(s), nx, ny, nz, &nb))
-            continue;
-
-        uint8_t m = nb.metadata & 0x0F;
-        if ((nb.type == BLOCK_REDSTONE_WIRE && m > 0) ||
-            nb.type == BLOCK_REDSTONE_TORCH_LIT            ||
-           (nb.type == BLOCK_LEVER && (m & 0x08))         ||
-           (nb.type == BLOCK_STONE_BUTTON && (m & 0x04)) ||
-           (nb.type == BLOCK_TRIPWIRE_HOOK && (m & 0x08)) ||
-           nb.type == BLOCK_REPEATER_ON                   ||
-           ((nb.type == BLOCK_STONE_PRESSURE_PLATE         ||
-             nb.type == BLOCK_WOOD_PRESSURE_PLATE)         &&
-            (m & 0x01)))
-        {
-            powered = true;
-            break;
-        }
-    }
-
-    // extraheren van de hand-bit (bit 0)
-    uint8_t handBit = cur.metadata & 0x01;
-    // nieuw meta = handBit plus (powered ? redstone-bit : 0)
-    uint8_t newMeta = handBit | (powered ? 0x04 : 0x00);
-
-    // wijzig alleen als het verschil is
-    if ((cur.metadata & 0x05) != newMeta) {
-        // onderste helft
-        server_world_set_block(s, info->x, info->y,   info->z,
-            (struct block_data){ .type = cur.type, .metadata = newMeta });
-        // bovenste helft: zet top-flag (0x08) wél altijd als het oorspronkelijk top-flag had
-        server_world_set_block(s, info->x, info->y+1, info->z,
-            (struct block_data){ .type = cur.type, .metadata = newMeta | 0x08 });
-    }
+	if(st->powered != powered) {
+		st->powered = powered;
+		setDoorOpen(s, info->x, info->y, info->z, cur.type, powered);
+	}
 }
 
 

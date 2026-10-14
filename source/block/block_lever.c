@@ -60,7 +60,7 @@ static bool lever_has_support(struct server_local* s, struct block_info* this) {
 		return false;
 	if(!server_world_get_block(AWORLD(s), sx, sy, sz, &support))
 		return false;
-	return blocks[support.type] && !blocks[support.type]->can_see_through;
+	return block_can_support_attachment(support.type);
 }
 
 static size_t getBoundingBox(struct block_info* this, bool entity,
@@ -115,7 +115,7 @@ static uint8_t lever_top_orientation(struct server_local* s, struct block_info* 
 static bool onItemPlace(struct server_local* s, struct item_data* it,
 						struct block_info* where, struct block_info* on,
 						enum side on_side) {
-	if(!blocks[on->block->type] || blocks[on->block->type]->can_see_through)
+	if(!block_can_support_attachment(on->block->type))
 		return false;
 
 	uint8_t metadata = 0;
@@ -183,7 +183,7 @@ struct block block_lever = {
 	.renderBlock = render_block_lever,
 	.renderBlockAlways = NULL,
 	.luminance = 0,
-	.double_sided = false,
+	.double_sided = true,
 	.can_see_through = true,
 	.opacity = 0,
 	.ignore_lighting = false,

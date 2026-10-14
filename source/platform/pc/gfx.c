@@ -22,6 +22,13 @@
 #include <assert.h>
 #include "../../m-lib/m-string.h"
 #include <malloc.h>
+#include <stdio.h>
+
+#if 0
+#define CAVEX_DEBUG_PRINTF(...) printf(__VA_ARGS__)
+#else
+#define CAVEX_DEBUG_PRINTF(...) ((void)0)
+#endif
 #include <math.h>
 #include <string.h>
 
@@ -49,7 +56,7 @@ static void shader_error(GLuint shader) {
 
 		char log[length];
 		glGetShaderInfoLog(shader, length, &length, log);
-		printf("%s\n", log);
+		CAVEX_DEBUG_PRINTF("%s\n", log);
 
 		glDeleteShader(shader);
 	}
@@ -357,7 +364,7 @@ void gfx_setup() {
 	glfwSetInputMode(window, GLFW_STICKY_KEYS, GLFW_TRUE);
 
 	if(glewInit())
-		printf("Could not load extended OpenGL functions!\n");
+		CAVEX_DEBUG_PRINTF("Could not load extended OpenGL functions!\n");
 
 	printf("Vendor: %s\n", glGetString(GL_VENDOR));
 	printf("Renderer: %s\n", glGetString(GL_RENDERER));
@@ -429,7 +436,7 @@ void gfx_setup() {
 							  GL_RENDERBUFFER, fbo_rbo);
 
 	if(glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-		printf("FBO incomplete\n");
+		CAVEX_DEBUG_PRINTF("FBO incomplete\n");
 
 	/* Create the fixed-resolution GUI FBO (color only, GL_NEAREST so it stays
 	 * pixelated when upscaled). Cleared transparent so the 3D shows through. */
@@ -448,7 +455,7 @@ void gfx_setup() {
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
 						   fbo_gui_tex, 0);
 	if(glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-		printf("GUI FBO incomplete\n");
+		CAVEX_DEBUG_PRINTF("GUI FBO incomplete\n");
 	glClearColor(0, 0, 0, 0);
 	glClear(GL_COLOR_BUFFER_BIT);
 

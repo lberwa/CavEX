@@ -119,7 +119,9 @@ static bool onItemPlace(struct server_local* s, struct item_data* it,
 		}
 	}
 
+#if 0
 	puts("Too many chests");
+#endif
 	return false;
 }
 

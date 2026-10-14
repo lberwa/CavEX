@@ -31,6 +31,13 @@
 #endif
 
 #include <assert.h>
+#include <stdio.h>
+
+#if 0
+#define CAVEX_DEBUG_PRINTF(...) printf(__VA_ARGS__)
+#else
+#define CAVEX_DEBUG_PRINTF(...) ((void)0)
+#endif
 
 #include "../cglm/cglm.h"
 #include "gfx.h"
@@ -114,14 +121,14 @@ void input_native_key_status(int key, int player, bool* pressed, bool* released,
 	   && (orig_key == 87 || orig_key == 83 || orig_key == 65 || orig_key == 68
 		   || orig_key == 73 || orig_key == 75 || orig_key == 74 || orig_key == 76
 		   || orig_key == 1000 || orig_key == 1001)) {
-		printf("[input_native_key_status] player=%d orig=%d mapped=%d state=%d pressed=%d released=%d held=%d\n",
+		CAVEX_DEBUG_PRINTF("[input_native_key_status] player=%d orig=%d mapped=%d state=%d pressed=%d released=%d held=%d\n",
 			   player, orig_key, key, state, (int)*pressed, (int)*released,
 			   (int)*held);
 	}
 	if(!printed_p1_wasd_held && player == 1 && *held
 	   && (orig_key == 87 || orig_key == 83 || orig_key == 65 || orig_key == 68)) {
 		printed_p1_wasd_held = true;
-		printf("[input_native_key_status] WARNING player=1 sees WASD held (orig=%d mapped=%d)\n",
+		CAVEX_DEBUG_PRINTF("[input_native_key_status] WARNING player=1 sees WASD held (orig=%d mapped=%d)\n",
 			   orig_key, key);
 	}
 #endif
@@ -798,7 +805,7 @@ bool input_joystick(float dt, float* x, float* y, int player) {
 	if(player == 0) {
 		if(!printed_joy_p0) {
 			printed_joy_p0 = true;
-			printf("[input_joystick] player=0 uses mouse\n");
+			CAVEX_DEBUG_PRINTF("[input_joystick] player=0 uses mouse\n");
 		}
 		input_native_joystick(dt, x, y, player);
 		return true;
@@ -806,7 +813,7 @@ bool input_joystick(float dt, float* x, float* y, int player) {
 	if(player == 1) {
 		if(!printed_joy_p1) {
 			printed_joy_p1 = true;
-			printf("[input_joystick] player=1 uses arrow keys\n");
+			CAVEX_DEBUG_PRINTF("[input_joystick] player=1 uses arrow keys\n");
 		}
 		bool pressed, released, held;
 
