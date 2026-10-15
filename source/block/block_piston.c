@@ -215,12 +215,11 @@ static uint16_t getTextureIndex(struct block_info* this, enum side side) {
 	if(side == blocks_side_opposite(facing))
 		return tex_atlas_lookup(TEXAT_PISTON_BACK);
 	if(side == facing)
-		return tex_atlas_lookup(piston_is_extended(this->block) &&
+		return tex_atlas_lookup(piston_is_extended(this->block) ?
+						TEXAT_PISTON_FRONT_EXTENDED :
 						piston_is_sticky(this->block) ?
-									TEXAT_PISTON_FRONT_STICKY :
-						piston_is_extended(this->block) ?
-									TEXAT_PISTON_FRONT_EXTENDED :
-									TEXAT_PISTON_PLATE);
+										TEXAT_PISTON_FRONT_STICKY :
+										TEXAT_PISTON_PLATE);
 
 	return tex_atlas_lookup(TEXAT_PISTON_SIDE);
 }
@@ -334,7 +333,10 @@ static void onWorldTick(struct server_local* s, struct block_info* info) {
 	bool extended = piston_is_extended(&cur);
 
 	if(powered && !extended) {
+		bool suppress_particles = s->suppress_block_particles;
+		s->suppress_block_particles = true;
 		if(!piston_try_extend(s, info)) {
+			s->suppress_block_particles = suppress_particles;
 			return;
 		}
 
@@ -349,7 +351,8 @@ static void onWorldTick(struct server_local* s, struct block_info* info) {
 										   | (piston_is_sticky(&cur) ? PISTON_EXTENDED : 0),
 								   .sky_light = 0,
 								   .torch_light = 0,
-							   });
+				   });
+		s->suppress_block_particles = suppress_particles;
 	} else if(powered && extended) {
 		w_coord_t fx, fy, fz;
 		struct block_data front;
@@ -366,6 +369,8 @@ static void onWorldTick(struct server_local* s, struct block_info* info) {
 								   });
 		}
 	} else if(!powered && extended) {
+		bool suppress_particles = s->suppress_block_particles;
+		s->suppress_block_particles = true;
 		w_coord_t fx, fy, fz;
 		struct block_data front;
 		piston_front_pos(info->block, info->x, info->y, info->z, &fx, &fy, &fz);
@@ -391,6 +396,7 @@ static void onWorldTick(struct server_local* s, struct block_info* info) {
 				}
 			}
 		}
+		s->suppress_block_particles = suppress_particles;
 	}
 }
 

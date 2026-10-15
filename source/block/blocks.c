@@ -18,6 +18,8 @@
 */
 
 #include <assert.h>
+#include <math.h>
+#include <stdio.h>
 #include <stdlib.h>
 
 #include "../game/game_state.h"
@@ -26,20 +28,136 @@
 
 struct block* blocks[256];
 
+/* Enable with -DCAVEX_DEBUG_BLOCK_PLACEMENT while investigating placement. */
+#ifdef CAVEX_DEBUG_BLOCK_PLACEMENT
+#define BLOCK_PLACE_DEBUG 1
+#else
+#define BLOCK_PLACE_DEBUG 0
+#endif
+#define BLOCK_PLACE_PLAYER_EYE_HEIGHT 1.62F
+#define BLOCK_PLACE_PLAYER_WIDTH 0.6F
+#define BLOCK_PLACE_PLAYER_HEIGHT 1.8F
+#if BLOCK_PLACE_DEBUG
+#define BLOCK_PLACE_PRINTF(...) printf(__VA_ARGS__)
+#else
+#define BLOCK_PLACE_PRINTF(...) ((void)0)
+#endif
+
+static void block_place_debug_bbox(const char* label, const struct AABB* a) {
+	BLOCK_PLACE_PRINTF("%s=(%.3f,%.3f,%.3f)-(%.3f,%.3f,%.3f)", label,
+	                  a->x1, a->y1, a->z1, a->x2, a->y2, a->z2);
+}
+
+static bool block_place_debug_aabb_overlap(const struct AABB* a,
+																   const struct AABB* b) {
+	bool x = a->x1 <= b->x2 && b->x1 <= a->x2;
+	bool y = a->y1 <= b->y2 && b->y1 <= a->y2;
+	bool z = a->z1 <= b->z2 && b->z1 <= a->z2;
+	BLOCK_PLACE_PRINTF(" axes=(x:%d y:%d z:%d) overlap=%d", x, y, z,
+	                  x && y && z);
+	return x && y && z;
+}
+
 static bool block_place_collides_with_player(struct server_local* s,
 											 struct block_info* blk_info) {
 	int player_count = 1;
 #ifdef SPLITSCREEN
 	player_count = splitscreen_player_count();
 #endif
-
+	BLOCK_PLACE_PRINTF("[PLACE_PLAYER] count=%d target=(%d,%d,%d)\n",
+	                  player_count, blk_info->x, blk_info->y, blk_info->z);
 	for(int i = 0; i < player_count; i++) {
-		if(!s->players[i].has_pos || !s->players[i].finished_loading)
+		if(!s->players[i].has_pos || !s->players[i].finished_loading) {
+			BLOCK_PLACE_PRINTF(
+				"[PLACE_PLAYER] skip player=%d has_pos=%d loaded=%d target=(%d,%d,%d)\n",
+				i, s->players[i].has_pos, s->players[i].finished_loading,
+				blk_info->x, blk_info->y, blk_info->z);
 			continue;
+		}
 
-		if(entity_local_player_block_collide(
-			   (vec3) {s->players[i].x, s->players[i].y, s->players[i].z},
-			   blk_info))
+		double player_x = s->players[i].x;
+		double player_y = s->players[i].y;
+		double player_z = s->players[i].z;
+		if(s->placement_player_pos_valid && i == s->active_player_id) {
+			player_x = s->placement_player_x;
+			player_y = s->placement_player_y;
+			player_z = s->placement_player_z;
+		}
+		float probe_y = player_y;
+		struct AABB player_bbox;
+		aabb_setsize_centered(&player_bbox, BLOCK_PLACE_PLAYER_WIDTH,
+		                      BLOCK_PLACE_PLAYER_HEIGHT,
+		                      BLOCK_PLACE_PLAYER_WIDTH);
+		aabb_translate(&player_bbox, player_x,
+		               probe_y + BLOCK_PLACE_PLAYER_HEIGHT / 2.0F
+						 - BLOCK_PLACE_PLAYER_EYE_HEIGHT,
+		               player_z);
+
+		bool collision = entity_local_player_block_collide(
+			(vec3) {player_x, probe_y, player_z},
+			blk_info);
+		struct block* target_block = blocks[blk_info->block->type];
+		bool direct_collision = false;
+		if(target_block && target_block->getBoundingBox) {
+			size_t target_bbox_count
+				= target_block->getBoundingBox(blk_info, true, NULL);
+			struct AABB target_bbox[target_bbox_count > 0 ? target_bbox_count : 1];
+			if(target_bbox_count > 0) {
+				target_block->getBoundingBox(blk_info, true, target_bbox);
+				for(size_t k = 0; k < target_bbox_count; k++) {
+					aabb_translate(target_bbox + k, blk_info->x, blk_info->y,
+					              blk_info->z);
+					BLOCK_PLACE_PRINTF(
+						"[PLACE_PLAYER_AABB] player=%d block_type=%u meta=%u bbox=%zu ",
+						i, blk_info->block->type, blk_info->block->metadata, k);
+					block_place_debug_bbox("player", &player_bbox);
+					BLOCK_PLACE_PRINTF(" ");
+					block_place_debug_bbox("block", target_bbox + k);
+					direct_collision |= block_place_debug_aabb_overlap(
+						&player_bbox, target_bbox + k);
+					BLOCK_PLACE_PRINTF(" helper=%d direct=%d\n", collision,
+					                  direct_collision);
+				}
+			}
+		}
+		BLOCK_PLACE_PRINTF(
+			"[PLACE_PLAYER] player=%d active=%d pos=(%.3f,%.3f,%.3f) "
+			"server=(%.3f,%.3f,%.3f) probe_y=%.3f vel_y=%.3f "
+			"target=(%d,%d,%d) type=%u meta=%u placement_valid=%d id=%u ",
+			i, s->active_player_id, player_x, player_y, player_z,
+			s->players[i].x, s->players[i].y, s->players[i].z,
+			probe_y, s->players[i].vel_y, blk_info->x, blk_info->y, blk_info->z,
+			blk_info->block->type, blk_info->block->metadata,
+			s->placement_player_pos_valid, s->placement_sync_id);
+		block_place_debug_bbox("player", &player_bbox);
+		BLOCK_PLACE_PRINTF(" helper_collision=%d direct_collision=%d\n",
+		                  collision, direct_collision);
+		if(direct_collision != collision)
+			BLOCK_PLACE_PRINTF(
+				"[PLACE_PLAYER_MISMATCH] helper=%d direct=%d target=(%d,%d,%d)\n",
+				collision, direct_collision, blk_info->x, blk_info->y, blk_info->z);
+
+		/* The player may have moved between the click and the server handling
+		 * the packet. Reject the placement if the current server position also
+		 * intersects the block, even when the click position was still valid. */
+		if(!collision && s->placement_player_pos_valid
+		   && (fabs(player_x - s->players[i].x) > 0.001
+		       || fabs(player_y - s->players[i].y) > 0.001
+		       || fabs(player_z - s->players[i].z) > 0.001)) {
+			float current_probe_y = s->players[i].y;
+			bool current_collision = entity_local_player_block_collide(
+				(vec3) {s->players[i].x, current_probe_y, s->players[i].z},
+				blk_info);
+			BLOCK_PLACE_PRINTF(
+				"[PLACE_PLAYER] server_pos=(%.3f,%.3f,%.3f) "
+				"probe_y=%.3f collision=%d\n",
+				s->players[i].x, s->players[i].y, s->players[i].z,
+				current_probe_y, current_collision);
+			if(current_collision)
+				collision = true;
+		}
+
+		if(collision)
 			return true;
 	}
 
@@ -59,8 +177,13 @@ static bool block_place_collides_with_entity(struct server_local* s,
 	struct AABB block_bbox[block_bbox_count];
 	b->getBoundingBox(blk_info, true, block_bbox);
 
-	for(size_t i = 0; i < block_bbox_count; i++)
+	for(size_t i = 0; i < block_bbox_count; i++) {
 		aabb_translate(block_bbox + i, blk_info->x, blk_info->y, blk_info->z);
+		BLOCK_PLACE_PRINTF("[PLACE_BLOCK] target type=%u meta=%u bbox[%zu] ",
+		                  blk_info->block->type, blk_info->block->metadata, i);
+		block_place_debug_bbox("block", block_bbox + i);
+		BLOCK_PLACE_PRINTF("\n");
+	}
 
 	dict_entity_it_t it;
 	dict_entity_it(it, s->entities);
@@ -78,10 +201,16 @@ static bool block_place_collides_with_entity(struct server_local* s,
 		if(e->getBoundingBox(e, &entity_bbox) == 0)
 			continue;
 
+		bool collision = false;
 		for(size_t i = 0; i < block_bbox_count; i++) {
-			if(aabb_intersection(block_bbox + i, &entity_bbox))
-				return true;
+			if(aabb_intersection(block_bbox + i, &entity_bbox)) {
+				collision = true;
+				break;
+			}
 		}
+
+		if(collision)
+			return true;
 	}
 
 	return false;
@@ -318,8 +447,20 @@ bool block_place_default(struct server_local* s, struct item_data* it,
 	struct block_info blk_info = *where;
 	blk_info.block = &blk;
 
-	if(block_place_collides_with_player(s, &blk_info)
-	   || block_place_collides_with_entity(s, &blk_info))
+	bool player_collision = block_place_collides_with_player(s, &blk_info);
+	bool entity_collision = block_place_collides_with_entity(s, &blk_info);
+	const char* decision = player_collision || entity_collision
+		? "SERVER_REJECT" : "SERVER_ACCEPT";
+	const char* reason = player_collision ? "player" :
+		(entity_collision ? "entity" : "none");
+	BLOCK_PLACE_PRINTF("[PLACE_RESULT] decision=%s reason=%s item=%u "
+	                  "target=(%d,%d,%d) player=%d entity=%d allowed=%d\n",
+	                  decision, reason,
+	                  it->id, blk_info.x, blk_info.y, blk_info.z,
+	                  player_collision, entity_collision,
+	                  !player_collision && !entity_collision);
+
+	if(player_collision || entity_collision)
 		return false;
 
 	server_world_set_block(s, where->x, where->y, where->z, blk);

@@ -21,8 +21,114 @@
 #include "../network/server_world.h"
 #include "../network/server_local.h"
 
+#include <stdio.h>
+#include <string.h>
+
 #include "../platform/gfx.h"
 #include "../world.h"
+
+#ifdef CAVEX_DEBUG_PLAYER_COLLISION
+#define ENTITY_COLLISION_DEBUG 1
+#else
+#define ENTITY_COLLISION_DEBUG 0
+#endif
+#if ENTITY_COLLISION_DEBUG
+#define ENTITY_COLLISION_PRINTF(...) printf(__VA_ARGS__)
+#else
+#define ENTITY_COLLISION_PRINTF(...) ((void)0)
+#endif
+
+struct entity_collision_log_state {
+	bool valid;
+	uint32_t entity_id;
+	size_t coord;
+	vec3 pos;
+	vec3 vel;
+	vec3 candidate;
+	float threshold;
+	bool on_ground;
+};
+
+static struct entity_collision_log_state entity_collision_log_states[4][3];
+
+struct player_collision_block_log_state {
+	bool valid[8];
+	uint32_t entity_id[8];
+	w_coord_t x[8], y[8], z[8];
+	uint8_t type[8], metadata[8];
+	vec3 player_pos[8];
+	unsigned next;
+};
+
+static struct player_collision_block_log_state
+	player_collision_block_log_states[4];
+
+static bool entity_collision_log_changed(const struct entity* e, vec3 pos,
+														vec3 vel, vec3 candidate,
+														size_t coord, float threshold,
+														bool on_ground) {
+	int index = 0;
+#ifdef SPLITSCREEN
+	index = e->data.local_player.player_index;
+#endif
+	if(index < 0 || index >= 4)
+		index = 0;
+
+	if(coord >= 3)
+		return true;
+	struct entity_collision_log_state* state
+		= &entity_collision_log_states[index][coord];
+	bool changed = !state->valid || state->entity_id != e->id
+		|| state->coord != coord || state->threshold != threshold
+		|| state->on_ground != on_ground
+		|| memcmp(state->pos, pos, sizeof(state->pos)) != 0
+		|| memcmp(state->vel, vel, sizeof(state->vel)) != 0
+		|| memcmp(state->candidate, candidate, sizeof(state->candidate)) != 0;
+	if(changed) {
+		state->valid = true;
+		state->entity_id = e->id;
+		state->coord = coord;
+		memcpy(state->pos, pos, sizeof(state->pos));
+		memcpy(state->vel, vel, sizeof(state->vel));
+		memcpy(state->candidate, candidate, sizeof(state->candidate));
+		state->threshold = threshold;
+		state->on_ground = on_ground;
+	}
+	return changed;
+}
+
+static bool player_collision_block_log_changed(const struct entity* e,
+																	w_coord_t x, w_coord_t y,
+																	w_coord_t z, const struct block_data* blk) {
+	int index = 0;
+#ifdef SPLITSCREEN
+	index = e->data.local_player.player_index;
+#endif
+	if(index < 0 || index >= 4)
+		index = 0;
+
+	struct player_collision_block_log_state* state
+		= player_collision_block_log_states + index;
+	for(unsigned slot = 0; slot < 8; slot++) {
+		if(state->valid[slot] && state->entity_id[slot] == e->id
+		   && state->x[slot] == x && state->y[slot] == y
+		   && state->z[slot] == z && state->type[slot] == blk->type
+		   && state->metadata[slot] == blk->metadata
+		   && memcmp(state->player_pos[slot], e->pos,
+		             sizeof(state->player_pos[slot])) == 0)
+			return false;
+	}
+	unsigned slot = state->next++ % 8;
+	state->valid[slot] = true;
+	state->entity_id[slot] = e->id;
+	state->x[slot] = x;
+	state->y[slot] = y;
+	state->z[slot] = z;
+	state->type[slot] = blk->type;
+	state->metadata[slot] = blk->metadata;
+	memcpy(state->player_pos[slot], e->pos, sizeof(state->player_pos[slot]));
+	return true;
+}
 
 void entity_default_init(struct entity* e, bool server, void* world) {
 	e->on_server = server;
@@ -205,11 +311,20 @@ bool entity_intersection(struct entity* e, struct AABB* a,
 
 					if(test(a,
 							&(struct block_info) {.block = &blk,
-												  .neighbours = neighbours,
-												  .x = x,
-												  .y = y,
-												  .z = z}))
+														  .neighbours = neighbours,
+														  .x = x,
+														  .y = y,
+														  .z = z}))
+					{
+		if(e->type == ENTITY_LOCAL_PLAYER
+		   && player_collision_block_log_changed(e, x, y, z, &blk))
+			ENTITY_COLLISION_PRINTF(
+				"[PLAYER_COLLISION_BLOCK] player=%u block=(%d,%d,%d) "
+				"type=%u meta=%u player_pos=(%.3f,%.3f,%.3f)\n",
+				e->id, x, y, z, blk.type, blk.metadata,
+				e->pos[0], e->pos[1], e->pos[2]);
 					return true;
+					}
 				}
 			}
 		}
@@ -283,6 +398,16 @@ void entity_try_move(struct entity* e, vec3 pos, vec3 vel, struct AABB* bbox,
 
 	float threshold;
 	if(entity_intersection_threshold(e, bbox, pos, tmp, &threshold)) {
+		const char* axis = coord == 0 ? "x" : coord == 1 ? "y" : "z";
+		if(e->type == ENTITY_LOCAL_PLAYER && vel == e->vel
+		   && entity_collision_log_changed(e, pos, vel, tmp, coord, threshold,
+		                                    *on_ground))
+			ENTITY_COLLISION_PRINTF(
+			"[MOVE_COLLISION] entity=%u type=%d axis=%s pos=(%.3f,%.3f,%.3f) "
+			"vel=(%.3f,%.3f,%.3f) candidate=(%.3f,%.3f,%.3f) "
+			"threshold=%.6f on_ground_before=%d\n",
+			e->id, e->type, axis, pos[0], pos[1], pos[2], vel[0], vel[1],
+			vel[2], tmp[0], tmp[1], tmp[2], threshold, *on_ground);
 		if(coord == 1 && vel[1] < 0.0F)
 			*on_ground = true;
 		if(coord == 0 || coord == 2)

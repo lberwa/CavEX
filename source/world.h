@@ -88,6 +88,8 @@ struct block_data world_get_block(struct world* w, w_coord_t x, w_coord_t y,
 								  w_coord_t z);
 void world_set_block(struct world* w, w_coord_t x, w_coord_t y, w_coord_t z,
 					 struct block_data blk, bool light_update);
+void world_set_block_immediate(struct world* w, w_coord_t x, w_coord_t y,
+								w_coord_t z, struct block_data blk, bool light_update);
 bool world_import_chunk_column(struct world* w, w_coord_t x, w_coord_t y,
 							   w_coord_t z, w_coord_t sx, w_coord_t sy,
 							   w_coord_t sz, const uint8_t* ids,

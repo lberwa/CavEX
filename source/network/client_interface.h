@@ -100,6 +100,9 @@ struct client_rpc {
 			w_coord_t x, y, z;
 			struct block_data block;
 			enum world_dim dimension;
+			uint32_t placement_id;
+			uint8_t placement_player_id;
+			bool suppress_block_particles;
 		} set_block;
 		struct {
 			uint8_t window;

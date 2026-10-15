@@ -34,7 +34,7 @@
   - ~~TNT~~
   - ~~Powered Rail~~
 
-* If you jump into a block, you will get stuck and won't be able to move.
+* ~~If you jump into a block, you will get stuck and won't be able to move.~~
 
 * ~~Placing blocks on dirt doesn't consume the block.~~
 

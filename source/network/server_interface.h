@@ -36,6 +36,7 @@ enum server_rpc_type {
 	SRPC_UNLOAD_WORLD,
 	SRPC_HOTBAR_SLOT,
 	SRPC_BLOCK_PLACE,
+	SRPC_BLOCK_PLACE_REJECT,
 	SRPC_BLOCK_DIG,
 	SRPC_WINDOW_CLICK,
 	SRPC_WINDOW_CLOSE,
@@ -81,7 +82,14 @@ struct server_rpc {
 		struct {
 			w_coord_t x, y, z;
 			enum side side;
+			/* Position at the moment the client pressed place. */
+			double player_x, player_y, player_z;
+			uint32_t placement_id;
 		} block_place;
+		struct {
+			w_coord_t x, y, z;
+			uint32_t placement_id;
+		} block_place_reject;
 		struct {
 			bool finished;
 			w_coord_t x, y, z;
