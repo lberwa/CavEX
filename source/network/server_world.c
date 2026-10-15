@@ -39,6 +39,12 @@
 #define EXPLOSION_STEP     0.5f
 #define HARDNESS_SCALE     0.0005f
 
+#ifdef CAVEX_DEBUG_BLOCK_PLACEMENT
+#define BLOCK_PLACE_SERVER_PRINTF(...) printf(__VA_ARGS__)
+#else
+#define BLOCK_PLACE_SERVER_PRINTF(...) ((void)0)
+#endif
+
 // #define ALL_FALSE_FINISHER
 
 #ifndef M_PI
@@ -9254,7 +9260,18 @@ bool server_world_set_block(struct server_local* s, w_coord_t x, w_coord_t y, w_
 			.payload.set_block.z = z,
 			.payload.set_block.block = blk,
 			.payload.set_block.dimension = w->dimension,
+			.payload.set_block.placement_id = s->placement_sync_pending
+				? s->placement_sync_id : 0,
+			.payload.set_block.placement_player_id = s->placement_sync_player_id,
+			.payload.set_block.suppress_block_particles = s->suppress_block_particles,
 		};
+		if(s->placement_sync_pending)
+			BLOCK_PLACE_SERVER_PRINTF(
+			       "[PLACE_SERVER_TAG] id=%u player=%u pos=(%d,%d,%d)\n",
+			       s->placement_sync_id, s->placement_sync_player_id,
+			       x, y, z);
+		if(s->placement_sync_pending)
+			s->placement_sync_pending = false;
 		if(redstone_visual_update)
 			clin_rpc_try_send(&set_block_call);
 		else

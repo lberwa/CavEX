@@ -188,6 +188,16 @@ struct server_player {
 /* Welt des aktuell verarbeiteten Spielers */
 #define AWORLD(s) PWORLD(s, (s)->active_player_id)
 
+struct server_placement_record {
+	bool valid;
+	uint32_t id;
+	w_coord_t x, y, z;
+	struct block_data old_block;
+	struct block_data new_block;
+	uint8_t slot;
+	struct item_data item_before;
+};
+
 struct server_local {
 	struct random_gen rand_src;
 #define MAX_SERVER_PLAYERS 4
@@ -195,6 +205,16 @@ struct server_local {
 	// Player id of the RPC currently being processed (used by block/inventory
 	// callbacks that don't carry player context yet).
 	uint8_t active_player_id;
+	bool placement_sync_pending;
+	uint32_t placement_sync_id;
+	uint8_t placement_sync_player_id;
+	struct server_placement_record last_placement[4];
+	/* Valid only while processing one placement callback. This prevents a
+	 * delayed placement packet from being checked against an unrelated later
+	 * player position. */
+	bool placement_player_pos_valid;
+	double placement_player_x, placement_player_y, placement_player_z;
+	bool suppress_block_particles;
 	struct server_world worlds[2]; /* [0]=Overworld, [1]=Nether */
 	bool world_initialized;
 	/* set for a freshly created world: snap the spawn/player onto solid ground

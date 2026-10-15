@@ -52,6 +52,11 @@
 #else
 #define BLOCK_LAT_PRINTF(...)
 #endif
+#ifdef CAVEX_DEBUG_BLOCK_PLACEMENT
+#define BLOCK_PLACE_SERVER_PRINTF(...) printf(__VA_ARGS__)
+#else
+#define BLOCK_PLACE_SERVER_PRINTF(...) ((void)0)
+#endif
 #include "server_world.h"
 #include "complex_block_archive.h"
 #include "../parson/parson.h"
@@ -1717,11 +1722,18 @@ static void server_local_process(struct server_rpc* call, void* user) {
 			break;
 		case SRPC_BLOCK_PLACE:
 			//CAVEX_DEBUG_PRINTF("srpc_block_place");
-			BLOCK_LAT_PRINTF("[BLOCK_LAT] SERVER_RECV place p=%d pos=%d,%d,%d side=%d\n",
-				   (int)pid, (int)call->payload.block_place.x,
+			BLOCK_LAT_PRINTF("[PLACE_SERVER_RECV] p=%d id=%u hit=(%d,%d,%d) "
+						"side=%d click_player=(%.3f,%.3f,%.3f) "
+						"server_player=(%.3f,%.3f,%.3f) dim=%d\n",
+				   (int)pid, call->payload.block_place.placement_id,
+				   (int)call->payload.block_place.x,
 				   (int)call->payload.block_place.y,
 				   (int)call->payload.block_place.z,
-				   (int)call->payload.block_place.side);
+				   (int)call->payload.block_place.side,
+				   call->payload.block_place.player_x,
+				   call->payload.block_place.player_y,
+				   call->payload.block_place.player_z,
+				   player->x, player->y, player->z, player->dimension);
 			if(player->has_pos && call->payload.block_place.y >= 0
 			   && call->payload.block_place.y < WORLD_HEIGHT) {
 				int x, y, z;
@@ -1759,7 +1771,19 @@ static void server_local_process(struct server_rpc* call, void* user) {
 					bool placed = false;
 					bool target_replaceable = !blocks[blk_where.type]
 						|| blocks[blk_where.type]->place_ignore;
+					BLOCK_LAT_PRINTF(
+						"[PLACE_SERVER_TARGET] p=%d id=%u on=(%d,%d,%d) type=%u:%u "
+						"where=(%d,%d,%d) type=%u:%u replaceable=%d item=%u\n",
+						(int)pid, call->payload.block_place.placement_id,
+						on.x, on.y, on.z, blk_on.type, blk_on.metadata,
+						where.x, where.y, where.z, blk_where.type,
+						blk_where.metadata, target_replaceable,
+						it_data.id);
 
+					s->placement_player_pos_valid = true;
+					s->placement_player_x = call->payload.block_place.player_x;
+					s->placement_player_y = call->payload.block_place.player_y;
+					s->placement_player_z = call->payload.block_place.player_z;
 					if(blocks[blk_on.type]
 					   && blocks[blk_on.type]->onRightClick) {
 						//CAVEX_DEBUG_PRINTF("true 2");
@@ -1769,22 +1793,41 @@ static void server_local_process(struct server_rpc* call, void* user) {
 						bool do_place = place_block;
 						place_block = false;
 						if (do_place && target_replaceable && it
-							&& it->onItemPlace)
+							&& it->onItemPlace) {
+							s->placement_sync_pending
+								= call->payload.block_place.placement_id != 0;
+							s->placement_sync_id
+								= call->payload.block_place.placement_id;
+							s->placement_sync_player_id = pid;
 							placed = it->onItemPlace(
 								s, &it_data, &where, &on,
 								call->payload.block_place.side);
+						}
 					} else if(target_replaceable
 							  && it && it->onItemPlace
-							  && (placed = it->onItemPlace(
-								  s, &it_data, &where, &on,
-								  call->payload.block_place.side))) {
+							  ) {
+						s->placement_sync_pending
+							= call->payload.block_place.placement_id != 0;
+						s->placement_sync_id = call->payload.block_place.placement_id;
+						s->placement_sync_player_id = pid;
+						placed = it->onItemPlace(
+							s, &it_data, &where, &on,
+							call->payload.block_place.side);
 						//CAVEX_DEBUG_PRINTF("false2");
 					}
+					s->placement_player_pos_valid = false;
+					s->placement_sync_pending = false;
+					BLOCK_LAT_PRINTF("[PLACE_SERVER_RESULT] p=%d id=%u placed=%d "
+						"where=(%d,%d,%d)\n", (int)pid,
+						call->payload.block_place.placement_id, placed,
+						where.x, where.y, where.z);
 
 					if(placed) {
 						struct block_data placed_blk;
-						if(server_world_get_block(AWORLD(s), where.x, where.y,
-						                          where.z, &placed_blk)) {
+						bool have_placed_block
+							= server_world_get_block(AWORLD(s), where.x, where.y,
+							                         where.z, &placed_blk);
+						if(have_placed_block) {
 							BLOCK_LAT_PRINTF("[BLOCK_LAT] SERVER_SET place p=%d pos=%d,%d,%d "
 								   "new=%u:%u\n",
 								   (int)pid, (int)where.x, (int)where.y,
@@ -1800,6 +1843,18 @@ static void server_local_process(struct server_rpc* call, void* user) {
 
 						size_t slot
 							= inventory_get_hotbar(&player->inventory);
+						struct server_placement_record *record
+							= &s->last_placement[pid];
+						record->valid = have_placed_block
+							&& call->payload.block_place.placement_id != 0;
+						record->id = call->payload.block_place.placement_id;
+						record->x = where.x;
+						record->y = where.y;
+						record->z = where.z;
+						record->old_block = blk_where;
+						record->new_block = placed_blk;
+						record->slot = slot;
+						record->item_before = it_data;
 						if(!player->creative)
 							inventory_consume(&player->inventory,
 											  slot + INVENTORY_SLOT_HOTBAR);
@@ -1814,10 +1869,72 @@ static void server_local_process(struct server_rpc* call, void* user) {
 							= player->inventory
 								  .items[slot + INVENTORY_SLOT_HOTBAR],
 						});
+					} else {
+						/* Reconcile a client that may have predicted this placement. */
+						clin_rpc_send(&(struct client_rpc) {
+							CRPC_PLAYER_ID(pid)
+							.type = CRPC_SET_BLOCK,
+							.payload.set_block.x = where.x,
+							.payload.set_block.y = where.y,
+							.payload.set_block.z = where.z,
+							.payload.set_block.block = blk_where,
+							.payload.set_block.dimension = player->dimension,
+						});
+
+						size_t slot = inventory_get_hotbar(&player->inventory);
+						clin_rpc_send(&(struct client_rpc) {
+							CRPC_PLAYER_ID(pid)
+							.type = CRPC_INVENTORY_SLOT,
+							.payload.inventory_slot.window = WINDOWC_INVENTORY,
+							.payload.inventory_slot.slot =
+								slot + INVENTORY_SLOT_HOTBAR,
+							.payload.inventory_slot.item = player->inventory
+								.items[slot + INVENTORY_SLOT_HOTBAR],
+						});
 					}
 				}
 			}
 			break;
+		case SRPC_BLOCK_PLACE_REJECT: {
+			struct server_placement_record *record = &s->last_placement[pid];
+			struct block_data current;
+			if(record->valid && record->id == call->payload.block_place_reject.placement_id
+			   && record->x == call->payload.block_place_reject.x
+			   && record->y == call->payload.block_place_reject.y
+			   && record->z == call->payload.block_place_reject.z
+			   && server_world_get_block(AWORLD(s), record->x, record->y,
+										 record->z, &current)
+			   && current.type == record->new_block.type
+			   && current.metadata == record->new_block.metadata) {
+				BLOCK_PLACE_SERVER_PRINTF(
+				       "[PLACE_SERVER_ROLLBACK] id=%u pos=(%d,%d,%d) "
+				       "item=%u count=%u\n",
+				       record->id, record->x, record->y, record->z,
+				       record->item_before.id, record->item_before.count);
+				server_world_set_block(s, record->x, record->y, record->z,
+									   record->old_block);
+				if(!player->creative)
+					player->inventory.items[record->slot + INVENTORY_SLOT_HOTBAR]
+						= record->item_before;
+				clin_rpc_send(&(struct client_rpc) {
+					CRPC_PLAYER_ID(pid)
+					.type = CRPC_INVENTORY_SLOT,
+					.payload.inventory_slot.window = WINDOWC_INVENTORY,
+					.payload.inventory_slot.slot =
+						record->slot + INVENTORY_SLOT_HOTBAR,
+					.payload.inventory_slot.item = record->item_before,
+				});
+				record->valid = false;
+			} else {
+				BLOCK_PLACE_SERVER_PRINTF(
+				       "[PLACE_SERVER_ROLLBACK_IGNORED] id=%u pos=(%d,%d,%d)\n",
+				       call->payload.block_place_reject.placement_id,
+				       call->payload.block_place_reject.x,
+				       call->payload.block_place_reject.y,
+				       call->payload.block_place_reject.z);
+			}
+			break;
+		}
 			case SRPC_UNLOAD_WORLD:
 			// Splitscreen can send duplicate unload/save requests (e.g. from
 			// multiple local players). If the world is already unloaded, ignore.

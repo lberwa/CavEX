@@ -381,6 +381,25 @@ void world_set_block(struct world* w, w_coord_t x, w_coord_t y, w_coord_t z,
 	}
 }
 
+void world_set_block_immediate(struct world* w, w_coord_t x, w_coord_t y,
+								w_coord_t z, struct block_data blk, bool light_update) {
+	assert(w);
+
+	if(y < 0 || y >= WORLD_HEIGHT)
+		return;
+
+	if(light_update)
+		stack_push(&w->lighting_updates,
+				   &(struct world_modification_entry) {
+					   .x = x,
+					   .y = y,
+					   .z = z,
+					   .blk = blk,
+				   });
+
+	world_set_block(w, x, y, z, blk, false);
+}
+
 bool world_import_chunk_column(struct world* w, w_coord_t x, w_coord_t y,
 							   w_coord_t z, w_coord_t sx, w_coord_t sy,
 							   w_coord_t sz, const uint8_t* ids,

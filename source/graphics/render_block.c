@@ -2685,9 +2685,7 @@ size_t render_block_piston(struct displaylist* d, struct block_info* this,
 		if(side == facing) {
 			return render_cuboid_side(
 				d, this, side, vertex_light, count_only, x0, y0, z0, x1, y1, z1,
-				tex_atlas_lookup(this->block->type == BLOCK_STICKY_PISTON
-					? TEXAT_PISTON_FRONT_STICKY
-					: TEXAT_PISTON_FRONT_EXTENDED), tex_rotate);
+				tex_atlas_lookup(TEXAT_PISTON_FRONT_EXTENDED), tex_rotate);
 		}
 
 		if(side != blocks_side_opposite(facing)) {

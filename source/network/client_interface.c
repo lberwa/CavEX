@@ -30,6 +30,11 @@
 #else
 #define BLOCK_LAT_PRINTF(...)
 #endif
+#ifdef CAVEX_DEBUG_BLOCK_PLACEMENT
+#define BLOCK_PLACE_CLIENT_PRINTF(...) printf(__VA_ARGS__)
+#else
+#define BLOCK_PLACE_CLIENT_PRINTF(...) ((void)0)
+#endif
 #include "../game/game_state.h"
 #include "../particle.h"
 #include "../platform/thread.h"
@@ -445,6 +450,60 @@ void clin_process(struct client_rpc* call) {
 			break;
 		case CRPC_SET_BLOCK:
 		{
+			if(call->payload.set_block.placement_id != 0)
+				BLOCK_PLACE_CLIENT_PRINTF(
+					"[PLACE_CLIENT_APPLY] id=%u player=%u pos=(%d,%d,%d)\n",
+				       call->payload.set_block.placement_id,
+				       call->payload.set_block.placement_player_id,
+				       call->payload.set_block.x,
+				       call->payload.set_block.y,
+				       call->payload.set_block.z);
+			if(call->payload.set_block.placement_id != 0
+			   && call->payload.set_block.placement_player_id == pid) {
+				struct entity* local_player = NULL;
+#ifdef SPLITSCREEN
+				local_player = gstate.local_players[pid];
+#else
+				local_player = gstate.local_player;
+#endif
+				struct block_info incoming = {
+					.block = &call->payload.set_block.block,
+					.neighbours = NULL,
+					.x = call->payload.set_block.x,
+					.y = call->payload.set_block.y,
+					.z = call->payload.set_block.z,
+				};
+				bool current_collision = local_player
+					&& entity_local_player_block_collide(local_player->pos,
+					                                    &incoming);
+				if(local_player)
+					BLOCK_PLACE_CLIENT_PRINTF("[PLACE_CLIENT_CHECK] id=%u current=%d "
+					       "pos=(%.3f,%.3f,%.3f) block=(%d,%d,%d)\n",
+					       call->payload.set_block.placement_id,
+					       current_collision,
+					       local_player->pos[0], local_player->pos[1],
+					       local_player->pos[2], incoming.x, incoming.y,
+					       incoming.z);
+				if(current_collision) {
+					BLOCK_PLACE_CLIENT_PRINTF(
+						"[PLACE_CLIENT_REJECT] id=%u pos=(%d,%d,%d) "
+					       "player=(%.3f,%.3f,%.3f)\n",
+					       call->payload.set_block.placement_id,
+					       incoming.x, incoming.y, incoming.z,
+					       local_player->pos[0], local_player->pos[1],
+					       local_player->pos[2]);
+					svin_rpc_try_send(&(struct server_rpc) {
+						RPC_PLAYER_ID(pid)
+						.type = SRPC_BLOCK_PLACE_REJECT,
+						.payload.block_place_reject.x = incoming.x,
+						.payload.block_place_reject.y = incoming.y,
+						.payload.block_place_reject.z = incoming.z,
+						.payload.block_place_reject.placement_id =
+							call->payload.set_block.placement_id,
+					});
+					break;
+				}
+			}
 			struct world* sbw = world_for_dim(call->payload.set_block.dimension);
 			struct block_data old_blk = world_get_block(
 				sbw, call->payload.set_block.x, call->payload.set_block.y,
@@ -473,7 +532,8 @@ void clin_process(struct client_rpc* call) {
 								call->payload.set_block.block, false);
 				break;
 			}
-			if(call->payload.set_block.block.type == BLOCK_AIR) {
+			if(call->payload.set_block.block.type == BLOCK_AIR
+			   && !call->payload.set_block.suppress_block_particles) {
 				struct block_data blk = world_get_block(
 					sbw, call->payload.set_block.x,
 					call->payload.set_block.y, call->payload.set_block.z);
@@ -499,7 +559,7 @@ void clin_process(struct client_rpc* call) {
 				});
 			}
 
-			world_set_block(sbw, call->payload.set_block.x,
+			world_set_block_immediate(sbw, call->payload.set_block.x,
 							call->payload.set_block.y,
 							call->payload.set_block.z,
 							call->payload.set_block.block, true);

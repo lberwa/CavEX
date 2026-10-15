@@ -295,6 +295,10 @@ void screen_ingame_render3D(struct screen* s, mat4 view) {
 			   gstate_active_player(), (int)gstate.camera_hit.x,
 			   (int)gstate.camera_hit.y, (int)gstate.camera_hit.z,
 			   (int)gstate.camera_hit.side);
+		static uint32_t next_placement_id = 1;
+		uint32_t placement_id = next_placement_id++;
+		if(placement_id == 0)
+			placement_id = next_placement_id++;
 		svin_rpc_try_send(&(struct server_rpc) {
 			RPC_PLAYER_ID(gstate_active_player())
 			.type = SRPC_BLOCK_PLACE,
@@ -302,6 +306,10 @@ void screen_ingame_render3D(struct screen* s, mat4 view) {
 			.payload.block_place.y = gstate.camera_hit.y,
 			.payload.block_place.z = gstate.camera_hit.z,
 			.payload.block_place.side = gstate.camera_hit.side,
+			.payload.block_place.player_x = gstate.local_player->pos[0],
+			.payload.block_place.player_y = gstate.local_player->pos[1],
+			.payload.block_place.player_z = gstate.local_player->pos[2],
+			.payload.block_place.placement_id = placement_id,
 		});
 
 		if(inventory_get_hotbar_item(
