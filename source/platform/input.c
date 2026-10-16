@@ -54,17 +54,31 @@ extern GLFWwindow* window;
 static bool input_pointer_enabled;
 static double input_old_pointer_x, input_old_pointer_y;
 static bool input_key_held[1024];
+static bool input_key_previous[1024];
+static bool input_mouse_held[3];
+static bool input_mouse_previous[3];
 
 void input_init() {
 	for(int k = 0; k < 1024; k++)
-		input_key_held[k] = false;
+		input_key_held[k] = input_key_previous[k] = false;
+	for(int k = 0; k < 3; k++)
+		input_mouse_held[k] = input_mouse_previous[k] = false;
 
 	input_pointer_enabled = false;
 	input_old_pointer_x = 0;
 	input_old_pointer_y = 0;
 }
 
-void input_poll() { }
+void input_poll() {
+	for(int k = 0; k < 1024; k++) {
+		input_key_previous[k] = input_key_held[k];
+		input_key_held[k] = glfwGetKey(window, k) == GLFW_PRESS;
+	}
+	for(int k = 0; k < 3; k++) {
+		input_mouse_previous[k] = input_mouse_held[k];
+		input_mouse_held[k] = glfwGetMouseButton(window, k) == GLFW_PRESS;
+	}
+}
 
 void input_native_key_status(int key, int player, bool* pressed, bool* released,
 								 bool* held) {
@@ -87,31 +101,37 @@ void input_native_key_status(int key, int player, bool* pressed, bool* released,
 		}
 	#endif
 
-		if(key < 0 || key >= 1024) {
+		bool mouse_button = orig_key >= 1000 && player <= 0;
+		if((!mouse_button && (key < 0 || key >= 1024))
+		   || (mouse_button && (orig_key - 1000 < 0 || orig_key - 1000 >= 3))) {
 			*pressed = false;
 			*released = false;
 			*held = false;
 			return;
 		}
 
-		int state = 0;
+		bool current;
+		bool previous;
 		if(orig_key >= 1000) {
-	#ifdef TEST_MULTIPLAYER_INPUT
+#ifdef TEST_MULTIPLAYER_INPUT
 			if(player > 0) {
-				// Emulated mouse buttons (Z/U/H) are queried as keys.
-				state = glfwGetKey(window, key);
+				current = input_key_held[key];
+				previous = input_key_previous[key];
 			} else
-	#endif
+#endif
 			{
-				state = glfwGetMouseButton(window, orig_key - 1000);
+				current = input_mouse_held[orig_key - 1000];
+				previous = input_mouse_previous[orig_key - 1000];
 			}
 		} else {
-			state = glfwGetKey(window, key);
+			current = input_key_held[key];
+			previous = input_key_previous[key];
 		}
+		int state = current ? GLFW_PRESS : GLFW_RELEASE;
 
-	*pressed = (state == GLFW_PRESS) && !input_key_held[key];
-	*released = (state == GLFW_RELEASE) && input_key_held[key];
-	*held = !(*released) && input_key_held[key];
+	*pressed = current && !previous;
+	*released = !current && previous;
+	*held = current;
 
 #ifdef TEST_MULTIPLAYER_INPUT
 	// Debug: show whether the per-player mapping actually happens at runtime.
@@ -133,11 +153,6 @@ void input_native_key_status(int key, int player, bool* pressed, bool* released,
 	}
 #endif
 
-	if(state == GLFW_PRESS)
-		input_key_held[key] = true;
-
-	if(state == GLFW_RELEASE)
-		input_key_held[key] = false;
 }
 
 bool input_native_key_symbol(int key, int* symbol, int* symbol_help,
@@ -587,7 +602,7 @@ static bool input_button_pressed_state(enum input_button b, int player,
 	bool any_held = false;
 	input_button_status(b, player, vplayer, &any_pressed, &any_released,
 						&any_held);
-	return any_pressed && !any_held && !any_released;
+	return any_pressed;
 }
 
 static bool input_button_released_state(enum input_button b, int player,
@@ -709,7 +724,7 @@ bool input_pressed(enum input_button b, int player) {
 			any_held = true;
 	}
 
-	return any_pressed && !any_held && !any_released;
+	return any_pressed;
 }
 
 bool input_released(enum input_button b,int player) {
@@ -916,5 +931,5 @@ bool rinput_pressed(enum input_button b, int player) {
 			any_held = true;
 	}
 
-	return any_pressed && !any_held && !any_released;
+	return any_pressed;
 }

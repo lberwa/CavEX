@@ -72,7 +72,28 @@ static uint16_t getTextureIndex(struct block_info* this, enum side side) {
 
 	return side == blocks_side_opposite(head_side)
 	         ? tex_atlas_lookup(TEXAT_BED_BACK)
-	         : tex_atlas_lookup(TEXAT_BED_SIDE_1);
+		 : tex_atlas_lookup(TEXAT_BED_SIDE_1);
+}
+
+static void onNeighbourBlockChange(struct server_local* s,
+									struct block_info* info) {
+	struct block_data bed = *info->block;
+	enum side head_side = bed_head_side(bed.metadata);
+	if(bed.metadata & 0x08)
+		head_side = blocks_side_opposite(head_side);
+
+	int ox, oy, oz;
+	blocks_side_offset(head_side, &ox, &oy, &oz);
+	struct block_data partner;
+	bool valid = server_world_get_block(AWORLD(s), info->x + ox,
+									info->y + oy, info->z + oz, &partner)
+		&& partner.type == BLOCK_BED
+		&& ((partner.metadata & 0x03) == (bed.metadata & 0x03))
+		&& ((partner.metadata & 0x08) != (bed.metadata & 0x08));
+
+	if(!valid)
+		server_world_set_block(s, info->x, info->y, info->z,
+							   (struct block_data) {.type = BLOCK_AIR});
 }
 
 static size_t getDroppedItem(struct block_info* this, struct item_data* it,
@@ -118,6 +139,7 @@ struct block block_bed = {
 	.getDroppedItem = getDroppedItem,
 	.onRandomTick = NULL,
 	.onRightClick = onRightClick,
+	.onNeighbourBlockChange = onNeighbourBlockChange,
 	.transparent = false,
 	.renderBlock = render_block_bed,
 	.renderBlockAlways = NULL,

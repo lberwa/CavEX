@@ -299,14 +299,26 @@ bool entity_intersection(struct entity* e, struct AABB* a,
 			for(w_coord_t y = min_y; y < max_y; y++) {
 				struct block_data blk;
 
-				if(entity_get_block(e, x, y, z, &blk) && blocks[blk.type]) {
+				bool block_loaded = entity_get_block(e, x, y, z, &blk);
+				if(!block_loaded && e->on_server && y >= 0 && y < WORLD_HEIGHT) {
+					/* Unloaded server chunks are not empty space. Treating them as
+					 * air lets mobs and items fall through chunk boundaries. */
+					blk = (struct block_data) {.type = BLOCK_STONE};
+					block_loaded = true;
+				}
+
+				if(block_loaded && blocks[blk.type]) {
 					struct block_data neighbours[SIDE_MAX];
 
 					for(int k = 0; k < SIDE_MAX; k++) {
 						int ox, oy, oz;
 						blocks_side_offset((enum side)k, &ox, &oy, &oz);
-						entity_get_block(e, x + ox, y + oy, z + oz,
-										 neighbours + k);
+						neighbours[k] = (struct block_data) {.type = BLOCK_AIR};
+						if(!entity_get_block(e, x + ox, y + oy, z + oz,
+										 neighbours + k)
+							&& e->on_server
+							&& y + oy >= 0 && y + oy < WORLD_HEIGHT)
+							neighbours[k] = (struct block_data) {.type = BLOCK_STONE};
 					}
 
 					if(test(a,
@@ -395,6 +407,18 @@ void entity_try_move(struct entity* e, vec3 pos, vec3 vel, struct AABB* bbox,
 	vec3 tmp;
 	glm_vec3_copy(pos, tmp);
 	tmp[coord] += vel[coord];
+	if(coord == 1 && pos[1] <= WORLD_FALL_BOUNDARY_Y && vel[1] <= 0.0F) {
+		pos[1] = WORLD_FALL_BOUNDARY_Y;
+		vel[1] = 0.0F;
+		*on_ground = true;
+		return;
+	}
+	if(coord == 1 && vel[1] < 0.0F && tmp[1] < WORLD_FALL_BOUNDARY_Y) {
+		pos[1] = WORLD_FALL_BOUNDARY_Y;
+		vel[1] = 0.0F;
+		*on_ground = true;
+		return;
+	}
 
 	float threshold;
 	if(entity_intersection_threshold(e, bbox, pos, tmp, &threshold)) {

@@ -45,7 +45,28 @@ static const char* menu_options[4] = {
 static size_t gui_selection[4];
 static bool server_failed = false;
 
+static void game_menu_select(int option) {
+	int player = gstate_active_player();
+	sound_play(pcm_click);
+	switch(option) {
+		case 0: screen_set_player(player, &screen_ingame); break;
+		case 1: screen_set_player(player, &screen_game_settings); break;
+		case 2:
+			gstate.paused = true;
+			screen_set(&screen_pause);
+			svin_rpc_send(&(struct server_rpc) {.type = SRPC_TOGGLE_PAUSE});
+			break;
+		case 3:
+			gstate.paused = false;
+			screen_set(&screen_select_world);
+			svin_rpc_send(&(struct server_rpc) {.type = SRPC_UNLOAD_WORLD});
+			break;
+	}
+}
+
 static void screen_gmenu_reset(struct screen* s, int width, int height) {
+	gutil_button_new_menu();
+
 	int player = gstate_active_player();
 	gstate.game_run = false;
 #ifndef SPLITSCREEN
@@ -60,43 +81,11 @@ static void screen_gmenu_reset(struct screen* s, int width, int height) {
 
 static void screen_gmenu_update(struct screen* s, float dt) { 
 	int player = gstate_active_player();
-    // Navigation
-    if(input_pressed(IB_GUI_UP, player) && gui_selection[player] > 0)
-        gui_selection[player]--;
-
-    if(input_pressed(IB_GUI_DOWN, player) && gui_selection[player] < 3)
-        gui_selection[player]++;
-
-    // Aktion beim A-Knopf
-	    if(input_pressed(IB_GUI_CLICK, player)) {
-			sound_play(pcm_click);
-	        switch(gui_selection[player]) {
-            case 0:  // start
-				screen_set_player(player, &screen_ingame);
-				break;
-            case 1: // settings
-				screen_set_player(player, &screen_game_settings);
-				break;
-            case 2: // pause
-                gstate.paused = true;
-                screen_set(&screen_pause);
-        		svin_rpc_send(&(struct server_rpc) {
-        			.type = SRPC_TOGGLE_PAUSE,
-		        });
-                break;
-	            case 3: // save & quit
-					// Save & quit: unload the world but do NOT toggle pause here.
-					// `screen_game_menu` itself doesn't pause the server, so toggling
-					// would leave the server stuck in paused state for the next world.
-					gstate.paused = false;
-					screen_set(&screen_select_world);
-					svin_rpc_send(&(struct server_rpc) {
-						.type = SRPC_UNLOAD_WORLD,
-					});
-	                break;
-	        }
-	    }
-	}
+	(void)s;
+	(void)dt;
+	if(input_pressed(IB_BACK, player))
+		screen_set_player(player, &screen_ingame);
+}
 
 
 static void screen_gmenu_render2D(struct screen* s, int width, int height) { 
@@ -109,28 +98,19 @@ static void screen_gmenu_render2D(struct screen* s, int width, int height) {
 
 
 
+	int player = gstate_active_player();
+	float pointer_x, pointer_y, pointer_angle;
+	bool pointer_available = screen_pointer_local(player, width, height,
+										 &pointer_x, &pointer_y, &pointer_angle);
+	gutil_button_reset(player, pointer_available, pointer_x, pointer_y);
 	for(int i = 0; i < 4; i++) {
 	    int y = start_y + i * (button_height + button_spacing);
-
-    	bool selected = (gui_selection[gstate_active_player()] == (size_t)i);
-
-    	// Texcoords für hell/dunkel
-    	int tex_x = 0;
-    	int tex_y = selected ? 62 : 42; // hell : dunkel
-    	int tex_w = 200;
-    	int tex_h = 20;
-
-    	// Button skalieren auf 300x40
-		gfx_bind_texture(&texture_gui2);
-    	gutil_texquad((width - button_width) / 2, y, tex_x, tex_y, 
-					  					 tex_w, tex_h, button_width, button_height);
-
-
-		//int y = start_y + i*line_height;
-    	gutil_text((width/2) - (gutil_font_width(menu_options[i], 20)/2),
-									 y + 10, menu_options[i], 20, true);
+		gutil_button((width - button_width) / 2, y, button_width, button_height,
+					 menu_options[i], game_menu_select, i, 0, i);
 
 	}
+	gutil_button_update();
+	gutil_button_render();
 	
 	if (server_failed) {
 		int window_width = 220;

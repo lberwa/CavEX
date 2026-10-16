@@ -48,14 +48,35 @@ static const char* menu_options[4] = {
     "Quit"
 };
 
-static size_t gui_selection;
 static bool server_failed = false;
+
+static void mainmenu_select(int option) {
+	sound_play(pcm_click);
+	switch(option) {
+		case 0: menu_screen_set(&spieleranzahl_auswählen); break;
+		case 2: menu_screen_set(&screen_msettings); break;
+		case 3: gstate.quit = true; break;
+		case 1:
+#ifdef WITH_PYTHON
+		{
+			extern void cavex_run_python_file(const char*, const char*);
+			cavex_run_python_file(config_read_string(&gstate.config_user,
+										 "paths.python_file", "init.py"), NULL);
+		}
+#else
+		server_failed = true;
+#endif
+			break;
+	}
+}
 
 // Python-Fehler (Datei:Zeile + Meldung), gesetzt von cavex_run_python_file
 extern char g_py_error[160];
 extern bool g_py_error_show;
 
 static void screen_mainmenu_reset(struct screen* s, int width, int height) {
+	gutil_button_new_menu();
+
 	gstate.game_run = false;
 #ifdef SPLITSCREEN
 	gstate.num_players = 2;
@@ -106,56 +127,6 @@ static void screen_mainmenu_update(struct screen* s, float dt) {
 			g_py_error_show = false;
 		}
 
-	} else {
-
-    // Navigation
-    if(input_pressed(IB_GUI_UP, 0) && gui_selection > 0)
-        gui_selection--;
-
-    if(input_pressed(IB_GUI_DOWN, 0) && gui_selection < 3)
-        gui_selection++;
-
-    // Aktion beim A-Knopf
-    if(input_pressed(IB_GUI_CLICK, 0)) {
-		sound_play(pcm_click);
-        switch(gui_selection) {
-            case 0: // Start 
-				//#ifdef PLATFORM_WII
-				menu_screen_set(&spieleranzahl_auswählen);
-                /*#endif
-				#ifdef PLATFORM_PC
-				menu_screen_set(&screen_select_world);
-				#endif*/
-				break;
-            case 1: // Server
-#ifdef WITH_PYTHON
-				// CPython ist in CavEX gelinkt -> ./init.py in-process ausfuehren
-				{
-					extern void cavex_run_python_file(const char *path,
-													  const char *arg);
-					extern bool g_sdtrace;
-					extern void sdlog(const char *msg);
-					g_sdtrace = true; // schon VOR dem Aufruf tracen
-					sdlog("=== Server gedrueckt, rufe cavex_run_python_file ===");
-					cavex_run_python_file(config_read_string(&gstate.config_user,
-										  "paths.python_file", "init.py"), NULL);
-					sdlog("=== zurueck aus cavex_run_python_file ===");
-				}
-#else
-				server_failed = true;
-				return;
-#endif
-				
-				break;
-            case 2: // Einstellungen
-                menu_screen_set(&screen_msettings);
-                break;
-            case 3: // Beenden
-                gstate.quit = true;
-                break;
-        }
-    }
-
 	}
 
     // Home-Button beendet das Spiel
@@ -176,28 +147,18 @@ static void screen_mainmenu_render2D(struct screen* s, int width, int height) {
 
 
 
+	float pointer_x, pointer_y, pointer_angle;
+	bool pointer_available = screen_pointer_local(0, width, height,
+										 &pointer_x, &pointer_y, &pointer_angle);
+	gutil_button_reset(0, pointer_available, pointer_x, pointer_y);
 	for(int i = 0; i < 4; i++) {
 	    int y = start_y + i * (button_height + button_spacing);
-
-    	bool selected = (gui_selection == i);
-
-    	// Texcoords für hell/dunkel
-    	int tex_x = 0;
-    	int tex_y = selected ? 62 : 42; // hell : dunkel
-    	int tex_w = 200;
-    	int tex_h = 20;
-
-    	// Button skalieren auf 300x40
-		gfx_bind_texture(&texture_gui2);
-    	gutil_texquad((width - button_width) / 2, y, tex_x, tex_y, 
-					  					 tex_w, tex_h, button_width, button_height);
-
-
-		//int y = start_y + i*line_height;
-    	gutil_text((width/2) - (gutil_font_width(menu_options[i], 20)/2),
-									 y + 10, menu_options[i], 20, true);
+		gutil_button((width - button_width) / 2, y, button_width, button_height,
+					 menu_options[i], mainmenu_select, i, 0, i);
 
 	}
+	gutil_button_update();
+	gutil_button_render();
 	
 	if (server_failed) {
 		int window_width = 220;

@@ -619,8 +619,9 @@ void gutil_button_render() {
 					  tex_w, tex_h, buttons[i].width, buttons[i].height);
 
 
-    	gutil_text(buttons[i].x + buttons[i].width/2 - (gutil_font_width(buttons[i].text, 20)/2),
-				   buttons[i].y, buttons[i].text, 20, true);
+		gutil_text(buttons[i].x + buttons[i].width/2 - (gutil_font_width(buttons[i].text, 20)/2),
+				   buttons[i].y + (buttons[i].height - 20) / 2,
+				   buttons[i].text, 20, true);
 		
 	  } else if (buttons[i].type == BUTTON_TOGGLE) {
 		int tex_x = 0;

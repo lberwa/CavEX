@@ -694,6 +694,19 @@ void sound_stop_bg() {
     bg_pending = false;
 }
 
+void sound_stop_effects(void) {
+    for(int i = 0; i < voices_n; i++) {
+        ASND_StopVoice(voices[i].voice);
+        if(voices[i].sound_id >= 0 && voices[i].sound_id < PCM_COUNT)
+            snd_cache[voices[i].sound_id].ref_count--;
+        else if(voices[i].anon_data)
+            free(voices[i].anon_data);
+    }
+    voices_n = 0;
+    for(int i = 0; i < PCM_COUNT; i++)
+        pending[i].valid = false;
+}
+
 void sound_resume_bg() {
 #ifdef BG_MUSIC
     if (music_run) return;
@@ -2003,6 +2016,14 @@ void sound_stop_bg(void) {
     bg_wav.pos  = 0;
     pthread_mutex_unlock(&bg_mutex);
     bg_playlist_num = 0;
+}
+
+void sound_stop_effects(void) {
+    pthread_mutex_lock(&pcm_mutex);
+    for(int i = 0; i < pcm_playlist_num; i++)
+        free(pcm_playlist[i].data);
+    pcm_playlist_num = 0;
+    pthread_mutex_unlock(&pcm_mutex);
 }
 
 void sound_set_volume_bg(float volume) {

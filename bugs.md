@@ -34,33 +34,33 @@
   - ~~TNT~~
   - ~~Powered Rail~~
 
-* ~~If you jump into a block, you will get stuck and won't be able to move.~~
+* ~~If you jump into a block, you will get stuck and won't be able to move~~
 
 * ~~Placing blocks on dirt doesn't consume the block.~~
 
 * ~~Stair and fence hitboxes are incorrect.~~
 
-* Furnace output items despawn when moving an item.
+* ~~Furnace output items despawn when moving an item.~~
 
-* if you destroy one part of the block, the other doesn't despawn_
-  - bed
-  - door
+* ~~if you destroy one part of the block, the other doesn't despawn~~
+  - ~~bed~~
+  - ~~door~~
 
-* Blocks don't rotate when placed from a different side:
+* ~~Blocks don't rotate when placed from a different side:~~
   - ~~Chests~~
-  - Trapdoor
-  - Log
-  - stairs (top/bottom)
+  - ~~Trapdoor~~
+  - ~~Log~~
+  - ~~stairs (top/bottom)~~
 
-* Chests can't combine into a double chest.
+* ~~Chests can't combine into a double chest.~~
 
-* sort worlds with date
+* ~~sort worlds with date~~
 
-* TNT and Creeper drop glass
+* ~~TNT and Creeper drop glass~~
 
 * ~~still water looks like stone brick~~
 
-* Input system of the PC must work like on the Wii: checking ... every frame all buttons and register them for input_pressed() and input_released()
+* ~~Input system of the PC must work like on the Wii: checking ... every frame all buttons and register them for input_pressed() and input_released()~~
 
 * ~~Upgrader~~
 
@@ -68,38 +68,38 @@
 
 * ~~frozen config.json if no config.json~~
 
-* save player data of player 2
+* ~~save player data of player 2~~
 
-* Buttons like in settings in main menu
+* ~~Buttons like in settings in main menu~~
 
-* visibility bug like vine
-  (--> gfx_write_buffers(true, true, true) and MODE_OFF)
-  - Waterlilies 
-  - glass_pane
-  - pumpkin stem
-  - melon stem
-  - vine
-  - crops
+* ~~visibility bug like vine~~
+  ~~(--> gfx_write_buffers(true, true, true) and MODE_OFF)~~
+  - ~~Waterlilies~~
+  - ~~glass_pane~~
+  - ~~pumpkin stem~~
+  - ~~melon stem~~
+  - ~~vine~~
+  - ~~crops~~
 
-* save settings in config.json
+* ~~save settings in config.json~~
 
-* sprint with double click
+* ~~sprint with double click~~
 
 * sheep and pigs can't rotate
 
-* sheep and pigs drop nothing
+* ~~sheep and pigs drop nothing~~
 
-* player 2 imput prints
+* ~~player 2 input prints~~
 
-* screen game settings input is broken
+* ~~screen game settings input is broken~~
 
-* entities are able to going throw chunks and falling down
+* ~~entities are able to going throw chunks and falling down~~
 
 * implement a minecraft terminal
 
-* the moon and sun are too little
+* ~~the moon and sun are too little~~
 
-* Implement a fallback boundary at Y = -50 to stop players falling under the world.
+* ~~Implement a fallback boundary at Y = -50 to stop players falling under the world.~~
 
 * in creative inventory add:
   - search function
@@ -122,7 +122,7 @@
 
 * ~~gpu on the pc is too slowly so it runs with 20-55fps on fullscreen~~
 
-* world generator needs too much cpu and is too slowly
+* ~~world generator needs too much cpu and is too slowly~~
 
 * you don't see the cracks on the blocks on the wii
 
@@ -154,10 +154,16 @@
 
 * the inventory item of chests isn't correct
 
+* you can't stack doors
+
 * there is no item in the creative inventory:
   - fence
   - door
   - iron door
+  - vine
+  - waterlily
+  - glas pane
+  - crops
 
 * there is superfluous item in the creative inventory:
   - boat motor

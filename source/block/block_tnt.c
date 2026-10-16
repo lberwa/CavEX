@@ -140,6 +140,7 @@ static uint16_t getTextureIndex(struct block_info* this, enum side side) {
 	}
 }
 
+#if 0
 static void onRightClick(struct server_local* s, struct item_data* it,
 						 struct block_info* where, struct block_info* on,
 						 enum side on_side) {
@@ -148,6 +149,7 @@ static void onRightClick(struct server_local* s, struct item_data* it,
 			(struct block_data){ .type = BLOCK_TNT, .metadata = TNT_FUSE_TICKS });
 	}
 }
+#endif
 
 static bool onItemPlace(struct server_local* s, struct item_data* it,
 							struct block_info* where, struct block_info* on,
@@ -182,7 +184,7 @@ struct block block_tnt = {
 	.getDroppedItem = block_drop_default,
 	.onRandomTick = NULL,
 	.onWorldTick = onWorldTick,
-	.onRightClick = onRightClick,
+	.onRightClick = NULL,
 	.transparent = false,
 	.renderBlock = render_block_full,
 	.renderBlockAlways = NULL,

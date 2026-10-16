@@ -218,7 +218,18 @@ static void onNeighbourBlockChange(struct server_local* s,
                                    struct block_info* info)
 {
     struct block_data cur = *info->block;
-    // alleen bottom half
+    w_coord_t partner_y = info->y + ((cur.metadata & 0x08) ? -1 : 1);
+    struct block_data partner;
+    bool valid = server_world_get_block(AWORLD(s), info->x, partner_y,
+                                        info->z, &partner)
+        && partner.type == cur.type
+        && ((partner.metadata & 0x08) != (cur.metadata & 0x08));
+    if(!valid) {
+        server_world_set_block(s, info->x, info->y, info->z,
+                               (struct block_data) {.type = BLOCK_AIR});
+        return;
+    }
+
     if (cur.metadata & 0x08) return;
 
     bool powered = block_redstone_is_powered(s, info->x, info->y, info->z)

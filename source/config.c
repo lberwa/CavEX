@@ -63,6 +63,8 @@ static void config_write_frozen(const char* filename) {
 
 bool config_create(struct config* c, const char* filename) {
 	assert(c && filename);
+	strncpy(c->filename, filename, sizeof(c->filename) - 1);
+	c->filename[sizeof(c->filename) - 1] = '\0';
 	c->root = json_parse_file(filename);
 
 	if(!c->root) {
@@ -141,10 +143,55 @@ void settings_init() {
 	 * Spielmenue kleiner stellen -> weniger RAM-Druck, beide Splitscreen-Spieler
 	 * passen zuverlaessig in die Chunk-Grenze. */
 	gstate.settings.view_distance = 3;
-	gstate.settings.render_scale_pct = 0; /* Standard: Minimum-Auflösung (802×480) */
+	gstate.settings.render_scale_pct = 100; /* Standard: Minimum-Auflösung (802×480) */
 	gstate.settings.view_bob = true;
 	gstate.settings.max_volume  = 2.0f;
 	gstate.settings.step_volume = 0.3f;
 	gstate.settings.dig_volume  = 0.3f;
 	gstate.settings.bg_music_enabled = true;
+
+	if(gstate.config_user.root) {
+		JSON_Object* root = json_object(gstate.config_user.root);
+		if(json_object_dothas_value_of_type(root, "settings.debug", JSONBoolean))
+			gstate.settings.debug = json_object_dotget_boolean(root, "settings.debug");
+		if(json_object_dothas_value_of_type(root, "settings.chunk_build_per_tick", JSONNumber))
+			gstate.settings.chunk_build_per_tick = (int)json_object_dotget_number(root, "settings.chunk_build_per_tick");
+		if(json_object_dothas_value_of_type(root, "settings.chunk_build_budget_ms", JSONNumber))
+			gstate.settings.chunk_build_budget_ms = (int)json_object_dotget_number(root, "settings.chunk_build_budget_ms");
+		if(json_object_dothas_value_of_type(root, "settings.start_fullscreen", JSONBoolean))
+			gstate.settings.start_fullscreen = json_object_dotget_boolean(root, "settings.start_fullscreen");
+		if(json_object_dothas_value_of_type(root, "settings.view_distance", JSONNumber))
+			gstate.settings.view_distance = (int)json_object_dotget_number(root, "settings.view_distance");
+		if(json_object_dothas_value_of_type(root, "settings.render_scale_pct", JSONNumber))
+			gstate.settings.render_scale_pct = (int)json_object_dotget_number(root, "settings.render_scale_pct");
+		if(json_object_dothas_value_of_type(root, "settings.view_bob", JSONBoolean))
+			gstate.settings.view_bob = json_object_dotget_boolean(root, "settings.view_bob");
+		if(json_object_dothas_value_of_type(root, "settings.max_volume", JSONNumber))
+			gstate.settings.max_volume = (float)json_object_dotget_number(root, "settings.max_volume");
+		if(json_object_dothas_value_of_type(root, "settings.step_volume", JSONNumber))
+			gstate.settings.step_volume = (float)json_object_dotget_number(root, "settings.step_volume");
+		if(json_object_dothas_value_of_type(root, "settings.dig_volume", JSONNumber))
+			gstate.settings.dig_volume = (float)json_object_dotget_number(root, "settings.dig_volume");
+		if(json_object_dothas_value_of_type(root, "settings.bg_music_enabled", JSONBoolean))
+			gstate.settings.bg_music_enabled = json_object_dotget_boolean(root, "settings.bg_music_enabled");
+	}
+}
+
+void config_save_settings(struct config* c) {
+	if(!c || !c->root || !c->filename[0])
+		return;
+
+	JSON_Object* root = json_object(c->root);
+	json_object_dotset_boolean(root, "settings.debug", gstate.settings.debug);
+	json_object_dotset_number(root, "settings.chunk_build_per_tick", gstate.settings.chunk_build_per_tick);
+	json_object_dotset_number(root, "settings.chunk_build_budget_ms", gstate.settings.chunk_build_budget_ms);
+	json_object_dotset_boolean(root, "settings.start_fullscreen", gstate.settings.start_fullscreen);
+	json_object_dotset_number(root, "settings.view_distance", gstate.settings.view_distance);
+	json_object_dotset_number(root, "settings.render_scale_pct", gstate.settings.render_scale_pct);
+	json_object_dotset_boolean(root, "settings.view_bob", gstate.settings.view_bob);
+	json_object_dotset_number(root, "settings.max_volume", gstate.settings.max_volume);
+	json_object_dotset_number(root, "settings.step_volume", gstate.settings.step_volume);
+	json_object_dotset_number(root, "settings.dig_volume", gstate.settings.dig_volume);
+	json_object_dotset_boolean(root, "settings.bg_music_enabled", gstate.settings.bg_music_enabled);
+	json_serialize_to_file_pretty(c->root, c->filename);
 }

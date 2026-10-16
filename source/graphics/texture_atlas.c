@@ -717,6 +717,8 @@ void* tex_atlas_block(const char* filename, size_t* width, size_t* height) {
 	tex_atlas_reg(atlas, TEXAT_ENDER_CHEST_TOP, 4, 12);
 	tex_atlas_reg(atlas, TEXAT_ENDER_CHEST_SIDE, 5, 12);
 	tex_atlas_reg(atlas, TEXAT_ENDER_CHEST_FRONT, 6, 12);
+	tex_atlas_reg(atlas, TEXAT_CHEST_TOP_1, 7, 12);
+	tex_atlas_reg(atlas, TEXAT_CHEST_TOP_2, 8, 12);
 	tex_atlas_reg(atlas, TEXAT_TRIPWIRE_STRAIGHT, 3, 13);
 	tex_atlas_reg(atlas, TEXAT_TRIPWIRE_CORNER, 4, 13);
 	tex_atlas_reg(atlas, TEXAT_TRIPWIRE_T, 5, 13);

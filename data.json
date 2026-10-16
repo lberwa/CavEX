@@ -184,8 +184,8 @@
       "../assets/gui/brewing_stand.png"
     ],
     [
-      "assets/gui/iron_chest.png",
-      "../assets/gui/iron_chest.png"
+      "assets/gui/double_chest.png",
+      "../assets/gui/double_chest.png"
     ],
     [
       "assets/armor/chain_2.png",
@@ -4373,8 +4373,8 @@
       "../assets/gui/brewing_stand.png"
     ],
     [
-      "assets/gui/iron_chest.png",
-      "../assets/gui/iron_chest.png"
+      "assets/gui/double_chest.png",
+      "../assets/gui/double_chest.png"
     ],
     [
       "assets/armor/chain_2.png",

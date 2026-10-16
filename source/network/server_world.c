@@ -45,6 +45,8 @@
 #define BLOCK_PLACE_SERVER_PRINTF(...) ((void)0)
 #endif
 
+#define WORLD_GEN_STEP_LOG(...) ((void)0)
+
 // #define ALL_FALSE_FINISHER
 
 #ifndef M_PI
@@ -8147,19 +8149,22 @@ static void gen_generate_deco_columns(struct server_world* w, struct server_chun
 					else if(dir == 1) dx = -1;
 					else if(dir == 2) dz2 = 1;
 					else dz2 = -1;
-					/* CavEX-Log: kein Rotations-Support, nur Holztyp (0=Eiche,1=Fichte,2=Birke) */
+					/* Die unteren zwei Bits bestimmen den Holztyp; 0x04/0x08
+					 * drehen den Stamm entlang der X-/Z-Achse. */
 					uint8_t log_type = (fallen_biome == birch_forest
 					    || fallen_biome == birch_forest_hills) ? 2 :
 					    (fallen_biome == taiga || fallen_biome == taiga_hills
 					    || fallen_biome == giant_tree_taiga || fallen_biome == giant_tree_taiga_hills)
 					    ? 1 : 0;
+					uint8_t log_axis = dx != 0 ? 0x04 : 0x08;
 					for(int i = 0; i < len; i++) {
 						int nx = lx + dx * i, nz = lz + dz2 * i;
 						if(nx < 0 || nx >= CHUNK_SIZE || nz < 0 || nz >= CHUNK_SIZE) break;
 						uint8_t base = sc->ids[S_CHUNK_IDX(nx, sy, nz)];
 						if(base != BLOCK_GRASS && base != BLOCK_DIRT && base != BLOCK_STONE) break;
 						if(sc->ids[S_CHUNK_IDX(nx, sy + 1, nz)] != BLOCK_AIR) break;
-						gen_set_block_with_meta(sc, nx, sy + 1, nz, BLOCK_LOG, log_type);
+						gen_set_block_with_meta(sc, nx, sy + 1, nz, BLOCK_LOG,
+							log_type | log_axis);
 					}
 				}
 			}
@@ -8732,6 +8737,14 @@ static bool server_world_advance_pending(struct server_world* w,
 	assert(w && out);
 	if(!w->pending_chunk.active)
 		return false;
+	if(w->pending_chunk.next_column == 64
+	   || w->pending_chunk.next_column == 128
+	   || w->pending_chunk.next_column == 192
+	   || w->pending_chunk.next_column == 256) {
+		WORLD_GEN_STEP_LOG("[WORLD_GEN_STEP] chunk=(%d,%d) phase=%d next=%d\n",
+			(int)w->pending_chunk.x, (int)w->pending_chunk.z,
+			(int)w->pending_chunk.phase, w->pending_chunk.next_column);
+	}
 
 	/* Nether: gesamten Chunk in TERRAIN-Phase generieren, direkt finalisieren */
 	if(w->dimension == WORLD_DIM_NETHER) {
@@ -8794,6 +8807,9 @@ static bool server_world_advance_pending(struct server_world* w,
 									 GEN_CHUNK_COLUMNS_PER_STEP);
 		gen_profile_phase_done(GEN_PROFILE_TERRAIN, phase_start);
 		w->pending_chunk.next_column += GEN_CHUNK_COLUMNS_PER_STEP;
+		if(w->pending_chunk.next_column % 64 == 0)
+			WORLD_GEN_STEP_LOG("[WORLD_GEN_STEP_RESULT] phase=terrain next=%d\n",
+				w->pending_chunk.next_column);
 		if(w->pending_chunk.next_column >= CHUNK_SIZE * CHUNK_SIZE) {
 			w->pending_chunk.phase = SERVER_WORLD_PENDING_FEATURES;
 			w->pending_chunk.next_column = 0;
@@ -9388,26 +9404,52 @@ bool server_world_load_chunk(struct server_world* w, w_coord_t x, w_coord_t z,
 	assert(w && sc);
 	*sc = NULL;
 
+	#ifdef PLATFORM_PC
+	if(w->pending_chunk.active)
+		server_world_pending_clear(w);
+	#else
+	if(w->pending_chunk.active) {
+		enum server_world_pending_phase phase_before = w->pending_chunk.phase;
+		int next_before = w->pending_chunk.next_column;
+		bool loaded = server_world_advance_pending(w, sc);
+		if(!loaded && w->pending_chunk.active
+		   && phase_before == w->pending_chunk.phase
+		   && next_before == w->pending_chunk.next_column) {
+			WORLD_GEN_STEP_LOG(
+				"[WORLD_GEN_NO_PROGRESS] chunk=(%d,%d) phase=%d next=%d\n",
+				(int)w->pending_chunk.x, (int)w->pending_chunk.z,
+				(int)w->pending_chunk.phase, w->pending_chunk.next_column);
+		}
+		return loaded;
+	}
+	#endif
+
 	if(server_world_is_chunk_loaded(w, x, z))
 		return false;
-
-	if(w->pending_chunk.active) {
-		return server_world_advance_pending(w, sc);
-	}
 
 	// Ensure the corresponding region archive is loaded (LRU is tiny; scanning
 	// can evict the region we need before load happens).
 	struct region_archive* ra = server_world_chunk_region(w, x, z);
-	if(!ra)
+	if(!ra) {
+	#ifdef PLATFORM_PC
+		return server_world_generate_chunk(w, x, z, sc);
+	#else
 		return server_world_pending_start(w, x, z)
 			? server_world_advance_pending(w, sc)
 			: false;
+	#endif
+	}
 
 	bool chunk_exists = false;
-	if(!region_archive_contains(ra, x, z, &chunk_exists) || !chunk_exists)
+	if(!region_archive_contains(ra, x, z, &chunk_exists) || !chunk_exists) {
+	#ifdef PLATFORM_PC
+		return server_world_generate_chunk(w, x, z, sc);
+	#else
 		return server_world_pending_start(w, x, z)
 			? server_world_advance_pending(w, sc)
 			: false;
+	#endif
+	}
 
 	/* Puffer aus dem Chunk-Pool holen (fragmentierungsfrei) und die Blockdaten
 	 * hineinkopieren -- kein malloc/free-Churn pro Disk-Load mehr (das war der
@@ -9731,8 +9773,9 @@ void server_world_explode(struct server_local *s, vec3 center, float power) {
         struct block_data old;
         server_world_get_block(AWORLD(s), bx, by, bz, &old);
         server_world_set_block(s, bx, by, bz, (struct block_data){0});
-        if (old.type != BLOCK_TNT
-            && rand()/(float)RAND_MAX < 0.33f) {
+		if (old.type != BLOCK_TNT && blocks[old.type]
+		    && blocks[old.type]->getDroppedItem
+		    && rand()/(float)RAND_MAX < 0.33f) {
             server_local_spawn_block_drops(
                 s,
                 &(struct block_info){ .x=bx,.y=by,.z=bz,.block=&old }

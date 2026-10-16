@@ -235,6 +235,13 @@ void gutil_clouds(mat4 view_matrix, float brightness) {
 	gfx_fog(false);
 }
 
+/* Original-Werte aus dem ersten fcavex-Commit. Flache welt-orientierte Scheibe
+ * bei Abstand 100. Größer als ~30-40 bringt Artefakte (Raute von der Seite,
+ * sichtbare 8x8-Pixel der Textur), weil die leuchtende Scheibe nur 8x8px der
+ * 32x32-Textur ist — mehr Rundheit gibt die Textur nicht her. */
+#define SUN_SIZE 30
+#define MOON_SIZE 20
+
 void gutil_sky_box(mat4 view_matrix, float celestial_angle, vec3 color_atmosphere,
 				   vec3 color_top, vec3 color_bottom) {
 	assert(view_matrix && color_atmosphere && color_top && color_bottom);
@@ -316,27 +323,33 @@ void gutil_sky_box(mat4 view_matrix, float celestial_angle, vec3 color_atmospher
 	if(daytime_render_dim == WORLD_DIM_OVERWORLD) {
 		gfx_blending(MODE_BLEND2);
 
-		mat4 tmp;
-		glm_translate_to(view_matrix,
-						 (vec3) {gstate.camera.x, gstate.camera.y, gstate.camera.z},
-						 tmp);
-		glm_rotate_x(tmp, glm_rad(celestial_angle * 360.0F), model_view);
+		/* Original-Rendering (wie im ersten fcavex-Commit): flache welt-orientierte
+		 * Scheibe via rotate_x. Position UND Textur welt-fest — wandert mit der
+		 * Tageszeit, dreht NIE mit dem Spielerblick. Bei dieser Größe (30/20) ist
+		 * die Scheibe klein genug, dass die perspektivische Verzerrung unsichtbar
+		 * bleibt. */
+		glm_rotate_x(model_view, glm_rad(celestial_angle * 360.0F), model_view);
 		gfx_matrix_modelview(model_view);
 
-		gfx_bind_texture(&texture_sun);
+		/* _virtual setzt tex_scale=1/256, passend zu den 256er-texcoords unten.
+		 * Das normale gfx_bind_texture würde tex_scale=1/tex->width=1/32 setzen
+		 * (Sonne ist 32px) → texcoords 256 würden auf 8 skaliert, die Textur
+		 * landet in 1/8 des Quads. Das hat die Sonne winzig gemacht. */
+		gfx_bind_texture_virtual(&texture_sun);
 		gfx_draw_quads(
-			4, (int16_t[]) {-30, 100, -30, -30, 100, 30, 30, 100, 30, 30, 100, -30},
-			(uint8_t[]) {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-						 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
+			4, (int16_t[]) {-SUN_SIZE, 100, -SUN_SIZE, -SUN_SIZE, 100, SUN_SIZE,
+							SUN_SIZE, 100, SUN_SIZE, SUN_SIZE, 100, -SUN_SIZE},
+			(uint8_t[]) {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+							 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
 			(uint16_t[]) {0, 0, 0, 256, 256, 256, 256, 0});
 
-		gfx_bind_texture(&texture_moon);
-		gfx_draw_quads(4,
-					   (int16_t[]) {-20, -100, -20, 20, -100, -20, 20, -100, 20,
-									-20, -100, 20},
-					   (uint8_t[]) {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-									0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
-					   (uint16_t[]) {0, 0, 0, 256, 256, 256, 256, 0});
+		gfx_bind_texture_virtual(&texture_moon);
+		gfx_draw_quads(
+			4, (int16_t[]) {-MOON_SIZE, -100, -MOON_SIZE, MOON_SIZE, -100, -MOON_SIZE,
+							MOON_SIZE, -100, MOON_SIZE, -MOON_SIZE, -100, MOON_SIZE},
+			(uint8_t[]) {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+							 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
+			(uint16_t[]) {0, 0, 0, 256, 256, 256, 256, 0});
 	}
 
 	gfx_blending(MODE_OFF);

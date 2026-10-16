@@ -47,6 +47,42 @@ static float plane_distance(vec3 n, vec3 p0, vec3 l0, vec3 l) {
 	return glm_vec3_dot(tmp, n) / d;
 }
 
+static void ray_hit_position(float gx0, float gy0, float gz0, vec3 dir,
+							 w_coord_t x, w_coord_t y, w_coord_t z,
+							 enum side side, float* hit_x, float* hit_y,
+							 float* hit_z) {
+	float plane;
+	float distance;
+	int axis;
+
+	switch(side) {
+		case SIDE_LEFT: axis = 0; plane = x; break;
+		case SIDE_RIGHT: axis = 0; plane = x + 1.0F; break;
+		case SIDE_BOTTOM: axis = 1; plane = y; break;
+		case SIDE_TOP: axis = 1; plane = y + 1.0F; break;
+		case SIDE_FRONT: axis = 2; plane = z; break;
+		case SIDE_BACK: axis = 2; plane = z + 1.0F; break;
+		default:
+			*hit_x = x + 0.5F;
+			*hit_y = y + 0.5F;
+			*hit_z = z + 0.5F;
+			return;
+	}
+
+	float origin[3] = {gx0, gy0, gz0};
+	if(fabsf(dir[axis]) < GLM_FLT_EPSILON) {
+		*hit_x = x + 0.5F;
+		*hit_y = y + 0.5F;
+		*hit_z = z + 0.5F;
+		return;
+	}
+
+	distance = (plane - origin[axis]) / dir[axis];
+	*hit_x = gx0 + dir[0] * distance;
+	*hit_y = gy0 + dir[1] * distance;
+	*hit_z = gz0 + dir[2] * distance;
+}
+
 void camera_ray_pick(struct world* w, float gx0, float gy0, float gz0,
 					 float gx1, float gy1, float gz1,
 					 struct camera_ray_result* res, bool allow_water_target) {
@@ -87,6 +123,8 @@ void camera_ray_pick(struct world* w, float gx0, float gy0, float gz0,
 			res->z = gz;
 			res->hit = true;
 			res->side = s;
+			ray_hit_position(gx0, gy0, gz0, dir, gx, gy, gz, s,
+							 &res->hit_x, &res->hit_y, &res->hit_z);
 			return;
 		}
 
@@ -100,6 +138,9 @@ void camera_ray_pick(struct world* w, float gx0, float gy0, float gz0,
 					res->z = gz;
 					res->hit = true;
 					res->side = SIDE_TOP;
+					ray_hit_position(gx0, gy0, gz0, dir, gx, gy, gz,
+									 SIDE_TOP, &res->hit_x, &res->hit_y,
+									 &res->hit_z);
 					return;
 				}
 			}

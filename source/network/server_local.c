@@ -20,9 +20,11 @@
 #include <assert.h>
 #include <math.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
 
 #include <stdio.h>
+
 
 #define PRESSURE_PLATE_DEBUG 0
 
@@ -83,6 +85,12 @@ static int g_chunk_cap = SERVER_CHUNK_HARD_CAP;
 /* ---- CHUNK DEBUG ---- Auf 1 setzen, nur diese Datei neu kompilieren ---- */
 #define CHUNK_MESHER_DEBUG 0
 /* ----------------------------------------------------------------------- */
+#define WORLD_GENERATOR_DEBUG 0
+#if WORLD_GENERATOR_DEBUG && defined(PLATFORM_PC)
+#define WORLD_GEN_LOG(...) fprintf(stderr, __VA_ARGS__)
+#else
+#define WORLD_GEN_LOG(...) ((void)0)
+#endif
 #if CHUNK_MESHER_DEBUG
 #include <stdio.h>
 #include <stdarg.h>
@@ -134,6 +142,110 @@ static int64_t server_local_hash_seed_from_name(const char* name) {
 		hash *= 1099511628211ULL;
 	}
 	return (int64_t)hash;
+}
+
+static int64_t server_local_last_played(void) {
+	static int64_t previous;
+	int64_t current = (int64_t)time(NULL) * 1000;
+	if(current <= previous)
+		current = previous + 1;
+	previous = current;
+	return current;
+}
+
+struct server_player2_save {
+	uint32_t magic;
+	uint32_t version;
+	double x, y, z;
+	float rx, ry;
+	int dimension;
+	short health;
+	int oxygen;
+	int spawn_x, spawn_y, spawn_z;
+	float vel_y, old_vel_y, fall_distance;
+	bool creative;
+	bool has_pos;
+	int hotbar_slot;
+	struct item_data picked_item;
+	struct item_data items[INVENTORY_SIZE];
+};
+
+static void server_local_player2_path(const struct server_local* s,
+									char* path, size_t path_size) {
+	snprintf(path, path_size, "%s/player2.dat", string_get_cstr(s->level_name));
+}
+
+static void server_local_save_player2(const struct server_local* s) {
+	if(!s || !s->world_initialized || s->players[1].inventory.capacity < INVENTORY_SIZE)
+		return;
+	struct server_player2_save save = {
+		.magic = 0x32564346U,
+		.version = 2,
+	};
+	const struct server_player* player = &s->players[1];
+	save.x = player->x;
+	save.y = player->y;
+	save.z = player->z;
+	save.rx = player->rx;
+	save.ry = player->ry;
+	save.dimension = player->dimension;
+	save.health = player->health;
+	save.oxygen = player->oxygen;
+	save.spawn_x = player->spawn_x;
+	save.spawn_y = player->spawn_y;
+	save.spawn_z = player->spawn_z;
+	save.vel_y = player->vel_y;
+	save.old_vel_y = player->old_vel_y;
+	save.fall_distance = player->fall_distance;
+	save.creative = player->creative;
+	save.has_pos = player->has_pos;
+	save.hotbar_slot = player->inventory.hotbar_slot;
+	save.picked_item = player->inventory.picked_item;
+	memcpy(save.items, player->inventory.items,
+	       sizeof(save.items));
+	char path[512];
+	server_local_player2_path(s, path, sizeof(path));
+	FILE* file = fopen(path, "wb");
+	if(file) {
+		fwrite(&save, sizeof(save), 1, file);
+		fclose(file);
+	}
+}
+
+static void server_local_load_player2(struct server_local* s) {
+	if(!s || s->players[1].inventory.capacity < INVENTORY_SIZE)
+		return;
+	char path[512];
+	server_local_player2_path(s, path, sizeof(path));
+	FILE* file = fopen(path, "rb");
+	if(!file)
+		return;
+	struct server_player2_save save;
+	bool valid = fread(&save, sizeof(save), 1, file) == 1
+					 && save.magic == 0x32564346U && save.version == 2
+					 && save.has_pos;
+	fclose(file);
+	if(!valid)
+		return;
+	struct server_player* player = &s->players[1];
+	player->x = save.x;
+	player->y = save.y;
+	player->z = save.z;
+	player->rx = save.rx;
+	player->ry = save.ry;
+	player->dimension = save.dimension;
+	player->health = save.health;
+	player->oxygen = save.oxygen;
+	player->spawn_x = save.spawn_x;
+	player->spawn_y = save.spawn_y;
+	player->spawn_z = save.spawn_z;
+	player->vel_y = save.vel_y;
+	player->old_vel_y = save.old_vel_y;
+	player->fall_distance = save.fall_distance;
+	player->creative = save.creative;
+	player->inventory.hotbar_slot = save.hotbar_slot;
+	player->inventory.picked_item = save.picked_item;
+	memcpy(player->inventory.items, save.items, sizeof(save.items));
 }
 
 static const int server_local_spawn_animals[] = {
@@ -1549,6 +1661,18 @@ static void server_local_process(struct server_rpc* call, void* user) {
 			player->old_vel_y = player->vel_y;
 			player->vel_y = call->payload.player_pos.vel_y;
 			player->has_pos = true;
+			if(player->y <= WORLD_FALL_BOUNDARY_Y) {
+				player->y = WORLD_FALL_BOUNDARY_Y;
+				player->vel_y = 0.0F;
+				clin_rpc_send(&(struct client_rpc) {
+					CRPC_PLAYER_ID(pid)
+					.type = CRPC_PLAYER_POS,
+					.payload.player_pos.position = {player->x, player->y, player->z},
+					.payload.player_pos.rotation = {player->rx, player->ry},
+					.payload.player_pos.dimension = player->dimension,
+					.payload.player_pos.teleport = false,
+				});
+			}
 			break;
 		case SRPC_HOTBAR_SLOT:
 			if(player->has_pos
@@ -1702,21 +1826,27 @@ static void server_local_process(struct server_rpc* call, void* user) {
 						&player->inventory, &it_data);
 					struct item* it = has_tool ? item_get(&it_data) : NULL;
 
-					if(!player->creative && blocks[blk.type]
-					   && ((it
-							&& it->tool.type == blocks[blk.type]->digging.tool
-							&& it->tool.tier >= blocks[blk.type]->digging.min)
-						   || blocks[blk.type]->digging.min == TOOL_TIER_ANY
-						   || blocks[blk.type]->digging.tool == TOOL_TYPE_ANY))
-						server_local_spawn_block_drops(
-							s,
-							&(struct block_info) {
-								.block = &blk,
-								.neighbours = NULL,
-								.x = call->payload.block_dig.x,
-								.y = call->payload.block_dig.y,
-								.z = call->payload.block_dig.z,
-							});
+					if(blocks[blk.type]) {
+						struct block_info broken_block = {
+							.block = &blk,
+							.neighbours = NULL,
+							.x = call->payload.block_dig.x,
+							.y = call->payload.block_dig.y,
+							.z = call->payload.block_dig.z,
+						};
+
+						if(player->creative) {
+							struct random_gen tmp = s->rand_src;
+							blocks[blk.type]->getDroppedItem(
+								&broken_block, NULL, &tmp, s);
+						} else if((it
+								&& it->tool.type == blocks[blk.type]->digging.tool
+								&& it->tool.tier >= blocks[blk.type]->digging.min)
+							   || blocks[blk.type]->digging.min == TOOL_TIER_ANY
+							   || blocks[blk.type]->digging.tool == TOOL_TYPE_ANY) {
+							server_local_spawn_block_drops(s, &broken_block);
+						}
+					}
 				}
 			}
 			break;
@@ -1784,6 +1914,10 @@ static void server_local_process(struct server_rpc* call, void* user) {
 					s->placement_player_x = call->payload.block_place.player_x;
 					s->placement_player_y = call->payload.block_place.player_y;
 					s->placement_player_z = call->payload.block_place.player_z;
+					s->placement_hit_valid = true;
+					s->placement_hit_x = call->payload.block_place.hit_x;
+					s->placement_hit_y = call->payload.block_place.hit_y;
+					s->placement_hit_z = call->payload.block_place.hit_z;
 					if(blocks[blk_on.type]
 					   && blocks[blk_on.type]->onRightClick) {
 						//CAVEX_DEBUG_PRINTF("true 2");
@@ -1816,6 +1950,7 @@ static void server_local_process(struct server_rpc* call, void* user) {
 						//CAVEX_DEBUG_PRINTF("false2");
 					}
 					s->placement_player_pos_valid = false;
+					s->placement_hit_valid = false;
 					s->placement_sync_pending = false;
 					BLOCK_LAT_PRINTF("[PLACE_SERVER_RESULT] p=%d id=%u placed=%d "
 						"where=(%d,%d,%d)\n", (int)pid,
@@ -1953,9 +2088,14 @@ static void server_local_process(struct server_rpc* call, void* user) {
 			level_archive_write_player(
 				&s->level, (vec3) {player->x, player->y, player->z},
 				(vec2) {player->rx, player->ry}, NULL, player->dimension);
+			server_local_save_player2(s);
 
 			level_archive_write_inventory(&s->level, &player->inventory);
 			level_archive_write(&s->level, LEVEL_TIME, &s->world_time);
+			{
+				int64_t last_played = server_local_last_played();
+				level_archive_write(&s->level, LEVEL_LAST_PLAYED, &last_played);
+			}
 			{
 				int32_t gm = player->creative ? 1 : 0;
 				level_archive_write(&s->level, LEVEL_PLAYER_GAMEMODE, &gm);
@@ -2246,6 +2386,7 @@ static void server_local_process(struct server_rpc* call, void* user) {
 
 					// Load only the primary inventory from `level.dat` (vanilla format).
 					level_archive_read_inventory(&s->level, &s->players[0].inventory);
+					server_local_load_player2(s);
 #else
 						player->dimension = dim;
 					player->x = base_pos[0];
@@ -2269,14 +2410,10 @@ static void server_local_process(struct server_rpc* call, void* user) {
 					}
 
 				chest_archive_read(s->chest_pos, s->chest_items[0], s->level_name);
-				dispenser_archive_read(s->dispenser_pos, s->dispenser_items[0], s->level_name);
-				/* A powered dispenser loaded from disk has no rising edge. */
-				for(int i = 0; i < MAX_DISPENSERS; i++) {
-					if(s->dispenser_pos[i].y >= 0)
-						s->dispenser_powered[i] = block_redstone_is_powered(
-							s, s->dispenser_pos[i].x, s->dispenser_pos[i].y,
-							s->dispenser_pos[i].z);
-				}
+					dispenser_archive_read(s->dispenser_pos, s->dispenser_items[0], s->level_name);
+					/* A powered dispenser loaded from disk has no rising edge. */
+				for(int i = 0; i < MAX_DISPENSERS; i++)
+					s->dispenser_state_initialized[i] = false;
 				furnace_archive_read(s->furnaces, s->level_name);
 				sign_archive_read(s->sign_pos, s->sign_texts[0], s->level_name);
 				server_local_load_portal_registry(s);
@@ -2301,8 +2438,8 @@ static void server_local_process(struct server_rpc* call, void* user) {
 							= {sp->x, sp->y, sp->z},
 						.payload.player_pos.rotation
 							= {sp->rx, sp->ry},
-					});
-				}
+				});
+			}
 #else
 				clin_rpc_send(&(struct client_rpc) {
 					.type = CRPC_PLAYER_POS,
@@ -2784,44 +2921,6 @@ unload_done:
 	}
 #endif
 
-	// iterate over all chunks that should be loaded
-	bool c_nearest = false;
-	w_coord_t c_nearest_x, c_nearest_z;
-	w_coord_t c_nearest_dist2;
-	w_coord_t min_px = px;
-	w_coord_t max_px = px;
-	w_coord_t min_pz = pz;
-	w_coord_t max_pz = pz;
-#ifdef SPLITSCREEN
-	if(p1_active) {
-		if(px1 < min_px) min_px = px1;
-		if(px1 > max_px) max_px = px1;
-		if(pz1 < min_pz) min_pz = pz1;
-		if(pz1 > max_pz) max_pz = pz1;
-	}
-#endif
-	for(w_coord_t z = min_pz - vd; z <= max_pz + vd; z++) {
-		for(w_coord_t x = min_px - vd; x <= max_px + vd; x++) {
-			w_coord_t d = CHUNK_DIST2(px, x, pz, z);
-#ifdef SPLITSCREEN
-			if(p1_active) {
-				w_coord_t d1 = CHUNK_DIST2(px1, x, pz1, z);
-				if(d1 < d)
-					d = d1;
-			}
-#endif
-			if(d > vd * vd)
-				continue;
-			if(!server_world_is_chunk_loaded(&s->worlds[0], x, z)
-			   && (d < c_nearest_dist2 || !c_nearest)) {
-				c_nearest_dist2 = d;
-				c_nearest_x = x;
-				c_nearest_z = z;
-				c_nearest = true;
-			}
-		}
-	}
-
 #ifdef SPLITSCREEN
 	int num_players = splitscreen_player_count();
 	bool finished_loading = true;
@@ -2898,28 +2997,52 @@ unload_done:
 	int generated_this_tick = 0;
 	/* true once there is no candidate chunk left to load/generate in range */
 	bool all_loaded = false;
+	const char* chunk_loop_break = "entered";
 	ptime_t chunk_load_start = time_get();
 	for(int load_i = 0;; load_i++) {
-		if(time_diff_ms(chunk_load_start, time_get()) >= chunk_budget_ms)
+		if(load_i >= 24 && load_i <= 26) {
+			WORLD_GEN_LOG("[WORLD_GEN_LOOP_TOP] load_i=%d pending=%d\n",
+				load_i,
+				server_world_pending_chunk(&s->worlds[0], NULL, NULL) ? 1 : 0);
+		}
+		if(load_i > 0
+		   && server_world_pending_chunk(&s->worlds[0], NULL, NULL)) {
+			chunk_loop_break = "pending_yield";
 			break;
+		}
+		int32_t elapsed_ms = time_diff_ms(chunk_load_start, time_get());
+		if(elapsed_ms >= chunk_budget_ms) {
+			chunk_loop_break = "time_budget";
+			WORLD_GEN_LOG("[WORLD_GEN_STOP] reason=time_budget elapsed=%d budget=%d load_i=%d\n",
+				(int)elapsed_ms, chunk_budget_ms, load_i);
+			break;
+		}
 #ifdef PLATFORM_WII
 		/* Harter Lade-Stopp: nie über die Speichergrenze laden, egal was der
 		 * (nur sekündlich laufende) Governor gerade als vd gesetzt hat. Ohne
 		 * das könnte die Chunk-Zahl zwischen zwei Governor-Ticks über die
 		 * Grenze schießen und den Speicher erschöpfen. */
 		if(dict_server_chunks_size(s->worlds[0].chunks)
-		   >= (size_t)g_chunk_cap)
+		   >= (size_t)g_chunk_cap) {
+			chunk_loop_break = "chunk_cap";
 			break;
+		}
 #endif
 		if(generating) {
 			/* new-world spawn generation happens on the loading screen -> full
 			 * speed, bounded only by the loading time budget above (NOT by the
 			 * in-game chunk_build_per_tick setting). */
-			if(loaded_this_tick >= 1000000) /* whole chunks per tick */
+			if(loaded_this_tick >= 1000000) { /* whole chunks per tick */
+				chunk_loop_break = "generation_limit";
 				break;
+			}
 		} else {
-			if(load_i >= load_per_tick) /* steps per tick */
+			if(load_i >= load_per_tick) { /* steps per tick */
+				chunk_loop_break = "step_limit";
+				WORLD_GEN_LOG("[WORLD_GEN_STOP] reason=step_limit load_i=%d limit=%d\n",
+					load_i, load_per_tick);
 				break;
+			}
 		}
 
 		/* recompute nearest disk candidate each iteration */
@@ -2929,17 +3052,24 @@ unload_done:
 		if(server_world_pending_chunk(&s->worlds[0], &cand_x, &cand_z)) {
 			c_found = true;
 		}
-		if(!c_found) {
-		for(w_coord_t z = min_pz - vd; z <= max_pz + vd; z++) {
-			for(w_coord_t x = min_px - vd; x <= max_px + vd; x++) {
-				w_coord_t d = CHUNK_DIST2(px, x, pz, z);
+	if(!c_found) {
+		int pass_count = 1;
 #ifdef SPLITSCREEN
-				if(p1_active) {
-					w_coord_t d1 = CHUNK_DIST2(px1, x, pz1, z);
-					if(d1 < d)
-						d = d1;
-				}
+		if(p1_active)
+			pass_count = 2;
 #endif
+		for(int pass = 0; pass < pass_count; pass++) {
+			w_coord_t center_x = px;
+			w_coord_t center_z = pz;
+#ifdef SPLITSCREEN
+			if(pass == 1) {
+				center_x = px1;
+				center_z = pz1;
+			}
+#endif
+			for(w_coord_t z = center_z - vd; z <= center_z + vd; z++) {
+				for(w_coord_t x = center_x - vd; x <= center_x + vd; x++) {
+					w_coord_t d = CHUNK_DIST2(center_x, x, center_z, z);
 				if(d > vd * vd)
 					continue;
 				if(!server_world_is_chunk_loaded(&s->worlds[0], x, z)
@@ -2953,9 +3083,17 @@ unload_done:
 		}
 		}
 
-		if(!c_found) {
+			if(!c_found) {
 			all_loaded = true; /* nothing left in range -> done */
+			chunk_loop_break = "no_candidate";
+			WORLD_GEN_LOG("[WORLD_GEN_STOP] reason=no_candidate total=%zu vd=%d\n",
+				dict_server_chunks_size(s->worlds[0].chunks), vd);
 			break;
+		}
+		if(load_i == 25 || load_i % 100000 == 0) {
+			WORLD_GEN_LOG("[WORLD_GEN_LOOP] load_i=%d candidate=(%d,%d) pending=%d\n",
+				load_i, (int)cand_x, (int)cand_z,
+				server_world_pending_chunk(&s->worlds[0], NULL, NULL) ? 1 : 0);
 		}
 
 		/* Transfer-Puffer ZUERST holen. Nur mit freiem Puffer den Chunk laden
@@ -2966,12 +3104,22 @@ unload_done:
 			/* Pool momentan leer (Client hat Puffer noch nicht zurückgegeben) —
 			 * Chunk NICHT laden, nächster Tick erneut. Kein vd-- hier: der
 			 * RAM-Governor regelt die Sichtweite. */
+			chunk_loop_break = "transfer_pool_empty";
+			WORLD_GEN_LOG("[WORLD_GEN_STOP] reason=transfer_pool_empty candidate=(%d,%d) "
+				"pending=%d total=%zu\n", (int)cand_x, (int)cand_z,
+				server_world_pending_chunk(&s->worlds[0], NULL, NULL) ? 1 : 0,
+				dict_server_chunks_size(s->worlds[0].chunks));
 			break;
 		}
 
 		struct server_chunk* sc;
+		chunk_loop_break = "load_call";
 		bool pending_before = server_world_pending_chunk(&s->worlds[0], NULL, NULL);
+		WORLD_GEN_LOG("[WORLD_GEN_CALL] chunk=(%d,%d) pending_before=%d load_i=%d\n",
+			(int)cand_x, (int)cand_z, pending_before ? 1 : 0, load_i);
 		if(server_world_load_chunk(&s->worlds[0], cand_x, cand_z, &sc)) {
+			WORLD_GEN_LOG("[WORLD_GEN_RETURN] result=loaded chunk=(%d,%d)\n",
+				(int)cand_x, (int)cand_z);
 			size_t sz = CHUNK_SIZE * CHUNK_SIZE * WORLD_HEIGHT;
 
 			uint8_t* ids           = block;
@@ -3009,15 +3157,18 @@ unload_done:
 		} else if(server_world_pending_chunk(&s->worlds[0], NULL, NULL)) {
 			/* Generierung läuft noch (mehrstufig) → Puffer zurückgeben */
 			clin_chunk_buf_return(block);
+			chunk_loop_break = "pending_step";
+			WORLD_GEN_LOG("[WORLD_GEN_RETURN] result=pending progress=%d\n",
+				server_world_pending_progress(&s->worlds[0]));
 			/* KEIN Fehler: die Chunk-Generierung ist mehrstufig (Terrain ->
 			 * Features -> Deko -> Finalize) und liefert pro Schritt false, bis
 			 * der Chunk fertig ist. Das ist Fortschritt, NICHT OOM — die Grenze
 			 * darf hier NICHT gesenkt werden (sonst spammt "[CAP] OOM" bei vollem
 			 * Speicher, und der harte Cap-Stopp würgt die Generierung ab -> die
-			 * beobachteten 0-ms-Leerlauf-Ticks während die Welt generiert). Am
-			 * selben Pending-Chunk weiterarbeiten; das Zeit-/Schrittbudget am
-			 * Schleifenanfang begrenzt die Schritte pro Tick. */
-			continue;
+				 * beobachteten 0-ms-Leerlauf-Ticks während die Welt generiert). Den
+				 * nächsten Schritt im nächsten Tick ausführen, damit die Chunk-Mesher-
+				 * Queue und die Client-RPCs weiterarbeiten können. */
+			break;
 		} else {
 			/* Echter Fehlschlag: Allokation (malloc/Pool erschöpft) oder
 			 * Archiv-Fehler OHNE laufende Generierung. Die Grenze auf die
@@ -3032,7 +3183,28 @@ unload_done:
 				CDBG("[CAP] OOM bei %zu -> harte Grenze auf %d gesenkt\n",
 					 now_loaded, g_chunk_cap);
 			}
+			chunk_loop_break = "load_failed";
 			break;
+		}
+	}
+	{
+		static ptime_t last_generator_log;
+		ptime_t now = time_get();
+		bool pending = server_world_pending_chunk(&s->worlds[0], NULL, NULL);
+		if((pending || !all_loaded || loaded_this_tick > 0)
+		   && time_diff_ms(last_generator_log, now) >= 500) {
+			int pending_progress = server_world_pending_progress(&s->worlds[0]);
+			WORLD_GEN_LOG(
+				"[WORLD_GEN] loaded=%d generated=%d total=%zu pending=%d progress=%d "
+				"break=%s loop=%d budget=%d elapsed=%d vd=%d cap=%d all_loaded=%d "
+				"finished=%d generating=%d limit=%d\n",
+				loaded_this_tick, generated_this_tick,
+				dict_server_chunks_size(s->worlds[0].chunks), pending ? 1 : 0,
+				pending_progress, chunk_loop_break, load_i, chunk_budget_ms,
+				(int)time_diff_ms(chunk_load_start, now), vd, g_chunk_cap,
+				all_loaded ? 1 : 0, finished_loading ? 1 : 0,
+				generating ? 1 : 0, load_per_tick);
+			last_generator_log = now;
 		}
 	}
 
@@ -3077,6 +3249,7 @@ unload_done:
 						gstate.gen_debug.chunks_per_sec * 0.75f + inst * 0.25f;
 				gen_rate_count = 0;
 				gen_rate_last = gen_rate_now;
+				}
 			}
 		}
 	}
@@ -3257,12 +3430,14 @@ for (int i = 0; i < 4; i++) {
 		/* Welt von Spieler i (PWORLD), nicht die des aktiven Spielers (AWORLD),
 		 * sonst werden Wasser/Lava/Leiter für Spieler in anderer Dimension
 		 * im falschen Welt-Objekt geprüft. */
-		struct block_data blk;
+		struct block_data blk = {.type = BLOCK_AIR};
 		server_world_get_block(PWORLD(s, i), player->x-1, player->y, player->z, &blk);
 		bool in_water = (blk.type == BLOCK_WATER_STILL || blk.type == BLOCK_WATER_FLOW);
-		bool in_lava = (blk.type == BLOCK_LAVA_STILL || blk.type == BLOCK_LAVA_FLOW);
+		bool in_lava = (blk.type == BLOCK_LAVA_STILL || blk.type == BLOCK_LAVA_FLOW)
+			|| player->y <= WORLD_FALL_BOUNDARY_Y;
 		int feet_y = (int)floor(player->y - 1.62);
-		struct block_data blk_climb, blk_climb2;
+		struct block_data blk_climb = {.type = BLOCK_AIR};
+		struct block_data blk_climb2 = {.type = BLOCK_AIR};
 		server_world_get_block(PWORLD(s, i), player->x, feet_y,     player->z, &blk_climb);
 		server_world_get_block(PWORLD(s, i), player->x, feet_y + 1, player->z, &blk_climb2);
 		bool on_climbable = (blk_climb.type  == BLOCK_LADDER || blk_climb.type  == BLOCK_VINE
@@ -3383,12 +3558,14 @@ for (int i = 0; i < 4; i++) {
 #else
 	// check if player is underwater
 	// server side X off by one?
-	struct block_data blk;
+	struct block_data blk = {.type = BLOCK_AIR};
 	server_world_get_block(AWORLD(s), s->player.x-1, s->player.y, s->player.z, &blk);
 	bool in_water = (blk.type == BLOCK_WATER_STILL || blk.type == BLOCK_WATER_FLOW);
-	bool in_lava = (blk.type == BLOCK_LAVA_STILL || blk.type == BLOCK_LAVA_FLOW);
+	bool in_lava = (blk.type == BLOCK_LAVA_STILL || blk.type == BLOCK_LAVA_FLOW)
+		|| s->player.y <= WORLD_FALL_BOUNDARY_Y;
 	int feet_y = (int)floor(s->player.y - 1.62);
-	struct block_data blk_climb, blk_climb2;
+	struct block_data blk_climb = {.type = BLOCK_AIR};
+	struct block_data blk_climb2 = {.type = BLOCK_AIR};
 	server_world_get_block(AWORLD(s), s->player.x, feet_y,     s->player.z, &blk_climb);
 	server_world_get_block(AWORLD(s), s->player.x, feet_y + 1, s->player.z, &blk_climb2);
 	bool on_climbable = (blk_climb.type  == BLOCK_LADDER || blk_climb.type  == BLOCK_VINE

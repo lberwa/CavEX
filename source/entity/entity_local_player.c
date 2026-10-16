@@ -98,6 +98,25 @@ static size_t getBoundingBox(const struct entity* e, struct AABB* out) {
 	return 1;
 }
 
+static bool trapdoor_step_ignore_valid;
+static int trapdoor_step_ignore_x;
+static int trapdoor_step_ignore_y;
+static int trapdoor_step_ignore_z;
+
+static bool trapdoor_step_collision(struct AABB* entity,
+									 struct block_info* block_info) {
+	if(trapdoor_step_ignore_valid
+	   && block_info->x == trapdoor_step_ignore_x
+	   && block_info->y == trapdoor_step_ignore_y
+	   && block_info->z == trapdoor_step_ignore_z)
+		return false;
+
+	if(!entity_block_aabb_test(entity, block_info))
+		return false;
+
+	return true;
+}
+
 static void liquid_aabb(struct AABB* out, struct block_info* blk_info) {
 	int block_height = (blk_info->block->metadata & 0x8) ?
 		16 :
@@ -408,7 +427,8 @@ static bool entity_tick(struct entity* e) {
 	               e->pos[2]);
 
 	bool in_water = entity_intersection(e, &bbox, test_in_water);
-	bool in_lava  = entity_intersection(e, &bbox, test_in_lava);
+	bool in_lava  = entity_intersection(e, &bbox, test_in_lava)
+		|| e->pos[1] <= WORLD_FALL_BOUNDARY_Y;
 
 	float slipperiness = (in_lava || in_water) ? 1.0F : (e->on_ground ? 0.6F : 1.0F);
 
@@ -425,6 +445,16 @@ static bool entity_tick(struct entity* e) {
 		jumping = input_held(IB_JUMP, player_index);
 		sneaking = input_held(IB_SNEAK, player_index);
 
+		bool forward_held = forward > 0;
+		bool forward_edge = forward_held
+			&& !e->data.local_player.forward_held_prev;
+		e->data.local_player.forward_held_prev = forward_held;
+		if(detect_double_tap(forward_edge,
+		                     &e->data.local_player.sprint_tap_window))
+			e->data.local_player.sprinting = true;
+		if(!forward_held)
+			e->data.local_player.sprinting = false;
+
 		bool jump_edge = jumping && !e->data.local_player.jump_held_prev;
 		e->data.local_player.jump_held_prev = jumping;
 		if(e->data.local_player.creative
@@ -433,6 +463,9 @@ static bool entity_tick(struct entity* e) {
 	} else {
 		e->data.local_player.jump_tap_window = 0;
 		e->data.local_player.jump_held_prev = false;
+		e->data.local_player.sprint_tap_window = 0;
+		e->data.local_player.forward_held_prev = false;
+		e->data.local_player.sprinting = false;
 	}
 
 	if(!e->data.local_player.creative)
@@ -466,8 +499,9 @@ static bool entity_tick(struct entity* e) {
 			e->vel[2] += 0.5F * powf(0.6F / slipperiness, 3.0F) * dy;
 		} else {
 #endif
-			e->vel[0] += 0.1F * powf(0.6F / slipperiness, 3.0F) * dx;
-			e->vel[2] += 0.1F * powf(0.6F / slipperiness, 3.0F) * dy;
+			float movement_accel = e->data.local_player.sprinting ? 0.15F : 0.1F;
+			e->vel[0] += movement_accel * powf(0.6F / slipperiness, 3.0F) * dx;
+			e->vel[2] += movement_accel * powf(0.6F / slipperiness, 3.0F) * dy;
 #ifdef FAST_MOVING
 		}
 #endif
@@ -523,6 +557,9 @@ static bool entity_tick(struct entity* e) {
 	if(e->on_ground) {
 		bool collision = false;
 		bool ground    = e->on_ground;
+		bool stepped   = false;
+		const float step_dx = new_vel[0];
+		const float step_dz = new_vel[2];
 
 		new_vel[1] = 0.6F;
 		entity_try_move(e, new_pos, new_vel, &bbox, 1, &collision, &ground);
@@ -540,6 +577,69 @@ static bool entity_tick(struct entity* e) {
 			e->on_ground = ground;
 			glm_vec3_copy(new_pos, e->pos);
 			glm_vec3_copy(new_vel, e->vel);
+			stepped = true;
+		}
+
+		if(!stepped) {
+			const float candidate_x = e->pos[0] + step_dx;
+			const float candidate_z = e->pos[2] + step_dz;
+			const float feet_y = e->pos[1] - EYE_HEIGHT;
+			const int min_x = (int)floorf(candidate_x - PLAYER_HITBOX_WIDTH / 2.0F);
+			const int max_x = (int)floorf(candidate_x + PLAYER_HITBOX_WIDTH / 2.0F);
+			const int min_z = (int)floorf(candidate_z - PLAYER_HITBOX_WIDTH / 2.0F);
+			const int max_z = (int)floorf(candidate_z + PLAYER_HITBOX_WIDTH / 2.0F);
+			const int min_y = (int)floorf(feet_y) - 1;
+			const int max_y = (int)floorf(feet_y) + 1;
+			float trapdoor_step = 1.0F;
+			int found_trapdoor_x = 0;
+			int found_trapdoor_y = 0;
+			int found_trapdoor_z = 0;
+
+			for(int trap_x = min_x; trap_x <= max_x; trap_x++) {
+				for(int trap_z = min_z; trap_z <= max_z; trap_z++) {
+					for(int trap_y = min_y; trap_y <= max_y; trap_y++) {
+						struct block_data trapdoor;
+						if(!entity_get_block(e, trap_x, trap_y, trap_z, &trapdoor)
+						   || trapdoor.type != BLOCK_TRAP_DOOR
+						   || (trapdoor.metadata & 0x04)
+						   || (trapdoor.metadata & 0x08))
+							continue;
+
+						float step = (float)trap_y + 0.1875F - feet_y;
+						if(step > 0.001F && step < trapdoor_step && step <= 0.6F) {
+							trapdoor_step = step;
+							found_trapdoor_x = trap_x;
+							found_trapdoor_y = trap_y;
+							found_trapdoor_z = trap_z;
+						}
+					}
+				}
+			}
+
+			if(trapdoor_step < 1.0F) {
+				vec3 trapdoor_pos = {
+					candidate_x,
+					e->pos[1] + trapdoor_step,
+					candidate_z
+				};
+				struct AABB trapdoor_bbox = bbox;
+				aabb_translate(&trapdoor_bbox, trapdoor_pos[0],
+				               trapdoor_pos[1], trapdoor_pos[2]);
+
+				trapdoor_step_ignore_valid = true;
+				trapdoor_step_ignore_x = found_trapdoor_x;
+				trapdoor_step_ignore_y = found_trapdoor_y;
+				trapdoor_step_ignore_z = found_trapdoor_z;
+				if(!entity_intersection(e, &trapdoor_bbox,
+				                       trapdoor_step_collision)) {
+					new_vel[1] = 0.0F;
+					collision_xz = true;
+					e->on_ground = true;
+					glm_vec3_copy(trapdoor_pos, e->pos);
+					glm_vec3_copy(new_vel, e->vel);
+				}
+				trapdoor_step_ignore_valid = false;
+			}
 		}
 	}
 
@@ -602,7 +702,7 @@ static bool entity_tick(struct entity* e) {
 	e->data.local_player.walk_bob_speed += (bob_target - e->data.local_player.walk_bob_speed) * 0.1f;
 	e->data.local_player.walk_bob += walk_speed * GLM_PI;
 
-	if(e->on_ground
+	if(gstate.world_loaded && e->on_ground && walk_speed > 0.001f
 	   && e->data.local_player.walk_bob >= e->data.local_player.step_bob_next) {
 		struct block_data step_blk;
 		if(entity_get_block(e, floorf(e->pos[0]),

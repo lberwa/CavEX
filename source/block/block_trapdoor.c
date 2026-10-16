@@ -22,6 +22,8 @@
 // best would be to add something that looks at the neighbour state change
 //todo; fix rendering of the door in various metadata positions
 
+#include <math.h>
+
 #include "../network/server_local.h"
 #include "blocks.h"
 
@@ -53,6 +55,8 @@ static size_t getBoundingBox(struct block_info* this, bool entity,
 			}
 		} else {
 			aabb_setsize(x, 1.0F, 0.1875F, 1.0F);
+			if(this->block->metadata & 0x08)
+				aabb_translate(x, 0, 0.8125F, 0);
 		}
 	}
 
@@ -91,8 +95,27 @@ static bool onItemPlace(struct server_local* s, struct item_data* it,
 		case SIDE_LEFT: metadata = 2; break;
 		case SIDE_RIGHT: metadata = 3; break;
 		case SIDE_BACK: metadata = 1; break;
+		case SIDE_FRONT: metadata = 0; break;
+		case SIDE_TOP:
+		case SIDE_BOTTOM: {
+			const double dx = s->players[s->active_player_id].x
+				- (where->x + 0.5);
+			const double dz = s->players[s->active_player_id].z
+				- (where->z + 0.5);
+			if(fabs(dx) > fabs(dz))
+				metadata = dx >= 0 ? 3 : 2;
+			else
+				metadata = dz >= 0 ? 1 : 0;
+			break;
+		}
 		default: break;
 	}
+
+	if(on_side == SIDE_BOTTOM
+	   || (on_side != SIDE_BOTTOM && on_side != SIDE_TOP
+		   && s->placement_hit_valid
+		   && s->placement_hit_y - on->y >= 0.5F))
+		metadata |= 0x08;
 
 	struct block_data blk = (struct block_data) {
 		.type = it->id,
@@ -149,7 +172,7 @@ static void onNeighbourBlockChange(struct server_local* s, struct block_info* in
 
 	if(st->powered != powered) {
 		st->powered = powered;
-		cur.metadata = (cur.metadata & 0x03) | (powered ? 0x04 : 0x00);
+		cur.metadata = (cur.metadata & 0x0B) | (powered ? 0x04 : 0x00);
 		server_world_set_block(s, info->x, info->y, info->z, cur);
 		notifyNeighbours(s, info->x, info->y, info->z);
 	}

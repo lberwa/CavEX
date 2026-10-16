@@ -191,10 +191,6 @@ static void inv_post_action(struct inventory* inv, size_t slot, bool right,
 	struct item_data result = furnace_recipe_result(
 		furnace->items[FURNACE_SLOT_INPUT]);
 	if(result.id == 0) {
-		inventory_clear_slot(inv, FURNACE_SLOT_OUTPUT);
-		furnace->items[FURNACE_SLOT_OUTPUT].id = 0;
-		furnace->items[FURNACE_SLOT_OUTPUT].durability = 0;
-		furnace->items[FURNACE_SLOT_OUTPUT].count = 0;
 		furnace->cook_time = 0;
 	} else {
 		inventory_set_slot(inv, FURNACE_SLOT_OUTPUT, furnace->items[FURNACE_SLOT_OUTPUT]);

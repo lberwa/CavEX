@@ -49,6 +49,13 @@ static const char* menu_options[4] = {
 
 extern struct screen screen_controllerauswahl;
 static int gui_selection = 0;
+
+static void player_count_select(int option) {
+	sound_play(pcm_click);
+	gstate.num_players = option + 1;
+	if(option < TWO_PLAYERS + 1)
+		menu_screen_set(&screen_controllerauswahl);
+}
 /*
 static enum mp3_sound bg_playlist[16] = {
 	mp3_bg1,
@@ -63,6 +70,8 @@ static enum mp3_sound bg_playlist[16] = {
 */
 // Reset-Funktion: Initialisiert den Screen
 static void screen_splayeranzahl_reset(struct screen* s, int width, int height) {
+	gutil_button_new_menu();
+
     input_pointer_enable(true);
 	/*
 	debug_send("Reset Spieleranzahl Screen");
@@ -75,45 +84,8 @@ static void screen_splayeranzahl_reset(struct screen* s, int width, int height) 
 
 // Update-Funktion: Handhabt Navigation und Auswahl
 static void screen_splayeranzahl_update(struct screen* s, float dt) {
-	for (int p = 0; p < MAX_WIIMOTES; p++) {
-	    // Navigation nach oben
-	    if (input_pressed(IB_GUI_UP, p) && gui_selection > 0) {
-	        gui_selection--;
-	    }
-	
-	    // Navigation nach unten
-	    if (input_pressed(IB_GUI_DOWN, p) && gui_selection < PLAYER_COUNT - 1) {
-	        gui_selection++;
-	    }
-    
-	    // Auswahl mit A
-	    if((input_pressed(IB_GUI_CLICK, p))) {
-			sound_play(pcm_click);
-	        switch(gui_selection) {
-	            case ONE_PLAYER:
-	                gstate.num_players = 1;
-	                menu_screen_set(&screen_controllerauswahl);
-	                break;
-	            case TWO_PLAYERS:
-	                gstate.num_players = 2;
-	                menu_screen_set(&screen_controllerauswahl);
-	                break;
-	            case THREE_PLAYERS:
-	                gstate.num_players = 3;
-	                //menu_screen_set(&screen_controllerauswahl);
-	                break;
-	            case FOUR_PLAYERS:
-	                gstate.num_players = 4;
-	                //menu_screen_set(&screen_controllerauswahl);
-	                break;
-	        }
-	    }
-	
-	    if (input_pressed(IB_BACK, p)) {
-			sound_play(pcm_click);
-	        screen_back();
-	    }
-    }
+	if(input_pressed(IB_BACK, 0))
+		screen_back();
 }
 
 // Render-Funktion: Zeigt die Optionen an
@@ -128,27 +100,17 @@ static void screen_spieleranzahl_auswählen_render2D(struct screen* s, int width
 
 
 
+	float pointer_x, pointer_y, pointer_angle;
+	bool pointer_available = screen_pointer_local(0, width, height,
+										 &pointer_x, &pointer_y, &pointer_angle);
+	gutil_button_reset(0, pointer_available, pointer_x, pointer_y);
 	for(int i = 0; i < 4; i++) {
 	    int y = start_y + i * (button_height + button_spacing);
-
-    	bool selected = (gui_selection == i);
-
-    	// Texcoords für hell/dunkel
-    	int tex_x = 0;
-    	int tex_y = selected ? 62 : 42; // hell : dunkel
-    	int tex_w = 200;
-    	int tex_h = 20;
-
-    	// Button skalieren auf 300x40
-		gfx_bind_texture(&texture_gui2);
-    	gutil_texquad((width - button_width) / 2, y, tex_x, tex_y, 
-				  					 tex_w, tex_h, button_width, button_height);
-
-
-		//int y = start_y + i*line_height;
-    	gutil_text((width/2) - (gutil_font_width(menu_options[i], 20)/2),
-									 y + 10, menu_options[i], 20, true);
+		gutil_button((width - button_width) / 2, y, button_width, button_height,
+					 menu_options[i], player_count_select, i, 0, i);
 	}
+	gutil_button_update();
+	gutil_button_render();
 
 	gutil_license(width, height);
 

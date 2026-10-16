@@ -72,8 +72,6 @@ static void set(int s) {
 }
 
 static void screen_msettings_update(struct screen* s, float dt) {
-	gutil_bg();
-
 	// logische GUI-Groesse benutzen: in der update-Phase liefert gfx_width()
 	// die native Fenstergroesse, die Buttons werden aber in GUI-Koordinaten
 	// gezeichnet -> sonst stimmt die Zentrierung nicht.
@@ -112,7 +110,8 @@ static void screen_msettings_update(struct screen* s, float dt) {
 }
 
 static void screen_msettings_render2D(struct screen* s, int width, int height) {
-    gutil_button_render();
+	gutil_bg();
+	 gutil_button_render();
 
 	gutil_license(width, height);
 

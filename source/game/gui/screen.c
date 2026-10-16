@@ -187,7 +187,7 @@ bool screen_pointer_local(int player, int view_width, int view_height,
 		return false;
 
 #ifdef SPLITSCREEN
-	if(splitscreen_enabled()) {
+	if(gstate.world_loaded && splitscreen_enabled()) {
 		int vp_x, vp_y, vp_w, vp_h;
 		/* Auf PC zuerst in GUI-logische Koordinaten umrechnen (screen_viewport_rect
 		 * liefert jetzt ebenfalls GUI-logische Werte). Auf Wii ist gfx_pointer_to_gui
@@ -239,10 +239,10 @@ bool screen_pointer_local(int player, int view_width, int view_height,
 #ifdef PLATFORM_WII
 	/* Wii: immer umrechnen (auf Wii ist gfx_pointer_to_gui No-Op, schadet also
 	 * nicht), damit der Nicht-Splitscreen-Wii-Pfad ebenfalls abgedeckt ist. */
-	if(!splitscreen_enabled())
+	if(!gstate.world_loaded || !splitscreen_enabled())
 		gfx_pointer_to_gui(&px, &py);
 #else
-	if(!splitscreen_enabled())
+	if(!gstate.world_loaded || !splitscreen_enabled())
 		gfx_pointer_to_gui(&px, &py);
 #endif
 #else
