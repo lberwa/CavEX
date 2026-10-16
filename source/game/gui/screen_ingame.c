@@ -64,6 +64,45 @@ static void screen_ingame_reset(struct screen* s, int width, int height) {
 	gstate_set_capture_input_all(true);
 }
 
+static bool digging_partner(struct block_data block, w_coord_t x, w_coord_t y,
+							w_coord_t z, w_coord_t* partner_x,
+							w_coord_t* partner_y, w_coord_t* partner_z) {
+	struct world* world = gstate_player_world(gstate_active_player());
+
+	if(block.type == BLOCK_DOOR_WOOD || block.type == BLOCK_DOOR_IRON) {
+		w_coord_t candidate_y = y + ((block.metadata & 0x08) ? -1 : 1);
+		struct block_data candidate = world_get_block(world, x, candidate_y, z);
+		if(candidate.type == block.type
+		   && ((candidate.metadata & 0x08) != (block.metadata & 0x08))) {
+			*partner_x = x;
+			*partner_y = candidate_y;
+			*partner_z = z;
+			return true;
+		}
+		return false;
+	}
+
+	if(block.type != BLOCK_BED)
+		return false;
+
+	for(int side = 0; side < SIDE_MAX; side++) {
+		int ox, oy, oz;
+		blocks_side_offset((enum side)side, &ox, &oy, &oz);
+		struct block_data candidate = world_get_block(world, x + ox, y + oy,
+											 z + oz);
+		if(candidate.type == BLOCK_BED
+		   && (candidate.metadata & 0x03) == (block.metadata & 0x03)
+		   && ((candidate.metadata & 0x08) != (block.metadata & 0x08))) {
+			*partner_x = x + ox;
+			*partner_y = y + oy;
+			*partner_z = z + oz;
+			return true;
+		}
+	}
+
+	return false;
+}
+
 void screen_ingame_render3D(struct screen* s, mat4 view) {
 	if(!active_inventory_window())
 		return;
@@ -90,9 +129,21 @@ void screen_ingame_render3D(struct screen* s, mat4 view) {
 			= world_get_block(gstate_player_world(gstate_active_player()), gstate.camera_hit.x,
 							  gstate.camera_hit.y, gstate.camera_hit.z);
 
-		if(gstate.digging.active)
+		if(gstate.digging.active) {
 			render_block_cracks(&blk, view, gstate.camera_hit.x,
 								gstate.camera_hit.y, gstate.camera_hit.z);
+
+			w_coord_t partner_x, partner_y, partner_z;
+			if(digging_partner(blk, gstate.camera_hit.x, gstate.camera_hit.y,
+							   gstate.camera_hit.z, &partner_x, &partner_y,
+							   &partner_z)) {
+				struct block_data partner = world_get_block(
+					gstate_player_world(gstate_active_player()), partner_x, partner_y,
+					partner_z);
+				render_block_cracks(&partner, view, partner_x, partner_y,
+									partner_z);
+			}
+		}
 
 		gfx_blending(MODE_BLEND);
 		gfx_alpha_test(false);
@@ -309,6 +360,9 @@ void screen_ingame_render3D(struct screen* s, mat4 view) {
 			.payload.block_place.player_x = gstate.local_player->pos[0],
 			.payload.block_place.player_y = gstate.local_player->pos[1],
 			.payload.block_place.player_z = gstate.local_player->pos[2],
+			.payload.block_place.hit_x = gstate.camera_hit.hit_x,
+			.payload.block_place.hit_y = gstate.camera_hit.hit_y,
+			.payload.block_place.hit_z = gstate.camera_hit.hit_z,
 			.payload.block_place.placement_id = placement_id,
 		});
 
@@ -571,6 +625,44 @@ void screen_ingame_render3D(struct screen* s, mat4 view) {
 		}
 	}
 
+static int camera_hit_quadrant(const struct camera_ray_result* hit,
+							   const char** name) {
+	float fx = hit->hit_x - floorf(hit->hit_x);
+	float fy = hit->hit_y - floorf(hit->hit_y);
+	float fz = hit->hit_z - floorf(hit->hit_z);
+	bool top;
+	bool right;
+
+	if(hit->side == SIDE_TOP || hit->side == SIDE_BOTTOM) {
+		top = fz < 0.5F;
+		right = fx >= 0.5F;
+	} else {
+		top = fy >= 0.5F;
+		switch(hit->side) {
+			case SIDE_FRONT: right = fx >= 0.5F; break;
+			case SIDE_BACK: right = fx < 0.5F; break;
+			case SIDE_LEFT: right = fz < 0.5F; break;
+			case SIDE_RIGHT: right = fz >= 0.5F; break;
+			default: right = true; break;
+		}
+	}
+	right = !right;
+
+	if(top && right) {
+		*name = "top-right";
+		return 3;
+	} else if(!top && right) {
+		*name = "bottom-right";
+		return 2;
+	} else if(!top) {
+		*name = "bottom-left";
+		return 1;
+	}
+
+	*name = "top-left";
+	return 4;
+}
+
 static void screen_ingame_render2D(struct screen* s, int width, int height) {
 	char str[128];
 	if(!active_inventory_window())
@@ -630,9 +722,13 @@ static void screen_ingame_render2D(struct screen* s, int width, int height) {
 			= world_get_block(gstate_player_world(gstate_active_player()), gstate.camera_hit.x,
 							  gstate.camera_hit.y, gstate.camera_hit.z);
 		struct block* b = blocks[bd.type];
-		snprintf(str, sizeof(str), "side: %s, (%i, %i, %i), %s, (%i:%i)",
-		         block_side_name(gstate.camera_hit.side), gstate.camera_hit.x,
-		         gstate.camera_hit.y, gstate.camera_hit.z,
+		const char* quadrant_name;
+		int quadrant = camera_hit_quadrant(&gstate.camera_hit,
+										  &quadrant_name);
+		snprintf(str, sizeof(str), "side: %s, quadrant: %d (%s), (%i, %i, %i), %s, (%i:%i)",
+		         block_side_name(gstate.camera_hit.side), quadrant,
+		         quadrant_name, gstate.camera_hit.x, gstate.camera_hit.y,
+		         gstate.camera_hit.z,
 		         (b && b->name) ? b->name : "<unknown>", bd.type,
 		         bd.metadata);
 		gutil_text(4, 4 + (GFX_GUI_SCALE * 8 + 1) * 6, str, GFX_GUI_SCALE * 8, true);

@@ -34,7 +34,10 @@ static size_t getBoundingBox(struct block_info* this, bool entity,
 							 struct AABB* x) {
 	(void)entity;
 	if(x) {
+		const bool upside_down = (this->block->metadata & 4) != 0;
 		aabb_setsize(x + 0, 1.0F, 0.5F, 1.0F);
+		if(upside_down)
+			aabb_translate(x + 0, 0, 0.5F, 0);
 
 		enum side facing
 			= (enum side[4]) {SIDE_RIGHT, SIDE_LEFT, SIDE_BACK,
@@ -44,19 +47,19 @@ static size_t getBoundingBox(struct block_info* this, bool entity,
 			default:
 			case SIDE_FRONT:
 				aabb_setsize(x + 1, 1.0F, 0.5F, 0.5F);
-				aabb_translate(x + 1, 0, 0.5F, -0.25F);
+				aabb_translate(x + 1, 0, upside_down ? 0 : 0.5F, -0.25F);
 				break;
 			case SIDE_BACK:
 				aabb_setsize(x + 1, 1.0F, 0.5F, 0.5F);
-				aabb_translate(x + 1, 0, 0.5F, 0.25F);
+				aabb_translate(x + 1, 0, upside_down ? 0 : 0.5F, 0.25F);
 				break;
 			case SIDE_RIGHT:
 				aabb_setsize(x + 1, 0.5F, 0.5F, 1.0F);
-				aabb_translate(x + 1, 0.25F, 0.5F, 0);
+				aabb_translate(x + 1, 0.25F, upside_down ? 0 : 0.5F, 0);
 				break;
 			case SIDE_LEFT:
 				aabb_setsize(x + 1, 0.5F, 0.5F, 1.0F);
-				aabb_translate(x + 1, -0.25F, 0.5F, 0);
+				aabb_translate(x + 1, -0.25F, upside_down ? 0 : 0.5F, 0);
 				break;
 		}
 	}
@@ -72,6 +75,21 @@ static struct face_occlusion side_mask = {
 static struct face_occlusion side_mask_mirrored = {
 	.mask = {0x00FF00FF, 0x00FF00FF, 0x00FF00FF, 0xFF00FF00, 0xFFFFFFFF,
 			 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF},
+};
+
+static struct face_occlusion side_mask_upside_down = {
+	.mask = {0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFF00FF00,
+			 0xFF00FF00, 0xFF00FF00, 0xFF00FF00},
+};
+
+static struct face_occlusion side_mask_mirrored_upside_down = {
+	.mask = {0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFF00FF00,
+			 0x00FF00FF, 0x00FF00FF, 0x00FF00FF},
+};
+
+static struct face_occlusion opposite_mask_upside_down = {
+	.mask = {0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0x00000000,
+			 0x00000000, 0x00000000, 0x00000000},
 };
 
 static struct face_occlusion side_top_mask_1 = {
@@ -96,16 +114,17 @@ static struct face_occlusion side_top_mask_4 = {
 
 static struct face_occlusion*
 getSideMask(struct block_info* this, enum side side, struct block_info* it) {
+	const bool upside_down = (this->block->metadata & 4) != 0;
 	enum side facing = (enum side[4]) {SIDE_RIGHT, SIDE_LEFT, SIDE_BACK,
 									   SIDE_FRONT}[this->block->metadata & 3];
 
-	if(side == facing || side == SIDE_BOTTOM) {
+	if(side == facing || side == (upside_down ? SIDE_TOP : SIDE_BOTTOM)) {
 		return face_occlusion_full();
 	} else if(side == blocks_side_opposite(facing)) {
-		return face_occlusion_rect(8);
+		return upside_down ? &opposite_mask_upside_down : face_occlusion_rect(8);
 	}
 
-	if(side == SIDE_TOP) {
+	if(side == (upside_down ? SIDE_BOTTOM : SIDE_TOP)) {
 		switch(facing) {
 			case SIDE_FRONT: return &side_top_mask_1;
 			case SIDE_BACK: return &side_top_mask_3;
@@ -117,10 +136,13 @@ getSideMask(struct block_info* this, enum side side, struct block_info* it) {
 		}
 	} else {
 		switch(facing) {
-			case SIDE_FRONT: return &side_mask;
-			case SIDE_BACK: return &side_mask_mirrored;
-			case SIDE_RIGHT: return &side_mask;
-			case SIDE_LEFT: return &side_mask_mirrored;
+			case SIDE_FRONT:
+			case SIDE_RIGHT:
+				return upside_down ? &side_mask_upside_down : &side_mask;
+			case SIDE_BACK:
+			case SIDE_LEFT:
+				return upside_down ? &side_mask_mirrored_upside_down
+									: &side_mask_mirrored;
 			default:
 				return face_occlusion_empty();
 				// case never reached, just for -pedantic
@@ -152,7 +174,10 @@ static bool onItemPlace(struct server_local* s, struct item_data* it,
 
 	struct block_data blk = (struct block_data) {
 		.type = it->id,
-		.metadata = metadata,
+		.metadata = metadata
+			| ((on_side == SIDE_BOTTOM
+				|| (on_side != SIDE_TOP && s->placement_hit_valid
+					&& s->placement_hit_y - on->y >= 0.5F)) ? 4 : 0),
 		.sky_light = 0,
 		.torch_light = 0,
 	};

@@ -18,6 +18,7 @@
 */
 
 #include <stdio.h>
+#include <stdlib.h>
 
 #if 0
 #define CAVEX_DEBUG_PRINTF(...) printf(__VA_ARGS__)
@@ -65,6 +66,18 @@ struct world_option {
 	int64_t last_access;
 	int64_t byte_size;
 };
+
+static int sworld_compare_last_access(const void* lhs, const void* rhs) {
+	const struct world_option* left = lhs;
+	const struct world_option* right = rhs;
+
+	if(left->last_access < right->last_access)
+		return 1;
+	if(left->last_access > right->last_access)
+		return -1;
+	return strcmp(string_get_cstr(left->directory),
+				  string_get_cstr(right->directory));
+}
 
 /* recompute the list layout for the current height (must be done every frame so
  * the dark band / list track the window when it is resized) */
@@ -135,8 +148,6 @@ static void screen_sworld_reset(struct screen* s, int width, int height) {
 										   &opt.last_access, 0))
 						opt.last_access = 0;
 
-					opt.last_access /= 1000;
-
 					level_archive_destroy(&la);
 					stack_push(worlds, &opt);
 				} else {
@@ -146,6 +157,21 @@ static void screen_sworld_reset(struct screen* s, int width, int height) {
 		}
 
 		closedir(d);
+	}
+
+	if(stack_size(worlds) > 1) {
+		size_t count = stack_size(worlds);
+		struct world_option* options = malloc(count * sizeof(*options));
+		if(options) {
+			for(size_t i = 0; i < count; i++)
+				stack_at(worlds, options + i, i);
+			qsort(options, count, sizeof(*options), sworld_compare_last_access);
+			stack_destroy(worlds);
+			stack_create(worlds, count, sizeof(*options));
+			for(size_t i = 0; i < count; i++)
+				stack_push(worlds, options + i);
+			free(options);
+		}
 	}
 
 	gui_selection = 0;
@@ -236,8 +262,9 @@ static void screen_sworld_render2D(struct screen* s, int width, int height) {
 				   (char*)string_get_cstr(opt.name), 8 * GFX_GUI_SCALE, true);
 
 		char tmp_time[32];
+		time_t display_time = (time_t)(opt.last_access / 1000);
 		strftime(tmp_time, sizeof(tmp_time), "%D %I:%M %p",
-				 gmtime(&opt.last_access));
+				 gmtime(&display_time));
 
 		char tmp[128];
 		snprintf(tmp, sizeof(tmp), "\2477%s (%s, %0.2fMB)",

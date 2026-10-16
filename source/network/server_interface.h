@@ -84,6 +84,8 @@ struct server_rpc {
 			enum side side;
 			/* Position at the moment the client pressed place. */
 			double player_x, player_y, player_z;
+			/* Exact ray/block intersection, used for quadrant-sensitive blocks. */
+			float hit_x, hit_y, hit_z;
 			uint32_t placement_id;
 		} block_place;
 		struct {

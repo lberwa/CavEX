@@ -43,9 +43,7 @@
 // -------------------------
 static int controller_for_slot[4];  // 0 = leer, 1 = Wiimote 2 = wiimote + nunchuk, 3 = classic TODO: 4 = gc controller
 static int wiimote_num_slot[4] = { -1, -1, -1, -1 };
-static int selected_menu = 0;
 static int slot_count = 0;
-static int gui_selection;
 //int gstate.player_sequence[4];  // -1 = keine Wiimote, sonst Nummer 0–3
 
 static const char* menu_options[2] = {
@@ -53,81 +51,65 @@ static const char* menu_options[2] = {
     "Change"
 };
 
+static void controller_menu_select(int option) {
+    if(option == 0) {
+        bool all_filled = true;
+        for(int i = 0; i < slot_count; i++)
+            if(controller_for_slot[i] == 0)
+                all_filled = false;
+        if(all_filled) {
+            sound_play(pcm_click);
+            menu_screen_set(&screen_select_world);
+        }
+        return;
+    }
+
+    sound_play(pcm_click);
+    for(int i = 0; i < slot_count; i++) {
+        controller_for_slot[i] = 0;
+        wiimote_num_slot[i] = -1;
+    }
+    for(int i = 1; i < 4; i++)
+        gstate.player_sequence[i] = -1;
+    gstate.player_sequence[0] = 0;
+}
+
 // -------------------------
 // Reset-Funktion
 // -------------------------
 static void screen_controllerauswahl_reset(struct screen* s, int width, int height) {
+    gutil_button_new_menu();
+
     slot_count = gstate.num_players;   // Spieleranzahl übernehmen
     if(slot_count <= 0) slot_count = 1; // fallback
 
-    selected_menu = 0;
 }
 
 // -------------------------
 // Update-Funktion
 // -------------------------
 static void screen_controllerauswahl_update(struct screen* s, float dt) {
-    // Slots automatisch zuweisen
+    (void)s;
+    (void)dt;
+    if(input_pressed(IB_BACK, 0)) {
+        screen_back();
+        sound_play(pcm_click);
+    }
+
     for(int ch = 0; ch < MAX_WIIMOTES; ch++) {
-        // UP / DOWN für Menüauswahl
-        if(input_pressed(IB_GUI_UP, ch)) {
-            selected_menu = (selected_menu - 1 + 2) % 2;
-        }
-        if(input_pressed(IB_GUI_DOWN, ch)) {
-            selected_menu = (selected_menu + 1) % 2;
-        }
-
-        // B = zurück
-        if(input_pressed(IB_BACK, ch)) {
-            screen_back();
-            sound_play(pcm_click);
-        }
-
-        // A = Menü bestätigen
-        if(input_pressed(IB_GUI_CLICK, ch)) { // --- OK --- //
-            bool all_filled = true;
-            for(int i=0; i<slot_count; i++)
-                if(controller_for_slot[i] == 0) all_filled = false;
-
-            if(selected_menu == 0 && all_filled) {
-                sound_play(pcm_click);
-                menu_screen_set(&screen_select_world);
-
-            } else if(selected_menu == 1) { // --- CHANGE --- //
-                sound_play(pcm_click);
-                // Ändern: alles resetten
-                for(int i=0; i<slot_count; i++) {
-                    controller_for_slot[i] = 0;
-                    wiimote_num_slot[i]    =-1;
-                }
-                for(int i=1; i<4; i++) {
-                    gstate.player_sequence[i] = -1;
-                }
-                gstate.player_sequence[0] = 0; // default: chan 0
-                return;
-            }
-        }
-        
         if(rinput_pressed(IB_ANY, ch)) {
-            // Prüfen, ob Wiimote schon in einem Slot zugewiesen
             bool already_assigned = false;
-            for(int i=0;i<slot_count;i++) {
-                if(wiimote_num_slot[i]==ch) {
+            for(int i = 0; i < slot_count; i++) {
+                if(wiimote_num_slot[i] == ch) {
                     already_assigned = true;
                     break;
                 }
             }
             if(!already_assigned) {
-                // ersten freien Slot suchen
-                for(int i=0;i<slot_count;i++) {
-                    if(controller_for_slot[i]==0) {
-                        int status = which_controller(ch);
-                            if (status == 0) { //           nunchuck
-                                controller_for_slot[i] = 2;
-                            } else {
-                                controller_for_slot[i] = 3;
-                            }
-                        gstate.player_sequence[i] = ch;   // Wiimote-Nummer speichern
+                for(int i = 0; i < slot_count; i++) {
+                    if(controller_for_slot[i] == 0) {
+                        controller_for_slot[i] = which_controller(ch) == 0 ? 2 : 3;
+                        gstate.player_sequence[i] = ch;
                         wiimote_num_slot[i] = ch;
                         break;
                     }
@@ -135,8 +117,7 @@ static void screen_controllerauswahl_update(struct screen* s, float dt) {
             }
         }
     }
-    gui_selection = selected_menu; 
-}    
+}
 
 static int propo(int x, int y, int sx) {
     double um = sx/x;
@@ -152,32 +133,20 @@ static void screen_controllerauswahl_render2D(struct screen* s, int width, int h
     gutil_bg();
     gutil_bg_panorama();
 
-    // Menü rechts rendern
-	int start_y = height / 3 + 15;
-	int button_height = 40;
-	int button_width  = 300;
-	int button_spacing = 20;
-
-	for(int i = 0; i < 2; i++) {
-	    int y = start_y + i * (button_height + button_spacing);
-
-    	bool selected = (gui_selection == i);
-
-    	// Texcoords für hell/dunkel
-    	int tex_x = 0;
-    	int tex_y = selected ? 62 : 42; // hell : dunkel
-    	int tex_w = 200;
-    	int tex_h = 20;
-
-    	// Button skalieren auf 300x40
-		gfx_bind_texture(&texture_gui2);
-    	gutil_texquad(((width + width/2) - button_width) / 2, y, tex_x, tex_y, 
-				  					 tex_w, tex_h, button_width, button_height);
-
-    	gutil_text((((width + width/2) - button_width) / 2) 
-                   + button_width/2 - (gutil_font_width(menu_options[i], 20)/2),
-									         y + 10, menu_options[i], 20, true);
-	}
+    int button_width = 300;
+    int button_height = 40;
+    int button_x = width / 2 + (width / 2 - button_width) / 2;
+    int button_y = height / 3 + 15;
+    float pointer_x, pointer_y, pointer_angle;
+    bool pointer_available = screen_pointer_local(0, width, height,
+                                                   &pointer_x, &pointer_y,
+                                                   &pointer_angle);
+    gutil_button_reset(0, pointer_available, pointer_x, pointer_y);
+    for(int i = 0; i < 2; i++)
+        gutil_button(button_x, button_y + i * 60, button_width, button_height,
+                     menu_options[i], controller_menu_select, i, 0, i);
+    gutil_button_update();
+    gutil_button_render();
 
     gfx_bind_texture(&texture_gui2);
 

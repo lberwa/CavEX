@@ -256,7 +256,7 @@ static void screen_iron_chest_render2D(struct screen* s, int width, int height) 
 	int off_y = (height - GUI_HEIGHT * scale) / 2;
 
 	// draw inventory
-	gfx_bind_texture(&texture_gui_iron_chest);
+	gfx_bind_texture(&texture_gui_double_chest);
 	gutil_texquad(off_x, off_y, 0, 0, GUI_WIDTH, GUI_HEIGHT, GUI_WIDTH * scale,
 				  GUI_HEIGHT * scale);
 	gutil_text(off_x + 28 * scale, off_y + 6 * scale, "\2478Iron Chest", 8 * scale, false);

@@ -3946,21 +3946,41 @@ size_t render_block_stairs_always(struct displaylist* d,
 								  bool count_only) {
 	enum side facing = (enum side[4]) {SIDE_RIGHT, SIDE_LEFT, SIDE_BACK,
 									   SIDE_FRONT}[this->block->metadata & 3];
+	bool upside_down = (this->block->metadata & 4) != 0;
+	enum side step_side = upside_down ? SIDE_BOTTOM : SIDE_TOP;
 
-	if(side != SIDE_TOP && side != blocks_side_opposite(facing))
+	if(side != step_side && side != blocks_side_opposite(facing))
 		return 0;
 
 	if(!count_only) {
 		uint16_t tex = blocks[this->block->type]->getTextureIndex(this, side);
 		uint8_t luminance = blocks[this->block->type]->luminance;
 
-		if(side == SIDE_TOP) {
-			render_block_side(d, W2C_COORD(this->x), W2C_COORD(this->y),
-							  W2C_COORD(this->z), 0, BLK_LEN / 2, tex,
-							  luminance, true, 0, false, 0, side, vertex_light);
+		if(side == step_side) {
+			if(upside_down) {
+				int tx = (facing == SIDE_RIGHT) ? BLK_LEN / 2 : 0;
+				int ty = (facing == SIDE_BACK) ? BLK_LEN / 2 : 0;
+				int sx = (facing == SIDE_LEFT || facing == SIDE_RIGHT)
+					? BLK_LEN / 2 : BLK_LEN;
+				int sy = (facing == SIDE_FRONT || facing == SIDE_BACK)
+					? BLK_LEN / 2 : BLK_LEN;
+				render_block_side_adv(
+					d, W2C_COORD(this->x) * BLK_LEN + tx,
+					W2C_COORD(this->y) * BLK_LEN,
+					W2C_COORD(this->z) * BLK_LEN + ty, sx, sy,
+					TEX_OFFSET(TEXTURE_X(tex)) + tx / 16,
+					TEX_OFFSET(TEXTURE_Y(tex)) + ty / 16, false, false, true,
+					SIDE_BOTTOM, vertex_light, luminance);
+			} else {
+				render_block_side(d, W2C_COORD(this->x), W2C_COORD(this->y),
+								  W2C_COORD(this->z), 0, BLK_LEN / 2, tex,
+								  luminance, true, 0, false, 0, side,
+								  vertex_light);
+			}
 		} else if(side == blocks_side_opposite(facing)) {
 			render_block_side(d, W2C_COORD(this->x), W2C_COORD(this->y),
-							  W2C_COORD(this->z), 0, BLK_LEN, tex, luminance,
+							  W2C_COORD(this->z), 0,
+							  upside_down ? BLK_LEN / 2 : BLK_LEN, tex, luminance,
 							  true, BLK_LEN / 2, false, 0, side, vertex_light);
 		}
 	}
@@ -3976,6 +3996,8 @@ size_t render_block_stairs(struct displaylist* d, struct block_info* this,
 									   SIDE_FRONT}[this->block->metadata & 3];
 	uint16_t tex = blocks[this->block->type]->getTextureIndex(this, side);
 	uint8_t luminance = blocks[this->block->type]->luminance;
+	bool upside_down = (this->block->metadata & 4) != 0;
+	enum side step_side = upside_down ? SIDE_BOTTOM : SIDE_TOP;
 
 	// render "slab"
 	if(side == facing) {
@@ -3984,16 +4006,17 @@ size_t render_block_stairs(struct displaylist* d, struct block_info* this,
 							  W2C_COORD(this->z), 0, BLK_LEN, tex, luminance,
 							  true, 0, false, 0, side, vertex_light);
 		k++;
-	} else if(side != SIDE_TOP) {
+	} else if(side != SIDE_TOP || upside_down) {
 		if(!count_only)
 			render_block_side(d, W2C_COORD(this->x), W2C_COORD(this->y),
-							  W2C_COORD(this->z), 0, BLK_LEN / 2, tex,
+							  W2C_COORD(this->z), upside_down ? BLK_LEN / 2 : 0,
+							  BLK_LEN / 2, tex,
 							  luminance, true, 0, false, 0, side, vertex_light);
 		k++;
 	}
 
 	// render top part
-	if(side == SIDE_TOP) {
+	if(side == step_side) {
 		int tx = (facing == SIDE_RIGHT) ? BLK_LEN / 2 : 0;
 		int ty = (facing == SIDE_BACK) ? BLK_LEN / 2 : 0;
 		int sx = (facing == SIDE_LEFT || facing == SIDE_RIGHT) ? BLK_LEN / 2 :
@@ -4002,15 +4025,23 @@ size_t render_block_stairs(struct displaylist* d, struct block_info* this,
 																 BLK_LEN;
 		if(!count_only)
 			render_block_side_adv(d, W2C_COORD(this->x) * BLK_LEN + tx,
-								  W2C_COORD(this->y) * BLK_LEN + BLK_LEN,
+								  W2C_COORD(this->y) * BLK_LEN
+									+ (upside_down ? 0 : BLK_LEN),
 								  W2C_COORD(this->z) * BLK_LEN + ty, sx, sy,
 								  TEX_OFFSET(TEXTURE_X(tex)) + tx / 16,
-								  TEX_OFFSET(TEXTURE_Y(tex)) + ty / 16, false,
-								  false, true, SIDE_TOP, vertex_light,
+								  TEX_OFFSET(TEXTURE_Y(tex)) + ty / 16,
+								  false, false, true, step_side, vertex_light,
 								  luminance);
 		k++;
 	} else if(side != facing && side != blocks_side_opposite(facing)
-			  && side != SIDE_BOTTOM) {
+			  && side != step_side
+			  && (side == SIDE_FRONT || side == SIDE_BACK
+				  || (((this->block->metadata & 7) == 2
+					   || (this->block->metadata & 7) == 3
+					   || (this->block->metadata & 7) == 6
+					   || (this->block->metadata & 7) == 7)
+					  && (side == SIDE_LEFT || side == SIDE_RIGHT)))
+			 ) {
 		int off[][2] = {
 			[SIDE_LEFT] = {0, 0},
 			[SIDE_RIGHT] = {BLK_LEN, 0},
@@ -4031,7 +4062,8 @@ size_t render_block_stairs(struct displaylist* d, struct block_info* this,
 		if(!count_only)
 			render_block_side_adv(
 				d, W2C_COORD(this->x) * BLK_LEN + off[side][0],
-				W2C_COORD(this->y) * BLK_LEN + BLK_LEN / 2,
+				W2C_COORD(this->y) * BLK_LEN
+					+ (upside_down ? 0 : BLK_LEN / 2),
 				W2C_COORD(this->z) * BLK_LEN + off[side][1], BLK_LEN / 2,
 				BLK_LEN / 2, TEX_OFFSET(TEXTURE_X(tex)),
 				TEX_OFFSET(TEXTURE_Y(tex)), false, false, true, side,
@@ -4981,7 +5013,7 @@ size_t render_block_trapdoor(struct displaylist* d,
                 W2C_COORD(this->x),
                 W2C_COORD(this->y),
                 W2C_COORD(this->z),
-                /*y-offset*/   0,            // height 0..3/16
+                /*y-offset*/   (m & 0x08) ? BLK_LEN - BLK_LEN / 16 * 3 : 0,
                 /*thickness*/  BLK_LEN / 16 * 3,
                 tex, lumi,
                 /*double-sided=*/true,
@@ -5281,6 +5313,46 @@ size_t render_block_full(struct displaylist* d, struct block_info* this,
 			BLK_LEN, blocks[this->block->type]->getTextureIndex(this, side),
 			blocks[this->block->type]->luminance, true, 0, false, 0, side,
 			vertex_light);
+	return 1;
+}
+
+size_t render_block_chest(struct displaylist* d, struct block_info* this,
+						  enum side side, struct block_info* it,
+						  uint8_t* vertex_light, bool count_only) {
+	uint8_t metadata = this->block->metadata;
+	uint8_t direction = metadata & 0x03; // direction
+	uint16_t texture
+		= blocks[this->block->type]->getTextureIndex(this, side);
+	int texture_rotate = 0;
+
+	(void)it;
+	if(metadata & 0x0c) {
+		bool left = metadata & 0x08;
+
+		if(side == SIDE_TOP || side == SIDE_BOTTOM) {
+				switch(direction) {
+				case 1:
+					texture_rotate = side == SIDE_TOP ? 3 : 1;
+					break;
+
+				case 3:
+					texture_rotate = side == SIDE_TOP ? 1 : 3;
+					break;
+
+				case 2: texture_rotate = 2; break;
+				default: break;
+			}
+		} else if((direction == 1 || direction == 3)
+				  && (side == SIDE_FRONT || side == SIDE_BACK)) {
+			texture = tex_atlas_lookup(TEXAT_CHEST_SIDE);
+		}
+	}
+
+	if(!count_only)
+		render_block_side(
+			d, W2C_COORD(this->x), W2C_COORD(this->y), W2C_COORD(this->z), 0,
+			BLK_LEN, texture, blocks[this->block->type]->luminance, true, 0,
+			false, texture_rotate, side, vertex_light);
 	return 1;
 }
 

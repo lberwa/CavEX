@@ -63,7 +63,7 @@ struct tex_gfx texture_gui_dispenser;
 struct tex_gfx texture_gui_furnace;
 struct tex_gfx texture_gui_brewing_stand;
 struct tex_gfx texture_gui_chest;
-struct tex_gfx texture_gui_iron_chest;
+struct tex_gfx texture_gui_double_chest;
 struct tex_gfx texture_gui_enchanting_table;
 struct tex_gfx texture_gui2;
 struct tex_gfx texture_controls;
@@ -250,7 +250,7 @@ void tex_init() {
 					  TEX_FMT_RGBA16, false);
 	tex_gfx_load_file(&texture_gui_chest, "gui/chest.png", TEX_FMT_RGBA16,
 					  false);
-	tex_gfx_load_file(&texture_gui_iron_chest, "gui/iron_chest.png", TEX_FMT_RGBA16,
+	tex_gfx_load_file(&texture_gui_double_chest, "gui/double_chest.png", TEX_FMT_RGBA16,
 					  false);
 	tex_gfx_load_file(&texture_gui_enchanting_table, "gui/enchanting_table.png",
 					  TEX_FMT_RGBA16, false);

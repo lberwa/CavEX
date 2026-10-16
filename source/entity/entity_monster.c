@@ -248,12 +248,17 @@ static bool server_tick_pig(struct entity* e, struct server_local* s) {
 
     entity_damp_velocity(e, 0.005f);
 
+    vec3 center = { e->pos[0], e->pos[1], e->pos[2] };
+
     // dead: pigs don't have a fuse, remove immediately when health <= 0
     if (e->health <= 0) {
         e->delay_destroy = 0;
+        server_local_spawn_item(center,
+                    &e->drop_item,
+                    true,
+                    s
+        );
     }
-
-    vec3 center = { e->pos[0], e->pos[1], e->pos[2] };
 
     if (--e->data.monster.direction_time <= 0) {
         float ang = rand_gen_flt(&s->rand_src) * 2.0f * M_PI;
@@ -618,7 +623,7 @@ void entity_monster(uint32_t id,
             break;
         case ANIMAIL_SHEEP:
             e->name = "Sheep";
-            e->drop_item = (struct item_data){ .id = ITEM_PORKCHOP, .durability = 0, .count = 1 };
+            e->drop_item = (struct item_data){ .id = BLOCK_WOOL, .durability = 0, .count = 1 };
             e->getBoundingBox = getBoundingBox_sheep;
             e->onRightClick = onRightClick_sheep;
             e->data.monster.shared = false;

@@ -1176,8 +1176,8 @@ int main(void) {
 									atmosphere_color,
 									top_plane_color, bottom_plane_color);
 
-						gstate.stats.chunks_rendered
-							= world_render(pw, &gstate.camera, false);
+					gstate.stats.chunks_rendered
+						= world_render(pw, &gstate.camera, false);
 					} else {
 						gstate.stats.chunks_rendered = 0;
 					}
@@ -1662,6 +1662,8 @@ int main(void) {
 		//debug_send(text2);
 //----------------------------------------------------------------------------
 	}
+
+	config_save_settings(&gstate.config_user);
 
 	if (gstate.reboot) {
 #ifdef PLATFORM_WII

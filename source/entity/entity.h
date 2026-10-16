@@ -95,6 +95,9 @@ struct entity {
 			bool creative;
 			int jump_tap_window;
 			bool jump_held_prev;
+			int sprint_tap_window;
+			bool forward_held_prev;
+			bool sprinting;
 			float walk_bob;
 			float walk_bob_old;
 			float walk_bob_speed;

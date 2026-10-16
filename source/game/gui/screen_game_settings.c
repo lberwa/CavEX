@@ -61,20 +61,19 @@ enum { // Buttons
     SET_GAMEMODE_PLAYER_TWO,
 };
 
-static int8_t menu;
-static int8_t owner_player;
+static int8_t menu[4];
 
 static void screen_gsettings_reset(struct screen* s, int width, int height) {
 	input_pointer_enable(true);
 	gutil_button_new_menu();
-	owner_player = gstate_active_player();
-	gstate_set_capture_input_player(owner_player, false);
-	menu = MAIN;
+	int player = gstate_active_player();
+	gstate_set_capture_input_player(player, false);
+	menu[player] = MAIN;
 }
 
 static void choose(int m) {
 	gutil_button_new_menu();
-	menu = m;
+	menu[gstate_active_player()] = m;
 }
 
 static void vol_clamp(float *v) {
@@ -173,14 +172,15 @@ static void set(int s) {
 static void screen_gsettings_update(struct screen* s, float dt) { }
 
 static void screen_gsettings_render2D(struct screen* s, int width, int height) {
+	int player = gstate_active_player();
 	float x, y, a;
-	bool avaiable = screen_pointer_local(owner_player, width, height, &x, &y, &a);
-	gutil_button_reset(owner_player, avaiable, x, y);
+	bool avaiable = screen_pointer_local(player, width, height, &x, &y, &a);
+	gutil_button_reset(player, avaiable, x, y);
 
 	int cx = width / 2;
 	int cy = height / 2;
 
-	switch(menu) {
+	switch(menu[player]) {
 		/* ---- GRAPHICS ---- */
 		case GRAPHICS:
 		{

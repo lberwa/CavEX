@@ -76,7 +76,7 @@ extern struct tex_gfx texture_gui_dispenser;
 extern struct tex_gfx texture_gui_furnace;
 extern struct tex_gfx texture_gui_brewing_stand;
 extern struct tex_gfx texture_gui_chest;
-extern struct tex_gfx texture_gui_iron_chest;
+extern struct tex_gfx texture_gui_double_chest;
 extern struct tex_gfx texture_gui_enchanting_table;
 extern struct tex_gfx texture_gui2;
 extern struct tex_gfx texture_controls;

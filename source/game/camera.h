@@ -41,6 +41,7 @@ struct camera {
 struct camera_ray_result {
 	bool hit;
 	w_coord_t x, y, z;
+	float hit_x, hit_y, hit_z;
 	enum side side;
 	bool   entity_hit;
 	uint32_t entity_id;

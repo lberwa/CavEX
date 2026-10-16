@@ -30,6 +30,7 @@
 #include "stack.h"
 
 #define WORLD_HEIGHT 128
+#define WORLD_FALL_BOUNDARY_Y (-50.0F)
 
 enum world_dim {
 	WORLD_DIM_NETHER = -1,

@@ -30,6 +30,8 @@
 #include "stack.h"
 #include "graphics/gfx_settings.h"
 
+#define CHUNK_STREAM_LOG(...) ((void)0)
+
 /* Debug: live client-chunk count (chunk_init minus chunk_destroy). If this
  * climbs while the server chunk count stays flat, client chunks are leaking
  * (blocks + displaylists live in the MEM2 heap on Wii). */
@@ -315,8 +317,15 @@ bool chunk_check_built(struct chunk* c) {
 	}
 
 	if(c->rebuild_displist) {
-		if(chunk_mesher_send(c))
+		if(chunk_mesher_send(c)) {
 			c->rebuild_displist = false;
+		} else {
+			static unsigned long mesh_queue_failures;
+			mesh_queue_failures++;
+			if(mesh_queue_failures == 1 || mesh_queue_failures % 100 == 0)
+				CHUNK_STREAM_LOG("[CHUNK_MESHER] queue_full failures=%lu chunk=(%d,%d,%d)\n",
+					mesh_queue_failures, (int)c->x, (int)c->y, (int)c->z);
+		}
 		return true;
 	}
 

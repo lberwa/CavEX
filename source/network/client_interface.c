@@ -23,6 +23,7 @@
 
 #include <stdio.h>
 
+
 #include "client_interface.h"
 
 #ifdef BLOCK_LAT_DEBUG
@@ -41,6 +42,8 @@
 #include "../sound/sound.h"
 #include "server_interface.h"
 #include "server_local.h"
+
+#define CHUNK_STREAM_LOG(...) ((void)0)
 
 #define RPC_INBOX_SIZE 256
 static struct client_rpc rpc_msg[RPC_INBOX_SIZE];
@@ -109,8 +112,11 @@ void clin_chunk(w_coord_t x, w_coord_t y, w_coord_t z, w_coord_t sx,
 	assert(ids && metadata && lighting_sky && lighting_torch);
 	struct world* tw = world_for_dim(dim);
 
-	if(world_import_chunk_column(tw, x, y, z, sx, sy, sz, ids,
-								 metadata, lighting_sky, lighting_torch)) {
+	bool imported = world_import_chunk_column(tw, x, y, z, sx, sy, sz, ids,
+								 metadata, lighting_sky, lighting_torch);
+	CHUNK_STREAM_LOG("[CHUNK_CLIENT] rpc=(%d,%d,%d) size=(%d,%d,%d) imported=%d\n",
+		(int)x, (int)y, (int)z, (int)sx, (int)sy, (int)sz, imported ? 1 : 0);
+	if(imported) {
 		/* ids == Blockanfang des Transfer-Puffers -> in den Pool zurueck. */
 		clin_chunk_buf_return(ids);
 		return;
@@ -267,6 +273,7 @@ void clin_process(struct client_rpc* call) {
 			gstate.portal_loading[pid] = true;
 			break;
 		case CRPC_WORLD_RESET:
+			sound_stop_effects();
 			world_unload_all(&gstate.world);
 			world_unload_all(&gstate.world_nether);
 

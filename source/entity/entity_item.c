@@ -205,6 +205,7 @@ static bool entity_server_tick(struct entity* e, struct server_local* s) {
 
 		if(best_pid >= 0) {
 			struct server_player* p = &s->players[best_pid];
+			bool picked_up = p->creative;
 
 			// TODO: case where item cannot be picked up completely
 			if(p->active_inventory && p->active_inventory->logic
@@ -212,19 +213,22 @@ static bool entity_server_tick(struct entity* e, struct server_local* s) {
 				uint8_t old_pid = s->active_player_id;
 				s->active_player_id = (uint8_t)best_pid;
 				p->active_inventory->logic->on_collect(p->active_inventory,
-													  &e->data.item.item);
+														  &e->data.item.item);
 				s->active_player_id = old_pid;
+				picked_up = p->creative || e->data.item.item.count == 0;
 			}
 
-			clin_rpc_send(&(struct client_rpc) {
-				CRPC_PLAYER_ID(best_pid)
-				.type = CRPC_PICKUP_ITEM,
-				.payload.pickup_item.entity_id = e->id,
-				// `collector_id == 0` means: use `player_id` on client side.
-				.payload.pickup_item.collector_id = 0,
-			});
+			if(picked_up) {
+				clin_rpc_send(&(struct client_rpc) {
+					CRPC_PLAYER_ID(best_pid)
+					.type = CRPC_PICKUP_ITEM,
+					.payload.pickup_item.entity_id = e->id,
+					// `collector_id == 0` means: use `player_id` on client side.
+					.payload.pickup_item.collector_id = 0,
+				});
 
-			e->delay_destroy = 1;
+				e->delay_destroy = 1;
+			}
 		}
 	}
 

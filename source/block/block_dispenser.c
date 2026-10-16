@@ -112,8 +112,9 @@ double dz = s->players[player_id].z - (where->z + 0.5);
 			};
 			memset(s->dispenser_items[i], 0,
 				   sizeof(s->dispenser_items[i]));
-			s->dispenser_powered[i]
+		s->dispenser_powered[i]
 				= block_redstone_is_powered(s, where->x, where->y, where->z);
+			s->dispenser_state_initialized[i] = true;
 			break;
 		}
 	}
@@ -148,6 +149,11 @@ static void onWorldTick(struct server_local* s, struct block_info* info) {
 		if(s->dispenser_pos[i].x == info->x
 		   && s->dispenser_pos[i].y == info->y
 		   && s->dispenser_pos[i].z == info->z) {
+			if(!s->dispenser_state_initialized[i]) {
+				s->dispenser_powered[i] = powered;
+				s->dispenser_state_initialized[i] = true;
+				break;
+			}
 			if(powered && !s->dispenser_powered[i]) {
 				int available[DISPENSER_SIZE_STORAGE];
 				int count = 0;

@@ -214,6 +214,8 @@ struct server_local {
 	 * player position. */
 	bool placement_player_pos_valid;
 	double placement_player_x, placement_player_y, placement_player_z;
+	bool placement_hit_valid;
+	float placement_hit_x, placement_hit_y, placement_hit_z;
 	bool suppress_block_particles;
 	struct server_world worlds[2]; /* [0]=Overworld, [1]=Nether */
 	bool world_initialized;
@@ -229,6 +231,7 @@ struct server_local {
 	struct complex_block_pos dispenser_pos[MAX_DISPENSERS];
 	struct item_data dispenser_items[MAX_DISPENSERS][DISPENSER_SIZE_STORAGE];
 	bool dispenser_powered[MAX_DISPENSERS];
+	bool dispenser_state_initialized[MAX_DISPENSERS];
 	struct furnace_data furnaces[MAX_FURNACES];
 	struct brewing_stand_data brewing_stands[MAX_BREWING_STANDS];
 	struct enchanting_table_data enchanting_tables[MAX_ENCHANTING_TABLES];

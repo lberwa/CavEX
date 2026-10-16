@@ -30,6 +30,7 @@
 #define CAVEX_DEBUG_PRINTF(...) ((void)0)
 #endif
 
+
 #include "game/game_state.h"
 #include "graphics/render_entity.h"
 #include "lighting.h"
@@ -1317,6 +1318,7 @@ size_t world_render(struct world* w, struct camera* c, bool pass) {
 		gfx_bind_texture_pixels(&texture_terrain);
 		gfx_blending(MODE_OFF);
 		gfx_alpha_test(true);
+		gfx_write_buffers(true, true, true);
 
 		ilist_chunks_it(it, w->render);
 
@@ -1331,6 +1333,7 @@ size_t world_render(struct world* w, struct camera* c, bool pass) {
 	} else {
 		gfx_alpha_test(false);
 		gfx_blending(MODE_BLEND);
+		gfx_write_buffers(true, true, true);
 		gfx_write_buffers(false, true, true);
 
 		mat4 matrix_anim;
