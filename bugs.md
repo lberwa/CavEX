@@ -108,41 +108,41 @@
   - ~~remove slot~~
   - ~~other icons~~
 
-* the menu of creative inventory of player 1 is the same like of player 2
+* ~~the menu of creative inventory of player 1 is the same like of player 2~~
 
-* compass and clock can't tell anything in the nether
+* ~~compass and clock can't tell anything in the nether~~
 
-* the player doesn't move his arms if he places a block
+* ~~the player doesn't move his arms if he places a block~~
 
 * ~~you should be able to destroy blocks with destroy number -1 if you are in creative mode~~
 
 * ~~IB_ANY doesn't ask all buttons~~
 
-* shadow bugs on the wii
+* ~~shadow bugs on the wii~~
 
 * ~~gpu on the pc is too slowly so it runs with 20-55fps on fullscreen~~
 
 * ~~world generator needs too much cpu and is too slowly~~
 
-* you don't see the cracks on the blocks on the wii
+* ~~you don't see the cracks on the blocks on the wii~~
 
-* if player 2 goes into the nether portal he can't go out of the loading screen while player 1 doesn't go to the nether portal too
+* if player 2 goes into the nether portal he can't go out of the loading screen while player 1 doesn't go to the nether portal too ??
 
-* if you go throw the portal, and you wait 5 sekonds you go again to the world
+* if you go throw the portal, and you wait 5 sekonds you go again to the world ??
 
-* the texture of the creative menu is broken on the wii
+* ~~the texture of the creative menu is broken on the wii~~
 
 * may load ogg files insead of pcm/wav
 
-* config.json in ~/.cavex
+* ~~config.json in ~/.cavex~~
 
-* Window Quit (x) don't work in the server menu
+* ~~Window Quit (x) don't work in the server menu~~
 
 * ~~bg in the menu -> real VR~~
 
-* loading chunks is broken on the Wii because the RAM problem-fixes
+* ~~loading chunks is broken on the Wii because the RAM problem-fixes~~
 
-* add a better food logic
+* ~~add a better food logic~~
 
 * ~~the mp3 loader expect 10 mp3 files~~
 
@@ -250,6 +250,5 @@
   - fishing_hook = uint8=255 !!
   - armor
   - collor/dye
-
 
 

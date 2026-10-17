@@ -207,20 +207,6 @@ void clin_process(struct client_rpc* call) {
 			new_pos[1] = call->payload.player_pos.position[1];
 			new_pos[2] = call->payload.player_pos.position[2];
 
-			if(gstate.settings.chunk_render_log && lp
-			   && glm_vec3_distance2(lp->pos, new_pos) > 1024.0f) {
-				printf("[CAMERA_POS_RPC] player=%u teleport=%d "
-				       "old_player=(%.2f,%.2f,%.2f) "
-				       "new=(%.2f,%.2f,%.2f) "
-				       "camera_before=(%.2f,%.2f,%.2f) loaded=%d\n",
-				       (unsigned)pid,
-				       (int)call->payload.player_pos.teleport,
-				       lp->pos[0], lp->pos[1], lp->pos[2],
-				       new_pos[0], new_pos[1], new_pos[2],
-				       cam->x, cam->y, cam->z,
-				       (int)gstate.world_loaded);
-			}
-
 			bool apply_rotation = !was_loaded;
 			if(lp) {
 				float dist2 = glm_vec3_distance2(lp->pos, new_pos);
@@ -350,6 +336,8 @@ void clin_process(struct client_rpc* call) {
 								gstate.local_player, &gstate.world);
 
 			gstate.local_player->health = MAX_PLAYER_HEALTH;
+			gstate.local_player->food = MAX_PLAYER_FOOD;
+			gstate.local_player->saturation = MAX_PLAYER_FOOD;
 			gstate.local_player->data.local_player.capture_input = true;
 #ifdef SPLITSCREEN
 			gstate.local_player->data.local_player.player_index = 0;
@@ -371,6 +359,8 @@ void clin_process(struct client_rpc* call) {
 				gstate.local_players[1]->data.local_player.player_index = 1;
 				gstate.local_players[1]->data.local_player.capture_input = true;
 				gstate.local_players[1]->health = MAX_PLAYER_HEALTH;
+				gstate.local_players[1]->food = MAX_PLAYER_FOOD;
+				gstate.local_players[1]->saturation = MAX_PLAYER_FOOD;
 				gstate.oxygen_arr[1] = MAX_OXYGEN;
 			} else {
 				gstate.local_players[1] = NULL;
@@ -477,6 +467,16 @@ void clin_process(struct client_rpc* call) {
 			break;
 		case CRPC_SET_BLOCK:
 		{
+			/* A successful placement is broadcast with the originating player.
+			 * Start that player's third-person arm animation on every client, so
+			 * split-screen observers see the same motion as the placing player. */
+			if(call->payload.set_block.placement_id != 0
+			   && call->payload.set_block.placement_player_id < 4) {
+				struct held_anim* anim = &gstate.held_item_animations[
+					call->payload.set_block.placement_player_id];
+				anim->punch.start = time_get();
+				anim->punch.place = true;
+			}
 			if(call->payload.set_block.placement_id != 0)
 				BLOCK_PLACE_CLIENT_PRINTF(
 					"[PLACE_CLIENT_APPLY] id=%u player=%u pos=(%d,%d,%d)\n",
@@ -591,6 +591,15 @@ void clin_process(struct client_rpc* call) {
 							call->payload.set_block.z,
 							call->payload.set_block.block, true);
 		}
+			break;
+		case CRPC_PLAYER_ANIMATION:
+			if(call->payload.player_animation.player_id < 4
+			   && call->payload.player_animation.digging) {
+				struct held_anim* anim = &gstate.held_item_animations[
+					call->payload.player_animation.player_id];
+				anim->punch.start = time_get();
+				anim->punch.place = false;
+			}
 			break;
 		case CRPC_SPAWN_ITEM: {
 			struct entity** e_ptr = dict_entity_safe_get(
@@ -751,6 +760,19 @@ void clin_process(struct client_rpc* call) {
 				lp->health = call->payload.player_set_health.health;
 		}
 		break;
+		case CRPC_PLAYER_SET_FOOD:
+		{
+#ifdef SPLITSCREEN
+			struct entity* lp = gstate.local_players[pid];
+#else
+			struct entity* lp = gstate.local_player;
+#endif
+			if(lp) {
+				lp->food = call->payload.player_set_food.food;
+				lp->saturation = call->payload.player_set_food.saturation;
+			}
+		}
+		break;
 		case CRPC_GAMEMODE:
 		{
 #ifdef SPLITSCREEN
@@ -840,7 +862,9 @@ void clin_update() {
 						.payload.player_pos.z = player->pos[2],
 						.payload.player_pos.rx = -glm_deg(cam->rx),
 						.payload.player_pos.ry = glm_deg(cam->ry) - 90.0F,
-						.payload.player_pos.vel_y = player->vel[1]
+						.payload.player_pos.vel_y = player->vel[1],
+						.payload.player_pos.sprinting =
+							player->data.local_player.sprinting
 					});
 				}
 			}
@@ -858,7 +882,9 @@ void clin_update() {
 					.payload.player_pos.z = player->pos[2],
 					.payload.player_pos.rx = -glm_deg(cam->rx),
 					.payload.player_pos.ry = glm_deg(cam->ry) - 90.0F,
-					.payload.player_pos.vel_y = player->vel[1]
+					.payload.player_pos.vel_y = player->vel[1],
+					.payload.player_pos.sprinting =
+						player->data.local_player.sprinting
 				});
 			}
 		}

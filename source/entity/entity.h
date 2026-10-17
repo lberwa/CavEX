@@ -58,6 +58,8 @@ struct entity {
 	void* world;
 	int delay_destroy;
 	short health;
+	uint8_t food;
+	float saturation;
 	struct item_data drop_item;
 
 	vec3 pos;

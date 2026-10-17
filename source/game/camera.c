@@ -301,23 +301,6 @@ void camera_attach(struct camera* c, struct entity* e, float tick_delta,
 				   float dt) {
 	vec3 pos_lerp;
 	glm_vec3_lerp(e->pos_old, e->pos, tick_delta, pos_lerp);
-	if(gstate.settings.chunk_render_log
-	   && glm_vec3_distance2(e->pos_old, e->pos) > 1024.0f) {
-		static vec3 last_old = {0.0f, 0.0f, 0.0f};
-		static vec3 last_pos = {0.0f, 0.0f, 0.0f};
-		if(glm_vec3_distance2(last_old, e->pos_old) > 1.0f
-		   || glm_vec3_distance2(last_pos, e->pos) > 1.0f) {
-			printf("[CAMERA_ATTACH_JUMP] entity=%u old=(%.2f,%.2f,%.2f) "
-			       "pos=(%.2f,%.2f,%.2f) lerp=(%.2f,%.2f,%.2f) "
-			       "tick_delta=%.3f\n",
-			       (unsigned)e->id,
-			       e->pos_old[0], e->pos_old[1], e->pos_old[2],
-			       e->pos[0], e->pos[1], e->pos[2],
-			       pos_lerp[0], pos_lerp[1], pos_lerp[2], tick_delta);
-			glm_vec3_copy(e->pos_old, last_old);
-			glm_vec3_copy(e->pos, last_pos);
-		}
-	}
 	c->x = pos_lerp[0];
 	c->y = pos_lerp[1];
 	c->z = pos_lerp[2];

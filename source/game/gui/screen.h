@@ -67,6 +67,8 @@ extern struct screen screen_msettings;
  * shown. */
 void screen_keyboard_open(char* target, size_t max_len, const char* title,
 						  struct screen* on_done);
+void screen_keyboard_open_player(int player, char* target, size_t max_len,
+								 const char* title, struct screen* on_done);
 
 void screen_set(struct screen* s);
 void menu_screen_set(struct screen* s);

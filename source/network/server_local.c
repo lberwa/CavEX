@@ -1380,6 +1380,134 @@ void server_local_send_inv_changes(uint8_t player_id, set_inv_slot_t changes,
 	}
 }
 
+void server_local_set_player_food(struct server_local* s, int player_id,
+							  uint8_t food, float saturation) {
+#ifdef SPLITSCREEN
+	if(player_id < 0 || player_id >= MAX_SERVER_PLAYERS)
+		player_id = 0;
+	struct server_player* player = &s->players[player_id];
+#else
+	(void)player_id;
+	struct server_player* player = &s->player;
+#endif
+	if(food > MAX_PLAYER_FOOD)
+		food = MAX_PLAYER_FOOD;
+	if(saturation < 0.0F)
+		saturation = 0.0F;
+	if(saturation > (float)food)
+		saturation = (float)food;
+	player->food = food;
+	player->saturation = saturation;
+	clin_rpc_send(&(struct client_rpc) {
+		CRPC_PLAYER_ID(player_id)
+		.type = CRPC_PLAYER_SET_FOOD,
+		.payload.player_set_food.food = food,
+		.payload.player_set_food.saturation = saturation,
+	});
+}
+
+static bool server_local_item_is_food(uint16_t item_id) {
+	switch(item_id) {
+		case ITEM_APPLE:
+		case ITEM_BREAD:
+		case ITEM_PORKCHOP:
+		case ITEM_PORKCHOP_COOKED:
+		case ITEM_APPLE_GOLDEN:
+		case ITEM_FISH:
+		case ITEM_FISH_COOKED:
+		case ITEM_MUSHROOM_STEW:
+		case ITEM_COOKIE:
+		case ITEM_MELON:
+			return true;
+		default:
+			return false;
+	}
+}
+
+bool server_local_eat(struct server_local* s, int player_id, uint16_t item_id) {
+	int food = 0;
+	float saturation_modifier = 0.0F;
+	switch(item_id) {
+		case ITEM_APPLE:           food = 4; saturation_modifier = 0.3F; break;
+		case ITEM_BREAD:           food = 5; saturation_modifier = 0.6F; break;
+		case ITEM_PORKCHOP:        food = 3; saturation_modifier = 0.3F; break;
+		case ITEM_PORKCHOP_COOKED: food = 8; saturation_modifier = 0.8F; break;
+		case ITEM_APPLE_GOLDEN:    food = 4; saturation_modifier = 1.2F; break;
+		case ITEM_FISH:            food = 2; saturation_modifier = 0.1F; break;
+		case ITEM_FISH_COOKED:     food = 5; saturation_modifier = 0.6F; break;
+		case ITEM_MUSHROOM_STEW:   food = 6; saturation_modifier = 0.6F; break;
+		case ITEM_COOKIE:          food = 2; saturation_modifier = 0.1F; break;
+		case ITEM_MELON:           food = 2; saturation_modifier = 0.3F; break;
+		default: return false;
+	}
+#ifdef SPLITSCREEN
+	if(player_id < 0 || player_id >= MAX_SERVER_PLAYERS)
+		player_id = 0;
+	struct server_player* player = &s->players[player_id];
+#else
+	(void)player_id;
+	struct server_player* player = &s->player;
+#endif
+	if(!player->creative && player->food >= MAX_PLAYER_FOOD)
+		return false;
+	uint8_t new_food = player->food + food > MAX_PLAYER_FOOD
+		? MAX_PLAYER_FOOD : (uint8_t)(player->food + food);
+	float new_saturation = player->saturation
+		+ (float)food * saturation_modifier * 2.0F;
+	server_local_set_player_food(s, player_id, new_food, new_saturation);
+	if(!player->creative) {
+		size_t slot = inventory_get_hotbar(&player->inventory)
+			+ INVENTORY_SLOT_HOTBAR;
+		inventory_consume(&player->inventory, slot);
+		if(item_id == ITEM_MUSHROOM_STEW)
+			inventory_set_slot(&player->inventory, slot,
+				(struct item_data) {.id = ITEM_BOWL, .count = 1, .durability = 0});
+		clin_rpc_send(&(struct client_rpc) {
+			CRPC_PLAYER_ID(player_id)
+			.type = CRPC_INVENTORY_SLOT,
+			.payload.inventory_slot.window = WINDOWC_INVENTORY,
+			.payload.inventory_slot.slot = slot,
+			.payload.inventory_slot.item = player->inventory.items[slot],
+		});
+	}
+	return true;
+}
+
+static void server_local_food_tick(struct server_local* s, int player_id,
+								   struct server_player* player) {
+	if(player->creative)
+		return;
+	if(player->sprinting && player->food >= 7)
+		player->exhaustion += 0.005F; /* 0.1 exhaustion per second at 20 TPS */
+	player->food_tick++;
+	bool food_changed = false;
+	while(player->exhaustion >= 4.0F) {
+		player->exhaustion -= 4.0F;
+		if(player->saturation > 0.0F) {
+			player->saturation -= 1.0F;
+			if(player->saturation < 0.0F)
+				player->saturation = 0.0F;
+		} else if(player->food > 0) {
+			player->food--;
+		}
+		food_changed = true;
+	}
+
+	if(player->food >= 18 && player->health < MAX_PLAYER_HEALTH
+	   && player->food_tick % 80 == 0) {
+		server_local_set_player_health(s, player_id,
+			player->health + HEALTH_PER_HEART / 2);
+		player->exhaustion += 3.0F;
+	} else if(player->food == 0 && player->food_tick % 80 == 0
+			   && server_local_damage_enabled()) {
+		server_local_set_player_health(s, player_id,
+			player->health - HEALTH_PER_HEART / 2);
+	}
+	if(food_changed)
+		server_local_set_player_food(s, player_id, player->food,
+			player->saturation);
+}
+
 void server_local_set_player_health(struct server_local* s, int player_id, short new_health) {
 #ifdef SPLITSCREEN
 	if(player_id < 0 || player_id >= MAX_SERVER_PLAYERS)
@@ -1652,6 +1780,9 @@ static void server_local_process(struct server_rpc* call, void* user) {
 			 * scheitert. Daher ignorieren bis der Teleport abgeschlossen ist. */
 			if(player->portal_pending_active)
 				break;
+			player->sprinting = !player->creative
+				&& call->payload.player_pos.sprinting
+				&& player->food >= 7;
 			// Accept position updates as soon as the player slot exists.
 			player->x = call->payload.player_pos.x;
 			player->y = call->payload.player_pos.y;
@@ -1929,8 +2060,26 @@ static void server_local_process(struct server_rpc* call, void* user) {
 				}
 			}
 			break;
-		case SRPC_BLOCK_PLACE:
+		case SRPC_PLAYER_ANIMATION:
+			if(player->has_pos) {
+				clin_rpc_send(&(struct client_rpc) {
+					.type = CRPC_PLAYER_ANIMATION,
+					.payload.player_animation.player_id = pid,
+					.payload.player_animation.digging
+						= call->payload.player_animation.digging,
+				});
+			}
+			break;
+	case SRPC_BLOCK_PLACE:
 			//CAVEX_DEBUG_PRINTF("srpc_block_place");
+			{
+				struct item_data held;
+				if(inventory_get_hotbar_item(&player->inventory, &held)
+				   && server_local_item_is_food(held.id)) {
+					server_local_eat(s, pid, held.id);
+					break;
+				}
+			}
 			BLOCK_LAT_PRINTF("[PLACE_SERVER_RECV] p=%d id=%u hit=(%d,%d,%d) "
 						"side=%d click_player=(%.3f,%.3f,%.3f) "
 						"server_player=(%.3f,%.3f,%.3f) dim=%d\n",
@@ -2276,7 +2425,9 @@ static void server_local_process(struct server_rpc* call, void* user) {
 		  struct item_data it_data;
 		  if(inventory_get_hotbar_item(&player->inventory, &it_data)) {
 		    struct item* it = item_get(&it_data);
-		    if(it && it_data.id == ITEM_MILK_BUCKET && it->onItemPlace) {
+		    if(server_local_eat(s, pid, it_data.id)) {
+		      /* Food use was handled above. */
+		    } else if(it && it_data.id == ITEM_MILK_BUCKET && it->onItemPlace) {
 		      it->onItemPlace(s, &it_data, NULL, NULL, SIDE_TOP);
 		    } else if(it && it_data.id == ITEM_FISHING_ROD) {
 		      // Cast or reel: find an existing hook owned by this player.
@@ -2549,11 +2700,22 @@ static void server_local_process(struct server_rpc* call, void* user) {
 						.type = CRPC_PLAYER_SET_HEALTH,
 						.payload.player_set_health.health = s->players[i].health
 					});
+					clin_rpc_send(&(struct client_rpc) {
+						CRPC_PLAYER_ID(i)
+						.type = CRPC_PLAYER_SET_FOOD,
+						.payload.player_set_food.food = s->players[i].food,
+						.payload.player_set_food.saturation = s->players[i].saturation
+					});
 				}
 #else
 				clin_rpc_send(&(struct client_rpc) {
 					.type = CRPC_PLAYER_SET_HEALTH,
 					.payload.player_set_health.health = player->health
+				});
+				clin_rpc_send(&(struct client_rpc) {
+					.type = CRPC_PLAYER_SET_FOOD,
+					.payload.player_set_food.food = player->food,
+					.payload.player_set_food.saturation = player->saturation
 				});
 #endif
 			}
@@ -3506,8 +3668,10 @@ unload_done:
 #ifdef SPLITSCREEN
 
 
-for (int i = 0; i < 4; i++) {
+		for (int i = 0; i < 4; i++) {
 			struct server_player* player = &s->players[i];
+			if(player->has_pos)
+				server_local_food_tick(s, i, player);
 
 
 
@@ -3644,6 +3808,8 @@ for (int i = 0; i < 4; i++) {
 	}
 #else
 	// check if player is underwater
+	if(s->player.has_pos)
+		server_local_food_tick(s, 0, &s->player);
 	// server side X off by one?
 	struct block_data blk = {.type = BLOCK_AIR};
 	server_world_get_block(AWORLD(s), s->player.x-1, s->player.y, s->player.z, &blk);
@@ -4079,6 +4245,11 @@ void server_local_create(struct server_local* s) {
 		s->players[i].fall_distance = 0.0f;
 		s->players[i].oxygen = MAX_OXYGEN;
 		s->players[i].health = MAX_PLAYER_HEALTH;
+		s->players[i].food = MAX_PLAYER_FOOD;
+		s->players[i].saturation = MAX_PLAYER_FOOD;
+		s->players[i].exhaustion = 0.0F;
+		s->players[i].food_tick = 0;
+		s->players[i].sprinting = false;
 		s->players[i].portal_ticks = 0;
 		s->players[i].portal_pending_active = false;
 		s->players[i].portal_pending_x = 0;

@@ -72,6 +72,10 @@ static bool quit_requested = false;
 
 void pc_update() {
     if (glfwWindowShouldClose(window)) { // quit X
+        if(gstate.current_screen == &screen_server) {
+            gstate.quit = true;
+            return;
+        }
         if (gstate.world_loaded) {
             /* Don't quit immediately: the server runs in its own thread and
              * works on `server` which lives on main()'s stack. If we set

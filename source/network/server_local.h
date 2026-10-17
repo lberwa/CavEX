@@ -161,6 +161,11 @@ struct server_player {
 	struct inventory* active_inventory;
 	struct item_data ender_chest_items[CHEST_SIZE_STORAGE];
 	short health;
+	uint8_t food;
+	float saturation;
+	float exhaustion;
+	int food_tick;
+	bool sprinting;
 	int oxygen;
 	int spawn_x, spawn_y, spawn_z;
 	float vel_y, old_vel_y;
@@ -296,6 +301,9 @@ void server_local_spawn_block_drops(struct server_local* s,
 void server_local_send_inv_changes(uint8_t player_id, set_inv_slot_t changes,
 								   struct inventory* inv, uint8_t window);
 void server_local_set_player_health(struct server_local* s, int player_id, short new_health);
+void server_local_set_player_food(struct server_local* s, int player_id,
+							  uint8_t food, float saturation);
+bool server_local_eat(struct server_local* s, int player_id, uint16_t item_id);
 /* queue a fluid cell change to be applied after the current world tick */
 void server_local_queue_fluid_change(struct server_local* s, w_coord_t x,
 									 w_coord_t y, w_coord_t z,

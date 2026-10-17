@@ -6042,7 +6042,15 @@ void render_block_cracks(struct block_data* blk, mat4 view, w_coord_t x,
 			gfx_cull_func(MODE_NONE);
 
 		gfx_bind_texture_pixels(&texture_terrain);
+		/* The crack geometry is coplanar with the block surface.  GX is more
+		 * sensitive to the resulting depth tie than OpenGL, so an exact depth
+		 * comparison makes the overlay disappear or flicker depending on the
+		 * viewing angle.  Render it as a slightly closer overlay for this pass
+		 * only; the range is restored immediately afterwards. */
+		gfx_depth_func(MODE_LEQUAL);
+		gfx_depth_range(0.0F, 0.9995F);
 		displaylist_render_immediate(&block_cracks_dl, vertices * 4);
+		gfx_depth_range(0.0F, 1.0F);
 
 		if(b->double_sided)
 			gfx_cull_func(MODE_BACK);
