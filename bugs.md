@@ -101,12 +101,12 @@
 
 * ~~Implement a fallback boundary at Y = -50 to stop players falling under the world.~~
 
-* in creative inventory add:
-  - search function
-  - save function
-  - move to other screen with IB_INVENTORY_LEFT/RIGHT
-  - remove slot
-  - other icons
+* ~~in creative inventory add:~~
+  - ~~search function~~
+  - ~~save function~~
+  - ~~move to other screen with IB_INVENTORY_LEFT/RIGHT~~
+  - ~~remove slot~~
+  - ~~other icons~~
 
 * the menu of creative inventory of player 1 is the same like of player 2
 

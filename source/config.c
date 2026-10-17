@@ -112,6 +112,34 @@ bool config_read_int_array(struct config* c, const char* key, int* dest,
 	return true;
 }
 
+bool config_read_int_chords(struct config* c, const char* key,
+							int (*dest)[8], size_t* chord_count) {
+	assert(c && key && dest && chord_count);
+	JSON_Array* entry = json_object_dotget_array(json_object(c->root), key);
+	if(!entry)
+		return false;
+
+	/* A flat array is intentionally not accepted here. This keeps old mappings
+	 * working unchanged while allowing a mapping to explicitly contain chords. */
+	size_t count = json_array_get_count(entry);
+	if(count > *chord_count)
+		count = *chord_count;
+	for(size_t i = 0; i < count; i++) {
+		JSON_Array* chord = json_array_get_array(entry, i);
+		if(!chord)
+			return false;
+		size_t keys = json_array_get_count(chord);
+		if(keys == 0 || keys > 8)
+			return false;
+		for(size_t k = 0; k < keys; k++)
+			dest[i][k] = (int)json_array_get_number(chord, k);
+		for(size_t k = keys; k < 8; k++)
+			dest[i][k] = -1;
+	}
+	*chord_count = count;
+	return count > 0;
+}
+
 void config_destroy(struct config* c) {
 	assert(c && c->root);
 	json_value_free(c->root);
@@ -120,6 +148,7 @@ void config_destroy(struct config* c) {
 
 void settings_init() {
 	gstate.settings.debug = true;
+	gstate.settings.chunk_render_log = false;
 	/* IN-GAME chunk generation speed (applies while playing, NOT on the loading
 	 * screen -- loading always runs at full speed):
 	 *   chunk_build_budget_ms = milliseconds of each ~50ms game tick spent
@@ -154,6 +183,8 @@ void settings_init() {
 		JSON_Object* root = json_object(gstate.config_user.root);
 		if(json_object_dothas_value_of_type(root, "settings.debug", JSONBoolean))
 			gstate.settings.debug = json_object_dotget_boolean(root, "settings.debug");
+		if(json_object_dothas_value_of_type(root, "settings.chunk_render_log", JSONBoolean))
+			gstate.settings.chunk_render_log = json_object_dotget_boolean(root, "settings.chunk_render_log");
 		if(json_object_dothas_value_of_type(root, "settings.chunk_build_per_tick", JSONNumber))
 			gstate.settings.chunk_build_per_tick = (int)json_object_dotget_number(root, "settings.chunk_build_per_tick");
 		if(json_object_dothas_value_of_type(root, "settings.chunk_build_budget_ms", JSONNumber))
@@ -183,6 +214,7 @@ void config_save_settings(struct config* c) {
 
 	JSON_Object* root = json_object(c->root);
 	json_object_dotset_boolean(root, "settings.debug", gstate.settings.debug);
+	json_object_dotset_boolean(root, "settings.chunk_render_log", gstate.settings.chunk_render_log);
 	json_object_dotset_number(root, "settings.chunk_build_per_tick", gstate.settings.chunk_build_per_tick);
 	json_object_dotset_number(root, "settings.chunk_build_budget_ms", gstate.settings.chunk_build_budget_ms);
 	json_object_dotset_boolean(root, "settings.start_fullscreen", gstate.settings.start_fullscreen);

@@ -21,6 +21,7 @@
 #define CONFIG_H
 
 #include <stdbool.h>
+#include <stddef.h>
 
 #include "parson/parson.h"
 
@@ -34,6 +35,9 @@ const char* config_read_string(struct config* c, const char* key,
 							   const char* fallback);
 bool config_read_int_array(struct config* c, const char* key, int* dest,
 						   size_t* length);
+/* Read a list of key chords, e.g. [[6,7],[206,207]]. */
+bool config_read_int_chords(struct config* c, const char* key,
+							int (*dest)[8], size_t* chord_count);
 void config_destroy(struct config* c);
 void config_save_settings(struct config* c);
 

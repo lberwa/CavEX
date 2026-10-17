@@ -52,6 +52,7 @@ enum client_rpc_type {
 	CRPC_SPAWN_POINT,    /* world/player spawn coordinates for compass */
 	CRPC_WORLD_LOADED, /* spawn area chunks loaded + hotbar sent -> start game */
 	CRPC_GAMEMODE,
+	CRPC_CREATIVE_SAVED_SLOT,
 	CRPC_PORTAL_LOADING, /* Ladescreen für diesen Spieler zeigen (Portal-Wechsel) */
 };
 
@@ -85,6 +86,10 @@ struct client_rpc {
 			uint8_t slot;
 			struct item_data item;
 		} inventory_slot;
+		struct {
+			uint8_t slot;
+			struct item_data item;
+		} creative_saved_slot;
 		struct {
 			vec3 position;
 			vec2 rotation;

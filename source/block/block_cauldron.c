@@ -130,10 +130,11 @@ struct block block_cauldron = {
 	.block_item = {
 		.has_damage = false,
 		.max_stack = 64,
-		.renderItem = render_item_block,
+		.renderItem = render_item_texture,
 		.onItemPlace = block_place_default,
 		.fuel = 0,
-		.render_data.block.has_default = false,
+		.render_data.item.texture_x = 9,
+		.render_data.item.texture_y = 8,
 		.armor.is_armor = false,
 		.tool.type = TOOL_TYPE_ANY,
 	},

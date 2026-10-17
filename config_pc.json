@@ -35,7 +35,9 @@
     "gui_click": [90],
     "gui_click_alt": [85],
 
-    "screenshot": [79],       
+    "screenshot": [[79]],
+    "load_inventory": [[79, 80]],
+    "save_inventory": [[79, 73]],
     "gui_back": [86],
 	"any_button": [71, 84, 72, 90, 85]
 },
@@ -58,7 +60,9 @@
 		"gui_right": [68, 262],
 		"gui_click": [1000, 257],
 		"gui_click_alt": [1001],
-		"screenshot": [291],
+		"screenshot": [[291]],
+		"load_inventory": [[79, 80]],
+		"save_inventory": [[79, 73]],
 		"gui_back": [256],
 		"toggle_creative": [294],
 		"any_button": [87, 83, 65]
@@ -82,7 +86,9 @@
 		"gui_right": [68, 262],
 		"gui_click": [1000, 257],
 		"gui_click_alt": [1001],
-		"screenshot": [291],
+		"screenshot": [[291]],
+		"load_inventory": [[79, 80]],
+		"save_inventory": [[79, 73]],
 		"gui_back": [256],
 		"toggle_creative": [294],
 		"any_button": [87, 83, 65]

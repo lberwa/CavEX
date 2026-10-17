@@ -230,6 +230,10 @@ void gutil_clouds(mat4 view_matrix, float brightness) {
 
 	gfx_write_buffers(true, true, true);
 	gfx_blending(MODE_OFF);
+	/* Sonne/Mond benutzen eine eigene Texturmatrix. Diese muss vor dem
+	 * Terrain-Rendering zurückgesetzt werden, sonst werden die Chunk-
+	 * Texturkoordinaten ebenfalls mit der Himmelsmatrix transformiert. */
+	gfx_matrix_texture(false, NULL);
 	gfx_texture(true);
 	gfx_cull_func(MODE_BACK);
 	gfx_fog(false);

@@ -773,4 +773,14 @@ bool entity_local_player_block_collide(vec3 pos, struct block_info* blk_info) {
 		e->data.local_player.creative = false;
 		e->data.local_player.jump_tap_window = 0;
 		e->data.local_player.jump_held_prev = false;
+		/* Die Entity wird per malloc() (ungenullt) erzeugt; diese Bob-Felder
+		 * MUESSEN initialisiert werden. Sonst startet walk_bob als Heap-Muell,
+		 * der gelegentlich ein NaN-Bitmuster ist. Da walk_bob nur per += und
+		 * walk_bob_old=walk_bob fortgeschrieben wird, bleibt ein NaN dauerhaft
+		 * und vergiftet via Kamera-Bob die komplette View-Matrix (NaN*0=NaN),
+		 * wodurch die 3D-Welt unsichtbar wird. */
+		e->data.local_player.walk_bob = 0.0f;
+		e->data.local_player.walk_bob_old = 0.0f;
+		e->data.local_player.walk_bob_speed = 0.0f;
+		e->data.local_player.step_bob_next = 0.0f;
 	}

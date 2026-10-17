@@ -54,6 +54,19 @@
 #include <ogc/system.h>
 #endif
 
+static bool quick_preset_active[4];
+static bool quick_preset_save[4];
+static unsigned quick_preset_row[4];
+
+static void quick_preset_begin(int player, bool save) {
+	if(player < 0 || player >= 4)
+		return;
+	quick_preset_active[player] = true;
+	quick_preset_save[player] = save;
+	quick_preset_row[player] = 0;
+	gstate_set_capture_input_all(false);
+}
+
 static struct window_container* active_inventory_window(void) {
 	return gstate_windows()[WINDOWC_INVENTORY];
 }
@@ -261,6 +274,45 @@ void screen_ingame_render3D(struct screen* s, mat4 view) {
 }
 
 	static void screen_ingame_update_player(struct screen* s, float dt) {
+		int player = gstate_active_player();
+		bool creative_mode = gstate.local_player
+			&& gstate.local_player->data.local_player.creative;
+		if(quick_preset_active[player]) {
+			if(input_pressed(IB_BACK, player)) {
+				quick_preset_active[player] = false;
+				gstate_set_capture_input_all(true);
+			} else if(input_pressed(IB_GUI_UP, player)
+			   || input_pressed(IB_GUI_RIGHT, player))
+				quick_preset_row[player] = (quick_preset_row[player] + 1) % 5;
+			else if(input_pressed(IB_GUI_DOWN, player)
+					 || input_pressed(IB_GUI_LEFT, player))
+				quick_preset_row[player] = (quick_preset_row[player] + 4) % 5;
+			else if(input_pressed(IB_GUI_CLICK, player)) {
+				svin_rpc_send(&(struct server_rpc) {
+					RPC_PLAYER_ID(player)
+					.type = SRPC_CREATIVE_HOTBAR_PRESET,
+					.payload.creative_hotbar_preset.row = quick_preset_row[player],
+					.payload.creative_hotbar_preset.save = quick_preset_save[player],
+				});
+				quick_preset_active[player] = false;
+				gstate_set_capture_input_all(true);
+			}
+			return;
+		}
+		if(creative_mode && input_pressed(IB_LOAD_INVENTORY, player))
+			quick_preset_begin(player, false);
+		else if(creative_mode && input_pressed(IB_SAVE_INVENTORY, player))
+			quick_preset_begin(player, true);
+		if(quick_preset_active[player])
+			return;
+		/* IB_SCROLL_RIGHT is the in-game inventory-forward/hotbar-forward
+		 * binding. It also toggles the optional chunk render diagnostics. */
+		if(input_pressed(IB_SCROLL_RIGHT, player)) {
+			gstate.settings.chunk_render_log = !gstate.settings.chunk_render_log;
+			printf("[CHUNK_RENDER] logging=%s\n",
+				   gstate.settings.chunk_render_log ? "on" : "off");
+			fflush(stdout);
+		}
 		if(input_pressed(IB_HOME, gstate_active_player())) {
 			screen_set_player(gstate_active_player(), &screen_game_menu);
 			return;
@@ -268,9 +320,6 @@ void screen_ingame_render3D(struct screen* s, mat4 view) {
 
 		if(!active_inventory_window())
 			return;
-
-		bool creative_mode = gstate.local_player
-			&& gstate.local_player->data.local_player.creative;
 
 		// left click interaction
 		if (gstate.camera_hit.entity_hit
@@ -830,6 +879,15 @@ static void screen_ingame_render2D(struct screen* s, int width, int height) {
 	gfx_bind_texture(&texture_gui2);
 	gutil_texquad((width - 182 * GFX_GUI_SCALE) / 2, height - hud_gap - 22 * GFX_GUI_SCALE, 0, 0,
 				  182, 22, 182 * GFX_GUI_SCALE, 22 * GFX_GUI_SCALE);
+	{
+		int player = gstate_active_player();
+		if(player >= 0 && player < 4 && quick_preset_active[player]) {
+			snprintf(str, sizeof(str), "%u", quick_preset_row[player] + 1);
+			gutil_text(width / 2 - gutil_font_width(str, 8 * GFX_GUI_SCALE) / 2,
+					   height - hud_gap - 31 * GFX_GUI_SCALE, str,
+					   8 * GFX_GUI_SCALE, true);
+		}
+	}
 
 	//  +
 	{

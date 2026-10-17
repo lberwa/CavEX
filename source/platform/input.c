@@ -533,6 +533,8 @@ static const char* input_config_translate(enum input_button key) {
 		case IB_GUI_CLICK: return "input.gui_click";
 		case IB_GUI_CLICK_ALT: return "input.gui_click_alt";
 		case IB_SCREENSHOT: return "input.screenshot";
+		case IB_LOAD_INVENTORY: return "input.load_inventory";
+		case IB_SAVE_INVENTORY: return "input.save_inventory";
 		case IB_BACK: return "input.gui_back";
 		case IB_TOGGLE_CREATIVE: return "input.toggle_creative";
 		case IB_ANY: return "input.any_button";
@@ -595,8 +597,34 @@ static void input_button_status(enum input_button b, int player, int vplayer,
 	}
 }
 
+static bool input_chord_state(enum input_button b, int player, int vplayer,
+							 bool want_pressed, bool want_held) {
+	int chords[8][8];
+	size_t chord_count = 8;
+	const char* key = input_config_translate(b);
+	if(!key || !config_read_int_chords(&gstate.config_user, key, chords,
+										  &chord_count))
+		return false;
+
+	for(size_t i = 0; i < chord_count; i++) {
+		bool all_held = true;
+		bool any_pressed = false;
+		for(size_t k = 0; k < 8 && chords[i][k] >= 0; k++) {
+			bool pressed, released, held;
+			input_native_key_status(chords[i][k], vplayer, &pressed, &released,
+								&held);
+			all_held = all_held && (pressed || held);
+			any_pressed = any_pressed || pressed;
+		}
+		if(all_held && ((want_pressed && any_pressed) || (want_held && all_held))) {
+			return true;
+		}
+	}
+	return false;
+}
+
 static bool input_button_pressed_state(enum input_button b, int player,
-									   int vplayer) {
+										   int vplayer) {
 	bool any_pressed = false;
 	bool any_released = false;
 	bool any_held = false;
@@ -697,6 +725,14 @@ bool input_pressed(enum input_button b, int player) {
 	if(b == IB_ANY) {
 		return input_any_pressed(player, vplayer);
 	}
+	{
+		int chords[8][8];
+		size_t chord_count = 8;
+		const char* chord_key = input_config_translate(b);
+		if(chord_key && config_read_int_chords(&gstate.config_user, chord_key,
+										  chords, &chord_count))
+			return input_chord_state(b, player, vplayer, true, false);
+	}
 
 	const char* key = input_config_translate(b);
 
@@ -782,6 +818,14 @@ bool input_held(enum input_button b, int player) {
 
 	if(b == IB_ANY) {
 		return input_any_held(player, vplayer);
+	}
+	{
+		int chords[8][8];
+		size_t chord_count = 8;
+		const char* chord_key = input_config_translate(b);
+		if(chord_key && config_read_int_chords(&gstate.config_user, chord_key,
+										  chords, &chord_count))
+		return input_chord_state(b, player, vplayer, false, true);
 	}
 	
 	const char* key = input_config_translate(b);

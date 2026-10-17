@@ -42,10 +42,13 @@ enum input_button {
 	IB_GUI_CLICK,
 	IB_GUI_CLICK_ALT,
 	IB_SCREENSHOT,
+	IB_LOAD_INVENTORY,
+	IB_SAVE_INVENTORY,
 	IB_BACK,
 	IB_TOGGLE_CREATIVE,
 	IB_ANY,
 };
+
 
 enum input_category {
 	INPUT_CAT_WIIMOTE,

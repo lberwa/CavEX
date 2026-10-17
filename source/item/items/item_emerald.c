@@ -16,8 +16,8 @@ struct item item_emerald = {
 	.tool.type = TOOL_TYPE_ANY,
 	.render_data = {
 		.item = {
-			.texture_x = 7,
-			.texture_y = 10,
+			.texture_x = 13,
+			.texture_y = 3,
 		},
 	},
 };

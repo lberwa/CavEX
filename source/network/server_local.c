@@ -1765,6 +1765,85 @@ static void server_local_process(struct server_rpc* call, void* user) {
 			}
 			break;
 		}
+		case SRPC_CREATIVE_SET_PICKED_STACK: {
+			if(player->has_pos && player->creative) {
+				struct item_data picked =
+					call->payload.creative_set_picked_stack.item;
+				if(picked.id == 0 || picked.count == 0
+				   || picked.id >= ITEMS_MAX || !items[picked.id]
+				   || !items[picked.id]->renderItem)
+					picked = (struct item_data) {0};
+				inventory_set_picked_item(&player->inventory, picked);
+				clin_rpc_send(&(struct client_rpc) {
+					CRPC_PLAYER_ID(pid)
+					.type = CRPC_INVENTORY_SLOT,
+					.payload.inventory_slot.window = WINDOWC_INVENTORY,
+					.payload.inventory_slot.slot = SPECIAL_SLOT_PICKED_ITEM,
+					.payload.inventory_slot.item = picked,
+				});
+			}
+			break;
+		}
+		case SRPC_CREATIVE_SAVED_REQUEST: {
+			if(player->has_pos && player->creative) {
+				for(uint8_t k = 0; k < CREATIVE_INVENTORY_SIZE; k++)
+					clin_rpc_send(&(struct client_rpc) {
+						CRPC_PLAYER_ID(pid)
+						.type = CRPC_CREATIVE_SAVED_SLOT,
+						.payload.creative_saved_slot.slot = k,
+						.payload.creative_saved_slot.item =
+							s->creative_saved_items[k],
+					});
+			}
+			break;
+		}
+		case SRPC_CREATIVE_SAVED_SLOT: {
+			if(player->has_pos && player->creative
+			   && call->payload.creative_saved_slot.slot
+					< CREATIVE_INVENTORY_SIZE) {
+				s->creative_saved_items[
+					call->payload.creative_saved_slot.slot]
+					= call->payload.creative_saved_slot.item;
+				level_archive_write_creative_inventory(
+					&s->level, s->creative_saved_items,
+					CREATIVE_INVENTORY_SIZE);
+			}
+			break;
+		}
+		case SRPC_CREATIVE_HOTBAR_PRESET: {
+			uint8_t row = call->payload.creative_hotbar_preset.row;
+			if(player->has_pos && player->creative && row < 5) {
+				size_t base = (size_t)row * INVENTORY_SIZE_HOTBAR;
+				if(call->payload.creative_hotbar_preset.save) {
+					for(size_t k = 0; k < INVENTORY_SIZE_HOTBAR; k++) {
+						s->creative_saved_items[base + k]
+							= player->inventory.items[INVENTORY_SLOT_HOTBAR + k];
+						clin_rpc_send(&(struct client_rpc) {
+							CRPC_PLAYER_ID(pid)
+							.type = CRPC_CREATIVE_SAVED_SLOT,
+							.payload.creative_saved_slot.slot = base + k,
+							.payload.creative_saved_slot.item = s->creative_saved_items[base + k],
+						});
+					}
+					level_archive_write_creative_inventory(
+						&s->level, s->creative_saved_items,
+						CREATIVE_INVENTORY_SIZE);
+				} else {
+					for(size_t k = 0; k < INVENTORY_SIZE_HOTBAR; k++) {
+						struct item_data item = s->creative_saved_items[base + k];
+						player->inventory.items[INVENTORY_SLOT_HOTBAR + k] = item;
+						clin_rpc_send(&(struct client_rpc) {
+							CRPC_PLAYER_ID(pid)
+							.type = CRPC_INVENTORY_SLOT,
+							.payload.inventory_slot.window = WINDOWC_INVENTORY,
+							.payload.inventory_slot.slot = INVENTORY_SLOT_HOTBAR + k,
+							.payload.inventory_slot.item = item,
+						});
+					}
+				}
+			}
+			break;
+		}
 		case SRPC_BLOCK_DIG:
 			BLOCK_LAT_PRINTF("[BLOCK_LAT] SERVER_RECV dig p=%d pos=%d,%d,%d finished=%d\n",
 				   (int)pid, (int)call->payload.block_dig.x,
@@ -2091,6 +2170,9 @@ static void server_local_process(struct server_rpc* call, void* user) {
 			server_local_save_player2(s);
 
 			level_archive_write_inventory(&s->level, &player->inventory);
+			level_archive_write_creative_inventory(
+				&s->level, s->creative_saved_items,
+				CREATIVE_INVENTORY_SIZE);
 			level_archive_write(&s->level, LEVEL_TIME, &s->world_time);
 			{
 				int64_t last_played = server_local_last_played();
@@ -2309,6 +2391,11 @@ static void server_local_process(struct server_rpc* call, void* user) {
 			CAVEX_DEBUG_PRINTF("[DEBUG server_local SRPC_LOAD_WORLD] name='%s'\n", string_get_cstr(s->level_name));
 #endif
 			if(level_archive_create(&s->level, s->level_name)) {
+				memset(s->creative_saved_items, 0,
+					   sizeof(s->creative_saved_items));
+				level_archive_read_creative_inventory(
+					&s->level, s->creative_saved_items,
+					CREATIVE_INVENTORY_SIZE);
 				vec3 base_pos = {0.0f, 80.0f, 0.0f};
 				vec2 base_rot = {0.0f, 0.0f};
 				enum world_dim dim = WORLD_DIM_OVERWORLD;
