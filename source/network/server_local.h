@@ -202,6 +202,7 @@ struct server_local {
 	struct random_gen rand_src;
 #define MAX_SERVER_PLAYERS 4
 	struct server_player players[MAX_SERVER_PLAYERS];
+	struct item_data creative_saved_items[CREATIVE_INVENTORY_SIZE];
 	// Player id of the RPC currently being processed (used by block/inventory
 	// callbacks that don't carry player context yet).
 	uint8_t active_player_id;

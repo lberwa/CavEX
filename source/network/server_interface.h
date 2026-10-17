@@ -44,6 +44,10 @@ enum server_rpc_type {
 	SRPC_SET_GAMEMODE,
 	SRPC_CREATIVE_PICK_BLOCK,
 	SRPC_CREATIVE_SET_PICKED,
+	SRPC_CREATIVE_SET_PICKED_STACK,
+	SRPC_CREATIVE_SAVED_REQUEST,
+	SRPC_CREATIVE_SAVED_SLOT,
+	SRPC_CREATIVE_HOTBAR_PRESET,
 	SRPC_BOAT_CONTROL,
 	SRPC_ITEM_USE, /* right-click use with no block/entity target (e.g. milk) */
 };
@@ -124,6 +128,17 @@ struct server_rpc {
 		struct {
 			uint16_t item_id;
 		} creative_set_picked;
+		struct {
+			struct item_data item;
+		} creative_set_picked_stack;
+		struct {
+			uint8_t slot;
+			struct item_data item;
+		} creative_saved_slot;
+		struct {
+			uint8_t row;
+			bool save;
+		} creative_hotbar_preset;
 	} payload;
 };
 

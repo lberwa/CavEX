@@ -37,6 +37,7 @@
 #define BLOCK_PLACE_CLIENT_PRINTF(...) ((void)0)
 #endif
 #include "../game/game_state.h"
+#include "../game/gui/screen_inventory_creative.h"
 #include "../particle.h"
 #include "../platform/thread.h"
 #include "../sound/sound.h"
@@ -206,6 +207,20 @@ void clin_process(struct client_rpc* call) {
 			new_pos[1] = call->payload.player_pos.position[1];
 			new_pos[2] = call->payload.player_pos.position[2];
 
+			if(gstate.settings.chunk_render_log && lp
+			   && glm_vec3_distance2(lp->pos, new_pos) > 1024.0f) {
+				printf("[CAMERA_POS_RPC] player=%u teleport=%d "
+				       "old_player=(%.2f,%.2f,%.2f) "
+				       "new=(%.2f,%.2f,%.2f) "
+				       "camera_before=(%.2f,%.2f,%.2f) loaded=%d\n",
+				       (unsigned)pid,
+				       (int)call->payload.player_pos.teleport,
+				       lp->pos[0], lp->pos[1], lp->pos[2],
+				       new_pos[0], new_pos[1], new_pos[2],
+				       cam->x, cam->y, cam->z,
+				       (int)gstate.world_loaded);
+			}
+
 			bool apply_rotation = !was_loaded;
 			if(lp) {
 				float dist2 = glm_vec3_distance2(lp->pos, new_pos);
@@ -374,6 +389,11 @@ void clin_process(struct client_rpc* call) {
 									call->payload.inventory_slot.item);
 			break;
 		}
+		case CRPC_CREATIVE_SAVED_SLOT:
+			creative_inventory_set_saved_item(
+				call->payload.creative_saved_slot.slot,
+				call->payload.creative_saved_slot.item);
+			break;
 		case CRPC_WINDOW_TRANSACTION: {
 			uint8_t window = call->payload.window_transaction.window;
 			struct window_container* wc =

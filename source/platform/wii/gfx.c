@@ -47,7 +47,11 @@ static uint32_t gfx_depth_test_last = GX_TRUE;
 static uint32_t gfx_depth_func_last = GX_LEQUAL;
 
 static int gfx_screen_width = 802;
-static float gfx_texcoord_div = 256.0f;
+/* GX texture coordinates are fixed-point.  Keep the source-space divisor for
+ * both axes so non-power-of-two textures (for example the 780x560 creative
+ * inventory) can be converted to the fixed-point range exactly. */
+static float gfx_texcoord_div_x = 256.0f;
+static float gfx_texcoord_div_y = 256.0f;
 /* signed: the split-screen cover viewport can have a negative origin */
 static int current_vp_x = 0;
 static int current_vp_y = 0;
@@ -72,12 +76,11 @@ static void gfx_apply_texcoord_frac(uint8_t frac) {
 	GX_SetVtxAttrFmt(GX_VTXFMT3, GX_VA_TEX0, GX_TEX_ST, GX_U8, frac);
 }
 
-/* frac = log2(Texturbreite): 256->8, 512->9, 1024->10. Damit ist der Rohwert
- * der Texcoord gleich dem Texel (raw/2^frac * texwidth = raw, wenn 2^frac =
- * texwidth). No-Op fuer alle 256er-Texturen, nur der 512er-Atlas wird zu 9. */
+/* Use the next fixed-point precision that can represent the complete texture.
+ * Pixel coordinates are scaled separately in gfx_draw_quads(). */
 static uint8_t gfx_frac_for_width(uint32_t w) {
 	uint8_t f = 0;
-	while((1u << (f + 1)) <= w && f < 15)
+	while((1u << f) < w && f < 15)
 		f++;
 	return f;
 }
@@ -434,7 +437,10 @@ void gfx_flip_buffers(float* gpu_wait, float* vsync_wait) {
 void gfx_bind_texture(struct tex_gfx* tex) {
 	assert(tex);
 	tex_gfx_bind(tex, GX_TEXMAP0);
-	gfx_set_texcoord_div(tex ? (float)tex->width : 256.0f);
+	gfx_texcoord_div_x = tex->width > 0 ? (float)tex->width : 256.0f;
+	gfx_texcoord_div_y = tex->height > 0 ? (float)tex->height : 256.0f;
+	uint32_t max_dim = tex->width > tex->height ? tex->width : tex->height;
+	gfx_apply_texcoord_frac(gfx_frac_for_width(max_dim));
 }
 
 void gfx_set_block_atlas_size(size_t atlas_size) {
@@ -452,12 +458,14 @@ void gfx_bind_texture_pixels(struct tex_gfx* tex) {
 }
 
 float gfx_get_texcoord_div(void) {
-	return gfx_texcoord_div;
+	return gfx_texcoord_div_x;
 }
 
 void gfx_set_texcoord_div(float div) {
-	gfx_texcoord_div = (div > 0.0f) ? div : 256.0f;
-	gfx_apply_texcoord_frac(gfx_frac_for_width((uint32_t)gfx_texcoord_div));
+	gfx_texcoord_div_x = (div > 0.0f) ? div : 256.0f;
+	gfx_texcoord_div_y = gfx_texcoord_div_x;
+	gfx_apply_texcoord_frac(
+		gfx_frac_for_width((uint32_t)gfx_texcoord_div_x));
 }
 
 void gfx_copy_framebuffer(uint8_t* dest, size_t* width, size_t* height) {
@@ -593,6 +601,9 @@ void gfx_end_panorama_capture(void) {
 }
 
 void gfx_mode_world() {
+	/* GUI-/Sky-Renderpfade dürfen keine aktive Texturmatrix in den
+	 * Terrain-Pass übernehmen. */
+	gfx_matrix_texture(false, NULL);
 	gfx_write_buffers(true, true, true);
 }
 
@@ -840,13 +851,22 @@ void gfx_draw_quads(size_t vertex_count, const int16_t* vertices,
 	assert(vertices && colors && texcoords);
 
 	GX_Begin(GX_QUADS, GX_VTXFMT2, vertex_count);
+	uint8_t frac = gfx_frac_for_width((uint32_t)fmaxf(
+		gfx_texcoord_div_x, gfx_texcoord_div_y));
+	float fixed_scale = (float)(1u << frac);
 
 	for(size_t k = 0; k < vertex_count; k++) {
 		GX_Position3s16(vertices[k * 3 + 0], vertices[k * 3 + 1],
 						vertices[k * 3 + 2]);
 		GX_Color4u8(colors[k * 4 + 0], colors[k * 4 + 1], colors[k * 4 + 2],
 					colors[k * 4 + 3]);
-		GX_TexCoord2u16(texcoords[k * 2 + 0], texcoords[k * 2 + 1]);
+		uint32_t s = (uint32_t)lroundf(
+			(float)texcoords[k * 2 + 0] * fixed_scale / gfx_texcoord_div_x);
+		uint32_t t = (uint32_t)lroundf(
+			(float)texcoords[k * 2 + 1] * fixed_scale / gfx_texcoord_div_y);
+		if(s > UINT16_MAX) s = UINT16_MAX;
+		if(t > UINT16_MAX) t = UINT16_MAX;
+		GX_TexCoord2u16((u16)s, (u16)t);
 	}
 
 	GX_End();

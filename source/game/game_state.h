@@ -53,6 +53,7 @@ struct game_state {
 	int player_sequence[4];
 	struct {
 		bool debug;
+		bool chunk_render_log;
 		int chunk_build_budget_ms;
 		int chunk_build_per_tick;
 		bool start_fullscreen;

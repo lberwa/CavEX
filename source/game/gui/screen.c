@@ -91,7 +91,8 @@ void screen_viewport_size(int player, int* width, int* height) {
 
 #ifdef PLATFORM_WII
 		if(screen_viewport_target(player) == &screen_game_menu
-		   || screen_viewport_target(player) == &screen_game_settings) {
+		   || screen_viewport_target(player) == &screen_game_settings
+		   || screen_viewport_target(player) == &screen_inventory_creative) {
 #else
 		if(screen_get_player(player) == &screen_game_menu
 		   || screen_get_player(player) == &screen_game_settings) {

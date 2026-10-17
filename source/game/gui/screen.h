@@ -48,6 +48,7 @@ extern struct screen spieleranzahl_auswählen;
 extern struct screen screen_controllerauswahl;
 extern struct screen screen_server;
 extern struct screen screen_inventory;
+extern struct screen screen_inventory_creative;
 extern struct screen screen_crafting;
 extern struct screen screen_dispenser;
 extern struct screen screen_furnace;

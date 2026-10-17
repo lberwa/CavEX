@@ -18,6 +18,7 @@
 */
 
 #include <assert.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "level_archive.h"
@@ -158,6 +159,110 @@ bool level_archive_read_inventory(struct level_archive* la,
 		}
 	}
 
+	return true;
+}
+
+#define LEVEL_CREATIVE_INVENTORY \
+	(struct level_archive_tag) { ".Data.CavEXCreativeInventory", TAG_LIST }
+
+static nbt_node* creative_tag_node(nbt_node* item, const char* name) {
+	return nbt_find_by_path(item, name);
+}
+
+bool level_archive_read_creative_inventory(struct level_archive* la,
+										  struct item_data* items, size_t count) {
+	if(!la || !la->data || !items) return false;
+	memset(items, 0, count * sizeof(*items));
+	nbt_node* list = nbt_find_by_path(la->data,
+		".Data.CavEXCreativeInventory");
+	if(!list || list->type != TAG_LIST) return false;
+	struct list_head* current;
+	list_for_each(current, &list->payload.tag_list->entry) {
+		nbt_node* obj = list_entry(current, struct nbt_list, entry)->data;
+		if(!obj || obj->type != TAG_COMPOUND) continue;
+		nbt_node* slot = creative_tag_node(obj, ".Slot");
+		nbt_node* id = creative_tag_node(obj, ".id");
+		nbt_node* amount = creative_tag_node(obj, ".Count");
+		nbt_node* damage = creative_tag_node(obj, ".Damage");
+		if(!slot || !id || !amount || !damage
+		   || slot->type != TAG_BYTE || id->type != TAG_SHORT
+		   || amount->type != TAG_BYTE || damage->type != TAG_SHORT)
+			continue;
+		if((uint8_t)slot->payload.tag_byte >= count) continue;
+		items[(uint8_t)slot->payload.tag_byte] = (struct item_data) {
+			.id = (uint16_t)id->payload.tag_short,
+			.count = (uint8_t)amount->payload.tag_byte,
+			.durability = (uint8_t)damage->payload.tag_short,
+		};
+	}
+	return true;
+}
+
+bool level_archive_write_creative_inventory(struct level_archive* la,
+										   const struct item_data* items, size_t count) {
+	if(!la || !la->data || !items) return false;
+	nbt_node* data = nbt_find_by_path(la->data, ".Data");
+	if(!data || data->type != TAG_COMPOUND) return false;
+	nbt_node* list = nbt_find_by_path(la->data,
+		".Data.CavEXCreativeInventory");
+	if(!list) {
+		struct nbt_list empty = {
+			.data = &(nbt_node) {.type = TAG_COMPOUND}
+		};
+		INIT_LIST_HEAD(&empty.entry);
+		nbt_node template = {
+			.type = TAG_LIST,
+			.name = "CavEXCreativeInventory",
+			.payload.tag_list = &empty,
+		};
+		list = nbt_clone(&template);
+		if(!list) return false;
+		struct nbt_list* link = malloc(sizeof(*link));
+		if(!link) { nbt_free(list); return false; }
+		link->data = list;
+		list_add_tail(&link->entry, &data->payload.tag_compound->entry);
+	} else if(list->type != TAG_LIST) {
+		return false;
+	} else {
+		nbt_free_list(list->payload.tag_list);
+	}
+
+	list->payload.tag_list = malloc(sizeof(*list->payload.tag_list));
+	if(!list->payload.tag_list) return false;
+	list->payload.tag_list->data = malloc(sizeof(nbt_node));
+	if(!list->payload.tag_list->data) {
+		free(list->payload.tag_list);
+		list->payload.tag_list = NULL;
+		return false;
+	}
+	list->payload.tag_list->data->type = TAG_COMPOUND;
+	INIT_LIST_HEAD(&list->payload.tag_list->entry);
+
+	for(size_t k = 0; k < count; k++) {
+		if(items[k].id == 0 || items[k].count == 0) continue;
+		nbt_node nodes[] = {
+			{.type = TAG_BYTE, .name = "Slot", .payload.tag_byte = (int8_t)k},
+			{.type = TAG_SHORT, .name = "id", .payload.tag_short = items[k].id},
+			{.type = TAG_BYTE, .name = "Count", .payload.tag_byte = items[k].count},
+			{.type = TAG_SHORT, .name = "Damage", .payload.tag_short = items[k].durability},
+		};
+		struct nbt_list sentinel = {.data = NULL};
+		INIT_LIST_HEAD(&sentinel.entry);
+		struct nbt_list links[4];
+		for(size_t n = 0; n < 4; n++) {
+			links[n].data = &nodes[n];
+			list_add_tail(&links[n].entry, &sentinel.entry);
+		}
+		nbt_node* item = nbt_clone(&(nbt_node) {
+			.type = TAG_COMPOUND, .payload.tag_compound = &sentinel
+		});
+		if(!item) return false;
+		struct nbt_list* link = malloc(sizeof(*link));
+		if(!link) { nbt_free(item); return false; }
+		link->data = item;
+		list_add_tail(&link->entry, &list->payload.tag_list->entry);
+	}
+	la->modified = true;
 	return true;
 }
 

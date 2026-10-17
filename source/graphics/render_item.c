@@ -273,6 +273,17 @@ void render_item_flat(struct item* item, struct item_data* stack, mat4 view,
 	gfx_matrix_modelview(GLM_MAT4_IDENTITY);
 }
 
+/* Render an item-sheet sprite even when the item id is a block id. This is
+ * useful for blocks with a dedicated inventory sprite (for example cauldrons
+ * and repeaters). */
+void render_item_texture(struct item* item, struct item_data* stack, mat4 view,
+						 bool fullbright, enum render_item_env env) {
+	struct item_data texture_stack = *stack;
+	/* render_item_flat selects the item sheet for non-block ids. */
+	texture_stack.id = ITEM_IRON_SHOVEL;
+	render_item_flat(item, &texture_stack, view, fullbright, env);
+}
+
 void render_item_block(struct item* item, struct item_data* stack, mat4 view,
 					   bool fullbright, enum render_item_env env) {
 	assert(item && stack && view);

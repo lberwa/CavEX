@@ -19,8 +19,9 @@
 
 #include <assert.h>
 #include <float.h>
-#ifdef CAMERA_DEBUG
+#include <math.h>
 #include <stdio.h>
+#ifdef CAMERA_DEBUG
 #if 0
 #define CAVEX_DEBUG_PRINTF(...) printf(__VA_ARGS__)
 #else
@@ -279,6 +280,14 @@ void camera_update_viewport(struct camera* c, bool in_water, float aspect) {
 	 * Verschiebt ALLES (Geometrie, Himmel, Wolken) gleichmäßig im View-Space. */
 	float _bob_h = sinf(c->walk_bob_phase) * c->walk_bob_amp * 0.08f;
 	float _bob_v = -fabsf(cosf(c->walk_bob_phase)) * c->walk_bob_amp * 0.06f; // * 0.06f
+	/* Robustheit: ein NaN/Inf im Bob (z.B. aus kaputtem walk_bob_phase) wuerde
+	 * via glm_mat4_mul die GESAMTE View-Matrix zerstoeren -- denn NaN*0=NaN
+	 * verseucht beim Multiplizieren auch die Rotationsspalten. Dann waere die
+	 * komplette 3D-Welt unsichtbar. Lieber den Bob verwerfen als alles killen. */
+	if(!isfinite(_bob_h) || !isfinite(_bob_v)) {
+		_bob_h = 0.0f;
+		_bob_v = 0.0f;
+	}
 	mat4 _bob_mat;
 	glm_translate_make(_bob_mat, (vec3) {_bob_h, _bob_v, 0.0f});
 	glm_mat4_mul(_bob_mat, c->view, c->view);
@@ -292,6 +301,23 @@ void camera_attach(struct camera* c, struct entity* e, float tick_delta,
 				   float dt) {
 	vec3 pos_lerp;
 	glm_vec3_lerp(e->pos_old, e->pos, tick_delta, pos_lerp);
+	if(gstate.settings.chunk_render_log
+	   && glm_vec3_distance2(e->pos_old, e->pos) > 1024.0f) {
+		static vec3 last_old = {0.0f, 0.0f, 0.0f};
+		static vec3 last_pos = {0.0f, 0.0f, 0.0f};
+		if(glm_vec3_distance2(last_old, e->pos_old) > 1.0f
+		   || glm_vec3_distance2(last_pos, e->pos) > 1.0f) {
+			printf("[CAMERA_ATTACH_JUMP] entity=%u old=(%.2f,%.2f,%.2f) "
+			       "pos=(%.2f,%.2f,%.2f) lerp=(%.2f,%.2f,%.2f) "
+			       "tick_delta=%.3f\n",
+			       (unsigned)e->id,
+			       e->pos_old[0], e->pos_old[1], e->pos_old[2],
+			       e->pos[0], e->pos[1], e->pos[2],
+			       pos_lerp[0], pos_lerp[1], pos_lerp[2], tick_delta);
+			glm_vec3_copy(e->pos_old, last_old);
+			glm_vec3_copy(e->pos, last_pos);
+		}
+	}
 	c->x = pos_lerp[0];
 	c->y = pos_lerp[1];
 	c->z = pos_lerp[2];
