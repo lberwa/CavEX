@@ -197,18 +197,30 @@ static void entity_render(struct entity* e, mat4 view, float td) {
 	float dx = e->pos[0] - e->pos_old[0];
 	float dz = e->pos[2] - e->pos_old[2];
 	float walk_speed = sqrtf(dx * dx + dz * dz);
+	#ifdef SPLITSCREEN
+	int player_index = e->data.local_player.player_index;
+	#else
+	int player_index = 0;
+	#endif
 	float t = time_diff_s(gstate.world_time_start, time_get());
 	float foot_angle
 		= walk_speed > 0.001f ? sinf(t * 2.0f * GLM_PI * 2.0f) * 30.0f : 0.0f;
+	float arm_angle = foot_angle;
+	if(player_index >= 0 && player_index < 4) {
+		const struct held_anim* anim
+			= &gstate.held_item_animations[player_index];
+		float punch_lerp
+			= time_diff_s(anim->punch.start, time_get()) / 0.4F;
+		if(punch_lerp >= 0.0F && punch_lerp < 1.0F) {
+			if(anim->punch.place)
+				punch_lerp = 1.0F - glm_clamp(punch_lerp * 4.0F, 0, 1);
+			arm_angle += sinf(punch_lerp * GLM_PI) * 30.0F;
+		}
+	}
 
 	struct item_data held_item, helmet, chestplate, leggings, boots;
 	struct item_data *held_ptr = NULL, *helmet_ptr = NULL, *chest_ptr = NULL,
 	                 *legs_ptr = NULL, *boots_ptr = NULL;
-#ifdef SPLITSCREEN
-	int player_index = e->data.local_player.player_index;
-#else
-	int player_index = 0;
-#endif
 	struct window_container* wc
 		= gstate.windows_by_player[player_index][WINDOWC_INVENTORY];
 	if(wc) {
@@ -231,7 +243,7 @@ static void entity_render(struct entity* e, mat4 view, float td) {
 
 	gfx_lighting(false);
 	render_model_player(mv, head_pitch, glm_deg(head_yaw), foot_angle,
-	                    foot_angle, held_ptr, helmet_ptr, chest_ptr, legs_ptr,
+	                    arm_angle, held_ptr, helmet_ptr, chest_ptr, legs_ptr,
 	                    boots_ptr);
 	gfx_lighting(true);
 
@@ -470,6 +482,8 @@ static bool entity_tick(struct entity* e) {
 
 	if(!e->data.local_player.creative)
 		e->data.local_player.flying = false;
+	if(!e->data.local_player.creative && e->food < 7)
+		e->data.local_player.sprinting = false;
 
 #ifdef PLATFORM_PC
 #ifdef MOVE_DEBUG
@@ -766,6 +780,8 @@ bool entity_local_player_block_collide(vec3 pos, struct block_info* blk_info) {
 	    e->rightClickText = NULL;
 	    e->onRightClick   = NULL;
 	e->health = MAX_PLAYER_HEALTH;
+	e->food = MAX_PLAYER_FOOD;
+	e->saturation = MAX_PLAYER_FOOD;
 		e->data.local_player.jump_ticks = 0;
 		e->data.local_player.body_yaw = e->orient[0];
 		e->data.local_player.body_yaw_old = e->orient[0];

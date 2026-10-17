@@ -71,6 +71,14 @@ static struct window_container* active_inventory_window(void) {
 	return gstate_windows()[WINDOWC_INVENTORY];
 }
 
+static void send_player_dig_animation(int player) {
+	svin_rpc_try_send(&(struct server_rpc) {
+		RPC_PLAYER_ID(player)
+		.type = SRPC_PLAYER_ANIMATION,
+		.payload.player_animation.digging = true,
+	});
+}
+
 static void screen_ingame_reset(struct screen* s, int width, int height) {
 	input_pointer_enable(false);
 
@@ -305,14 +313,6 @@ void screen_ingame_render3D(struct screen* s, mat4 view) {
 			quick_preset_begin(player, true);
 		if(quick_preset_active[player])
 			return;
-		/* IB_SCROLL_RIGHT is the in-game inventory-forward/hotbar-forward
-		 * binding. It also toggles the optional chunk render diagnostics. */
-		if(input_pressed(IB_SCROLL_RIGHT, player)) {
-			gstate.settings.chunk_render_log = !gstate.settings.chunk_render_log;
-			printf("[CHUNK_RENDER] logging=%s\n",
-				   gstate.settings.chunk_render_log ? "on" : "off");
-			fflush(stdout);
-		}
 		if(input_pressed(IB_HOME, gstate_active_player())) {
 			screen_set_player(gstate_active_player(), &screen_game_menu);
 			return;
@@ -432,9 +432,7 @@ void screen_ingame_render3D(struct screen* s, mat4 view) {
 	   && !gstate.digging.active) {
 		struct item_data held;
 		if(inventory_get_hotbar_item(
-			   windowc_get_latest(gstate_windows()[WINDOWC_INVENTORY]), &held)
-		   && (held.id == ITEM_MILK_BUCKET
-		       || held.id == ITEM_FISHING_ROD)) {
+			   windowc_get_latest(gstate_windows()[WINDOWC_INVENTORY]), &held)) {
 			svin_rpc_try_send(&(struct server_rpc) {
 				RPC_PLAYER_ID(gstate_active_player())
 				.type = SRPC_ITEM_USE,
@@ -526,10 +524,11 @@ void screen_ingame_render3D(struct screen* s, mat4 view) {
 			   && time_diff_ms(gstate.digging.cooldown, time_get()) >= 250) {
 				gstate.digging.active = true;
 				gstate.digging.start = time_get();
-				gstate.digging.x = gstate.camera_hit.x;
-				gstate.digging.y = gstate.camera_hit.y;
-				gstate.digging.z = gstate.camera_hit.z;
-				BLOCK_LAT_PRINTF("[BLOCK_LAT] CLIENT_SEND dig_start p=%d pos=%d,%d,%d "
+			gstate.digging.x = gstate.camera_hit.x;
+			gstate.digging.y = gstate.camera_hit.y;
+			gstate.digging.z = gstate.camera_hit.z;
+			send_player_dig_animation(gstate_active_player());
+			BLOCK_LAT_PRINTF("[BLOCK_LAT] CLIENT_SEND dig_start p=%d pos=%d,%d,%d "
 					   "cooldown_elapsed=%d\n",
 					   gstate_active_player(), (int)gstate.digging.x,
 					   (int)gstate.digging.y, (int)gstate.digging.z,
@@ -552,6 +551,8 @@ void screen_ingame_render3D(struct screen* s, mat4 view) {
 		   >= 0.2F) {
 		gstate.held_item_animation.punch.start = time_get();
 		gstate.held_item_animation.punch.place = false;
+		if(gstate.camera_hit.hit)
+			send_player_dig_animation(gstate_active_player());
 
 		if(gstate.camera_hit.hit) {
 			struct block_data blk
@@ -963,6 +964,29 @@ static void screen_ingame_render2D(struct screen* s, int width, int height) {
 					52, 229, 9, 9, 9 * GFX_GUI_SCALE, 9 * GFX_GUI_SCALE);
 			}
 		}
+		}
+
+		/* Hunger bar: ten two-point icons above the hearts.  The empty slot
+		 * background is at (34,219), full food at (17,219), and half food at
+		 * (26,220) in gui2.png. */
+		if(!hud_creative && gstate.local_player) {
+			int food = gstate.local_player->food;
+			int food_y = height - hud_gap
+				- (22 + 10) * GFX_GUI_SCALE - 10 * GFX_GUI_SCALE;
+			for(int k = 0; k < MAX_PLAYER_FOOD / 2; k++) {
+				int food_x = heart_x_base + k * heart_spacing;
+				gutil_texquad(food_x, food_y, 34, 219, 10, 10,
+					10 * GFX_GUI_SCALE, 10 * GFX_GUI_SCALE);
+				if(food >= (k + 1) * 2) {
+					gutil_texquad(food_x + GFX_GUI_SCALE, food_y,
+						17, 219, 8, 10,
+						8 * GFX_GUI_SCALE, 10 * GFX_GUI_SCALE);
+				} else if(food == k * 2 + 1) {
+					gutil_texquad(food_x + GFX_GUI_SCALE,
+						food_y + GFX_GUI_SCALE, 26, 220, 7, 8,
+						7 * GFX_GUI_SCALE, 8 * GFX_GUI_SCALE);
+				}
+			}
 		}
 
 		if(!hud_creative && gstate.in_water && gstate.oxygen >= OXYGEN_THRESHOLD) {

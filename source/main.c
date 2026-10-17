@@ -398,26 +398,15 @@ static void splitscreen_viewport_rect(int player_index, int player_count,
 #include <libgen.h>   // dirname
 
 int load_config(void) {
-    char exe_path[512];
-    char base_dir[512];
     char config_path[512];
 
-    // Pfad der eigenen Executable holen
-    ssize_t len = readlink("/proc/self/exe", exe_path, sizeof(exe_path) - 1);
-    if (len == -1) {
-        CAVEX_DEBUG_PRINTF("Failed to get exe path\n");
+    const char* home = getenv("HOME");
+    if(!home || !home[0]) {
+        CAVEX_DEBUG_PRINTF("Failed to determine HOME for config.json\n");
         return 0;
     }
-    exe_path[len] = '\0';
 
-    // Ordner der Executable extrahieren
-    strcpy(base_dir, exe_path);
-    dirname(base_dir);
-
-    // config Pfad bauen
-    snprintf(config_path, sizeof(config_path),
-             "%s/Cavex/config_pc.json",
-             base_dir);
+    snprintf(config_path, sizeof(config_path), "%s/.cavex/config.json", home);
 
     // config laden
     if (!config_create(&gstate.config_user, config_path)) {

@@ -103,22 +103,43 @@ static float pointer_x[4], pointer_y[4], pointer_angle[4];
 static bool pointer_keyboard_mode[4];
 static bool pointer_position_valid[4];
 static float pointer_last_x[4], pointer_last_y[4];
-static struct inv_slot slots[64]; // 5*9 virtuelle + 9 Hotbar + Rüstung
-static size_t slots_index;
 static size_t selected_slot[4];
 static int gui_scale[4];
 
-static creative_inv_tab current_tab;
-static int  sel_tab_pos = 5;   // welcher Button-Slot (0-5) gerade ausgewählt ist
-static bool sel_tab_top = false; // true = obere Reihe
-static bool tab_focus;
-static char search_query[64];
 #define CREATIVE_SAVED_SIZE 45
-static struct item_data saved_items[CREATIVE_SAVED_SIZE];
-static bool saved_sync_requested;
-static uint16_t creative_item_list[ITEMS_MAX];
-static size_t creative_item_count;
-static size_t creative_scroll;
+struct creative_player_state {
+	struct inv_slot slots[64];
+	size_t slots_index;
+	bool initialized;
+	creative_inv_tab current_tab;
+	int sel_tab_pos;
+	bool sel_tab_top;
+	bool tab_focus;
+	char search_query[64];
+	struct item_data saved_items[CREATIVE_SAVED_SIZE];
+	bool saved_sync_requested;
+	uint16_t creative_item_list[ITEMS_MAX];
+	size_t creative_item_count;
+	size_t creative_scroll;
+};
+
+static struct creative_player_state creative_players[4];
+
+/* All creative state is selected through the active player.  This is needed
+ * because split-screen renders and updates each player's screen separately. */
+#define CREATIVE_STATE (creative_players[gstate_active_player()])
+#define slots (CREATIVE_STATE.slots)
+#define slots_index (CREATIVE_STATE.slots_index)
+#define current_tab (CREATIVE_STATE.current_tab)
+#define sel_tab_pos (CREATIVE_STATE.sel_tab_pos)
+#define sel_tab_top (CREATIVE_STATE.sel_tab_top)
+#define tab_focus (CREATIVE_STATE.tab_focus)
+#define search_query (CREATIVE_STATE.search_query)
+#define saved_items (CREATIVE_STATE.saved_items)
+#define saved_sync_requested (CREATIVE_STATE.saved_sync_requested)
+#define creative_item_list (CREATIVE_STATE.creative_item_list)
+#define creative_item_count (CREATIVE_STATE.creative_item_count)
+#define creative_scroll (CREATIVE_STATE.creative_scroll)
 static size_t creative_max_scroll(void);
 static void creative_normalize_scroll(void);
 static bool text_contains_ignore_case(const char* text, const char* query);
@@ -268,6 +289,11 @@ static void screen_inventory_creative_reset(struct screen* s, int width,
 	int player = gstate_active_player();
 	int view_w, view_h;
 	screen_viewport_size(player, &view_w, &view_h);
+	if(!CREATIVE_STATE.initialized) {
+		sel_tab_pos = 5;
+		current_tab = CREATIVE_TAB_CHEST;
+		CREATIVE_STATE.initialized = true;
+	}
 	int scale = screen_gui_scale(view_w, view_h, GUI_WIDTH, GUI_TOTAL_H);
 	/* The Wii's per-player GUI viewport can report a reduced logical height
 	 * while the creative inventory is still rendered in the full GUI pass.
@@ -724,8 +750,8 @@ static void screen_inventory_creative_update(struct screen* s, float dt) {
 		if(pointer_x[player] >= search_x && pointer_x[player] < search_x + search_w
 		   && pointer_y[player] >= search_y
 		   && pointer_y[player] < search_y + SEARCH_BAR_HEIGHT * scale) {
-			screen_keyboard_open(search_query, sizeof(search_query),
-									"Creative Search", &screen_inventory_creative);
+			screen_keyboard_open_player(player, search_query, sizeof(search_query),
+										"Creative Search", &screen_inventory_creative);
 			return;
 		}
 	}
@@ -994,6 +1020,27 @@ static void screen_inventory_creative_render2D(struct screen* s, int width,
 	gfx_write_buffers(true, false, false);
 	gfx_matrix_modelview(GLM_MAT4_IDENTITY);
 #endif
+	}
+
+	/* The regular inventory shows the empty armor-slot hints from items.png.
+	 * Keep the Creative chest tab consistent; occupied slots are drawn by the
+	 * item loop below and therefore replace these hints automatically. */
+	if(current_tab == CREATIVE_TAB_CHEST) {
+		gfx_bind_texture(&texture_items);
+		for(int armor_type = 0; armor_type < INVENTORY_SIZE_ARMOR; armor_type++) {
+			for(size_t k = 0; k < slots_index; k++) {
+				if(slots[k].is_virtual || slots[k].is_saved || slots[k].is_delete
+				   || slots[k].slot != INVENTORY_SLOT_ARMOR + armor_type)
+					continue;
+
+				struct item_data armor_item;
+				if(!inventory_get_slot(inv, slots[k].slot, &armor_item))
+					gutil_texquad(off_x + slots[k].x, off_y + slots[k].y,
+								  15 * 16, armor_type * 16, 16, 16,
+								  16 * scale, 16 * scale);
+				break;
+			}
+		}
 	}
 
 	// Items in Slots zeichnen

@@ -22,6 +22,7 @@
 #include "../../game/game_state.h"
 #include "../../graphics/render_item.h"
 #include "../../item/items.h"
+#include "../../platform/time.h"
 
 /*
  * 40 animation frames spread across rows 9-13 of items.png:
@@ -35,6 +36,13 @@
  * Frame count increases as the player turns LEFT.
  */
 #define COMPASS_TOTAL_FRAMES 32
+#define COMPASS_NETHER_CHANGE_MS 50
+
+static int compass_nether_frame[4];
+static int compass_nether_direction[4];
+static uint64_t compass_nether_slice[4];
+static int compass_nether_steps_left[4];
+static bool compass_nether_initialized[4];
 
 static void frame_to_tex(int frame, uint8_t* tx, uint8_t* ty) {
 	if(frame < 28) {
@@ -47,6 +55,40 @@ static void frame_to_tex(int frame, uint8_t* tx, uint8_t* ty) {
 }
 
 static int compass_frame(void) {
+	#ifdef SPLITSCREEN
+	if(gstate.player_dims[gstate_active_player()] == WORLD_DIM_NETHER) {
+		/* In the Nether the compass has no valid target.  Use a deterministic
+		 * pseudo-random direction which changes rapidly like a broken compass,
+		 * without advancing the global RNG every frame. */
+		int player = gstate_active_player();
+		uint64_t slice = (uint64_t)(time_diff_ms(gstate.world_time_start,
+											 time_get()) / COMPASS_NETHER_CHANGE_MS);
+		if(!compass_nether_initialized[player] || slice < compass_nether_slice[player]) {
+			uint32_t hash = (uint32_t)slice * 1664525u +
+							(uint32_t)(player + 1) * 1013904223u;
+		compass_nether_frame[player] = (int)((hash >> 24)
+				% COMPASS_TOTAL_FRAMES);
+		compass_nether_direction[player] = (hash & 1) ? 1 : -1;
+		compass_nether_steps_left[player] = 16 + ((hash >> 1) % 17);
+		compass_nether_slice[player] = slice;
+		compass_nether_initialized[player] = true;
+		}
+		while(compass_nether_slice[player] < slice) {
+			compass_nether_slice[player]++;
+			if(compass_nether_steps_left[player] <= 0) {
+				uint32_t hash = (uint32_t)compass_nether_slice[player] * 1664525u +
+							(uint32_t)(player + 1) * 1013904223u;
+				compass_nether_direction[player] = (hash & 1) ? 1 : -1;
+				compass_nether_steps_left[player] = 16 + ((hash >> 1) % 17);
+			}
+			compass_nether_frame[player] = (compass_nether_frame[player]
+				+ compass_nether_direction[player] + COMPASS_TOTAL_FRAMES)
+				% COMPASS_TOTAL_FRAMES;
+			compass_nether_steps_left[player]--;
+		}
+		return compass_nether_frame[player];
+	}
+	#endif
 	struct entity* lp = gstate.local_player;
 	if(!lp)
 		return 0;

@@ -77,43 +77,65 @@ struct kb_key {
 	int row, col;
 };
 
-/* target / state for the currently open keyboard */
-static char* kb_target;
-static size_t kb_max;
-static char kb_title[64];
-static struct screen* kb_return;
-
-static char kb_buf[KB_BUF_MAX];
-static size_t kb_len;
-static int kb_caret;      /* text insertion position, 0..kb_len */
-static int kb_view_start; /* first visible character in the text box */
-static bool kb_shift;
-static bool kb_caps;
-
-/* navigation cursor (D-pad); only highlighted once the user navigates.
- * kb_sel_row == -1 means the text field is the active element. */
-static int kb_sel_row, kb_sel_col;
-static bool kb_dpad_active;
-
-/* blinking text caret */
-static float kb_blink;
 #define KB_TEXTFIELD_ROW (-1)
+#define KB_TEXT_PAD (4 + kb_scale)
 
-/* mouse / Wii IR pointer */
-static bool kb_ptr_available;
-static float kb_ptr_x, kb_ptr_y, kb_ptr_angle;
-static float kb_last_ptr_x, kb_last_ptr_y;
-static int kb_hover; /* key under the pointer, or -1 */
+struct keyboard_player_state {
+	char* target;
+	size_t max;
+	char title[64];
+	struct screen* return_screen;
+	char buf[KB_BUF_MAX];
+	size_t len;
+	int caret, view_start;
+	bool shift, caps;
+	int sel_row, sel_col;
+	bool dpad_active;
+	float blink;
+	bool ptr_available;
+	float ptr_x, ptr_y, ptr_angle;
+	float last_ptr_x, last_ptr_y;
+	int hover;
+	struct kb_key keys[KB_MAX_KEYS];
+	int nkeys, rowcount[8];
+	int box_x, box_y, box_w, box_h;
+	int title_x, title_y, font, scale;
+};
 
-#define KB_TEXT_PAD (4 + GFX_GUI_SCALE)
-
-/* layout, recomputed each frame from the current size */
-static struct kb_key kb_keys[KB_MAX_KEYS];
-static int kb_nkeys;
-static int kb_rowcount[8];
-static int kb_box_x, kb_box_y, kb_box_w, kb_box_h;
-static int kb_title_x, kb_title_y;
-static int kb_font; /* glyph size in pixels */
+static struct keyboard_player_state keyboard_players[4];
+#define KB_STATE (keyboard_players[gstate_active_player()])
+#define kb_target KB_STATE.target
+#define kb_max KB_STATE.max
+#define kb_title KB_STATE.title
+#define kb_return KB_STATE.return_screen
+#define kb_buf KB_STATE.buf
+#define kb_len KB_STATE.len
+#define kb_caret KB_STATE.caret
+#define kb_view_start KB_STATE.view_start
+#define kb_shift KB_STATE.shift
+#define kb_caps KB_STATE.caps
+#define kb_sel_row KB_STATE.sel_row
+#define kb_sel_col KB_STATE.sel_col
+#define kb_dpad_active KB_STATE.dpad_active
+#define kb_blink KB_STATE.blink
+#define kb_ptr_available KB_STATE.ptr_available
+#define kb_ptr_x KB_STATE.ptr_x
+#define kb_ptr_y KB_STATE.ptr_y
+#define kb_ptr_angle KB_STATE.ptr_angle
+#define kb_last_ptr_x KB_STATE.last_ptr_x
+#define kb_last_ptr_y KB_STATE.last_ptr_y
+#define kb_hover KB_STATE.hover
+#define kb_keys KB_STATE.keys
+#define kb_nkeys KB_STATE.nkeys
+#define kb_rowcount KB_STATE.rowcount
+#define kb_box_x KB_STATE.box_x
+#define kb_box_y KB_STATE.box_y
+#define kb_box_w KB_STATE.box_w
+#define kb_box_h KB_STATE.box_h
+#define kb_title_x KB_STATE.title_x
+#define kb_title_y KB_STATE.title_y
+#define kb_font KB_STATE.font
+#define kb_scale KB_STATE.scale
 
 /* description of the special (bottom) row: label, width in cells, type */
 struct kb_special {
@@ -126,6 +148,22 @@ static const struct kb_special KB_SPECIAL[] = {
 	{"Back", 2, KT_BACK},   {"OK", 2, KT_OK},       {"Cancel", 3, KT_CANCEL},
 };
 #define KB_SPECIAL_COUNT ((int)(sizeof(KB_SPECIAL) / sizeof(KB_SPECIAL[0])))
+
+static int kb_choose_scale(int width, int height) {
+	int scale = GFX_GUI_SCALE;
+	while(scale > 1) {
+		int cell = 16 * scale;
+		int gap = 2 * scale;
+		int pitch = cell + gap;
+		int layout_w = 13 * pitch - gap;
+		int layout_h = cell + gap * 2 + (KB_ROWS + 1) * pitch - gap
+			+ 8 * scale + gap;
+		if(layout_w <= width && layout_h <= height)
+			break;
+		scale--;
+	}
+	return scale;
+}
 
 static void kb_layout(int width, int height, int scale) {
 	int cell = 16 * scale;
@@ -301,11 +339,11 @@ static void kb_press(int idx) {
 				kb_target[kb_max - 1] = 0;
 			}
 			sound_play(pcm_click);
-			screen_set(kb_return);
+			screen_set_player(gstate_active_player(), kb_return);
 			return;
 		case KT_CANCEL:
 			sound_play(pcm_click);
-			screen_set(kb_return);
+			screen_set_player(gstate_active_player(), kb_return);
 			return;
 	}
 	sound_play(pcm_click);
@@ -316,6 +354,10 @@ static void screen_keyboard_reset(struct screen* s, int width, int height) {
 	(void)width;
 	(void)height;
 	input_pointer_enable(true);
+	int player = gstate_active_player();
+	int view_w, view_h;
+	screen_viewport_size(player, &view_w, &view_h);
+	kb_scale = kb_choose_scale(view_w, view_h);
 	kb_sel_row = 0;
 	kb_sel_col = 0;
 }
@@ -327,13 +369,14 @@ static void screen_keyboard_update(struct screen* s, float dt) {
 
 	/* use the logical GUI size (constant regardless of the current render pass)
 	 * so the layout matches render2D and the pointer lands on the right key */
-	int view_w = gfx_gui_width();
-	int view_h = gfx_gui_height();
-	kb_layout(view_w, view_h, GFX_GUI_SCALE);
+	int view_w, view_h;
+	screen_viewport_size(player, &view_w, &view_h);
+	kb_scale = kb_choose_scale(view_w, view_h);
+	kb_layout(view_w, view_h, kb_scale);
 
 	if(input_pressed(IB_BACK, player)) {
 		sound_play(pcm_click);
-		screen_set(kb_return);
+		screen_set_player(player, kb_return);
 		return;
 	}
 
@@ -436,7 +479,8 @@ static void screen_keyboard_update(struct screen* s, float dt) {
 
 static void screen_keyboard_render2D(struct screen* s, int width, int height) {
 	(void)s;
-	kb_layout(width, height, GFX_GUI_SCALE);
+	kb_scale = kb_choose_scale(width, height);
+	kb_layout(width, height, kb_scale);
 
 	gutil_bg();
 
@@ -473,7 +517,7 @@ static void screen_keyboard_render2D(struct screen* s, int width, int height) {
 			= kb_box_x + KB_TEXT_PAD + kb_sub_width(kb_view_start, kb_caret);
 		gfx_texture(false);
 		gutil_texquad_col(caret_x, text_y, 0, 0, 0, 0,
-						  GFX_GUI_SCALE < 1 ? 1 : GFX_GUI_SCALE, kb_font, 255,
+						  kb_scale < 1 ? 1 : kb_scale, kb_font, 255,
 						  255, 255, 255);
 		gfx_texture(true);
 	}
@@ -521,12 +565,19 @@ static void screen_keyboard_render2D(struct screen* s, int width, int height) {
 	if(kb_ptr_available) {
 		gfx_bind_texture_virtual(&texture_pointer);
 		gutil_texquad_rt_any(kb_ptr_x, kb_ptr_y, glm_rad(kb_ptr_angle), 0, 0,
-							 256, 256, 48 * GFX_GUI_SCALE, 48 * GFX_GUI_SCALE);
+							 256, 256, 48 * kb_scale, 48 * kb_scale);
 	}
 }
 
-void screen_keyboard_open(char* target, size_t max_len, const char* title,
-						  struct screen* on_done) {
+void screen_keyboard_open_player(int player, char* target, size_t max_len,
+								const char* title, struct screen* on_done) {
+	if(player < 0 || player >= 4)
+		return;
+	int restore_player = gstate_active_player();
+#ifdef SPLITSCREEN
+	splitscreen_store_player(restore_player);
+	splitscreen_load_player(player);
+#endif
 	kb_target = target;
 	kb_max = (max_len < KB_BUF_MAX) ? max_len : KB_BUF_MAX;
 	kb_return = on_done;
@@ -551,7 +602,17 @@ void screen_keyboard_open(char* target, size_t max_len, const char* title,
 	kb_dpad_active = false;
 	kb_hover = -1;
 
-	screen_set(&screen_keyboard);
+	screen_set_player(player, &screen_keyboard);
+#ifdef SPLITSCREEN
+	splitscreen_store_player(player);
+	splitscreen_load_player(restore_player);
+#endif
+}
+
+void screen_keyboard_open(char* target, size_t max_len, const char* title,
+						  struct screen* on_done) {
+	screen_keyboard_open_player(gstate_active_player(), target, max_len, title,
+								on_done);
 }
 
 struct screen screen_keyboard = {

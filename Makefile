@@ -264,7 +264,8 @@ pc-install: pc config install_desktop
 	@rm -rf $(HOME_PATH)/assets
 	@rm -rf /usr/local/bin/$(CAVEX)/saves
 	@mv     /usr/local/bin/$(CAVEX)/assets $(HOME_PATH)/
-	@cp     $(PC_BUILD)/install_config_pc.json /usr/local/bin/$(CAVEX)/config_pc.json
+	@cp     $(PC_BUILD)/install_config_pc.json "$(HOME_PATH)/config.json"
+	@rm -f  /usr/local/bin/$(CAVEX)/config_pc.json
 	@cp     $(PC_BUILD)/init_pc.py /usr/local/bin/$(CAVEX)/init.py
 	@cp     $(MAKEFILE_DIR)/pc-icon.png $(HOME_PATH)/icon.png
 	@chown -R "$(INSTALL_USER)" "$(HOME_PATH)"

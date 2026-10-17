@@ -44,6 +44,7 @@ enum client_rpc_type {
 	CRPC_OPEN_WINDOW,
 	CRPC_FURNACE_STATE,
 	CRPC_PLAYER_SET_HEALTH,
+	CRPC_PLAYER_SET_FOOD,
 	CRPC_SPAWN_MONSTER,
 	CRPC_SPAWN_MINECART,
 	CRPC_SPAWN_BOAT,
@@ -54,6 +55,7 @@ enum client_rpc_type {
 	CRPC_GAMEMODE,
 	CRPC_CREATIVE_SAVED_SLOT,
 	CRPC_PORTAL_LOADING, /* Ladescreen für diesen Spieler zeigen (Portal-Wechsel) */
+	CRPC_PLAYER_ANIMATION,
 };
 
 #ifdef SPLITSCREEN
@@ -175,8 +177,16 @@ struct client_rpc {
 			int16_t health;
 		} player_set_health;
 		struct {
+			uint8_t food;
+			float saturation;
+		} player_set_food;
+		struct {
 			bool creative;
 		} gamemode;
+		struct {
+			uint8_t player_id;
+			bool digging;
+		} player_animation;
 	} payload;
 };
 

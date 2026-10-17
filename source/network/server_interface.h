@@ -27,6 +27,7 @@
 
 #define MAX_PLAYER_HEALTH 160
 #define HEALTH_PER_HEART 16
+#define MAX_PLAYER_FOOD 20
 
 enum server_rpc_type {
 	SRPC_PLAYER_POS,
@@ -50,6 +51,7 @@ enum server_rpc_type {
 	SRPC_CREATIVE_HOTBAR_PRESET,
 	SRPC_BOAT_CONTROL,
 	SRPC_ITEM_USE, /* right-click use with no block/entity target (e.g. milk) */
+	SRPC_PLAYER_ANIMATION,
 };
 
 #ifdef SPLITSCREEN
@@ -68,6 +70,7 @@ struct server_rpc {
 			double x, y, z;
 			float rx, ry;
 			float vel_y;
+			bool sprinting;
 		} player_pos;
 		struct {
 			// Server-authoritative boat control, sent each tick by the riding
@@ -139,6 +142,9 @@ struct server_rpc {
 			uint8_t row;
 			bool save;
 		} creative_hotbar_preset;
+		struct {
+			bool digging;
+		} player_animation;
 	} payload;
 };
 

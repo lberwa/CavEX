@@ -20,6 +20,7 @@
 #include "../../game/game_state.h"
 #include "../../graphics/render_item.h"
 #include "../../item/items.h"
+#include "../../platform/time.h"
 
 /*
  * 32 animation frames across rows 13-15 of items.png:
@@ -31,8 +32,15 @@
  * Minecraft day: 24000 ticks, noon = tick 6000.
  */
 #define CLOCK_TOTAL_FRAMES 32
+#define CLOCK_NETHER_CHANGE_MS 100
 #define CLOCK_TICKS_PER_DAY 24000
 #define CLOCK_NOON_TICK     6000
+
+static int clock_nether_frame[4];
+static int clock_nether_direction[4];
+static uint64_t clock_nether_slice[4];
+static int clock_nether_steps_left[4];
+static bool clock_nether_initialized[4];
 
 static void frame_to_tex(int frame, uint8_t* tx, uint8_t* ty) {
 	if(frame < 12) {
@@ -48,6 +56,37 @@ static void frame_to_tex(int frame, uint8_t* tx, uint8_t* ty) {
 }
 
 static int clock_frame(void) {
+	#ifdef SPLITSCREEN
+	if(gstate.player_dims[gstate_active_player()] == WORLD_DIM_NETHER) {
+		/* Time is not meaningful for a Nether clock either. */
+		int player = gstate_active_player();
+		uint64_t slice = (uint64_t)(time_diff_ms(gstate.world_time_start,
+											 time_get()) / CLOCK_NETHER_CHANGE_MS);
+		if(!clock_nether_initialized[player] || slice < clock_nether_slice[player]) {
+			uint32_t hash = (uint32_t)slice * 22695477u +
+							(uint32_t)(player + 1) * 1103515245u;
+		clock_nether_frame[player] = (int)((hash >> 24) % CLOCK_TOTAL_FRAMES);
+		clock_nether_direction[player] = (hash & 1) ? 1 : -1;
+		clock_nether_steps_left[player] = 16 + ((hash >> 1) % 17);
+		clock_nether_slice[player] = slice;
+		clock_nether_initialized[player] = true;
+		}
+		while(clock_nether_slice[player] < slice) {
+			clock_nether_slice[player]++;
+			if(clock_nether_steps_left[player] <= 0) {
+				uint32_t hash = (uint32_t)clock_nether_slice[player] * 22695477u +
+							(uint32_t)(player + 1) * 1103515245u;
+				clock_nether_direction[player] = (hash & 1) ? 1 : -1;
+				clock_nether_steps_left[player] = 16 + ((hash >> 1) % 17);
+			}
+			clock_nether_frame[player] = (clock_nether_frame[player]
+				+ clock_nether_direction[player] + CLOCK_TOTAL_FRAMES)
+				% CLOCK_TOTAL_FRAMES;
+			clock_nether_steps_left[player]--;
+		}
+		return clock_nether_frame[player];
+	}
+	#endif
 	uint64_t t = (gstate.world_time + CLOCK_TICKS_PER_DAY - CLOCK_NOON_TICK)
 	             % CLOCK_TICKS_PER_DAY;
 	return (int)(t * CLOCK_TOTAL_FRAMES / CLOCK_TICKS_PER_DAY);
