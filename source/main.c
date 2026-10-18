@@ -604,7 +604,10 @@ int main(void) {
 			mp3_bg3, mp3_bg4, mp3_bg5,  mp3_bg6,  mp3_bg7,
 			mp3_bg8,
 		};
-		sound_play_bg(bg_playlist);
+		/* The setting is loaded before sound_init().  Do not start the
+		 * background playlist when the user disabled it in the config. */
+		if(gstate.settings.bg_music_enabled)
+			sound_play_bg(bg_playlist);
 	}
 
 #ifdef PLATFORM_PC

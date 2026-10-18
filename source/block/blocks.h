@@ -228,6 +228,8 @@ bool block_can_support_attachment(uint8_t type);
 
 
 void notifyNeighbours(struct server_local* s, w_coord_t x, w_coord_t y, w_coord_t z);
+void block_door_set_hinge(struct server_local* s, w_coord_t x, w_coord_t y,
+						  w_coord_t z, bool hinge_left, uint8_t closed_dir);
 bool block_redstone_powers_side(const struct block_data* blk,
 								enum side side_to_target);
 bool block_redstone_powers_wire(const struct block_data* blk,

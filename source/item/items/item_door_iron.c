@@ -17,55 +17,89 @@
 	along with CavEX.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <math.h>
+
 #include "../../network/server_local.h"
 
 static bool onItemPlace(struct server_local* s, struct item_data* it,
 						struct block_info* where, struct block_info* on,
 						enum side on_side) {
-	struct block_data blk;
-	if(!server_world_get_block(AWORLD(s), where->x, where->y - 1, where->z, &blk))
+	struct block_data support;
+	if(!server_world_get_block(AWORLD(s), where->x, where->y - 1, where->z,
+							   &support))
 		return false;
-	if(!server_world_get_block(AWORLD(s), where->x, where->y + 1, where->z, &blk))
+	if(!blocks[support.type] || blocks[support.type]->can_see_through)
 		return false;
-	if(blk.type != 0) return false;
-	if(!blocks[on->block->type]) return false;
 
-	int metadata = 6;
-	switch(on_side) {
-		case SIDE_LEFT: metadata = 2; break;
-		case SIDE_RIGHT: metadata = 0; break;
-		case SIDE_BACK: metadata = 4; break;
-		default: break;
+	struct block_data top;
+	if(!server_world_get_block(AWORLD(s), where->x, where->y + 1, where->z,
+							   &top))
+		return false;
+	if(blocks[top.type] && !blocks[top.type]->place_ignore)
+		return false;
+
+	bool hinge_left = false;
+	if(s->placement_hit_valid) {
+		/* Server yaw points forward as (-sin(yaw), cos(yaw)); its screen
+		 * right vector is therefore (cos(yaw), sin(yaw)). */
+		float rx = glm_rad((float)s->players[s->active_player_id].rx);
+		float hx = s->placement_hit_x - (on->x + 0.5F);
+		float hz = s->placement_hit_z - (on->z + 0.5F);
+		hinge_left = hx * cosf(rx) + hz * sinf(rx) < 0.0F;
 	}
+	(void)on_side;
+	float player_x = s->placement_player_pos_valid
+		? (float)s->placement_player_x
+		: (float)s->players[s->active_player_id].x;
+	float player_z = s->placement_player_pos_valid
+		? (float)s->placement_player_z
+		: (float)s->players[s->active_player_id].z;
+	double dx = player_x - (where->x + 0.5);
+	double dz = player_z - (where->z + 0.5);
+	uint8_t dir;
+	if(fabs(dx) > fabs(dz))
+		dir = (dx >= 0.0) ? 2 : 0;
+	else
+		dir = (dz >= 0.0) ? 3 : 1;
+
+	(void)on;
+	(void)on_side;
 
 	struct block_data blk2 = (struct block_data) {
 		.type = BLOCK_DOOR_IRON,
-		.metadata = metadata,
+		.metadata = dir,
 		.sky_light = 0,
 		.torch_light = 0,
 	};
 
 	struct block_info blk2_info = *where;
 	blk2_info.block = &blk2;
+	vec3 player_pos = {
+		player_x,
+		s->placement_player_pos_valid
+			? (float)s->placement_player_y
+			: (float)s->players[s->active_player_id].y,
+		player_z};
 
-	if(entity_local_player_block_collide(
-		   (vec3) {s->players[s->active_player_id].x,
-				   s->players[s->active_player_id].y,
-				   s->players[s->active_player_id].z},
-		   &blk2_info))
+	if(entity_local_player_block_collide(player_pos, &blk2_info))
 		return false;
 
-	if(entity_local_player_block_collide(
-		   (vec3) {s->players[s->active_player_id].x,
-				   s->players[s->active_player_id].y + 1,
-				   s->players[s->active_player_id].z},
-		   &blk2_info))
+	struct block_info top_info = *where;
+	top_info.y++;
+	struct block_data top_door = blk2;
+	top_door.metadata |= 0x08;
+	top_info.block = &top_door;
+	if(entity_local_player_block_collide(player_pos, &top_info))
 		return false;
 
 	server_world_set_block(s, where->x, where->y, where->z, blk2);
+	block_door_set_hinge(s, where->x, where->y, where->z,
+					 hinge_left, dir);
 
-	blk2.metadata |= 8;
-	server_world_set_block(s, where->x, where->y + 1, where->z, blk2);
+	/* The upper half stores the hinge bit so the renderer can mirror the
+	 * door texture even though the two halves have separate block metadata. */
+	top_door.metadata = (uint8_t)(dir | (hinge_left ? 0x04 : 0) | 0x08);
+	server_world_set_block(s, where->x, where->y + 1, where->z, top_door);
 	return true;
 }
 

@@ -144,6 +144,8 @@ struct repeater_state {
 struct redstone_openable_state {
 	struct complex_block_pos pos;
 	bool powered;
+	bool hinge_left;
+	uint8_t closed_dir;
 };
 
 struct noteblock_state {

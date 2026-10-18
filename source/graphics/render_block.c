@@ -5058,14 +5058,25 @@ size_t render_block_door(struct displaylist* d,
                          uint8_t* vertex_light,
                          bool count_only)
 {
-    uint8_t dir  = this->block->metadata & 0x03;
-    bool    open = (this->block->metadata & 0x04) != 0;
-    uint8_t state;
+    uint8_t metadata = this->block->metadata;
+    uint8_t dir = metadata & 0x03;
+    bool open = (metadata & 0x04) != 0;
+    uint8_t state = dir;
+    bool hinge_left = false;
 
-    if (!open) {
-        state = dir;
-    } else {
-        state = (dir + 3) % 4;
+    if(metadata & 0x08) {
+        /* The upper half stores the hinge in bit 2.  Its open state and
+         * swing direction come from the lower half. */
+        hinge_left = (metadata & 0x04) != 0;
+        if(this->neighbours
+           && this->neighbours[SIDE_BOTTOM].type == this->block->type) {
+            const uint8_t lower = this->neighbours[SIDE_BOTTOM].metadata;
+            open = (lower & 0x04) != 0;
+            state = lower & 0x03;
+        }
+    } else if(this->neighbours
+              && this->neighbours[SIDE_TOP].type == this->block->type) {
+        hinge_left = (this->neighbours[SIDE_TOP].metadata & 0x04) != 0;
     }
 
     static const enum side frontForDir[4] = {
@@ -5075,14 +5086,23 @@ size_t render_block_door(struct displaylist* d,
         SIDE_FRONT   // 3 = north
     };
 
+    bool flip_front = !open;
+    bool flip_back = open;
+    if(hinge_left) {
+        /* Left-hinged doors use the opposite texture orientation.  This is
+         * needed while closed as well as while swinging open. */
+        flip_front = !flip_front;
+        flip_back = !flip_back;
+    }
+
     return door_side_helper(
         d,
         this,
         frontForDir[state],
         side,
         vertex_light,
-        !open,
-        open,
+        flip_front,
+        flip_back,
         count_only
     );
 }

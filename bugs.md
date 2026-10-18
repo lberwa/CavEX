@@ -1,8 +1,8 @@
 # Bugs/Todos:
 
-* Texture orientation for blocks that have a specific "direction"
+* ~~Texture orientation for blocks that have a specific "direction"~~
   - ~~Bed placement isn't correct yet~~
-  - door placement isn't correct yet                                                                                             ⭕
+  - ~~door placement isn't correct yet~~
 
 * ~~Random crashes, once in a while.~~ Maybe I'll implement an optional auto-save, to prevent some headaches and tears
 
