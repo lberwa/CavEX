@@ -59,6 +59,12 @@ enum input_category {
 
 void input_init(void);
 void input_poll(void);
+#ifdef PLATFORM_PC
+/* Mouse-wheel movement is kept separate from IB_SCROLL_* so GUI screens do
+ * not accidentally treat the PC wheel as inventory scrolling. */
+int input_mouse_wheel_delta(void);
+void input_mouse_wheel_event(double yoffset);
+#endif
 
 bool input_symbol(enum input_button b, int* symbol, int* symbol_help,
 				  enum input_category* category, int player);

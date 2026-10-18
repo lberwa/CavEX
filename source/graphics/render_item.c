@@ -24,6 +24,7 @@
 #include "../platform/gfx.h"
 #include "gui_util.h"
 #include "gfx_settings.h"
+#include "render_block.h"
 #include "render_item.h"
 
 static struct displaylist dl;
@@ -332,12 +333,19 @@ void render_item_block(struct item* item, struct item_data* stack, mat4 view,
 		displaylist_reset(&dl);
 
 		size_t vertices = 0;
-
+		bool stair_inventory = env == R_ITEM_ENV_INVENTORY
+			&& b->renderBlock == render_block_stairs;
+		if(stair_inventory && b->renderBlockAlways) {
+			for(int k = 0; k < 6; k++)
+				vertices += b->renderBlockAlways(
+					&dl, &this, (enum side)k, &neighbour,
+					fullbright ? vertex_light_inv : vertex_light, false);
+		}
 		for(int k = 0; k < 6; k++) {
 			vertices += b->renderBlock(&dl, &this, (enum side)k, &neighbour,
 									   fullbright ? vertex_light_inv : vertex_light,
 									   false);
-			if(b->renderBlockAlways)
+			if(!stair_inventory && b->renderBlockAlways)
 				vertices += b->renderBlockAlways(
 					&dl, &this, (enum side)k, &neighbour,
 					fullbright ? vertex_light_inv : vertex_light, false);

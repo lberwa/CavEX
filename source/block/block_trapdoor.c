@@ -25,6 +25,7 @@
 #include <math.h>
 
 #include "../network/server_local.h"
+#include "../sound/sound.h"
 #include "blocks.h"
 
 static enum block_material getMaterial(struct block_info* this) {
@@ -190,6 +191,8 @@ static void onRightClick(struct server_local* s, struct item_data* it,
     server_world_set_block(s,
                            on->x, on->y, on->z,
                            cur);
+    sound_play_at_vol((cur.metadata & 0x04) ? pcm_door_open : pcm_door_close,
+                      on->x + 0.5f, on->y + 0.5f, on->z + 0.5f, 1.0f);
 }
 
 struct block block_trapdoor = {

@@ -104,6 +104,8 @@ struct entity {
 			float walk_bob_old;
 			float walk_bob_speed;
 			float step_bob_next;
+			bool was_in_water;
+			int water_splash_cooldown;
 #ifdef SPLITSCREEN
 			uint8_t player_index;
 #endif
@@ -116,6 +118,7 @@ struct entity {
 			int id;
 			int frame;
 			int frame_time_left;
+			int step_sound_cooldown;
 			vec2 direction;
 			int direction_time;
 			float body_yaw;

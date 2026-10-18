@@ -40,7 +40,10 @@ static uint16_t getTextureIndex1(struct block_info* this, enum side side) {
 	switch(this->block->metadata) {
 		case 1: return tex_atlas_lookup(TEXAT_TALLGRASS); // tallgrass
 		case 2: return tex_atlas_lookup(TEXAT_FERN);	  // fern
-		default: return tex_atlas_lookup(TEXAT_DEADBUSH); // deadbush
+		/* The creative Tallgrass item uses metadata 0.  It is a separate
+		 * block from Dead Bush, so it must not fall through to the dead-bush
+		 * texture here. */
+		default: return tex_atlas_lookup(TEXAT_TALLGRASS);
 	}
 }
 
@@ -84,7 +87,7 @@ struct block block_tallgrass = {
 	.renderBlock = render_block_cross,
 	.renderBlockAlways = NULL,
 	.luminance = 0,
-	.double_sided = false,
+	.double_sided = true,
 	.can_see_through = true,
 	.opacity = 0,
 	.render_block_data.cross_random_displacement = true,

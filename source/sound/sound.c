@@ -893,7 +893,23 @@ static void do_play_wii(int sound_id, u8 *data, u32 size,
         vol_L = mv; vol_R = mv;
     }
 
-    int voice = SND_GetFirstUnusedVoice();
+    /* SoundHandler streams the background music on ASND voice 0.  The
+     * generic first-free lookup does not know about that decoder and could
+     * therefore reuse voice 0 for an effect, making the music quiet or
+     * stopping it on Wii.  Reserve that voice while music is active. */
+    int voice = SND_INVALID;
+    /* Keep voice 0 reserved even before music starts: music can be started
+     * while a short effect is already playing. */
+    int first_voice = 1;
+    for(int candidate = first_voice; candidate < MAX_SND_VOICES;
+        candidate++) {
+        if(ASND_StatusVoice(candidate) == SND_UNUSED) {
+            voice = candidate;
+            break;
+        }
+    }
+    if(voice < 0)
+        return;
     voices[voices_n].voice     = voice;
     voices[voices_n].sound_id  = anon ? -1 : sound_id;
     voices[voices_n].anon_data = anon ? data : NULL;

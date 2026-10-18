@@ -71,6 +71,7 @@ struct server_rpc {
 			float rx, ry;
 			float vel_y;
 			bool sprinting;
+			bool flying;
 		} player_pos;
 		struct {
 			// Server-authoritative boat control, sent each tick by the riding

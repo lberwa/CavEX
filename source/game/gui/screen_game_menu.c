@@ -126,6 +126,13 @@ static void screen_gmenu_render2D(struct screen* s, int width, int height) {
 	int icon_offset = 32;
 	icon_offset += gutil_control_icon(icon_offset, IB_GUI_UP, "Change selection");
 	icon_offset += gutil_control_icon(icon_offset, IB_GUI_CLICK, "Select option");
+
+	if(pointer_available) {
+		gfx_bind_texture_virtual(&texture_pointer);
+		gutil_texquad_rt_any(pointer_x, pointer_y, glm_rad(pointer_angle),
+		                     0, 0, 256, 256,
+		                     48 * GFX_GUI_SCALE, 48 * GFX_GUI_SCALE);
+	}
 }
 
 struct screen screen_game_menu = {

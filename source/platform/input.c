@@ -57,6 +57,8 @@ static bool input_key_held[1024];
 static bool input_key_previous[1024];
 static bool input_mouse_held[3];
 static bool input_mouse_previous[3];
+static int input_wheel_pending;
+static int input_wheel_delta;
 
 void input_init() {
 	for(int k = 0; k < 1024; k++)
@@ -67,9 +69,13 @@ void input_init() {
 	input_pointer_enabled = false;
 	input_old_pointer_x = 0;
 	input_old_pointer_y = 0;
+	input_wheel_pending = 0;
+	input_wheel_delta = 0;
 }
 
 void input_poll() {
+	input_wheel_delta = input_wheel_pending;
+	input_wheel_pending = 0;
 	for(int k = 0; k < 1024; k++) {
 		input_key_previous[k] = input_key_held[k];
 		input_key_held[k] = glfwGetKey(window, k) == GLFW_PRESS;
@@ -78,6 +84,17 @@ void input_poll() {
 		input_mouse_previous[k] = input_mouse_held[k];
 		input_mouse_held[k] = glfwGetMouseButton(window, k) == GLFW_PRESS;
 	}
+}
+
+void input_mouse_wheel_event(double yoffset) {
+	if(yoffset > 0.0)
+		input_wheel_pending--;
+	else if(yoffset < 0.0)
+		input_wheel_pending++;
+}
+
+int input_mouse_wheel_delta(void) {
+	return input_wheel_delta;
 }
 
 void input_native_key_status(int key, int player, bool* pressed, bool* released,

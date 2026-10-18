@@ -150,61 +150,68 @@
 
 * ~~compatibility with Mac OS and Windows~~ (just tested with wine; don't test it on Mac OS)
 
-* the head of the men in the inventory is behind the body on PC
+* ~~the head of the men in the inventory is behind the body on PC~~
 
 * ~~the inventory item of chests isn't correct~~
 
-* you can't stack doors
+* ~~you can't stack doors~~
 
-* there is no item in the creative inventory:
-  - fence
-  - door
-  - iron door
-  - vine
-  - waterlily
-  - glas pane
-  - crops
+* ~~there is no item in the creative inventory:~~
+  - ~~fence~~
+  - ~~door~~
+  - ~~iron door~~
+  - ~~vine~~
+  - ~~waterlily~~
+  - ~~glas pane~~
+  - ~~crops~~
 
-* there is superfluous item in the creative inventory:
-  - boat motor
+* ~~there is superfluous item in the creative inventory:~~
+  - ~~boat motor~~
 
-* entities can't swim
+* entities can't swim                                                                                                                   ⭕
 
-* there is sound missing/broken:
-  - under water you hear footsteps
-  - in the water you doesn't hear something
-  - on the leadder
-  - if you pic some item
-  - if entities walks
+* ~~there is sound missing/broken:~~
+  - ~~under water you hear footsteps~~
+  - ~~in the water you doesn't hear something~~
+  - ~~on the leadder~~
+  - ~~if you pic some item~~
+  - ~~if entities walks~~
+  - ~~on snow~~
+  - ~~sand~~
+  - ~~glass~~
+  - ~~door~~
+  - ~~trapdoor~~
+  - ~~piston~~
+  - ~~pressure plate~~
 
-* bad mob AI
+* bad mob AI                                                                                                                             ⭕
 
-* tailgrass looks like dead bush
+* ~~tailgrass looks like dead bush~~
 
-* items doesn't despawn, if there is no block, next to him:
-  - tailgrass
-  - rail
-  - detector rail
-  - powered rail
-  - redstone torch
-  - redstone torch lit
-  - redstone
-  - pressure plate
-  - sampling
-  - flower
-  - dead bush
-  - rose
-  - brown mushroom
-  - red mushroom
-  - torch
-  - snow
-  - door
+* ~~items doesn't despawn, if there is no block, next to him:~~
+  - ~~tailgrass~~
+  - ~~rail~~
+  - ~~detector rail~~
+  - ~~powered rail~~
+  - ~~redstone torch~~
+  - ~~redstone torch lit~~
+  - ~~redstone~~
+  - ~~pressure plate~~
+  - ~~sampling~~
+  - ~~flower~~
+  - ~~dead bush~~
+  - ~~rose~~
+  - ~~brown mushroom~~
+  - ~~red mushroom~~
+  - ~~torch~~
+  - ~~snow~~
+  - ~~door~~
 
-* scroll with the mouse wheel
+* ~~scroll with the mouse wheel~~
 
-* bg sound on the wii is quiet if you play an other sound
+* ~~bg sound on the wii is quiet if you play an other sound~~
 
-* 2d problem:            ![./docs/bug1.png](./docs/bug1.png) ![./docs/bug2.png](./docs/bug2.png)
+* ~~2d problem:            [./docs/bug1.png](./docs/bug1.png) [./docs/bug2.png](./docs/bug2.png)~~
 
 
 

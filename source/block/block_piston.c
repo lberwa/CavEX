@@ -20,6 +20,7 @@
 #include <math.h>
 
 #include "../network/server_local.h"
+#include "../sound/sound.h"
 #include "blocks.h"
 
 #define PISTON_MAX_PUSH 12
@@ -351,7 +352,9 @@ static void onWorldTick(struct server_local* s, struct block_info* info) {
 										   | (piston_is_sticky(&cur) ? PISTON_EXTENDED : 0),
 								   .sky_light = 0,
 								   .torch_light = 0,
-				   });
+					   });
+		sound_play_at_vol(pcm_piston_out, info->x + 0.5f,
+			                  info->y + 0.5f, info->z + 0.5f, 1.0f);
 		s->suppress_block_particles = suppress_particles;
 	} else if(powered && extended) {
 		w_coord_t fx, fy, fz;
@@ -396,6 +399,8 @@ static void onWorldTick(struct server_local* s, struct block_info* info) {
 				}
 			}
 		}
+		sound_play_at_vol(pcm_piston_in, info->x + 0.5f,
+		                  info->y + 0.5f, info->z + 0.5f, 1.0f);
 		s->suppress_block_particles = suppress_particles;
 	}
 }

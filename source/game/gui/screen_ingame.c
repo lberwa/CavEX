@@ -586,7 +586,11 @@ void screen_ingame_render3D(struct screen* s, mat4 view) {
 	bool old_item_exists = inventory_get_hotbar_item(
 		windowc_get_latest(gstate_windows()[WINDOWC_INVENTORY]), NULL);
 
-	if(input_pressed(IB_SCROLL_LEFT, gstate_active_player())) {
+	int mouse_wheel = 0;
+#ifdef PLATFORM_PC
+	mouse_wheel = input_mouse_wheel_delta();
+#endif
+	if(input_pressed(IB_SCROLL_LEFT, gstate_active_player()) || mouse_wheel < 0) {
 		size_t next_slot = (slot == 0) ? INVENTORY_SIZE_HOTBAR - 1 : slot - 1;
 		inventory_set_hotbar(
 			windowc_get_latest(gstate_windows()[WINDOWC_INVENTORY]), next_slot);
@@ -610,7 +614,7 @@ void screen_ingame_render3D(struct screen* s, mat4 view) {
 		});
 	}
 
-	if(input_pressed(IB_SCROLL_RIGHT, gstate_active_player())) {
+	if(input_pressed(IB_SCROLL_RIGHT, gstate_active_player()) || mouse_wheel > 0) {
 #ifdef FAST_MOVING
 		gstate.fast_moving = gstate.fast_moving ? false : true;
 #endif

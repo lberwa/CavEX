@@ -748,6 +748,75 @@ static const int dx[6] = {  1, -1,  0,  0,  0,  0 };
 static const int dy[6] = {  0,  0,  0,  0,  1, -1 };
 static const int dz[6] = {  0,  0,  1, -1,  0,  0 };
 
+static bool block_needs_floor(uint8_t type) {
+	switch(type) {
+		case BLOCK_TALL_GRASS:
+		case BLOCK_RAIL:
+		case BLOCK_POWERED_RAIL:
+		case BLOCK_DETECTOR_RAIL:
+		case BLOCK_REDSTONE_TORCH:
+		case BLOCK_REDSTONE_TORCH_LIT:
+		case BLOCK_REDSTONE_WIRE:
+		case BLOCK_STONE_PRESSURE_PLATE:
+		case BLOCK_WOOD_PRESSURE_PLATE:
+		case BLOCK_SAPLING:
+		case BLOCK_FLOWER:
+		case BLOCK_ROSE:
+		case BLOCK_BROWM_MUSHROOM:
+		case BLOCK_RED_MUSHROOM:
+		case BLOCK_TORCH:
+		case BLOCK_SNOW:
+		case BLOCK_DOOR_WOOD:
+		case BLOCK_DOOR_IRON:
+			return true;
+		default:
+			return false;
+	}
+}
+
+static bool block_has_floor_support(struct server_local* s,
+								struct block_info* info) {
+	struct block_data support;
+	if(info->block->type == BLOCK_REDSTONE_TORCH
+	   || info->block->type == BLOCK_REDSTONE_TORCH_LIT
+	   || info->block->type == BLOCK_TORCH) {
+		w_coord_t sx = info->x, sy = info->y, sz = info->z;
+		switch(info->block->metadata & 0x7) {
+			case 1: sx--; break;
+			case 2: sx++; break;
+			case 3: sz--; break;
+			case 4: sz++; break;
+			default: sy--; break;
+		}
+		return server_world_get_block(AWORLD(s), sx, sy, sz, &support)
+			&& block_can_support_attachment(support.type);
+	}
+
+	return server_world_get_block(AWORLD(s), info->x, info->y - 1,
+								  info->z, &support)
+		&& block_can_support_attachment(support.type);
+}
+
+static void block_remove_without_support(struct server_local* s,
+									 struct block_info* info) {
+	struct block_data old = *info->block;
+	server_local_spawn_block_drops(s, info);
+	server_world_set_block(s, info->x, info->y, info->z,
+							   (struct block_data) {.type = BLOCK_AIR});
+
+		/* A door occupies two cells.  Remove the other half as well, but only
+		 * drop one door item. */
+		if(old.type == BLOCK_DOOR_WOOD || old.type == BLOCK_DOOR_IRON) {
+			w_coord_t other_y = info->y + ((old.metadata & 0x08) ? -1 : 1);
+			struct block_data other;
+			if(server_world_get_block(AWORLD(s), info->x, other_y, info->z,
+									  &other)
+			   && other.type == old.type)
+				server_world_set_block(s, info->x, other_y, info->z,
+									   (struct block_data) {.type = BLOCK_AIR});
+		}
+}
+
 void notifyNeighbours(struct server_local* s,
                       w_coord_t x, w_coord_t y, w_coord_t z)
 {
@@ -760,7 +829,37 @@ void notifyNeighbours(struct server_local* s,
         if (!server_world_get_block(AWORLD(s), nx, ny, nz, &nb))
             continue;
 
-        const struct block* b = blocks[nb.type];
+		const struct block* b = blocks[nb.type];
+		if(b && block_needs_floor(nb.type)) {
+			bool supported;
+
+			/* The upper door half is valid only while its lower half exists;
+			 * the lower half additionally needs a solid block below it. */
+			if(nb.type == BLOCK_DOOR_WOOD || nb.type == BLOCK_DOOR_IRON) {
+				w_coord_t base_y = (nb.metadata & 0x08) ? ny - 1 : ny;
+				struct block_data base;
+				supported = server_world_get_block(AWORLD(s), nx, base_y, nz,
+											&base)
+					&& base.type == nb.type
+					&& !(base.metadata & 0x08)
+					&& block_has_floor_support(s, &(struct block_info) {
+						.block = &base, .neighbours = NULL,
+						.x = nx, .y = base_y, .z = nz
+					});
+			} else {
+				supported = block_has_floor_support(s, &(struct block_info) {
+					.block = &nb, .neighbours = NULL, .x = nx, .y = ny, .z = nz
+				});
+			}
+
+			if(!supported) {
+				block_remove_without_support(s, &(struct block_info) {
+					.block = &nb, .neighbours = NULL,
+					.x = nx, .y = ny, .z = nz
+				});
+				continue;
+			}
+		}
         if (b && b->onNeighbourBlockChange) {
             struct block_info info = {
                 .block      = &nb,

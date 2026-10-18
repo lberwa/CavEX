@@ -72,7 +72,7 @@ static bool onItemPlace(struct server_local* s, struct item_data* it,
 struct item item_door_wood = {
 	.name = "Wooden Door",
 	.has_damage = false,
-	.max_stack = 1,
+	.max_stack = 64,
 	.fuel = 2,
 	.renderItem = render_item_flat,
 	.onItemPlace = onItemPlace,

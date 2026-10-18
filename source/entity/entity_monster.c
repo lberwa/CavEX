@@ -33,6 +33,9 @@
 #include "../network/server_local.h"
 #include "../network/client_interface.h"
 #include "../network/server_interface.h"
+#include "../sound/sound.h"
+
+#define CREEPER_FUSE_TICKS 52 /* duration of random/fuse.wav at 20 TPS */
 #include "../world.h"
 #include "../graphics/render_entity.h"
 #include "../platform/gfx.h"
@@ -117,8 +120,9 @@ static bool server_tick_creeper(struct entity* e, struct server_local* s) {
     entity_damp_velocity(e, 0.005f);
 
     if (e->health <= 0 && e->data.monster.fuse < 0) {
-            e->data.monster.fuse = 8; // was 30 but that's wayyyy too long
+            e->data.monster.fuse = CREEPER_FUSE_TICKS;
             e->ai_state = AI_FUSE;
+            sound_play_at(pcm_fuse, e->pos[0], e->pos[1], e->pos[2]);
         }
 
     vec3 center = { e->pos[0], e->pos[1], e->pos[2] };
@@ -136,6 +140,9 @@ static bool server_tick_creeper(struct entity* e, struct server_local* s) {
             // explosie
             particle_generate_explosion_flash(center, 3.0f);
             particle_generate_explosion_smoke(center, 3.0f);
+            sound_play_at((enum pcm_sound)(pcm_explode1
+                                           + (rand_gen(&s->rand_src) % 4)),
+                          center[0], center[1], center[2]);
             server_world_explode(s, center, 3.0f);
             e->delay_destroy = 0;
             server_local_spawn_item(center,

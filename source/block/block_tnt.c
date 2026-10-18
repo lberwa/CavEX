@@ -29,6 +29,7 @@
 #include "blocks.h"
 #include "blocks_data.h"
 #include "face_occlusion.h"
+#include "../sound/sound.h"
 #include <math.h>
 #include "../game/game_state.h"
 
@@ -37,7 +38,10 @@
 //todo: move explosion logic to a helper function outside of this?
 
 #define TNT_POWER 4.0f	  // blast radius 4 looks to be right, but crashes the game
-#define TNT_FUSE_TICKS 15 // amount of ticks before TNT explodes
+/* Block metadata has only four bits.  Thirteen four-tick steps give the
+ * 52-tick duration of random/fuse.wav (about 2.6 seconds at 20 TPS). */
+#define TNT_FUSE_STEPS 13
+#define TNT_FUSE_STEP_TICKS 4
 #define NUM_RAYS 1000	// amount of rays cast for an explosion 1000 is pretty heavy.. 300 maybe too weak.
 #define STEP_SIZE 0.25f
 #define HARDNESS_SCALE 0.0005f // how much the digging.hardness influences the resistance to explosion. Higher = materials don't break.
@@ -78,6 +82,10 @@ void tnt_explode(struct server_local* s,
 
     vec3 center = { x+0.5f, y+0.5f, z+0.5f };
 
+    sound_play_at((enum pcm_sound)(pcm_explode1
+                                   + (rand_gen(&s->rand_src) % 4)),
+                  center[0], center[1], center[2]);
+
     // initial explosion flash
     particle_generate_explosion_flash(center, power);
 
@@ -95,15 +103,24 @@ static void onWorldTick(struct server_local* s, struct block_info* info) {
     if (fuse == 0) {
         if (block_redstone_is_powered(s, info->x, info->y, info->z)) {
             server_world_set_block(s, info->x, info->y, info->z,
-                (struct block_data){ .type = BLOCK_TNT, .metadata = TNT_FUSE_TICKS });
+				(struct block_data){ .type = BLOCK_TNT, .metadata = TNT_FUSE_STEPS });
+            sound_play_at(pcm_fuse, info->x + 0.5f, info->y + 0.5f,
+                          info->z + 0.5f);
         }
         return;
     }
+    vec3 center = { info->x + 0.5f, info->y + 0.5f, info->z + 0.5f };
+    particle_generate_smoke(center, 1.0f);
+
+    /* Keep the visual smoke ticking normally, but consume one fuse step only
+     * every four server ticks so the four-bit metadata can represent the
+     * complete sound duration. */
+    if (s->world_time % TNT_FUSE_STEP_TICKS != 0)
+        return;
+
     if (fuse > 1) {
         info->block->metadata--;
         server_world_set_block(s, info->x, info->y, info->z, *info->block);
-        vec3 center = { info->x + 0.5f, info->y + 0.5f, info->z + 0.5f };
-        particle_generate_smoke(center, 1.0f);
     } else {
         server_world_set_block(s, info->x, info->y, info->z,
             (struct block_data){ .type = BLOCK_AIR, .metadata = 0, .sky_light = 0, .torch_light = 15 });
@@ -146,7 +163,7 @@ static void onRightClick(struct server_local* s, struct item_data* it,
 						 enum side on_side) {
 	if (on->block->type == BLOCK_TNT && on->block->metadata == 0) {
 		server_world_set_block(s, on->x, on->y, on->z,
-			(struct block_data){ .type = BLOCK_TNT, .metadata = TNT_FUSE_TICKS });
+                (struct block_data){ .type = BLOCK_TNT, .metadata = TNT_FUSE_STEPS });
 	}
 }
 #endif

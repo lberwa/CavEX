@@ -864,7 +864,9 @@ void clin_update() {
 						.payload.player_pos.ry = glm_deg(cam->ry) - 90.0F,
 						.payload.player_pos.vel_y = player->vel[1],
 						.payload.player_pos.sprinting =
-							player->data.local_player.sprinting
+							player->data.local_player.sprinting,
+						.payload.player_pos.flying =
+							player->data.local_player.flying
 					});
 				}
 			}
@@ -884,7 +886,9 @@ void clin_update() {
 					.payload.player_pos.ry = glm_deg(cam->ry) - 90.0F,
 					.payload.player_pos.vel_y = player->vel[1],
 					.payload.player_pos.sprinting =
-						player->data.local_player.sprinting
+						player->data.local_player.sprinting,
+					.payload.player_pos.flying =
+						player->data.local_player.flying
 				});
 			}
 		}

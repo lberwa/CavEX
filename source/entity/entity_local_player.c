@@ -32,6 +32,7 @@
 #include "../game/game_state.h"
 #include "../network/server_local.h"
 #include "../network/server_interface.h"
+#include "../sound/sound.h"
 #include "../item/inventory.h"
 #include "entity.h"
 
@@ -441,6 +442,11 @@ static bool entity_tick(struct entity* e) {
 	bool in_water = entity_intersection(e, &bbox, test_in_water);
 	bool in_lava  = entity_intersection(e, &bbox, test_in_lava)
 		|| e->pos[1] <= WORLD_FALL_BOUNDARY_Y;
+	struct block_data climb_blk = {.type = BLOCK_AIR};
+	bool on_climbable = entity_get_block(e, floorf(e->pos[0]),
+	                                     floorf(e->pos[1] - EYE_HEIGHT),
+	                                     floorf(e->pos[2]), &climb_blk)
+		&& (climb_blk.type == BLOCK_LADDER || climb_blk.type == BLOCK_VINE);
 
 	float slipperiness = (in_lava || in_water) ? 1.0F : (e->on_ground ? 0.6F : 1.0F);
 
@@ -711,12 +717,17 @@ static bool entity_tick(struct entity* e) {
 	entity_get_delta(e, movement_delta);
 	float walk_speed = sqrtf(movement_delta[0] * movement_delta[0]
 	                         + movement_delta[2] * movement_delta[2]);
+	bool entered_water = in_water && !e->data.local_player.was_in_water;
+	e->data.local_player.was_in_water = in_water;
+	if(e->data.local_player.water_splash_cooldown > 0)
+		e->data.local_player.water_splash_cooldown--;
 
 	float bob_target = (walk_speed > 0.001f && e->on_ground) ? 1.0f : 0.0f;
 	e->data.local_player.walk_bob_speed += (bob_target - e->data.local_player.walk_bob_speed) * 0.1f;
 	e->data.local_player.walk_bob += walk_speed * GLM_PI;
 
-	if(gstate.world_loaded && e->on_ground && walk_speed > 0.001f
+	if(gstate.world_loaded && !in_water && !in_lava && e->on_ground
+	   && walk_speed > 0.001f
 	   && e->data.local_player.walk_bob >= e->data.local_player.step_bob_next) {
 		struct block_data step_blk;
 		if(entity_get_block(e, floorf(e->pos[0]),
@@ -727,6 +738,25 @@ static bool entity_tick(struct entity* e) {
 			                   e->pos[1] - EYE_HEIGHT, e->pos[2],
 			                   gstate.settings.step_volume);
 		}
+		e->data.local_player.step_bob_next
+			= e->data.local_player.walk_bob + GLM_PI;
+	}
+	if(gstate.world_loaded && (entered_water
+	   || (in_water && fabsf(movement_delta[1]) > 0.01f))
+	   && e->data.local_player.water_splash_cooldown == 0) {
+		if(in_water) {
+			sound_play_at_vol((enum pcm_sound)(pcm_splash + rand() % 2),
+			                  e->pos[0], e->pos[1] - EYE_HEIGHT, e->pos[2],
+			                  gstate.settings.step_volume);
+			e->data.local_player.water_splash_cooldown = 10;
+		}
+	}
+	if(gstate.world_loaded && on_climbable && !e->on_ground
+	   && walk_speed > 0.001f
+	   && e->data.local_player.walk_bob >= e->data.local_player.step_bob_next) {
+		play_step_sound_at(BLOCK_PLANKS, e->pos[0],
+		                   e->pos[1] - EYE_HEIGHT, e->pos[2],
+		                   gstate.settings.step_volume);
 		e->data.local_player.step_bob_next
 			= e->data.local_player.walk_bob + GLM_PI;
 	}
@@ -799,4 +829,6 @@ bool entity_local_player_block_collide(vec3 pos, struct block_info* blk_info) {
 		e->data.local_player.walk_bob_old = 0.0f;
 		e->data.local_player.walk_bob_speed = 0.0f;
 		e->data.local_player.step_bob_next = 0.0f;
+		e->data.local_player.was_in_water = false;
+		e->data.local_player.water_splash_cooldown = 0;
 	}

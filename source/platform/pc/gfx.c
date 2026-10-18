@@ -331,14 +331,9 @@ static void framebuffer_size_callback(GLFWwindow* window, int width,
 
 static void scroll_callback(GLFWwindow* window, double xoffset,
 							double yoffset) {
-	// TODO: buttons are not released
-	if(glfwGetInputMode(window, GLFW_CURSOR) == GLFW_CURSOR_DISABLED) {
-		if(yoffset > 0) {
-			// input_set_status(IB_SCROLL_LEFT, GLFW_PRESS);
-		} else if(yoffset < 0) {
-			// input_set_status(IB_SCROLL_RIGHT, GLFW_PRESS);
-		}
-	}
+	(void)window;
+	(void)xoffset;
+	input_mouse_wheel_event(yoffset);
 }
 
 static GLuint shader_prog;
@@ -362,7 +357,7 @@ void gfx_setup() {
 	glfwSwapInterval(1);
 
 	glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
-	// glfwSetScrollCallback(window, scroll_callback);
+	glfwSetScrollCallback(window, scroll_callback);
 
 	if(glfwRawMouseMotionSupported())
 		glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);

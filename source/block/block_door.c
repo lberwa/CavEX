@@ -24,6 +24,7 @@
 
 
 #include "../network/server_local.h"
+#include "../sound/sound.h"
 #include "blocks.h"
 
 static enum block_material getMaterial1(struct block_info* this) {
@@ -185,10 +186,13 @@ s->players[pid].z = z + 0.5 + push;
     }
     // ————————————————————————————————————————————
 
+    bool was_open = (bd.metadata & 0x04) != 0;
     server_world_set_block(s, x,   y,   z,
         (struct block_data){ .type = doorType, .metadata = newMeta });
     server_world_set_block(s, x, y+1, z,
         (struct block_data){ .type = doorType, .metadata = newMeta | 0x08 });
+    sound_play_at_vol(was_open ? pcm_door_close : pcm_door_open,
+                      x + 0.5f, y + 0.5f, z + 0.5f, 1.0f);
 }
 
 static void onRightClick(struct server_local* s,
@@ -275,7 +279,7 @@ struct block block_wooden_door = {
 	.digging.best = TOOL_TIER_ANY,
 	.block_item = {
 		.has_damage = false,
-		.max_stack = 1,
+		.max_stack = 64,
 		.renderItem = render_item_flat,
 		.onItemPlace = block_place_default,
 		.fuel = 0,
@@ -310,7 +314,7 @@ struct block block_iron_door = {
 	.digging.best = TOOL_TIER_WOOD,
 	.block_item = {
 		.has_damage = false,
-		.max_stack = 1,
+		.max_stack = 64,
 		.renderItem = render_item_flat,
 		.onItemPlace = block_place_default,
 		.fuel = 0,

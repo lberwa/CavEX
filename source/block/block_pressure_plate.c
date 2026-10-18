@@ -18,6 +18,7 @@
 */
 
 #include "../network/server_local.h"
+#include "../sound/sound.h"
 #include "blocks.h"
 
 #include <math.h>
@@ -169,6 +170,10 @@ static void onWorldTick(struct server_local* s, struct block_info* info) {
                                info->x, info->y, info->z,
                                cur);
         notifyNeighbours(s, info->x, info->y, info->z);
+        sound_play_at_vol(cur.type == BLOCK_WOOD_PRESSURE_PLATE
+                              ? pcm_wood_click : pcm_click,
+                          info->x + 0.5f, info->y + 0.1f,
+                          info->z + 0.5f, 1.0f);
     }
 }
 

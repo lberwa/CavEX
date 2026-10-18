@@ -171,14 +171,6 @@ void render_model_player(mat4 mv, float head_pitch, float head_yaw,
 
 	gfx_bind_texture_virtual(&texture_mob_char);
 
-	// head
-	render_model_box(mv, (vec3) {0.0F, -4.0F, 0.0F}, (vec3) {4.0F, 0.0F, 4.0F},
-					 (vec3) {head_pitch, head_yaw, 0.0F}, (ivec2) {8, 8},
-					 (ivec3) {8, 8, 8}, 0.0F, false, 1.0F);
-	// head overlay
-	render_model_box(mv, (vec3) {0.0F, -4.0F, 0.0F}, (vec3) {4.0F, 0.0F, 4.0F},
-					 (vec3) {head_pitch, head_yaw, 0.0F}, (ivec2) {40, 8},
-					 (ivec3) {8, 8, 8}, 0.5F, false, 1.0F);
 	// body
 	render_model_box(mv, (vec3) {0.0F, -4.0F, 0.0F}, (vec3) {4.0F, 12.0F, 2.0F},
 					 (vec3) {0.0F, 0.0F, 0.0F}, (ivec2) {20, 20},
@@ -202,6 +194,15 @@ void render_model_player(mat4 mv, float head_pitch, float head_yaw,
 		mv, (vec3) {-4.0F, -4.0F, 0.0F}, (vec3) {4.0F, 12.0F, 2.0F},
 		(vec3) {(held_item_it ? -22.5F : 0.0F) - arm_angle, 0.0F, -4.0F},
 		(ivec2) {44, 20}, (ivec3) {4, 4, 12}, 0.0F, false, 1.0F);
+	/* Draw the head after both arms.  This keeps the arms behind the head in
+	 * the inventory preview on renderers where depth-buffer ordering overlaps
+	 * the model parts. */
+	render_model_box(mv, (vec3) {0.0F, -4.0F, 0.0F}, (vec3) {4.0F, 0.0F, 4.0F},
+					 (vec3) {head_pitch, head_yaw, 0.0F}, (ivec2) {8, 8},
+					 (ivec3) {8, 8, 8}, 0.0F, false, 1.0F);
+	render_model_box(mv, (vec3) {0.0F, -4.0F, 0.0F}, (vec3) {4.0F, 0.0F, 4.0F},
+					 (vec3) {head_pitch, head_yaw, 0.0F}, (ivec2) {40, 8},
+					 (ivec3) {8, 8, 8}, 0.5F, false, 1.0F);
 
 	if(held_item_it) {
 		mat4 model;

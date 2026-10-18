@@ -27,7 +27,9 @@
 // and Door items (ids >= 256) place the real multi-block structure; their raw
 // blocks (this list) are hidden from the grid.
 static bool creative_inventory_excluded(uint16_t id) {
-	return id == BLOCK_BED || id == BLOCK_DOOR_WOOD || id == BLOCK_DOOR_IRON;
+	return id == BLOCK_BED || id == BLOCK_DOOR_WOOD || id == BLOCK_DOOR_IRON
+		|| id == BLOCK_REDSTONE_TORCH /* only the lit torch is offered */
+		|| id == BLOCK_LIT_REDSTONE_LAMP; /* only the unlit lamp is offered */
 }
 
 /* ============================================================

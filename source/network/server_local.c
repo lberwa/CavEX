@@ -1689,7 +1689,9 @@ void play_dig_sound_at(enum block_type type, float x, float y, float z, float vo
     if(type == BLOCK_GRAVEL) {
         tbl = gravel; cnt = 4;
     } else if(type == BLOCK_SNOW || type == BLOCK_SNOW_BLOCK) {
-        tbl = grass;  cnt = 4;
+        tbl = (const enum pcm_sound[]){pcm_step_snow1, pcm_step_snow2,
+                                      pcm_step_snow3, pcm_step_snow4};
+        cnt = 4;
     } else if(type != BLOCK_AIR && blocks[type] && blocks[type]->getMaterial) {
         struct block_data bd = {.type = type, .metadata = 0};
         struct block_info bi = {.block = &bd, .neighbours = NULL,
@@ -1698,14 +1700,32 @@ void play_dig_sound_at(enum block_type type, float x, float y, float z, float vo
             case MATERIAL_WOOD:    tbl = wood;   cnt = 4; break;
             case MATERIAL_WOOL:    tbl = cloth;  cnt = 4; break;
             case MATERIAL_ORGANIC: tbl = grass;  cnt = 4; break;
-            case MATERIAL_SAND:    tbl = stone;  cnt = 4; break;
+            case MATERIAL_SAND:    tbl = (const enum pcm_sound[]){
+                                      pcm_dig_sand1, pcm_dig_sand1,
+                                      pcm_dig_sand1, pcm_dig_sand1};
+                                      cnt = 4; break;
             case MATERIAL_GLASS:
+                sound_play_at_vol((enum pcm_sound)(pcm_glass1 + rand() % 3),
+                                  x, y, z, vol_scale);
+                return;
             case MATERIAL_STONE:
             default:               tbl = stone;  cnt = 4; break;
         }
     }
 
     sound_play_at_vol(tbl[rand() % cnt], x, y, z, vol_scale);
+}
+
+void play_place_sound_at(enum block_type type, float x, float y, float z,
+                         float vol_scale) {
+    if(type == BLOCK_AIR)
+        return;
+    if(type == BLOCK_GLASS || type == BLOCK_GLASS_PANE) {
+        sound_play_at_vol((enum pcm_sound)(pcm_glass1 + rand() % 3),
+                          x, y, z, vol_scale);
+        return;
+    }
+    play_dig_sound_at(type, x, y, z, vol_scale);
 }
 
 void play_step_sound_at(enum block_type type, float x, float y, float z, float vol_scale) {
@@ -1791,6 +1811,7 @@ static void server_local_process(struct server_rpc* call, void* user) {
 			player->ry = call->payload.player_pos.ry;
 			player->old_vel_y = player->vel_y;
 			player->vel_y = call->payload.player_pos.vel_y;
+			player->flying = call->payload.player_pos.flying;
 			player->has_pos = true;
 			if(player->y <= WORLD_FALL_BOUNDARY_Y) {
 				player->y = WORLD_FALL_BOUNDARY_Y;
@@ -2005,12 +2026,15 @@ static void server_local_process(struct server_rpc* call, void* user) {
 						   (int)call->payload.block_dig.z, blk.type,
 						   blk.metadata);
 					server_world_set_block(s, call->payload.block_dig.x,
-										   call->payload.block_dig.y,
-										   call->payload.block_dig.z,
-										   (struct block_data) {
-											   .type = BLOCK_AIR,
-											   .metadata = 0,
-										   });
+									   call->payload.block_dig.y,
+									   call->payload.block_dig.z,
+									   (struct block_data) {
+										   .type = BLOCK_AIR,
+										   .metadata = 0,
+									   });
+					notifyNeighbours(s, call->payload.block_dig.x,
+								 call->payload.block_dig.y,
+								 call->payload.block_dig.z);
 
 					play_dig_sound_at(blk.type,
 					                  (float)call->payload.block_dig.x,
@@ -2197,7 +2221,7 @@ static void server_local_process(struct server_rpc* call, void* user) {
 								   (int)where.z, placed_blk.type,
 								   placed_blk.metadata);
 							if(placed_blk.type != BLOCK_AIR)
-							play_dig_sound_at(placed_blk.type,
+							play_place_sound_at(placed_blk.type,
 							                  (float)where.x,
 							                  (float)where.y,
 							                  (float)where.z,
@@ -2392,9 +2416,15 @@ static void server_local_process(struct server_rpc* call, void* user) {
 		        if (ce && *ce) { pos[0] = (*ce)->pos[0]; pos[1] = (*ce)->pos[1]; pos[2] = (*ce)->pos[2]; }
 		        server_local_spawn_item(pos, &e->drop_item, true, s);
 		        e->delay_destroy = 0;
-		      } else if (e->type == ENTITY_MONSTER) {
-		        e->data.monster.fuse = 30;
-		        e->ai_state = AI_FUSE;
+			  } else if (e->type == ENTITY_MONSTER) {
+				bool starting_creeper_fuse =
+					e->data.monster.id == MONSTER_CREEPER
+					&& e->data.monster.fuse < 0;
+			        e->data.monster.fuse = e->data.monster.id == MONSTER_CREEPER
+					? 52 : 30;
+				if(starting_creeper_fuse)
+					sound_play_at(pcm_fuse, e->pos[0], e->pos[1], e->pos[2]);
+			        e->ai_state = AI_FUSE;
 		      }
 		    }
 		  }
@@ -2723,6 +2753,34 @@ static void server_local_process(struct server_rpc* call, void* user) {
 	}
 }
 
+static void entity_server_step_sound(struct entity* e,
+                                     struct server_local* server) {
+	if(!e || e->type != ENTITY_MONSTER || e->health <= 0)
+		return;
+	if(e->data.monster.step_sound_cooldown > 0)
+		e->data.monster.step_sound_cooldown--;
+	if(!e->on_ground || e->data.monster.step_sound_cooldown > 0)
+		return;
+	float dx = e->pos[0] - e->pos_old[0];
+	float dz = e->pos[2] - e->pos_old[2];
+	if(dx * dx + dz * dz < 0.0001f)
+		return;
+	struct block_data below = {.type = BLOCK_AIR};
+	struct block_data here = {.type = BLOCK_AIR};
+	server_world_get_block(AWORLD(server), (w_coord_t)floorf(e->pos[0]),
+	                       (w_coord_t)floorf(e->pos[1] - 0.05f),
+	                       (w_coord_t)floorf(e->pos[2]), &below);
+	server_world_get_block(AWORLD(server), (w_coord_t)floorf(e->pos[0]),
+	                       (w_coord_t)floorf(e->pos[1] + 0.5f),
+	                       (w_coord_t)floorf(e->pos[2]), &here);
+	if(here.type == BLOCK_WATER_STILL || here.type == BLOCK_WATER_FLOW)
+		sound_play_at_vol((enum pcm_sound)(pcm_splash + rand() % 2),
+		                  e->pos[0], e->pos[1], e->pos[2], 0.65f);
+	else if(below.type != BLOCK_AIR)
+		play_step_sound_at(below.type, e->pos[0], e->pos[1], e->pos[2], 0.65f);
+	e->data.monster.step_sound_cooldown = 10;
+}
+
 static void server_local_update(struct server_local* s) {
 	assert(s);
 
@@ -2789,6 +2847,7 @@ static void server_local_update(struct server_local* s) {
 		struct entity* e = *ep;
 
 		bool remove = (e->delay_destroy == 0) || e->tick_server(e, s);
+		entity_server_step_sound(e, s);
 
 		if(remove) {
 			clin_rpc_send(&(struct client_rpc) {
@@ -3715,7 +3774,7 @@ unload_done:
 				(fall_blocks >= 4 && !landed_in_water) ? fall_blocks-3 : 0);
 #endif
 
-			if(!landed_in_water) {
+			if(!landed_in_water && !player->creative && !player->flying) {
 				if(fall_blocks >= 4) {
 					sound_play(pcm_fall_big);
 					if(server_local_damage_enabled())
@@ -3729,7 +3788,7 @@ unload_done:
 		}
 
 		// accumulate fall distance
-		if(in_water || on_climbable) {
+		if(player->creative || player->flying || in_water || on_climbable) {
 			player->fall_distance = 0.0f;
 		} else if(falling) {
 			player->fall_distance -= player->vel_y;
@@ -3845,7 +3904,7 @@ unload_done:
 			(fall_blocks >= 4 && !landed_in_water) ? fall_blocks-3 : 0);
 #endif
 
-		if(!landed_in_water) {
+		if(!landed_in_water && !s->player.creative && !s->player.flying) {
 			if(fall_blocks >= 4) {
 				sound_play(pcm_fall_big);
 				if(server_local_damage_enabled())
@@ -3859,7 +3918,7 @@ unload_done:
 	}
 
 	// accumulate fall distance
-	if(in_water || on_climbable) {
+	if(s->player.creative || s->player.flying || in_water || on_climbable) {
 		s->player.fall_distance = 0.0f;
 	} else if(falling) {
 		s->player.fall_distance -= s->player.vel_y;
