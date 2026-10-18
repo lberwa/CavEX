@@ -43,8 +43,14 @@
 #include "../thread.h"
 #include "shaders_fallback.h"
 
+#ifdef _WIN32
+#include <direct.h>
+#define CAVEX_MKDIR(path, mode) _mkdir(path)
+#else
 #include <sys/stat.h>
 #include <sys/types.h>
+#define CAVEX_MKDIR(path, mode) mkdir(path, mode)
+#endif
 
 static void shader_error(GLuint shader) {
 	GLint is_compiled = 0;
@@ -74,7 +80,7 @@ static void make_parent_dirs(const char* path) {
 	for(char* p = tmp + 1; *p; p++) {
 		if(*p == '/') {
 			*p = '\0';
-			mkdir(tmp, 0755); /* Fehler (z.B. EEXIST) ignorieren */
+			CAVEX_MKDIR(tmp, 0755); /* Fehler (z.B. EEXIST) ignorieren */
 			*p = '/';
 		}
 	}
@@ -960,8 +966,8 @@ void gfx_write_buffers(bool color, bool depth, bool depth_test) {
 	}
 }
 
-void gfx_depth_range(float near, float far) {
-	glDepthRange(near, far);
+void gfx_depth_range(float depth_near, float depth_far) {
+	glDepthRange(depth_near, depth_far);
 }
 
 void gfx_depth_func(enum depth_func func) {

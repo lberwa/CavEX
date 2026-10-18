@@ -50,7 +50,7 @@
 #define GFX_PC_WINDOW_WIDTH 802
 #define GFX_PC_WINDOW_HEIGHT 480
 
-#ifndef WITH_PYTHON
+#if !defined(CAVEX_NO_PYTHON) && !defined(WITH_PYTHON)
 #define WITH_PYTHON
 #endif
 
@@ -60,4 +60,3 @@
 //#define GFX_WIREFRAME
 
 #endif
-

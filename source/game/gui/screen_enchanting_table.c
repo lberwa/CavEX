@@ -37,7 +37,11 @@ static char offer_text[4][3][24];
 static uint32_t time_seed32(void) {
 	ptime_t t = time_get();
 #ifdef PLATFORM_PC
+#ifdef _WIN32
+	return (uint32_t)t.QuadPart;
+#else
 	return (uint32_t)t.tv_nsec ^ (uint32_t)t.tv_sec;
+#endif
 #else
 	return (uint32_t)t;
 #endif

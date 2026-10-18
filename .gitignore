@@ -29,6 +29,7 @@ ffCavEX.elf
 ready_wii/
 ready_wii/boot.elf
 ready_wii/boot.dol
+build_win/
 
 #!lib/
 #!lib/wii/

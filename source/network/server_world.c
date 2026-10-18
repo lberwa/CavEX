@@ -2022,12 +2022,12 @@ static bool gen_cave_refine(const struct gen_cave_defpoint* src, int src_count,
 			continue;
 		}
 		int dr = src[i].radius - prev_r;
-		int rad1 = prev_r + dr / 4;
-		int rad2 = prev_r + (3 * dr) / 4;
-		if(rad1 < 1) rad1 = 1;
-		if(rad2 < 1) rad2 = 1;
-		dst[out++] = (struct gen_cave_defpoint){prev_x + dx / 4, prev_y + dy / 4, prev_z + dz / 4, rad1};
-		dst[out++] = (struct gen_cave_defpoint){prev_x + (3 * dx) / 4, prev_y + (3 * dy) / 4, prev_z + (3 * dz) / 4, rad2};
+				int cave_rad1 = prev_r + dr / 4;
+				int cave_rad2 = prev_r + (3 * dr) / 4;
+				if(cave_rad1 < 1) cave_rad1 = 1;
+				if(cave_rad2 < 1) cave_rad2 = 1;
+				dst[out++] = (struct gen_cave_defpoint){prev_x + dx / 4, prev_y + dy / 4, prev_z + dz / 4, cave_rad1};
+				dst[out++] = (struct gen_cave_defpoint){prev_x + (3 * dx) / 4, prev_y + (3 * dy) / 4, prev_z + (3 * dz) / 4, cave_rad2};
 		prev_x = src[i].x; prev_y = src[i].y; prev_z = src[i].z; prev_r = src[i].radius;
 		res = true;
 	}

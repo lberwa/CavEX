@@ -40,6 +40,7 @@
 
 #include <assert.h>
 #include <dirent.h>
+#include <sys/stat.h>
 #include "../../m-lib/m-string.h"
 #include <string.h>
 #include <time.h>
@@ -117,7 +118,13 @@ static void screen_sworld_reset(struct screen* s, int width, int height) {
 	if(d) {
 		struct dirent* dir;
 		while((dir = readdir(d))) {
-			if(dir->d_type & DT_DIR && *dir->d_name != '.') {
+			if(*dir->d_name != '.') {
+				char candidate[512];
+				struct stat st;
+				snprintf(candidate, sizeof(candidate), "%s/%s", saves_path,
+						dir->d_name);
+				if(stat(candidate, &st) != 0 || !S_ISDIR(st.st_mode))
+					continue;
 				struct world_option opt;
 				string_init_printf(opt.path, "%s/%s", saves_path, dir->d_name);
 #ifdef DEBUG_SCREEN_SELECT_WORLD

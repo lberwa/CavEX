@@ -47,11 +47,30 @@ TARGET		:=	$(notdir $(CURDIR))
 VERSION     :=  Alpha 0.3.0_f3
 BUILD		:=	build
 PC_BUILD	:=	buildpc
+WIN_BUILD	:=	build_win
+MAC_BUILD	:=	build_mac
 CAVEX       :=  Cavex
 INSTALL_USER := $(if $(SUDO_USER),$(SUDO_USER),$(USER))
 INSTALL_HOME := $(if $(SUDO_USER),$(shell getent passwd "$(SUDO_USER)" | cut -d: -f6),$(HOME))
 HOME_PATH   :=  $(INSTALL_HOME)/.cavex
 CAVEX_DIR   :=  $(PC_BUILD)/$(CAVEX)
+WIN_CAVEX_DIR := $(WIN_BUILD)/$(CAVEX)
+WIN_CC      ?= x86_64-w64-mingw32-gcc
+WIN_CXX     ?= x86_64-w64-mingw32-g++
+WIN_CMAKE_TOOLCHAIN_FILE ?=
+VCPKG_ROOT  ?= $(firstword $(wildcard $(HOME)/vcpkg $(HOME)/Downloads/vcpkg))
+WIN_VCPKG_TRIPLET ?= x64-mingw-static
+MAC_CC      ?= clang
+MAC_CXX     ?= clang++
+MAC_CMAKE_TOOLCHAIN_FILE ?=
+MACOSX_SDK  ?=
+MACOSX_ARCH ?= x86_64
+MACOSX_DEPLOYMENT_TARGET ?= 10.13
+ifeq ($(strip $(WIN_CMAKE_TOOLCHAIN_FILE)),)
+ifneq ($(strip $(VCPKG_ROOT)),)
+WIN_CMAKE_TOOLCHAIN_FILE := $(VCPKG_ROOT)/scripts/buildsystems/vcpkg.cmake
+endif
+endif
 nropt       ?=  $(shell nproc)
 SOURCES		:=	source source/block source/entity source/graphics source/network \
 				source/game source/game/gui source/platform source/item source/item/items \
@@ -193,7 +212,7 @@ export LIBPATHS += $(PY_LIBDIRS)
 
 export OUTPUT	:=	$(CURDIR)/$(TARGET)
 .PHONY: $(BUILD) clean
-.PHONY: wii pc pc-clean
+.PHONY: wii pc pc-clean win win-clean win-run mac mac-clean mac-run
 
 #---------------------------------------------------------------------------------
 pc:
@@ -210,6 +229,78 @@ pc:
 	@cp $(CURDIR)/init_pc.py $(CAVEX_DIR)/init.py
 	@cd $(PC_BUILD) && unset CC CXX CPPFLAGS CFLAGS CXXFLAGS LDFLAGS && TMPDIR="$(CURDIR)/$(PC_BUILD)/tmp" cmake -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=OFF .
 	@cd $(PC_BUILD) && env TMPDIR="$(CURDIR)/$(PC_BUILD)/tmp" $(MAKE) -j$(nropt)
+
+#---------------------------------------------------------------------------------
+# Windows-Cross-Build (MinGW). Optional vcpkg/toolchain file can be supplied with:
+#   make win IS_PC_BUILD=1 WIN_CMAKE_TOOLCHAIN_FILE=/path/to/toolchain.cmake
+win:
+	@test "$(IS_PC_BUILD)" = "1" || { echo "Bitte mit IS_PC_BUILD=1 aufrufen"; exit 1; }
+	@command -v "$(WIN_CC)" >/dev/null 2>&1 || { echo "Fehlt: $(WIN_CC) (MinGW installieren)"; exit 1; }
+	@command -v "$(WIN_CXX)" >/dev/null 2>&1 || { echo "Fehlt: $(WIN_CXX) (MinGW installieren)"; exit 1; }
+	@[ -d $(WIN_BUILD) ] || mkdir -p $(WIN_BUILD)
+	@[ -d $(WIN_BUILD)/tmp ] || mkdir -p $(WIN_BUILD)/tmp
+	@rm -rf $(WIN_BUILD)/saves $(WIN_BUILD)/assets
+	@rm -f $(WIN_BUILD)/source
+	@mkdir -p $(WIN_CAVEX_DIR)
+	@cp $(CURDIR)/2CMakeLists.txt $(WIN_BUILD)/CMakeLists.txt
+	@ln -s $(CURDIR)/source $(WIN_BUILD)/
+	@cp -r $(CURDIR)/assets $(WIN_CAVEX_DIR)/
+	@cp -r $(CURDIR)/saves $(WIN_CAVEX_DIR)/
+	@cp $(CURDIR)/config_pc.json $(WIN_CAVEX_DIR)/
+	@cp $(CURDIR)/init_pc.py $(WIN_CAVEX_DIR)/init.py
+	@cd $(WIN_BUILD) && unset CPPFLAGS CFLAGS CXXFLAGS LDFLAGS && env CC="$(WIN_CC)" CXX="$(WIN_CXX)" TMPDIR="$(CURDIR)/$(WIN_BUILD)/tmp" cmake -DCMAKE_SYSTEM_NAME=Windows -DCMAKE_C_COMPILER="$(WIN_CC)" -DCMAKE_CXX_COMPILER="$(WIN_CXX)" $(if $(WIN_CMAKE_TOOLCHAIN_FILE),-DCMAKE_TOOLCHAIN_FILE="$(WIN_CMAKE_TOOLCHAIN_FILE)" -DVCPKG_TARGET_TRIPLET="$(WIN_VCPKG_TRIPLET)",) -DIS_PC_BUILD=1 -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=OFF .
+	@cd $(WIN_BUILD) && env TMPDIR="$(CURDIR)/$(WIN_BUILD)/tmp" $(MAKE) -j$(nropt)
+	@winpthread_dll="$$($(WIN_CC) -print-file-name=libwinpthread-1.dll)"; \
+	test -f "$$winpthread_dll" || { echo "Fehlt: libwinpthread-1.dll"; exit 1; }; \
+	cp -f "$$winpthread_dll" $(WIN_BUILD)/
+
+win-run: win
+	@command -v wine >/dev/null 2>&1 || { echo "Fehlt: wine"; exit 1; }
+	@cd $(WIN_BUILD) && wine ./cavex.exe
+
+win-clean:
+	@echo "cleaning ..."
+	@rm -rf $(WIN_BUILD)
+
+#---------------------------------------------------------------------------------
+# macOS-Build. Auf macOS wird der installierte Apple-Clang und das Apple-SDK
+# verwendet. Von Linux aus ist ein macOS-SDK plus ein Darwin-kompatibler Clang
+# erforderlich; ohne SDK wird bewusst mit einer verständlichen Meldung abgebrochen.
+mac:
+	@test "$(IS_PC_BUILD)" = "1" || { echo "Bitte mit IS_PC_BUILD=1 aufrufen"; exit 1; }
+	@command -v "$(MAC_CC)" >/dev/null 2>&1 || { echo "Fehlt: $(MAC_CC) (Clang installieren)"; exit 1; }
+	@command -v "$(MAC_CXX)" >/dev/null 2>&1 || { echo "Fehlt: $(MAC_CXX) (Clang installieren)"; exit 1; }
+	@[ -d $(MAC_BUILD) ] || mkdir -p $(MAC_BUILD)
+	@[ -d $(MAC_BUILD)/tmp ] || mkdir -p $(MAC_BUILD)/tmp
+	@rm -rf $(MAC_BUILD)/saves $(MAC_BUILD)/assets
+	@rm -f $(MAC_BUILD)/source
+	@mkdir -p $(MAC_BUILD)/$(CAVEX)
+	@cp $(CURDIR)/2CMakeLists.txt $(MAC_BUILD)/CMakeLists.txt
+	@ln -s $(CURDIR)/source $(MAC_BUILD)/
+	@cp -r $(CURDIR)/assets $(MAC_BUILD)/$(CAVEX)/
+	@cp -r $(CURDIR)/saves $(MAC_BUILD)/$(CAVEX)/
+	@cp $(CURDIR)/config_pc.json $(MAC_BUILD)/$(CAVEX)/
+	@cp $(CURDIR)/init_pc.py $(MAC_BUILD)/$(CAVEX)/init.py
+	@cd $(MAC_BUILD) && unset CPPFLAGS CFLAGS CXXFLAGS LDFLAGS && \
+	if [ "$$(uname -s)" = "Darwin" ]; then \
+		env CC="$(MAC_CC)" CXX="$(MAC_CXX)" MACOSX_DEPLOYMENT_TARGET="$(MACOSX_DEPLOYMENT_TARGET)" \
+		cmake -DIS_PC_BUILD=1 -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=OFF $(if $(MAC_CMAKE_TOOLCHAIN_FILE),-DCMAKE_TOOLCHAIN_FILE="$(MAC_CMAKE_TOOLCHAIN_FILE)",); \
+	else \
+		test -n "$(MACOSX_SDK)" || { echo "Linux-Cross-Build benötigt MACOSX_SDK=/pfad/zum/macOS-SDK"; exit 1; }; \
+		env CC="$(MAC_CC)" CXX="$(MAC_CXX)" MACOSX_DEPLOYMENT_TARGET="$(MACOSX_DEPLOYMENT_TARGET)" \
+		cmake -DCMAKE_SYSTEM_NAME=Darwin -DCMAKE_C_COMPILER="$(MAC_CC)" -DCMAKE_CXX_COMPILER="$(MAC_CXX)" \
+		-DCMAKE_OSX_SYSROOT="$(MACOSX_SDK)" -DCMAKE_OSX_ARCHITECTURES="$(MACOSX_ARCH)" \
+		-DCMAKE_OSX_DEPLOYMENT_TARGET="$(MACOSX_DEPLOYMENT_TARGET)" -DIS_PC_BUILD=1 -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=OFF \
+		$(if $(MAC_CMAKE_TOOLCHAIN_FILE),-DCMAKE_TOOLCHAIN_FILE="$(MAC_CMAKE_TOOLCHAIN_FILE)",); \
+	fi
+	@cd $(MAC_BUILD) && env TMPDIR="$(CURDIR)/$(MAC_BUILD)/tmp" $(MAKE) -j$(nropt)
+
+mac-run: mac
+	@cd $(MAC_BUILD) && ./cavex
+
+mac-clean:
+	@echo "cleaning ..."
+	@rm -rf $(MAC_BUILD)
 
 pc-just-make:
 	@[ -d $(PC_BUILD) ] || mkdir -p $(PC_BUILD)

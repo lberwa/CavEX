@@ -388,7 +388,7 @@ void cavex_python_selftest(void) {
 
 /////////////////////////////////////////////////////////////////////
 
-#ifdef PLATFORM_PC
+#if defined(PLATFORM_PC) && defined(WITH_PYTHON)
 
 #include <Python.h>
 #include <stdio.h>

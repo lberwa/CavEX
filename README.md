@@ -154,7 +154,9 @@ make clean IS_PC_BUILD=0
 
 
 
-### PC:
+### Linux PC:
+
+#### for Linux
 
 __first install the libarys:__
 
@@ -167,7 +169,7 @@ sudo apt install cmake zlib1g-dev libasound2-dev libglfw3-dev libglew-dev libmpg
 __Build:__
 
 ```bash
-make pc IS_PC_BUILD=1
+make pc -j$(nproc) IS_PC_BUILD=1
 ```
 
 __... or if you want to install:__
@@ -182,6 +184,33 @@ __clean:__
 ```bash
 make pc-clean IS_PC_BUILD=1
 ```
+
+#### for Windows
+
+__first install the libarys:__
+```bash
+sudo apt install mingw-w64 gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64
+```
+
+```bash
+git clone https://github.com/microsoft/vcpkg.git
+cd vcpkg
+./bootstrap-vcpkg.sh
+./vcpkg install glfw3 glew zlib mpg123 --triplet x64-mingw-static
+```
+
+__Build:__
+```bash
+make win -j$(nproc) IS_PC_BUILD=1
+```
+
+__clean:__
+```bash
+make win-clean IS_PC_BUILD=1
+```
+
+## Windows PC
+
 
 
 

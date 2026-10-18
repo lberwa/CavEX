@@ -20,7 +20,13 @@
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
+#ifdef _WIN32
+#include <direct.h>
+#define CAVEX_MKDIR(path, mode) _mkdir(path)
+#else
 #include <sys/stat.h>
+#define CAVEX_MKDIR(path, mode) mkdir(path, mode)
+#endif
 
 #include "config.h"
 #include "config_frozen.h"
@@ -39,7 +45,7 @@ static void config_make_parent_dirs(const char* path) {
 	for(char* p = tmp + 1; *p; p++) {
 		if(*p == '/') {
 			*p = '\0';
-			mkdir(tmp, 0755); /* Fehler (z.B. EEXIST) ignorieren */
+			CAVEX_MKDIR(tmp, 0755); /* Fehler (z.B. EEXIST) ignorieren */
 			*p = '/';
 		}
 	}

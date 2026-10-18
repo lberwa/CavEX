@@ -21,7 +21,14 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#ifdef _WIN32
+#include <direct.h>
+#define CAVEX_MKDIR(path, mode) _mkdir(path)
 #include <sys/stat.h>
+#else
+#include <sys/stat.h>
+#define CAVEX_MKDIR(path, mode) mkdir(path, mode)
+#endif
 #include <time.h>
 
 #include "../../cNBT/nbt.h"
@@ -117,8 +124,8 @@ static bool world_create_level_dat(const char* folder, const char* name,
 		= config_read_string(&gstate.config_user, "paths.worlds", "saves");
 
 	snprintf(out_path, out_len, "%s/%s", worlds, folder);
-	mkdir(worlds, 0755); /* make sure saves/ exists */
-	if(mkdir(out_path, 0755) != 0 && errno != EEXIST)
+	CAVEX_MKDIR(worlds, 0755); /* make sure saves/ exists */
+	if(CAVEX_MKDIR(out_path, 0755) != 0 && errno != EEXIST)
 		return false; /* create the world folder */
 
 	/* helper: append a node to a compound/list sentinel */

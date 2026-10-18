@@ -27,8 +27,13 @@ typedef uint64_t ptime_t;
 #endif
 
 #ifdef PLATFORM_PC
+#ifdef _WIN32
+#include <windows.h>
+typedef LARGE_INTEGER ptime_t;
+#else
 #include <time.h>
 typedef struct timespec ptime_t;
+#endif
 #endif
 
 void time_reset(void);

@@ -209,6 +209,11 @@ bool boot_dol(const char *path, const char *args) {
 	(void)path;
 	(void)args;
 
+#ifdef _WIN32
+	/* Windows has no /proc/self/exe or execv. Reboot requests are optional on
+	 * the desktop; the caller can terminate normally instead. */
+	return false;
+#else
 	char exe[512];
 	ssize_t len = readlink("/proc/self/exe", exe, sizeof(exe) - 1);
 	if (len <= 0)
@@ -230,6 +235,7 @@ bool boot_dol(const char *path, const char *args) {
 	/* nur erreichbar, wenn execv() fehlgeschlagen ist */
 	perror("boot_dol: execv");
 	return false;
+#endif
 }
 
 #endif

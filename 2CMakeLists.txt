@@ -2,7 +2,12 @@ cmake_minimum_required(VERSION 3.14)
 
 project(cavex C)
 
-add_compile_options(-O3 -DSPLITSCREEN=2 -DMULTIPLAYER -march=native -g)
+add_compile_definitions(SPLITSCREEN=2 MULTIPLAYER)
+if(MSVC)
+	add_compile_options(/O2 /Zi)
+else()
+	add_compile_options(-O3 -g)
+endif()
 
 # Dieses CMakeLists.txt ist ausschliesslich fuer den PC-Build.
 # Der Wii-Build verwendet das Makefile direkt.
@@ -14,15 +19,49 @@ if(TEST_MULTIPLAYER_INPUT)
 endif()
 
 find_package(ZLIB REQUIRED)
-find_package(ALSA REQUIRED)
 find_package(Threads REQUIRED)
 find_package(glfw3 3.3 REQUIRED)
 find_package(OpenGL REQUIRED)
 # Optional: CPython zum Einbetten (fuer den "Server"-Menuepunkt, run_python.c).
 # Wenn vorhanden -> WITH_PYTHON, sonst faellt cavex_run_python_file auf den
 # leeren Stub zurueck (Build funktioniert trotzdem).
-find_package(Python3 COMPONENTS Development.Embed)
+if(NOT CMAKE_CROSSCOMPILING)
+	find_package(Python3 COMPONENTS Development.Embed)
+endif()
 find_package(GLEW REQUIRED)
+
+if(UNIX AND NOT APPLE)
+	find_package(ALSA REQUIRED)
+	set(CAVEX_AUDIO_SOURCES
+		source/sound/pc_sound/src/hostapi/alsa/pa_linux_alsa.c
+		source/sound/pc_sound/src/os/unix/pa_unix_hostapis.c
+		source/sound/pc_sound/src/os/unix/pa_pthread_util.c
+		source/sound/pc_sound/src/os/unix/pa_unix_util.c)
+elseif(APPLE)
+	set(CAVEX_AUDIO_SOURCES
+		source/sound/pc_sound/src/hostapi/coreaudio/pa_mac_core.c
+		source/sound/pc_sound/src/hostapi/coreaudio/pa_mac_core_blocking.c
+		source/sound/pc_sound/src/hostapi/coreaudio/pa_mac_core_utilities.c
+		source/sound/pc_sound/src/os/unix/pa_unix_hostapis.c
+		source/sound/pc_sound/src/os/unix/pa_pthread_util.c
+		source/sound/pc_sound/src/os/unix/pa_unix_util.c)
+	set(CAVEX_AUDIO_LIBS
+		"-framework CoreAudio" "-framework AudioToolbox"
+		"-framework AudioUnit" "-framework CoreFoundation"
+		"-framework CoreServices")
+elseif(WIN32)
+	set(CAVEX_AUDIO_SOURCES
+		source/sound/pc_sound/src/hostapi/wasapi/pa_win_wasapi.c
+		source/sound/pc_sound/src/hostapi/wmme/pa_win_wmme.c
+		source/sound/pc_sound/src/os/win/pa_win_coinitialize.c
+		source/sound/pc_sound/src/os/win/pa_win_hostapis.c
+		source/sound/pc_sound/src/os/win/pa_win_util.c
+		source/sound/pc_sound/src/os/win/pa_win_version.c
+		source/sound/pc_sound/src/os/win/pa_win_waveformat.c)
+	set(CAVEX_AUDIO_LIBS winmm ole32 uuid ws2_32)
+else()
+	message(FATAL_ERROR "Unsupported desktop platform")
+endif()
 
 add_executable(cavex
 				source/block/aabb.c
@@ -294,19 +333,30 @@ add_executable(cavex
 				source/sound/pc_sound/src/common/pa_trace.c
 				source/sound/pc_sound/src/common/pa_front.c
 
-				source/sound/pc_sound/src/hostapi/alsa/pa_linux_alsa.c
-				source/sound/pc_sound/src/os/unix/pa_unix_hostapis.c
-				source/sound/pc_sound/src/os/unix/pa_pthread_util.c
-				source/sound/pc_sound/src/os/unix/pa_unix_util.c
+				${CAVEX_AUDIO_SOURCES}
 			)
 
 # PA_USE_ALSA=1 ist noetig, damit PortAudio das ALSA-Backend registriert
 # (pa_unix_hostapis.c nimmt PaAlsa_Initialize nur bei #if PA_USE_ALSA in die
 # Initializer-Liste auf). Ohne das Makro gibt es 0 Host-APIs -> 0 Geraete ->
 # Pa_GetDefaultOutputDevice() == -1 -> "Device unavailable".
-target_compile_definitions(cavex PRIVATE PLATFORM_PC CGLM_ALL_UNALIGNED PA_USE_ALSA=1)
-target_include_directories(cavex PRIVATE source source/cubiomes)
-target_compile_options(cavex PRIVATE -fwrapv)
+target_compile_definitions(cavex PRIVATE PLATFORM_PC CGLM_ALL_UNALIGNED)
+if(UNIX AND NOT APPLE)
+	target_compile_definitions(cavex PRIVATE PA_USE_ALSA=1)
+elseif(WIN32)
+	target_compile_definitions(cavex PRIVATE PA_USE_WASAPI=1 PA_USE_WMME=1)
+endif()
+target_include_directories(cavex PRIVATE
+	source
+	source/cubiomes
+	source/sound/pc_sound/include
+	source/sound/pc_sound/src/common
+	source/sound/pc_sound/src/os/win
+	source/sound/pc_sound/src/hostapi/wasapi
+	source/sound/pc_sound/src/hostapi/wmme)
+if(NOT MSVC)
+	target_compile_options(cavex PRIVATE -fwrapv)
+endif()
 
 set_target_properties(
 	cavex PROPERTIES
@@ -315,10 +365,40 @@ set_target_properties(
 
 set_property(TARGET cavex PROPERTY INTERPROCEDURAL_OPTIMIZATION False)
 
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(MPG123 REQUIRED libmpg123)
-target_include_directories(cavex PRIVATE ${MPG123_INCLUDE_DIRS})
-target_link_libraries(cavex ${CMAKE_THREAD_LIBS_INIT} ZLIB::ZLIB ${ALSA_LIBRARIES} glfw GLEW::GLEW OpenGL::GL m ${MPG123_LIBRARIES})
+if(NOT WIN32)
+	find_package(PkgConfig QUIET)
+	if(PkgConfig_FOUND)
+		pkg_check_modules(MPG123 QUIET libmpg123)
+	endif()
+	if(NOT MPG123_FOUND)
+		find_path(MPG123_INCLUDE_DIRS mpg123.h)
+		find_library(MPG123_LIBRARIES NAMES mpg123)
+	endif()
+else()
+	# The cross pkg-config result points at the host/debug import paths and
+	# produces an unusable -lmpg123 link. MP3 playback is optional on Windows.
+	set(CAVEX_NO_MPG123 ON)
+	set(MPG123_INCLUDE_DIRS "")
+	set(MPG123_LIBRARIES "")
+endif()
+if(NOT MPG123_INCLUDE_DIRS OR NOT MPG123_LIBRARIES)
+	if(UNIX AND NOT APPLE)
+		message(FATAL_ERROR "libmpg123 is required on Linux (install libmpg123-dev)")
+	else()
+		message(STATUS "libmpg123 not found: background MP3 music disabled")
+		set(CAVEX_NO_MPG123 ON)
+	endif()
+endif()
+if(NOT CAVEX_NO_MPG123)
+	target_include_directories(cavex PRIVATE ${MPG123_INCLUDE_DIRS})
+endif()
+target_link_libraries(cavex ${CMAKE_THREAD_LIBS_INIT} ZLIB::ZLIB ${ALSA_LIBRARIES} ${CAVEX_AUDIO_LIBS} glfw GLEW::GLEW OpenGL::GL ${MPG123_LIBRARIES})
+if(CAVEX_NO_MPG123)
+	target_compile_definitions(cavex PRIVATE CAVEX_NO_MPG123=1)
+endif()
+if(NOT WIN32 AND NOT APPLE)
+	target_link_libraries(cavex m)
+endif()
 
 if(IS_PC_BUILD)
     add_executable(test_world
@@ -328,7 +408,9 @@ if(IS_PC_BUILD)
     target_include_directories(test_world PRIVATE source source/cubiomes)
     set_target_properties(test_world PROPERTIES C_STANDARD 99)
     target_compile_definitions(test_world PRIVATE WGEN_TESTING=1)
-    target_link_libraries(test_world m)
+	if(NOT WIN32)
+		target_link_libraries(test_world m)
+	endif()
 endif()
 
 # CPython einbetten (nur wenn gefunden). init_pc.py ruft CavEX-Funktionen ueber
@@ -339,5 +421,6 @@ if(Python3_FOUND)
 	target_link_libraries(cavex ${Python3_LIBRARIES})
 	message(STATUS "cavex: Python-Embedding aktiv (${Python3_VERSION})")
 else()
+	target_compile_definitions(cavex PRIVATE CAVEX_NO_PYTHON=1)
 	message(STATUS "cavex: kein Python-Embedding (Python3 Development.Embed nicht gefunden)")
 endif()

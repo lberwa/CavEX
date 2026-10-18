@@ -29,25 +29,50 @@ void time_reset() {
 }
 
 ptime_t time_get() {
-	struct timespec t;
-	clock_gettime(CLOCK_MONOTONIC_RAW, &t);
+	#ifdef _WIN32
+	ptime_t t;
+	QueryPerformanceCounter(&t);
 	return t;
+	#else
+	struct timespec t;
+	clock_gettime(CLOCK_MONOTONIC, &t);
+	return t;
+	#endif
 }
 
 ptime_t time_add_ms(ptime_t t, unsigned int ms) {
+	#ifdef _WIN32
+	LARGE_INTEGER frequency;
+	QueryPerformanceFrequency(&frequency);
+	t.QuadPart += (frequency.QuadPart * (LONGLONG)ms) / 1000;
+	return t;
+	#else
 	uint64_t ns = t.tv_nsec + ms * 1000000LL;
 	t.tv_sec += ns / 1000000000LL;
 	t.tv_nsec = ns % 1000000000LL;
 	return t;
+	#endif
 }
 
 int32_t time_diff_ms(ptime_t f, ptime_t s) {
+	#ifdef _WIN32
+	LARGE_INTEGER frequency;
+	QueryPerformanceFrequency(&frequency);
+	return (int32_t)(((s.QuadPart - f.QuadPart) * 1000) / frequency.QuadPart);
+	#else
 	return (s.tv_sec - f.tv_sec) * 1000 + (s.tv_nsec - f.tv_nsec) / 1000000;
+	#endif
 }
 
 float time_diff_s(ptime_t f, ptime_t s) {
+	#ifdef _WIN32
+	LARGE_INTEGER frequency;
+	QueryPerformanceFrequency(&frequency);
+	return (float)(s.QuadPart - f.QuadPart) / (float)frequency.QuadPart;
+	#else
 	return (float)(s.tv_sec - f.tv_sec)
 		+ (float)(s.tv_nsec - f.tv_nsec) / 1000000000.0F;
+	#endif
 }
 
 int get_random(int from, int to) {

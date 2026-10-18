@@ -2,7 +2,7 @@
 
 * Texture orientation for blocks that have a specific "direction"
   - ~~Bed placement isn't correct yet~~
-  - door placement isn't correct yet
+  - door placement isn't correct yet                                                                                             ⭕
 
 * ~~Random crashes, once in a while.~~ Maybe I'll implement an optional auto-save, to prevent some headaches and tears
 
@@ -95,7 +95,7 @@
 
 * ~~entities are able to going throw chunks and falling down~~
 
-* implement a minecraft terminal
+* implement a minecraft terminal                                                                                                     ⭕
 
 * ~~the moon and sun are too little~~
 
@@ -126,13 +126,13 @@
 
 * ~~you don't see the cracks on the blocks on the wii~~
 
-* if player 2 goes into the nether portal he can't go out of the loading screen while player 1 doesn't go to the nether portal too ??
+* if player 2 goes into the nether portal he can't go out of the loading screen while player 1 doesn't go to the nether portal too ?? ⭕
 
-* if you go throw the portal, and you wait 5 sekonds you go again to the world ??
+* if you go throw the portal, and you wait 5 sekonds you go again to the world ??                                                     ⭕
 
 * ~~the texture of the creative menu is broken on the wii~~
 
-* may load ogg files insead of pcm/wav
+* may load ogg files insead of pcm/wav                                                                                                ⭕
 
 * ~~config.json in ~/.cavex~~
 
@@ -146,13 +146,13 @@
 
 * ~~the mp3 loader expect 10 mp3 files~~
 
-* the position of the cursor in the main menu is broken because the 2 player mode
+* ~~the position of the cursor in the main menu is broken because the 2 player mode~~
 
-* compatibility with Mac OS and Windows
+* ~~compatibility with Mac OS and Windows~~ (just tested with wine; don't test it on Mac OS)
 
 * the head of the men in the inventory is behind the body on PC
 
-* the inventory item of chests isn't correct
+* ~~the inventory item of chests isn't correct~~
 
 * you can't stack doors
 

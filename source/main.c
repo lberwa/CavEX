@@ -22,7 +22,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef _WIN32
+#include <direct.h>
+#define CAVEX_MKDIR(path, mode) _mkdir(path)
+#else
 #include <sys/stat.h>
+#define CAVEX_MKDIR(path, mode) mkdir(path, mode)
+#endif
+#include <signal.h>
 #include <time.h>
 
 #if 1
@@ -103,11 +110,11 @@ static void make_dirs(const char* path) {
 	for(char* p = tmp + 1; *p; p++) {
 		if(*p == '/') {
 			*p = '\0';
-			mkdir(tmp, 0755);
+			CAVEX_MKDIR(tmp, 0755);
 			*p = '/';
 		}
 	}
-	mkdir(tmp, 0755);
+	CAVEX_MKDIR(tmp, 0755);
 }
 
 static void panorama_capture_apply_camera(struct camera* cam) {
@@ -393,14 +400,16 @@ static void splitscreen_viewport_rect(int player_index, int player_count,
 #include <time.h>
 
 #include <stdio.h>
-#include <unistd.h>
 #include <string.h>
-#include <libgen.h>   // dirname
 
 int load_config(void) {
     char config_path[512];
 
-    const char* home = getenv("HOME");
+	#ifdef _WIN32
+	const char* home = getenv("USERPROFILE");
+	#else
+	const char* home = getenv("HOME");
+	#endif
     if(!home || !home[0]) {
         CAVEX_DEBUG_PRINTF("Failed to determine HOME for config.json\n");
         return 0;
@@ -428,19 +437,16 @@ void cavex_request_reboot(void) {
 
 int main(void) {
 #ifdef PLATFORM_PC
+	#ifndef _WIN32
 	signal(SIGPIPE, SIG_IGN);
-
-	// find out which path it is
-	char pictures[256];
-
-    FILE *fp = popen("xdg-user-dir PICTURES", "r");
-    if (!fp) return 1;
-
-    fgets(pictures, sizeof(pictures), fp);
-    pclose(fp);
-
-    pictures[strcspn(pictures, "\n")] = 0;
-	snprintf(g_pictures_dir, sizeof(g_pictures_dir), "%s", pictures);
+	#endif
+	#ifdef _WIN32
+	const char* home = getenv("USERPROFILE");
+	#else
+	const char* home = getenv("HOME");
+	#endif
+	if(home && home[0])
+		snprintf(g_pictures_dir, sizeof(g_pictures_dir), "%s/Pictures", home);
 #endif
 
 	//video_init_custom();
@@ -1434,7 +1440,7 @@ int main(void) {
 #ifdef PLATFORM_WII
 				snprintf(name, sizeof(name), "%ld.png", (long)time(NULL));
 #else
-				snprintf(name, sizeof(name), "%s/%ld.png", pictures, (long)time(NULL));
+				snprintf(name, sizeof(name), "%s/%ld.png", g_pictures_dir, (long)time(NULL));
 #endif
 				lodepng_encode32_file(name, image, width, height);
 				free(image);

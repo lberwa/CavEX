@@ -33,14 +33,22 @@
 #ifdef PLATFORM_PC
 
 #include <limits.h>
+#ifndef _WIN32
 #include <sched.h>
+#endif
 #include <stdlib.h>
 #include <string.h>
+#ifndef _WIN32
 #include <sys/resource.h>
+#endif
 #ifdef __linux__
 #include <sys/syscall.h>
 #endif
+#ifndef _WIN32
 #include <unistd.h>
+#else
+#include <windows.h>
+#endif
 
 struct thread_start_args {
 	void* (*entry)(void* arg);
@@ -49,6 +57,10 @@ struct thread_start_args {
 };
 
 static void thread_apply_current_priority(uint8_t priority) {
+	#ifdef _WIN32
+	(void)priority;
+	return;
+	#else
 	/* Wii/libogc uses the priority value directly. On PC this is best-effort:
 	 * realtime pthread priority usually needs privileges, and Linux nice only
 	 * allows raising priority when CAP_SYS_NICE is available. Failing either is
@@ -86,6 +98,7 @@ static void thread_apply_current_priority(uint8_t priority) {
 #else
 	(void)priority;
 #endif
+	#endif
 }
 
 static void* thread_entry_wrapper(void* user) {
@@ -135,7 +148,11 @@ void thread_join(struct thread* t) {
 }
 
 void thread_msleep(size_t ms) {
+	#ifdef _WIN32
+	Sleep((DWORD)ms);
+	#else
 	usleep(ms * 1000);
+	#endif
 }
 
 void tchannel_init(struct thread_channel* c, size_t count) {

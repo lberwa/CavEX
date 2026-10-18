@@ -398,7 +398,11 @@ static DWORD WINAPI searchAll48Thread(LPVOID data)
 #ifdef USE_PTHREAD
     pthread_exit(NULL);
 #endif
+#if defined(_WIN32) && !defined(USE_PTHREAD)
+    return 0;
+#else
     return NULL;
+#endif
 }
 
 

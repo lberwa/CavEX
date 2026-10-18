@@ -267,12 +267,17 @@ int debug_close() {
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+#ifdef _WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#define close closesocket
+#else
 #include <unistd.h>
-
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#endif
 
 #include "server_comunication.h"
 #include "../game/game_state.h"
@@ -295,12 +300,27 @@ int debug_close() {
    Server socket
 ---------------------------------- */
 
+#ifdef _WIN32
+static SOCKET sock = INVALID_SOCKET;
+#else
 static int sock = -1;
+#endif
 
 bool server_init(int a, int b, int c, int d)
 {
+#ifdef _WIN32
+    WSADATA wsa;
+    if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0)
+        return false;
+#endif
     sock = socket(AF_INET, SOCK_STREAM, 0);
-    if (sock < 0)
+    if (sock ==
+#ifdef _WIN32
+        INVALID_SOCKET
+#else
+        -1
+#endif
+    )
         return false;
 
     struct sockaddr_in server;
@@ -354,7 +374,12 @@ uint8_t* server_receive(int *out_len)
 int server_close(void)
 {
     int r = close(sock);
+#ifdef _WIN32
+    sock = INVALID_SOCKET;
+    WSACleanup();
+#else
     sock = -1;
+#endif
     return r;
 }
 
@@ -376,13 +401,23 @@ char* server_get_mac_address(void)
 ---------------------------------- */
 
 #ifdef NET_DEBUG
+#ifdef _WIN32
+static SOCKET dsock = INVALID_SOCKET;
+#else
 static int dsock = -1;
+#endif
 
 bool debug_init(int a, int b, int c, int d)
 {
     #ifdef DEBUG_SEND
     dsock = socket(AF_INET, SOCK_STREAM, 0);
-    if (dsock < 0)
+    if (dsock ==
+#ifdef _WIN32
+        INVALID_SOCKET
+#else
+        -1
+#endif
+    )
         return false;
 
     struct sockaddr_in server;
@@ -419,7 +454,11 @@ int debug_close(void)
 {
     #ifdef DEBUG_SEND
     int r = close(dsock);
+#ifdef _WIN32
+    dsock = INVALID_SOCKET;
+#else
     dsock = -1;
+#endif
     return r;
     #endif
 }

@@ -1007,14 +1007,18 @@ bool sound_play_at(enum pcm_sound sound, float wx, float wy, float wz) {
 #include <string.h>
 #include <math.h>
 #include <pthread.h>
+#ifndef _WIN32
 #include <unistd.h>
 #include <fcntl.h>
+#endif
 
 #include "pc_sound/include/portaudio.h"
 #include "sound.h"
 #include "config.h"
 #include "game/game_state.h"
+#ifndef CAVEX_NO_MPG123
 #include <mpg123.h>
+#endif
 
 #define MAX_PCM_PLAYLIST 16
 #define OUT_CHANNELS 2      // Stream ist stereo (siehe Pa_OpenDefaultStream)
@@ -1572,6 +1576,10 @@ static const char* sound_get_bg_mp3_path(enum mp3_sound sound) {
 
 static wav_t load_mp3_file(const char *path) {
     wav_t w = {0};
+#ifdef CAVEX_NO_MPG123
+    (void)path;
+    return w;
+#else
     if (!path) return w;
 
     mpg123_handle *mh = mpg123_new(NULL, NULL);
@@ -1638,6 +1646,7 @@ static wav_t load_mp3_file(const char *path) {
     w.channels    = channels;
     w.sample_rate = (int)rate;
     return w;
+#endif
 }
 
 static void* bg_loader_thread_main(void* user) {
@@ -1769,18 +1778,22 @@ void sound_init(void) {
     if (pa_stream)
         return;
 
+#ifndef CAVEX_NO_MPG123
     mpg123_init();
+#endif
 
     // PortAudio/ALSA/JACK/BlueALSA schreiben beim Initialisieren jede Menge
     // Backend-Gemecker direkt nach stderr ("unable to open slave", "jack server
     // is not running", ...). Waehrend der Init stderr temporaer nach /dev/null
     // umleiten und danach wiederherstellen -> Konsole bleibt sauber.
+#ifndef _WIN32
     int saved_stderr = dup(STDERR_FILENO);
     int devnull = open("/dev/null", O_WRONLY);
     if (devnull != -1) {
         dup2(devnull, STDERR_FILENO);
         close(devnull);
     }
+#endif
 
     PaError err = Pa_Initialize();
     if (err == paNoError) {
@@ -1797,10 +1810,12 @@ void sound_init(void) {
     }
 
     // stderr wiederherstellen (VOR eventuellen Fehlermeldungen)
+    #ifndef _WIN32
     if (saved_stderr != -1) {
         dup2(saved_stderr, STDERR_FILENO);
         close(saved_stderr);
     }
+    #endif
 
     if (err != paNoError) {
         fprintf(stderr, "PortAudio init failed: %s\n", Pa_GetErrorText(err));
@@ -1829,7 +1844,9 @@ void sound_shutdown(void) {
     bg_wav.data = NULL;
     pthread_mutex_unlock(&bg_mutex);
 
+#ifndef CAVEX_NO_MPG123
     mpg123_exit();
+#endif
 }
 
 //----------------------

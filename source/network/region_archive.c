@@ -20,7 +20,13 @@
 #include <assert.h>
 #include <errno.h>
 #include <string.h>
+#ifdef _WIN32
+#include <direct.h>
+#define CAVEX_MKDIR(path, mode) _mkdir(path)
+#else
 #include <sys/stat.h>
+#define CAVEX_MKDIR(path, mode) mkdir(path, mode)
+#endif
 #include "../m-lib/m-string.h"
 
 #include "../cNBT/nbt.h"
@@ -104,12 +110,12 @@ bool region_archive_create_new(struct region_archive* ra, string_t world_name,
 		} else {
 			string_t d1;
 			string_init_printf(d1, "%s/DIM-1", string_get_cstr(world_name));
-			mkdir(string_get_cstr(d1), 0755);
+			CAVEX_MKDIR(string_get_cstr(d1), 0755);
 			string_clear(d1);
 			string_init_printf(dir, "%s/DIM-1/region",
 							   string_get_cstr(world_name));
 		}
-		mkdir(string_get_cstr(dir), 0755);
+			CAVEX_MKDIR(string_get_cstr(dir), 0755);
 		string_clear(dir);
 	}
 
