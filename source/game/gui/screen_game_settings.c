@@ -59,6 +59,7 @@ enum { // Buttons
     // gamemode
     SET_GAMEMODE_PLAYER_ONE,
     SET_GAMEMODE_PLAYER_TWO,
+    CREATIVE_ALL_ITEMS_TOGGLE,
 };
 
 static int8_t menu[4];
@@ -166,6 +167,9 @@ static void set(int s) {
 				});
 			}
 			break;
+		case CREATIVE_ALL_ITEMS_TOGGLE:
+			gstate.settings.creative_all_items = !gstate.settings.creative_all_items;
+			break;
 	}
 }
 
@@ -252,11 +256,15 @@ static void screen_gsettings_render2D(struct screen* s, int width, int height) {
 								creative_mode[0], &set, SET_GAMEMODE_PLAYER_ONE, 0, 0);
 			gutil_button_toggle(cx +  50, cy - 5,
 								creative_mode[1], &set, SET_GAMEMODE_PLAYER_TWO, 1, 0);
-			gutil_button(cx - 75, cy + 60, 150, 50, "Back", &choose, MAIN, 0, 1);
+			gutil_button_toggle(cx + 75, cy + 45,
+								gstate.settings.creative_all_items,
+								&set, CREATIVE_ALL_ITEMS_TOGGLE, 0, 1);
+			gutil_button(cx - 75, cy + 125, 150, 50, "Back", &choose, MAIN, 0, 2);
 
 			gutil_text(cx - 150, cy - 78, "Creative:",  26, true);
 			gutil_text(cx - 150, cy - 32, "Player 1:", 16, true);
 			gutil_text(cx +  50, cy - 32, "Player 2:", 16, true);
+			gutil_text(cx - 150, cy + 60, "All creative items:", 16, true);
 		}
 		break;
 

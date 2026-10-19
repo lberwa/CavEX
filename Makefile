@@ -76,10 +76,14 @@ SOURCES		:=	source source/block source/entity source/graphics source/network \
 				source/game source/game/gui source/platform source/item source/item/items \
 				source/cNBT source/parson source/cubiomes source/boot \
 				source/sound source/sound/mp3 source/sound/mp3/FileOperations \
-				source/sound/mp3/Tools #source/lodepng
+				source/sound/mp3/Tools \
+				source/recastnavigation/Recast/Source \
+				source/recastnavigation/Detour/Source #source/lodepng
 DATA		:=  
 TEXTURES	:=	textures
-INCLUDES	:=	source source/sound/mp3
+INCLUDES	:=	source source/sound/mp3 \
+				source/recastnavigation/Recast/Include \
+				source/recastnavigation/Detour/Include
 
 CPPFLAGS += -D__WII__ -DPLATFORM_WII
 CFLAGS   += -D__WII__ -DPLATFORM_WII

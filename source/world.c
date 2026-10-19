@@ -844,10 +844,10 @@ static void world_render_spawner_mob(struct block_data* blk, mat4 view,
 			render_entity_creeper(mv, spin_y, spin_y, frame);
 			break;
 		case 2:
-			render_entity_pig(mv, spin_y, frame);
+			render_entity_pig(mv, spin_y, spin_y, frame);
 			break;
 		case 3:
-			render_entity_sheep(mv, spin_y, frame, false);
+				render_entity_sheep(mv, spin_y, spin_y, frame, false);
 			break;
 		default:
 			break;

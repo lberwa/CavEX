@@ -445,8 +445,18 @@ int main(void) {
 	#else
 	const char* home = getenv("HOME");
 	#endif
-	if(home && home[0])
-		snprintf(g_pictures_dir, sizeof(g_pictures_dir), "%s/Pictures", home);
+	if(home && home[0]) {
+		/* Prefer an existing localized directory, otherwise use the usual
+		 * English name and create it below. */
+		char german_dir[sizeof(g_pictures_dir)];
+		struct stat st;
+		snprintf(german_dir, sizeof(german_dir), "%s/Bilder", home);
+		if(stat(german_dir, &st) == 0 && S_ISDIR(st.st_mode))
+			snprintf(g_pictures_dir, sizeof(g_pictures_dir), "%s", german_dir);
+		else
+			snprintf(g_pictures_dir, sizeof(g_pictures_dir), "%s/Pictures", home);
+		make_dirs(g_pictures_dir);
+	}
 #endif
 
 	//video_init_custom();

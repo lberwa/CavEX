@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CavEX Navigation Viewer</title>
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #10141c; color: #e8edf5; font: 14px system-ui, sans-serif; }
+    #view { width: 100vw; height: 100vh; display: block; outline: none; }
+    #hud { position: fixed; inset: 12px auto auto 12px; max-width: 460px; padding: 10px 12px; background: rgba(9, 13, 20, .82); border: 1px solid #53627a; border-radius: 6px; pointer-events: none; line-height: 1.45; }
+    #status { color: #8fd3ff; }
+    kbd { padding: 1px 5px; border: 1px solid #77849a; border-radius: 3px; background: #252d3b; }
+    #legend { margin-top: 5px; color: #c8d0dc; }
+    .dot { display: inline-block; width: 10px; height: 10px; margin: 0 3px 0 8px; border-radius: 2px; }
+  </style>
+</head>
+<body>
+  <canvas id="view" tabindex="0"></canvas>
+  <div id="hud">
+    <div><strong>CavEX Navigation Viewer</strong></div>
+    <div id="status">Loading maps …</div>
+    <div id="renderer"></div>
+    <div><kbd>M</kbd> next map · <kbd>N</kbd> previous map · mouse wheel forward/back</div>
+    <div><kbd>WASD</kbd> fly · <kbd>Space</kbd> up · <kbd>Shift</kbd> down · <kbd>Q</kbd> fast · move mouse to look</div>
+    <div id="legend">
+      <span class="dot" style="background:#777"></span>Wall
+      <span class="dot" style="background:#4f9b62"></span>Walkable
+      <span class="dot" style="background:#55e879"></span>Creeper
+      <span class="dot" style="background:#ef5664"></span>Player
+      <span class="dot" style="background:#ffd34d"></span>Path
+    </div>
+  </div>
+  <script src="nav_viewer.js?v=3"></script>
+</body>
+</html>

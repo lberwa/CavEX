@@ -45,7 +45,15 @@
 #define BLOCK_PLACE_SERVER_PRINTF(...) ((void)0)
 #endif
 
+#ifndef WORLD_GENERATOR_DEBUG
+#define WORLD_GENERATOR_DEBUG 0
+#endif
+
+#if WORLD_GENERATOR_DEBUG && defined(PLATFORM_PC)
+#define WORLD_GEN_STEP_LOG(...) fprintf(stderr, __VA_ARGS__)
+#else
 #define WORLD_GEN_STEP_LOG(...) ((void)0)
+#endif
 
 // #define ALL_FALSE_FINISHER
 
@@ -8737,6 +8745,9 @@ static bool server_world_advance_pending(struct server_world* w,
 	assert(w && out);
 	if(!w->pending_chunk.active)
 		return false;
+	WORLD_GEN_STEP_LOG("[WORLD_GEN_ADVANCE_BEGIN] chunk=(%d,%d) phase=%d next=%d\n",
+		(int)w->pending_chunk.x, (int)w->pending_chunk.z,
+		(int)w->pending_chunk.phase, w->pending_chunk.next_column);
 	if(w->pending_chunk.next_column == 64
 	   || w->pending_chunk.next_column == 128
 	   || w->pending_chunk.next_column == 192
@@ -8807,6 +8818,9 @@ static bool server_world_advance_pending(struct server_world* w,
 									 GEN_CHUNK_COLUMNS_PER_STEP);
 		gen_profile_phase_done(GEN_PROFILE_TERRAIN, phase_start);
 		w->pending_chunk.next_column += GEN_CHUNK_COLUMNS_PER_STEP;
+		WORLD_GEN_STEP_LOG("[WORLD_GEN_ADVANCE_END] chunk=(%d,%d) phase=terrain next=%d\n",
+			(int)w->pending_chunk.x, (int)w->pending_chunk.z,
+			w->pending_chunk.next_column);
 		if(w->pending_chunk.next_column % 64 == 0)
 			WORLD_GEN_STEP_LOG("[WORLD_GEN_STEP_RESULT] phase=terrain next=%d\n",
 				w->pending_chunk.next_column);
@@ -8826,6 +8840,9 @@ static bool server_world_advance_pending(struct server_world* w,
 								 w->pending_chunk.next_column);
 		gen_profile_phase_done(GEN_PROFILE_FEATURES, phase_start);
 		w->pending_chunk.next_column++;
+		WORLD_GEN_STEP_LOG("[WORLD_GEN_ADVANCE_END] chunk=(%d,%d) phase=features next=%d\n",
+			(int)w->pending_chunk.x, (int)w->pending_chunk.z,
+			w->pending_chunk.next_column);
 		if(w->pending_chunk.next_column >= GEN_FEATURE_STEP_COUNT) {
 			w->pending_chunk.phase = SERVER_WORLD_PENDING_DECO;
 			w->pending_chunk.next_column = 0;
@@ -8842,6 +8859,9 @@ static bool server_world_advance_pending(struct server_world* w,
 								  GEN_CHUNK_COLUMNS_PER_STEP);
 		gen_profile_phase_done(GEN_PROFILE_DECO, phase_start);
 		w->pending_chunk.next_column += GEN_CHUNK_COLUMNS_PER_STEP;
+		WORLD_GEN_STEP_LOG("[WORLD_GEN_ADVANCE_END] chunk=(%d,%d) phase=deco next=%d\n",
+			(int)w->pending_chunk.x, (int)w->pending_chunk.z,
+			w->pending_chunk.next_column);
 		if(w->pending_chunk.next_column >= (CHUNK_SIZE - 2) * (CHUNK_SIZE - 2)) {
 			w->pending_chunk.phase = SERVER_WORLD_PENDING_FINALIZE;
 			w->pending_chunk.next_column = 0;
@@ -9330,6 +9350,12 @@ bool server_world_set_block(struct server_local* s, w_coord_t x, w_coord_t y, w_
     if (blk.type == BLOCK_WATER_STILL || blk.type == BLOCK_WATER_FLOW)
         server_local_schedule_fluid(s, x, y, z);
 
+	/* A real block edit happened (sc != NULL, and an unchanged block returned
+	 * earlier): drop the covering navmesh tile of any chasing mob so it is
+	 * rebuilt. Cheap no-op when no mob is navigating. */
+	if(sc)
+		entities_notify_block_change(s, x, y, z);
+
 	return sc;
 }
 
@@ -9404,14 +9430,19 @@ bool server_world_load_chunk(struct server_world* w, w_coord_t x, w_coord_t z,
 	assert(w && sc);
 	*sc = NULL;
 
-	#ifdef PLATFORM_PC
-	if(w->pending_chunk.active)
-		server_world_pending_clear(w);
-	#else
 	if(w->pending_chunk.active) {
+		WORLD_GEN_STEP_LOG(
+			"[WORLD_GEN_LOAD_PENDING] requested=(%d,%d) active=(%d,%d) phase=%d next=%d\n",
+			(int)x, (int)z, (int)w->pending_chunk.x, (int)w->pending_chunk.z,
+			(int)w->pending_chunk.phase, w->pending_chunk.next_column);
 		enum server_world_pending_phase phase_before = w->pending_chunk.phase;
 		int next_before = w->pending_chunk.next_column;
 		bool loaded = server_world_advance_pending(w, sc);
+		WORLD_GEN_STEP_LOG(
+			"[WORLD_GEN_LOAD_PENDING_RETURN] loaded=%d active=%d phase=%d next=%d\n",
+			loaded ? 1 : 0, w->pending_chunk.active ? 1 : 0,
+			w->pending_chunk.active ? (int)w->pending_chunk.phase : -1,
+			w->pending_chunk.active ? w->pending_chunk.next_column : -1);
 		if(!loaded && w->pending_chunk.active
 		   && phase_before == w->pending_chunk.phase
 		   && next_before == w->pending_chunk.next_column) {
@@ -9422,7 +9453,6 @@ bool server_world_load_chunk(struct server_world* w, w_coord_t x, w_coord_t z,
 		}
 		return loaded;
 	}
-	#endif
 
 	if(server_world_is_chunk_loaded(w, x, z))
 		return false;
@@ -9430,26 +9460,16 @@ bool server_world_load_chunk(struct server_world* w, w_coord_t x, w_coord_t z,
 	// Ensure the corresponding region archive is loaded (LRU is tiny; scanning
 	// can evict the region we need before load happens).
 	struct region_archive* ra = server_world_chunk_region(w, x, z);
-	if(!ra) {
-	#ifdef PLATFORM_PC
-		return server_world_generate_chunk(w, x, z, sc);
-	#else
+	if(!ra)
 		return server_world_pending_start(w, x, z)
 			? server_world_advance_pending(w, sc)
 			: false;
-	#endif
-	}
 
 	bool chunk_exists = false;
-	if(!region_archive_contains(ra, x, z, &chunk_exists) || !chunk_exists) {
-	#ifdef PLATFORM_PC
-		return server_world_generate_chunk(w, x, z, sc);
-	#else
+	if(!region_archive_contains(ra, x, z, &chunk_exists) || !chunk_exists)
 		return server_world_pending_start(w, x, z)
 			? server_world_advance_pending(w, sc)
 			: false;
-	#endif
-	}
 
 	/* Puffer aus dem Chunk-Pool holen (fragmentierungsfrei) und die Blockdaten
 	 * hineinkopieren -- kein malloc/free-Churn pro Disk-Load mehr (das war der

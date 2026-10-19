@@ -34,6 +34,7 @@
 #include "../../platform/time.h"
 #include "../game_state.h"
 #include "screen.h"
+#include "creative_inventory_list.h"
 #include "screen_inventory_creative.h"
 
 // Jede Sektion der PNG ist 390x272 Pixel.
@@ -245,7 +246,7 @@ static const uint16_t tab_list_b0[] = {
     427,0};
 // b1: Foodstuffs
 static const uint16_t tab_list_b1[] = {
-    260,282,297,319,320,322,349,350,354,357,360,0};
+    260,282,296,297,319,320,322,349,350,354,357,360,0};
 // b2: Tools
 static const uint16_t tab_list_b2[] = {
     256,257,258,259,269,270,271,273,274,275,277,278,279,284,285,
@@ -378,14 +379,19 @@ static void screen_inventory_creative_reset(struct screen* s, int width,
 		/* Build the complete list. Search only uses the normal creative tabs. */
 		creative_item_count = 0;
 		if(current_tab == CREATIVE_TAB_SEARCH) {
-			static const uint16_t* lists[] = {
-				tab_list_t0, tab_list_t1, tab_list_t2, tab_list_t3,
-				tab_list_b0, tab_list_b1, tab_list_b2, tab_list_b3,
-				tab_list_b4
-			};
-			for(size_t l = 0; l < sizeof(lists) / sizeof(lists[0]); l++)
-				for(size_t i = 0; lists[l][i] != 0; i++)
-					creative_item_append(lists[l][i], search_query);
+			if(gstate.settings.creative_all_items) {
+				for(size_t i = 0; i < creative_inventory_count(); i++)
+					creative_item_append(creative_inventory_item_id(i), search_query);
+			} else {
+				static const uint16_t* lists[] = {
+					tab_list_t0, tab_list_t1, tab_list_t2, tab_list_t3,
+					tab_list_b0, tab_list_b1, tab_list_b2, tab_list_b3,
+					tab_list_b4
+				};
+				for(size_t l = 0; l < sizeof(lists) / sizeof(lists[0]); l++)
+					for(size_t i = 0; lists[l][i] != 0; i++)
+						creative_item_append(lists[l][i], search_query);
+			}
 		} else {
 			for(size_t i = 0; vlist && vlist[i] != 0; i++)
 				creative_item_append(vlist[i], NULL);

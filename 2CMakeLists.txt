@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.14)
 
-project(cavex C)
+project(cavex C CXX)
 
 add_compile_definitions(SPLITSCREEN=2 MULTIPLAYER)
 if(MSVC)
@@ -322,6 +322,28 @@ add_executable(cavex
 
 				source/parson/parson.c
 
+				# Recast/Detour-Kernbibliotheken fuer die voxelbasierte Mob-Navigation.
+				# Demo, Tests, DebugUtils und TileCache bleiben ausserhalb des Spiel-Binaries.
+				source/recastnavigation/Recast/Source/Recast.cpp
+				source/recastnavigation/Recast/Source/RecastAlloc.cpp
+				source/recastnavigation/Recast/Source/RecastArea.cpp
+				source/recastnavigation/Recast/Source/RecastAssert.cpp
+				source/recastnavigation/Recast/Source/RecastContour.cpp
+				source/recastnavigation/Recast/Source/RecastFilter.cpp
+				source/recastnavigation/Recast/Source/RecastLayers.cpp
+				source/recastnavigation/Recast/Source/RecastMesh.cpp
+				source/recastnavigation/Recast/Source/RecastMeshDetail.cpp
+				source/recastnavigation/Recast/Source/RecastRasterization.cpp
+				source/recastnavigation/Recast/Source/RecastRegion.cpp
+				source/recastnavigation/Detour/Source/DetourAlloc.cpp
+				source/recastnavigation/Detour/Source/DetourAssert.cpp
+				source/recastnavigation/Detour/Source/DetourCommon.cpp
+				source/recastnavigation/Detour/Source/DetourNavMesh.cpp
+				source/recastnavigation/Detour/Source/DetourNavMeshBuilder.cpp
+				source/recastnavigation/Detour/Source/DetourNavMeshQuery.cpp
+				source/recastnavigation/Detour/Source/DetourNode.cpp
+				source/entity/mob_navigation.cpp
+
 				source/sound/pc_sound/src/common/pa_allocation.c
 				source/sound/pc_sound/src/common/pa_converters.c
 				source/sound/pc_sound/src/common/pa_cpuload.c
@@ -353,7 +375,9 @@ target_include_directories(cavex PRIVATE
 	source/sound/pc_sound/src/common
 	source/sound/pc_sound/src/os/win
 	source/sound/pc_sound/src/hostapi/wasapi
-	source/sound/pc_sound/src/hostapi/wmme)
+	source/sound/pc_sound/src/hostapi/wmme
+	source/recastnavigation/Recast/Include
+	source/recastnavigation/Detour/Include)
 if(NOT MSVC)
 	target_compile_options(cavex PRIVATE -fwrapv)
 endif()
@@ -361,6 +385,9 @@ endif()
 set_target_properties(
 	cavex PROPERTIES
 	C_STANDARD 99
+	CXX_STANDARD 98
+	CXX_STANDARD_REQUIRED ON
+	CXX_EXTENSIONS OFF
 )
 
 set_property(TARGET cavex PROPERTY INTERPROCEDURAL_OPTIMIZATION False)

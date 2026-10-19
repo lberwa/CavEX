@@ -73,3 +73,27 @@ assets/sound/**.pcm
 
 # interne Planungs-/Spec-Dokumente
 docs/superpowers/
+
+# RecastNavigation: CavEX only uses the runtime Recast/Detour sources.
+# Do not add the upstream demo, tests, documentation, CI or standalone build
+# files to the CavEX repository.
+source/recastnavigation/.github/
+source/recastnavigation/DebugUtils/
+source/recastnavigation/DetourCrowd/
+source/recastnavigation/DetourTileCache/
+source/recastnavigation/Docs/
+source/recastnavigation/RecastDemo/
+source/recastnavigation/Tests/
+source/recastnavigation/.clang-format
+source/recastnavigation/.clang-tidy
+source/recastnavigation/.editorconfig
+source/recastnavigation/.gitignore
+source/recastnavigation/CHANGELOG.md
+source/recastnavigation/CMakeLists.txt
+source/recastnavigation/CODE_OF_CONDUCT.md
+source/recastnavigation/CONTRIBUTING.md
+source/recastnavigation/Doxyfile
+source/recastnavigation/README.md
+source/recastnavigation/recastnavigation-config.cmake.in
+source/recastnavigation/recastnavigation.pc.in
+source/recastnavigation/version.h.in

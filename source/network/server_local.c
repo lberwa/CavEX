@@ -253,8 +253,16 @@ static const int server_local_spawn_animals[] = {
 	ANIMAIL_SHEEP,
 };
 
+/* Natural server-side Creeper spawning.  Spawn eggs and spawners are
+ * independent of this switch. */
+#define SERVER_LOCAL_NATURAL_CREEPER_SPAWN 1
+
 static const int server_local_spawn_dark_monsters[] = {
+#if SERVER_LOCAL_NATURAL_CREEPER_SPAWN
 	MONSTER_CREEPER,
+#else
+	-1,
+#endif
 };
 
 static bool server_local_is_spawn_animal(int monster_id) {
@@ -482,9 +490,16 @@ static void server_local_try_spawn_nearby_animal(struct server_local* s, float p
 }
 
 static void server_local_try_spawn_nearby_dark_monster(struct server_local* s,
-													   float px, float py,
-													   float pz) {
+														   float px, float py,
+														   float pz) {
 	assert(s);
+
+#if !SERVER_LOCAL_NATURAL_CREEPER_SPAWN
+	(void)px;
+	(void)py;
+	(void)pz;
+	return;
+#endif
 
 	if(s->world_time % ANIMAL_SPAWN_INTERVAL_TICKS != 0)
 		return;
@@ -2417,6 +2432,11 @@ static void server_local_process(struct server_rpc* call, void* user) {
 		        server_local_spawn_item(pos, &e->drop_item, true, s);
 		        e->delay_destroy = 0;
 			  } else if (e->type == ENTITY_MONSTER) {
+				if(e->data.monster.id == ANIMAIL_PIG
+				   || e->data.monster.id == ANIMAIL_SHEEP) {
+					e->data.monster.flee_time = 100;
+					e->data.monster.flee_player_id = pid;
+				}
 				bool starting_creeper_fuse =
 					e->data.monster.id == MONSTER_CREEPER
 					&& e->data.monster.fuse < 0;
@@ -2784,11 +2804,6 @@ static void entity_server_step_sound(struct entity* e,
 static void server_local_update(struct server_local* s) {
 	assert(s);
 
-	/* Start of this server tick. In game we generate chunks with whatever time
-	 * is left in the ~50ms tick after the game logic ran, so we measure from
-	 * here (see the chunk loop below). */
-	ptime_t tick_begin = time_get();
-
 	// print TPS
 	#ifdef PRINT_TPS
 	ptime_t this_tick = time_get();
@@ -2855,6 +2870,9 @@ static void server_local_update(struct server_local* s) {
 				.payload.entity_destroy.entity_id = key,
 			});
 
+			/* Free the mob navigator (Recast/Detour) before the entity
+			 * memory itself; no-op for non-monsters. */
+			entity_monster_free_nav(e);
 			free(e);
 			dict_entity_erase(s->entities, key);
 		} else if(e->delay_destroy < 0) {
@@ -3258,7 +3276,6 @@ unload_done:
 
 	int load_per_tick;
 	int chunk_budget_ms;
-	(void)tick_begin;
 	if(finished_loading) {
 		/* IN GAME: generation speed is controlled by the user settings
 		 * (chunk_build_*). Thanks to the mesher running at a HIGHER thread
@@ -3273,17 +3290,6 @@ unload_done:
 		chunk_budget_ms = gstate.settings.chunk_build_budget_ms;
 		if(chunk_budget_ms < 1)
 			chunk_budget_ms = 1;
-		/* Preserve the 20 TPS tick while generating.  Generation may use only
-		 * the time left after normal server work, with a small reserve for the
-		 * rest of the tick.  If gameplay itself becomes expensive, the budget
-		 * naturally shrinks and the server is allowed to fall below 20 TPS due
-		 * to that gameplay load, not because generation consumed the tick. */
-		int32_t normal_work_ms = time_diff_ms(tick_begin, time_get());
-		int available_ms = 50 - normal_work_ms - 3;
-		if(available_ms < 1)
-			available_ms = 1;
-		if(chunk_budget_ms > available_ms)
-			chunk_budget_ms = available_ms;
 		load_per_tick = chunk_build;
 	} else {
 		/* LOADING SCREEN: always run at full speed, independent of the in-game
@@ -3307,16 +3313,12 @@ unload_done:
 	bool all_loaded = false;
 	const char* chunk_loop_break = "entered";
 	ptime_t chunk_load_start = time_get();
-	for(int load_i = 0;; load_i++) {
+	int load_i = 0;
+	for(; ; load_i++) {
 		if(load_i >= 24 && load_i <= 26) {
 			WORLD_GEN_LOG("[WORLD_GEN_LOOP_TOP] load_i=%d pending=%d\n",
 				load_i,
 				server_world_pending_chunk(&s->worlds[0], NULL, NULL) ? 1 : 0);
-		}
-		if(load_i > 0
-		   && server_world_pending_chunk(&s->worlds[0], NULL, NULL)) {
-			chunk_loop_break = "pending_yield";
-			break;
 		}
 		int32_t elapsed_ms = time_diff_ms(chunk_load_start, time_get());
 		if(elapsed_ms >= chunk_budget_ms) {
@@ -3359,8 +3361,10 @@ unload_done:
 		w_coord_t cand_dist2 = 0;
 		if(server_world_pending_chunk(&s->worlds[0], &cand_x, &cand_z)) {
 			c_found = true;
-		}
-	if(!c_found) {
+			WORLD_GEN_LOG("[WORLD_GEN_PENDING_CANDIDATE] chunk=(%d,%d) load_i=%d\n",
+				(int)cand_x, (int)cand_z, load_i);
+			goto chunk_candidate_ready;
+		} else if(!c_found) {
 		int pass_count = 1;
 #ifdef SPLITSCREEN
 		if(p1_active)
@@ -3387,7 +3391,7 @@ unload_done:
 					cand_z = z;
 					c_found = true;
 				}
-			}
+		}
 		}
 		}
 
@@ -3396,8 +3400,9 @@ unload_done:
 			chunk_loop_break = "no_candidate";
 			WORLD_GEN_LOG("[WORLD_GEN_STOP] reason=no_candidate total=%zu vd=%d\n",
 				dict_server_chunks_size(s->worlds[0].chunks), vd);
-			break;
-		}
+				break;
+			}
+	chunk_candidate_ready:
 		if(load_i == 25 || load_i % 100000 == 0) {
 			WORLD_GEN_LOG("[WORLD_GEN_LOOP] load_i=%d candidate=(%d,%d) pending=%d\n",
 				load_i, (int)cand_x, (int)cand_z,
@@ -3476,7 +3481,7 @@ unload_done:
 				 * beobachteten 0-ms-Leerlauf-Ticks während die Welt generiert). Den
 				 * nächsten Schritt im nächsten Tick ausführen, damit die Chunk-Mesher-
 				 * Queue und die Client-RPCs weiterarbeiten können. */
-			break;
+			continue;
 		} else {
 			/* Echter Fehlschlag: Allokation (malloc/Pool erschöpft) oder
 			 * Archiv-Fehler OHNE laufende Generierung. Die Grenze auf die

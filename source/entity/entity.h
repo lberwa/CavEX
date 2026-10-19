@@ -43,6 +43,7 @@ enum ai_state {
     AI_CHASE,
     AI_FUSE,
     AI_ATTACK,
+    AI_FLEE,
     // todo: add more
 };
 
@@ -119,9 +120,35 @@ struct entity {
 			int frame;
 			int frame_time_left;
 			int step_sound_cooldown;
-			vec2 direction;
-			int direction_time;
-			float body_yaw;
+				vec2 direction;
+				int direction_time;
+				int detour_time;
+				int debug_path_mode;
+				int debug_target_x, debug_target_y, debug_target_z;
+				/* Opaque per-mob Recast/Detour navigator (mob_navigation.h).
+				 * NULL until the mob first needs pathing; freed before the
+				 * entity is freed. */
+				void* nav;
+				/* While > 0, keep using the BFS fallback instead of re-trying
+				 * the navmesh each tick -- prevents mode flicker (and the
+				 * resulting circling) when the navmesh cannot reach the player,
+				 * e.g. an elevated player only reachable by stairs. */
+				int bfs_lock;
+				/* While > 0, hold the current steering direction and skip
+				 * replanning/cliff-avoidance: set when the creeper force-jumps a
+				 * step, so it lands on the step instead of being redirected
+				 * mid-air and falling back. */
+				int jump_hold;
+				/* Throttle for the expensive grid (BFS) pathfind: it is cached
+				 * for a few ticks so 20+ mobs in BFS mode stay affordable. The
+				 * navmesh steer is cheap and runs every tick. path_cache_mode:
+				 * 1=navmesh, 2=BFS found, 3=BFS no path. */
+				int path_timer;
+				int path_cache_mode;
+				/* Passive animals flee briefly from the player who last hit them. */
+				int flee_time;
+				int flee_player_id;
+				float body_yaw;
 		    float head_yaw;
 		    int fuse;
 			bool shared;
@@ -176,6 +203,14 @@ void entity_item(uint32_t id, struct entity* e, bool server, void* world,
 
 void entity_monster(uint32_t id, struct entity* e, bool server, void* world,
 				 int monster_id);
+
+/* Free the monster's navigator (if any) before the entity is freed. Safe to
+ * call on any entity; a no-op for non-monsters or mobs that never navigated. */
+void entity_monster_free_nav(struct entity* e);
+
+/* Forward a world block edit to every active mob navigator so covering tiles
+ * rebuild. Cheap no-op when no mob is currently navigating. */
+void entities_notify_block_change(struct server_local* s, int x, int y, int z);
 
 void entity_minecart(uint32_t id, struct entity* e, bool server, void* world);
 

@@ -184,6 +184,7 @@ void settings_init() {
 	gstate.settings.step_volume = 0.3f;
 	gstate.settings.dig_volume  = 0.3f;
 	gstate.settings.bg_music_enabled = true;
+	gstate.settings.creative_all_items = false;
 
 	if(gstate.config_user.root) {
 		JSON_Object* root = json_object(gstate.config_user.root);
@@ -211,6 +212,8 @@ void settings_init() {
 			gstate.settings.dig_volume = (float)json_object_dotget_number(root, "settings.dig_volume");
 		if(json_object_dothas_value_of_type(root, "settings.bg_music_enabled", JSONBoolean))
 			gstate.settings.bg_music_enabled = json_object_dotget_boolean(root, "settings.bg_music_enabled");
+		if(json_object_dothas_value_of_type(root, "settings.creative_all_items", JSONBoolean))
+			gstate.settings.creative_all_items = json_object_dotget_boolean(root, "settings.creative_all_items");
 	}
 }
 
@@ -231,5 +234,6 @@ void config_save_settings(struct config* c) {
 	json_object_dotset_number(root, "settings.step_volume", gstate.settings.step_volume);
 	json_object_dotset_number(root, "settings.dig_volume", gstate.settings.dig_volume);
 	json_object_dotset_boolean(root, "settings.bg_music_enabled", gstate.settings.bg_music_enabled);
+	json_object_dotset_boolean(root, "settings.creative_all_items", gstate.settings.creative_all_items);
 	json_serialize_to_file_pretty(c->root, c->filename);
 }

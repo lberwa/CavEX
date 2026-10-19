@@ -69,6 +69,7 @@ struct game_state {
 		float step_volume;
 		float dig_volume;
 		bool bg_music_enabled;
+		bool creative_all_items;
 	} settings;
 	/* live chunk generation status, updated by the server thread for the debug
 	 * overlay (screen_ingame). */

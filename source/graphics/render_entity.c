@@ -22,6 +22,7 @@
 */
 
 #include <assert.h>
+#include <math.h>
 #include <string.h>
 
 #include "../block/blocks.h"
@@ -596,22 +597,29 @@ void render_entity_creeper(mat4 view, float headYawDeg, float bodyYawDeg, int fr
 //-------------------------
 // PIG
 //-------------------------
-void render_entity_pig(mat4 view, float headYawDeg, int frame) {
+void render_entity_pig(mat4 view, float bodyYawDeg, float headYawDeg, int frame) {
     assert(view);
 
     // 1) Basis‐matrix
     mat4 model, body_mv;
     glm_mat4_identity(model);
     glm_translate_make(model, (vec3){ -0.5f, 0.0f, -0.5f });
+    vec3 bodyPivot = {0.5f, 0.5f, 0.5f};
+    glm_translate(model, bodyPivot);
+    glm_rotate_y(model, glm_rad(bodyYawDeg - 90.0f), model);
+    glm_translate(model, (vec3){-bodyPivot[0], -bodyPivot[1], -bodyPivot[2]});
     glm_mat4_mul(view, model, body_mv);
 
     gfx_bind_texture_virtual(&texture_pig);
 
     // 2) Head (8×8×8), y0 = 4
     // Position the head centered on the body (head width = 8)
-    const int head_x = 6; // x start (pixels)
+    /* The body spans x=0..16.  x=4 keeps the 8-wide head centered; x=6
+     * was the old offset that made it visibly sit on the right. */
+    const int head_x = 12; // x start: forward of the body's x=0..16 length
     const int head_y = 8; // y start
-    const int head_z = -4; // z start (front of body)
+    /* Z is the body's lateral axis; keep the head centered laterally. */
+    const int head_z = 4;
 
     mat4 head_mv;
 
@@ -627,14 +635,16 @@ void render_entity_pig(mat4 view, float headYawDeg, int frame) {
         glm_translate(head_m, pivot);
         // add 180deg offset so the head rotates right-left relative to world
         
-        float yaw = headYawDeg;
+        float yaw = headYawDeg - bodyYawDeg;
 
         // Begrenzen auf [-80°, +80°]
         if (yaw > 45.0f)  yaw = 45.0f;
         if (yaw < -45.0f) yaw = -45.0f;
         glm_rotate_y(head_m, glm_rad(yaw + -90.0f), head_m);
         glm_translate(head_m, (vec3){ -pivot[0], -pivot[1], -pivot[2] });
-        glm_mat4_mul(view, head_m, head_mv);
+        mat4 head_world;
+        glm_mat4_mul(model, head_m, head_world);
+        glm_mat4_mul(view, head_world, head_mv);
         gfx_matrix_modelview(head_mv);
     }
     static const UVRect headUV[6] = {
@@ -759,45 +769,57 @@ glm_translate(leg_model, (vec3){ -pivot[0], -pivot[1], -pivot[2] });
 //-------------------------
 // SHEEP
 //-------------------------
-void render_entity_sheep(mat4 view, float headYawDeg, int frame, bool shared) {
+void render_entity_sheep(mat4 view, float bodyYawDeg, float headYawDeg,
+                         int frame, bool shared) {
     assert(view);
 
     // 1) Basis‐matrix
     mat4 model, body_mv;
     glm_mat4_identity(model);
     glm_translate_make(model, (vec3){ -0.5f, 0.0f, -0.5f });
+    vec3 bodyPivot = {0.5f, 0.5f, 0.5f};
+    glm_translate(model, bodyPivot);
+    glm_rotate_y(model, glm_rad(bodyYawDeg - 90.0f), model);
+    glm_translate(model, (vec3){-bodyPivot[0], -bodyPivot[1], -bodyPivot[2]});
     glm_mat4_mul(view, model, body_mv);
 
     gfx_bind_texture_virtual(&texture_sheep);
 
-    // 2) Head (8×8×8), y0 = 4 -----------------------------------
-    // Position the head centered on the body (head width = 8)
-    const int head_x = 6; // x start (pixels)
+    // 2) Head (6×6×8), y0 = 15 -----------------------------------
+    // These anchor coordinates match the original model in git history.
+    /* The body spans x=0..16.  Keep the head centered on that body. */
+    const int head_x = 12; // x start: forward of the body's x=0..16 length
     const int head_y = 15; // y start
-    const int head_z = -4; // z start (front of body)
+    /* Z is lateral on this model; keep the head centered over the body. */
+    const int head_z = 4;
+    const int head_w = 6, head_h = 6, head_d = 8;
 
     mat4 head_mv;
 
     displaylist_reset(&dl);
     {
         // pivot at head center (in model-local, normalized to [0..1])
-        float pivot_x = ((float)head_x + (float)(head_x + 8)) / 2.0f / 16.0f;
-        float pivot_y = ((float)head_y + (float)(head_y + 8)) / 2.0f / 16.0f;
-        float pivot_z = ((float)head_z + (float)(head_z + 8)) / 2.0f / 16.0f;
+        float pivot_x = ((float)head_x + (float)(head_x + head_w)) / 2.0f / 16.0f;
+        float pivot_y = ((float)head_y + (float)(head_y + head_h)) / 2.0f / 16.0f;
+        float pivot_z = ((float)head_z + (float)(head_z + head_d)) / 2.0f / 16.0f;
         vec3 pivot = { pivot_x, pivot_y, pivot_z };
         mat4 head_m;
         glm_mat4_identity(head_m);
         glm_translate(head_m, pivot);
         // add 180deg offset so the head rotates right-left relative to world
         
-        float yaw = headYawDeg;
+        /* Convert the absolute movement direction to a local head offset
+         * because the body now turns with the movement. */
+        float yaw = headYawDeg - bodyYawDeg;
 
         // Begrenzen auf [-80°, +80°]
         if (yaw > 45.0f)  yaw = 45.0f;
         if (yaw < -45.0f) yaw = -45.0f;
         glm_rotate_y(head_m, glm_rad(yaw + -90.0f), head_m);
         glm_translate(head_m, (vec3){ -pivot[0], -pivot[1], -pivot[2] });
-        glm_mat4_mul(view, head_m, head_mv);
+        mat4 sheep_head_world;
+        glm_mat4_mul(model, head_m, sheep_head_world);
+        glm_mat4_mul(view, sheep_head_world, head_mv);
         gfx_matrix_modelview(head_mv);
     }
     static const UVRect headUV[6] = {
@@ -810,35 +832,82 @@ void render_entity_sheep(mat4 view, float headYawDeg, int frame, bool shared) {
     };
     static const int headDir[6] = {0,0,-90,-90,-90,-90};
     //                          ↓↑     /\ \/   → ←
-    render_entity_create_cube(head_x, head_y, head_z,  6, 6, 8, headUV, headDir);
+    render_entity_create_cube(head_x, head_y, head_z,
+                              head_w, head_h, head_d, headUV, headDir);
     displaylist_render_immediate(&dl, 24);
 
 
     if (!shared) {
-        const int head_wool_x = 5; // x start (pixels)
-        const int head_wool_y = 14; // y start
-        const int head_wool_z = -3;
+        /* The fur cube is anchored to the head, not to an unrelated absolute
+         * position.  These are the only tuning knobs: changing them moves
+         * the fur relative to the head while the shared yaw keeps it facing
+         * exactly the same direction as the head. */
+        /* Offsets are in the head's own coordinate system.  Rotate the
+         * forward/side pair by the head yaw before converting it to the
+         * model's X/Z coordinates; otherwise either adjustment moves in two
+         * world directions at once. */
+        const float wool_offset_x = 0.6666666f;       // right/left relative to head
+        const float wool_offset_y = 0.0f;       // top/bottom
+        const float wool_offset_forward = 0.0f; // front/back relative to head
+        float wool_yaw = headYawDeg - bodyYawDeg;
+        if (wool_yaw > 45.0f)  wool_yaw = 45.0f;
+        if (wool_yaw < -45.0f) wool_yaw = -45.0f;
+        const float wool_angle = glm_rad(wool_yaw - 90.0f);
+        const float ca = cosf(wool_angle);
+        const float sa = sinf(wool_angle);
+        const float model_dx = (float)wool_offset_forward * ca
+                             + (float)wool_offset_x * sa;
+        const float model_dz = -(float)wool_offset_forward * sa
+                             + (float)wool_offset_x * ca;
+        const float wool_start_x = (float)head_x + (float)head_w / 2.0f
+                                 + model_dx - 4.0f;
+        const float wool_start_y = (float)head_y + (float)head_h / 2.0f
+                                 + wool_offset_y - 4.0f;
+        const float wool_start_z = (float)head_z + (float)head_d / 2.0f
+                                 + model_dz - 4.0f;
+        const int head_wool_x = (int)floorf(wool_start_x);
+        const int head_wool_y = (int)floorf(wool_start_y);
+        const int head_wool_z = (int)floorf(wool_start_z);
+        vec3 wool_fraction = {
+            (wool_start_x - (float)head_wool_x) / 16.0f,
+            (wool_start_y - (float)head_wool_y) / 16.0f,
+            (wool_start_z - (float)head_wool_z) / 16.0f
+        };
+        const int head_wool_size = 8;
 
         gfx_bind_texture_virtual(&texture_sheep_fur);
         displaylist_reset(&dl);
         {
             // pivot at head center (in model-local, normalized to [0..1])
-            float spivot_x = ((float)head_x + (float)(head_x + 8)) / 2.0f / 16.0f;
-            float spivot_y = ((float)head_y + (float)(head_y + 8)) / 2.0f / 16.0f;
-            float spivot_z = ((float)head_z + (float)(head_z + 8)) / 2.0f / 16.0f;
+            float spivot_x = ((float)head_wool_x
+                              + (float)(head_wool_x + head_wool_size))
+                             / 2.0f / 16.0f;
+            float spivot_y = ((float)head_wool_y
+                              + (float)(head_wool_y + head_wool_size))
+                             / 2.0f / 16.0f;
+            float spivot_z = ((float)head_wool_z
+                              + (float)(head_wool_z + head_wool_size))
+                             / 2.0f / 16.0f;
             vec3 spivot = { spivot_x, spivot_y, spivot_z };
             mat4 shead_m;
             glm_mat4_identity(shead_m);
             glm_translate(shead_m, spivot);
             // add 180deg offset so the head rotates right-left relative to world
         
-            float yaw = headYawDeg;
+            float yaw = wool_yaw;
 
             if (yaw > 45.0f)  yaw = 45.0f;
             if (yaw < -45.0f) yaw = -45.0f;
             glm_rotate_y(shead_m, glm_rad(yaw + -90.0f), shead_m);
             glm_translate(shead_m, (vec3){ -spivot[0], -spivot[1], -spivot[2] });
-            glm_mat4_mul(view, shead_m, head_mv);
+            mat4 fraction_m;
+            glm_mat4_identity(fraction_m);
+            glm_translate(fraction_m, wool_fraction);
+            mat4 fractional_shead_m;
+            glm_mat4_mul(fraction_m, shead_m, fractional_shead_m);
+            mat4 shead_world;
+            glm_mat4_mul(model, fractional_shead_m, shead_world);
+            glm_mat4_mul(view, shead_world, head_mv);
             gfx_matrix_modelview(head_mv);
         }
         static const UVRect sheadUV[6] = {
@@ -851,7 +920,9 @@ void render_entity_sheep(mat4 view, float headYawDeg, int frame, bool shared) {
         };
         static const int sheadDir[6] = {0,0,-90,-90,-90,-90};
         //                          ↓↑     /\ \/   → ←
-        render_entity_create_cube(head_wool_x, head_wool_y, head_wool_z,  8, 8, 8, sheadUV, headDir);
+        render_entity_create_cube(head_wool_x, head_wool_y, head_wool_z,
+                                  head_wool_size, head_wool_size,
+                                  head_wool_size, sheadUV, headDir);
         displaylist_render_immediate(&dl, 24);
     }
 
