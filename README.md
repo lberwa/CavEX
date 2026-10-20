@@ -141,7 +141,7 @@ __Build:__
 
 
 ```bash
-make wii -j$nropt IS_PC_BUILD=0
+make wii -j$(nproc) IS_PC_BUILD=0
 ```
 
 __clean:__
