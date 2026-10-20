@@ -22,6 +22,9 @@
 #include "RecastAssert.h"
 
 #include <stdlib.h>
+#ifndef __STDC_LIMIT_MACROS
+#define __STDC_LIMIT_MACROS
+#endif
 #include <stdint.h>
 
 /// Provides hint values to the memory allocator on how long the

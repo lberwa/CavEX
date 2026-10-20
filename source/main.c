@@ -24,10 +24,17 @@
 #include <string.h>
 #ifdef _WIN32
 #include <direct.h>
+#include <sys/stat.h>
 #define CAVEX_MKDIR(path, mode) _mkdir(path)
+#define CAVEX_STAT _stat
+#define CAVEX_STAT_STRUCT struct _stat
+#define CAVEX_ISDIR(mode) (((mode) & _S_IFMT) == _S_IFDIR)
 #else
 #include <sys/stat.h>
 #define CAVEX_MKDIR(path, mode) mkdir(path, mode)
+#define CAVEX_STAT stat
+#define CAVEX_STAT_STRUCT struct stat
+#define CAVEX_ISDIR(mode) S_ISDIR(mode)
 #endif
 #include <signal.h>
 #include <time.h>
@@ -481,9 +488,9 @@ int main(void) {
 		/* Prefer an existing localized directory, otherwise use the usual
 		 * English name and create it below. */
 		char german_dir[sizeof(g_pictures_dir)];
-		struct stat st;
+		CAVEX_STAT_STRUCT st;
 		snprintf(german_dir, sizeof(german_dir), "%s/Bilder", home);
-		if(stat(german_dir, &st) == 0 && S_ISDIR(st.st_mode))
+		if(CAVEX_STAT(german_dir, &st) == 0 && CAVEX_ISDIR(st.st_mode))
 			snprintf(g_pictures_dir, sizeof(g_pictures_dir), "%s", german_dir);
 		else
 			snprintf(g_pictures_dir, sizeof(g_pictures_dir), "%s/Pictures", home);

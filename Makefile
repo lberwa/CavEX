@@ -255,6 +255,12 @@ win:
 	@cp $(CURDIR)/init_pc.py $(WIN_CAVEX_DIR)/init.py
 	@cd $(WIN_BUILD) && unset CPPFLAGS CFLAGS CXXFLAGS LDFLAGS && env CC="$(WIN_CC)" CXX="$(WIN_CXX)" TMPDIR="$(CURDIR)/$(WIN_BUILD)/tmp" cmake -DCMAKE_SYSTEM_NAME=Windows -DCMAKE_C_COMPILER="$(WIN_CC)" -DCMAKE_CXX_COMPILER="$(WIN_CXX)" $(if $(WIN_CMAKE_TOOLCHAIN_FILE),-DCMAKE_TOOLCHAIN_FILE="$(WIN_CMAKE_TOOLCHAIN_FILE)" -DVCPKG_TARGET_TRIPLET="$(WIN_VCPKG_TRIPLET)",) -DIS_PC_BUILD=1 -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=OFF .
 	@cd $(WIN_BUILD) && env TMPDIR="$(CURDIR)/$(WIN_BUILD)/tmp" $(MAKE) -j$(nropt)
+	@libgcc_dll="$$($(WIN_CC) -print-file-name=libgcc_s_seh-1.dll)"; \
+	test -f "$$libgcc_dll" || { echo "Fehlt: libgcc_s_seh-1.dll"; exit 1; }; \
+	cp -f "$$libgcc_dll" $(WIN_BUILD)/
+	@libstdcxx_dll="$$($(WIN_CC) -print-file-name=libstdc++-6.dll)"; \
+	test -f "$$libstdcxx_dll" || { echo "Fehlt: libstdc++-6.dll"; exit 1; }; \
+	cp -f "$$libstdcxx_dll" $(WIN_BUILD)/
 	@winpthread_dll="$$($(WIN_CC) -print-file-name=libwinpthread-1.dll)"; \
 	test -f "$$winpthread_dll" || { echo "Fehlt: libwinpthread-1.dll"; exit 1; }; \
 	cp -f "$$winpthread_dll" $(WIN_BUILD)/
