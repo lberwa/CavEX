@@ -345,12 +345,12 @@ void screen_new_world_render2d(struct screen* s, int width, int height) {
 	int sx, sy, sw, sh;
 	seed_box_rect(width, height, &sx, &sy, &sw, &sh);
 
-	gutil_text(sx, sy - font - 2 * scale, "Seed (leer = zufaellig)", font, true);
+	gutil_text(sx, sy - font - 2 * scale, "Seed (empty = random)", font, true);
 
 	gfx_bind_texture(&texture_gui2);
 	gutil_texquad(sx, sy, 0, gui_sel == 1 ? 62 : 42, 200, 20, sw, sh);
 	/* Zeige Seed-String oder Platzhalter */
-	const char* seed_display = world_seed_str[0] ? world_seed_str : "(zufaellig)";
+	const char* seed_display = world_seed_str[0] ? world_seed_str : "(random)";
 	gutil_text(sx + 4 * scale, sy + (sh - font) / 2, seed_display, font, true);
 
 	/* "Generate" button */

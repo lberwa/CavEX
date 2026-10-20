@@ -49,6 +49,14 @@ static const char* menu_options[4] = {
 };
 
 static bool server_failed = false;
+#ifdef WITH_PYTHON
+/* Gesetzt vom "Server"-Button-Callback (mainmenu_select); abgearbeitet in
+   screen_mainmenu_update an der Frame-Grenze. mainmenu_select laeuft als
+   gutil_button-Callback mitten in render2D (nach gfx_flip_buffers) -- wuerde man
+   cavex_run_python_file dort direkt aufrufen, uebernimmt Python Video/GX im
+   halbfertigen Frame und gfx_wii_restore laesst den Bildschirm schwarz. */
+static bool server_requested = false;
+#endif
 
 static void mainmenu_select(int option) {
 	sound_play(pcm_click);
@@ -58,13 +66,12 @@ static void mainmenu_select(int option) {
 		case 3: gstate.quit = true; break;
 		case 1:
 #ifdef WITH_PYTHON
-		{
-			extern void cavex_run_python_file(const char*, const char*);
-			cavex_run_python_file(config_read_string(&gstate.config_user,
-										 "paths.python_file", "init.py"), NULL);
-		}
+			/* Nicht direkt hier aufrufen! Dieser Callback laeuft mitten in
+			   render2D. Nur ein Flag setzen; screen_mainmenu_update ruft Python
+			   dann an der Frame-Grenze auf (exakt wie der no_resources-Flow). */
+			server_requested = true;
 #else
-		server_failed = true;
+			server_failed = true;
 #endif
 			break;
 	}
@@ -73,6 +80,7 @@ static void mainmenu_select(int option) {
 // Python-Fehler (Datei:Zeile + Meldung), gesetzt von cavex_run_python_file
 extern char g_py_error[160];
 extern bool g_py_error_show;
+extern bool g_python_returned;
 
 static void screen_mainmenu_reset(struct screen* s, int width, int height) {
 	gutil_button_new_menu();
@@ -89,6 +97,13 @@ static void screen_mainmenu_reset(struct screen* s, int width, int height) {
 	gstate_set_capture_input_all(false);
 }
 static void screen_mainmenu_update(struct screen* s, float dt) {
+	/* Der Python-Overlay-Input darf nicht im selben Frame nochmals vom
+	 * Hauptmenue verarbeitet werden (insbesondere HOME -> gstate.quit). */
+	if(g_python_returned) {
+		g_python_returned = false;
+		return;
+	}
+
 #ifdef WITH_PYTHON
 	/* Fehlt eine WICHTIGE Textur (default.png/gui_2.png, gesetzt in tex_init),
 	   starten wir automatisch den Server-Flow (init.py mit "no_resources"), das
@@ -111,6 +126,21 @@ static void screen_mainmenu_update(struct screen* s, float dt) {
 			}
 			return; // waehrend der Wartezeit keine Menue-Eingaben verarbeiten
 		}
+	}
+
+	/* Manueller "Server"-Klick: der Button-Callback (mainmenu_select) setzt nur
+	   server_requested; der eigentliche Python-Aufruf passiert hier in der
+	   Update-Phase an der Frame-Grenze -- NICHT mitten im render2D-Frame, sonst
+	   uebernimmt Python Video/GX im halbfertigen Frame und gfx_wii_restore laesst
+	   den Bildschirm schwarz zurueck. */
+	if(server_requested) {
+		extern void cavex_run_python_file(const char* path, const char* arg);
+		server_requested = false;
+		cavex_run_python_file(
+			config_read_string(&gstate.config_user, "paths.python_file",
+							   "init.py"),
+			NULL);
+		return;
 	}
 #endif
 
@@ -165,17 +195,17 @@ static void screen_mainmenu_render2D(struct screen* s, int width, int height) {
 		int wx = width / 2 - window_width / 2;
 		int wy = height/2 - 60;
 
-		gutil_window(wx, wy, window_width, 100, "Verbindungsfehler");
+		gutil_window(wx, wy, window_width, 100, "Connection Error");
 
-		gutil_text(wx + 20, wy + 40, "Versuchen sie es", 16, false);
-		gutil_text(wx + 20, wy + 60, "später erneut.", 16, false);
+		gutil_text(wx + 20, wy + 40, "Please try again", 16, false);
+		gutil_text(wx + 20, wy + 60, "later.", 16, false);
 	}
 	if (g_py_error_show) {
 		int window_width = 420;
 		int wx = width / 2 - window_width / 2;
 		int wy = height / 2 - 80;
 
-		gutil_window(wx, wy, window_width, 160, "Python-Fehler");
+		gutil_window(wx, wy, window_width, 160, "Python Error");
 
 		// lange Meldung in Zeilen zu ~40 Zeichen umbrechen (max 4 Zeilen)
 		const int per_line = 40;
@@ -193,7 +223,7 @@ static void screen_mainmenu_render2D(struct screen* s, int width, int height) {
 			gutil_text(wx + 15, wy + 35 + li * 22, line, 14, false);
 		}
 
-		gutil_text(wx + 15, wy + 135, "Taste = weiter", 14, false);
+		gutil_text(wx + 15, wy + 135, "Press any button to continue", 14, false);
 	}
 
 	gutil_license(width, height);

@@ -280,8 +280,6 @@ void gfx_setup() {
 extern void sdlog(const char *msg);
 
 void gfx_wii_restore(void) {
-	sdlog("restore: start");
-
 	/* Frame-Pipeline auf definierten Zustand zuruecksetzen. Nach Pythons
 	   Video-Uebernahme kann frame_empty leer sein -> gfx_flip_buffers wuerde
 	   in MQ_Receive(frame_empty, BLOCK) ewig haengen (eingefrorenes Menue).
@@ -298,18 +296,13 @@ void gfx_wii_restore(void) {
 		frame = frameBuffer[2];
 		_CPU_ISR_Restore(level);
 	}
-	sdlog("restore: nach pipeline-reset");
-
 	/* Video-Ausgabe wieder auf CavEX' Pipeline (Callback ggf. neu setzen). */
 	VIDEO_SetPreRetraceCallback(copy_buffers);
 	VIDEO_SetNextFramebuffer(frameBuffer[0]);
 	VIDEO_Flush();
-	sdlog("restore: nach VIDEO setup");
-
 	/* KEIN GX_Init! Der GP blieb die ganze Zeit auf CavEX' FIFO (Python macht
 	   kein GX_Init mehr) -> nur den GX-State neu setzen. Ein GX_Init hier
 	   wuerde den GP-Finish-Mechanismus stoeren -> GX_WaitDrawDone haengt. */
-	sdlog("restore: (kein GX_Init)");
 	gfx_clear_buffers(255, 255, 255);
 	GX_SetViewport(0, 0, screenMode->fbWidth, screenMode->efbHeight, 0, 1);
 	current_vp_x = 0;
@@ -373,7 +366,6 @@ void gfx_wii_restore(void) {
 	   hier nach Pythons GX-Nutzung. Die eigentliche GPU-Sync macht der normale
 	   Loop (gfx_finish: GX_SetDrawDone, gfx_flip_buffers: GX_WaitDrawDone). */
 	GX_Flush();
-	sdlog("restore: nach GX_Flush (ENDE)");
 }
 
 void gfx_update_light(float daytime, const float* light_lookup) {

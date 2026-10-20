@@ -813,7 +813,7 @@ static void screen_ingame_render2D(struct screen* s, int width, int height) {
 	if(_pticks > 0) {
 		int _psec = _pticks / 20 + 1;      /* 1,2,3,4 */
 		if(_psec > 4) _psec = 4;
-		snprintf(str, sizeof(str), "Portal-Teleport: %d / 4", _psec);
+		snprintf(str, sizeof(str), "Portal Teleport: %d / 4", _psec);
 		gutil_text(4, 4 + (GFX_GUI_SCALE * 8 + 1) * 10, str, GFX_GUI_SCALE * 8, true);
 	}
 

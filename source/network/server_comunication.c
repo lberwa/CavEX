@@ -137,13 +137,13 @@ bool server_data_init() {
     IP4_ADDR(&server2.sin_addr, 192, 168, 15, 152);
 
     debug_send("Connecting...\n");
-    debug_send("Verbinde mit Server...");
+        debug_send("Connecting to server...");
     if (net_connect(sock, (struct sockaddr*)&server2, sizeof(server2)) < 0) {
-        debug_send("Verbindung fehlgeschlagen");
+        debug_send("Connection failed");
         net_close(sock);
         return 1;
     }
-    debug_send("Verbunden!");
+    debug_send("Connected!");
 
     debug_send("Sending HTTP request...\n");
     char request[256];

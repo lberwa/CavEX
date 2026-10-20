@@ -1,9 +1,9 @@
 
 try:
   import wiitools as w
-  import json
   import runpy
   import os
+  import sys
 
   w.rendering_adopt(mode_ptr, fb_ptr)
   d = True
@@ -163,11 +163,6 @@ try:
   gfx.license = license
   gfx.copyright = copyright
 
-  with open("config_wii.json", "r") as f:
-    config = json.load(f)
-  
-  os.makedirs(config["paths"]["tmp"], exist_ok=True)
-
   w.net_init() # IsNetReady() give false if not called before
   
   while not w.IsNetReady():
@@ -175,6 +170,59 @@ try:
     w.render_text(int(w.width/2 - w.text_length("waiting for network ...", txt_size)), int(w.height/2 - 10),
                    "waiting for network ...", txt_size, True, (0, 0, 255, 255), 0)
     w.update()
+
+
+  # Die Wii-Python-Umgebung bringt kein json-Modul mit. Die Server-Manifest-
+  # liste liefert es aber erst spaeter zusammen mit main.py. Fuer diesen
+  # Bootstrap werden deshalb die bekannten json-Dateien direkt aus demselben
+  # Serverpfad geladen, bevor der normale Loader startet.
+  json_root = "tmp"
+  json_files = (
+      ("https://cavexplorer.duckdns.org/en/wii/get/json/__init__.py",
+       "json/__init__.py"),
+      ("https://cavexplorer.duckdns.org/en/wii/get/json/__main__.py",
+       "json/__main__.py"),
+      ("https://cavexplorer.duckdns.org/en/wii/get/json/decoder.py",
+       "json/decoder.py"),
+      ("https://cavexplorer.duckdns.org/en/wii/get/json/encoder.py",
+       "json/encoder.py"),
+      ("https://cavexplorer.duckdns.org/en/wii/get/json/scanner.py",
+       "json/scanner.py"),
+      ("https://cavexplorer.duckdns.org/en/wii/get/json/tool.py",
+       "json/tool.py"),
+  )
+
+  os.makedirs(json_root, exist_ok=True)
+  sys.path.insert(0, os.path.abspath(json_root))
+  try:
+      import json
+  except ImportError:
+      for url, relative_path in json_files:
+          file_resp = w.curl_get(url)
+          if not file_resp["ok"]:
+              raise RuntimeError("curl_get " + url + " failed: status="
+                                 + str(file_resp["status"]) + " error="
+                                 + str(file_resp["error"]))
+          target = os.path.join(json_root, relative_path)
+          os.makedirs(os.path.dirname(target), exist_ok=True)
+          with open(target, "wb") as f:
+              f.write(file_resp["body"])
+      # Nicht erneut `import json` verwenden: Die Wii-Importlogik kann das
+      # frisch geladene Paket nicht sauber als Paket mit json.decoder usw.
+      # aufloesen. Wir registrieren es deshalb direkt unter seinem echten
+      # Modulnamen und fuehren __init__.py in diesem Modul aus.
+      import types
+      json = types.ModuleType("json")
+      json.__file__ = os.path.join(json_root, "json", "__init__.py")
+      json.__path__ = [os.path.join(json_root, "json")]
+      sys.modules["json"] = json
+      with open(json.__file__, "r") as f:
+          exec(compile(f.read(), json.__file__, "exec"), json.__dict__)
+
+  with open("config_wii.json", "r") as f:
+    config = json.load(f)
+
+  os.makedirs(config["paths"]["tmp"], exist_ok=True)
 
 
   while d:
@@ -202,7 +250,9 @@ try:
         if not file_resp["ok"]:
             raise RuntimeError("curl_get " + str(data[0]) + " failed: status="
                                + str(file_resp["status"]) + " error=" + str(file_resp["error"]))
-        with open(config["paths"]["tmp"] + "/" + data[1], "wb") as f:
+        target = config["paths"]["tmp"] + "/" + data[1]
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        with open(target, "wb") as f:
             f.write(file_resp["body"])
 
         if w.WPAD_ButtonsDown(w.WPAD_BUTTON_B, 0) or w.WPAD_ButtonsDown(w.WPAD_BUTTON_HOME, 0):
@@ -308,12 +358,9 @@ except Exception as e:
             raw = raw[90:]
         lines.append(raw)
 
-    # sicherstellen, dass wir zeichnen koennen (falls der Crash vor
-    # rendering_adopt passierte, ist es hier ein harmloses erneutes Setzen)
-    try:
-        w.rendering_adopt(mode_ptr, fb_ptr)
-    except Exception:
-        pass
+    # rendering_adopt wurde am Anfang bereits ausgefuehrt. Ein zweiter Aufruf
+    # im Fehlerpfad setzt die Overlay-/Framebuffer-Zustaende erneut zurueck
+    # und verhindert danach die normale Rueckkehr zu CavEX.
 
     line_h = 18          # Zeilenhoehe in Pixeln
     top = 10             # Abstand von oben
@@ -323,12 +370,30 @@ except Exception as e:
         w.draw_rect(0, 0, w.width, w.height, (255, 0, 0, 255), 0)
 
         y = top
-        for ln in lines[:max_lines]:
+        # die LETZTEN max_lines zeigen (tiefste Frames + Exception-Zeile),
+        # sonst faellt die eigentliche Fehlermeldung unten aus dem Bild
+        for ln in lines[-max_lines:]:
             w.render_text(10, int(y), ln, 1, True, (255, 255, 255, 255), 0)
             y += line_h
 
         w.render_text(10, int(w.height - 30), "HOME = zurueck",
                       1, True, (255, 255, 255, 255), 0)
-        if w.WPAD_ButtonsDown(w.WPAD_BUTTON_HOME, 0):
-            break
         w.update()
+        home_pressed = (w.WPAD_ButtonsDown(w.WPAD_BUTTON_HOME, 0)
+                        or w.WPAD_ButtonsHeld(w.WPAD_BUTTON_HOME, 0)
+                        or w.WPAD_ButtonsDown(w.WPAD_CLASSIC_BUTTON_HOME, 0)
+                        or w.WPAD_ButtonsHeld(w.WPAD_CLASSIC_BUTTON_HOME, 0))
+        back_pressed = (w.WPAD_ButtonsDown(w.WPAD_BUTTON_B, 0)
+                        or w.WPAD_ButtonsHeld(w.WPAD_BUTTON_B, 0)
+                        or w.WPAD_ButtonsDown(w.WPAD_CLASSIC_BUTTON_B, 0)
+                        or w.WPAD_ButtonsHeld(w.WPAD_CLASSIC_BUTTON_B, 0))
+        if home_pressed:
+            # Den Home-Press verbrauchen, damit ihn das C-Hauptmenue nach der
+            # Rueckkehr nicht ebenfalls als "Spiel beenden" verarbeitet.
+            while (w.WPAD_ButtonsHeld(w.WPAD_BUTTON_HOME, 0)
+                   or w.WPAD_ButtonsHeld(w.WPAD_CLASSIC_BUTTON_HOME, 0)):
+                w.update()
+            w.input_update()
+            break
+        if back_pressed:
+            break

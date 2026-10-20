@@ -296,6 +296,38 @@
       "../assets/sound/sound/mob/villager/idle2.wav"
     ],
     [
+      "assets/sound/bg/bg1.mp3",
+      "../assets/sound/bg/bg1.mp3"
+    ],
+    [
+      "assets/sound/bg/bg2.mp3",
+      "../assets/sound/bg/bg2.mp3"
+    ],
+    [
+      "assets/sound/bg/bg3.mp3",
+      "../assets/sound/bg/bg3.mp3"
+    ],
+    [
+      "assets/sound/bg/bg4.mp3",
+      "../assets/sound/bg/bg4.mp3"
+    ],
+    [
+      "assets/sound/bg/bg5.mp3",
+      "../assets/sound/bg/bg5.mp3"
+    ],
+    [
+      "assets/sound/bg/bg6.mp3",
+      "../assets/sound/bg/bg6.mp3"
+    ],
+    [
+      "assets/sound/bg/bg7.mp3",
+      "../assets/sound/bg/bg7.mp3"
+    ],
+    [
+      "assets/sound/bg/bg8.mp3",
+      "../assets/sound/bg/bg8.mp3"
+    ],
+    [
       "assets/sound/sound/ambient/cave/cave1.wav",
       "../assets/sound/sound/ambient/cave/cave1.wav"
     ],
@@ -1114,6 +1146,34 @@
     [
       "source/item/items/item_emerald.c",
       "source/item/items/item_emerald.c"
+    ],
+    [
+      "source/item/items/item_boat.c",
+      "source/item/items/item_boat.c"
+    ],
+    [
+      "source/item/items/item_clock.c",
+      "source/item/items/item_clock.c"
+    ],
+    [
+      "source/item/items/item_compass.c",
+      "source/item/items/item_compass.c"
+    ],
+    [
+      "source/item/items/item_fishing_rod.c",
+      "source/item/items/item_fishing_rod.c"
+    ],
+    [
+      "source/item/items/item_milk_bucket.c",
+      "source/item/items/item_milk_bucket.c"
+    ],
+    [
+      "source/item/items/item_motor.c",
+      "source/item/items/item_motor.c"
+    ],
+    [
+      "source/item/items/item_record_13.c",
+      "source/item/items/item_record_13.c"
     ],
     [
       "source/item/items/item_bucket.c",
@@ -2636,6 +2696,134 @@
       "source/entity/entity.h"
     ],
     [
+      "source/entity/mob_navigation.cpp",
+      "source/entity/mob_navigation.cpp"
+    ],
+    [
+      "source/entity/mob_navigation.h",
+      "source/entity/mob_navigation.h"
+    ],
+    [
+      "source/recastnavigation/Detour/Include/DetourAlloc.h",
+      "source/recastnavigation/Detour/Include/DetourAlloc.h"
+    ],
+    [
+      "source/recastnavigation/Detour/Include/DetourAssert.h",
+      "source/recastnavigation/Detour/Include/DetourAssert.h"
+    ],
+    [
+      "source/recastnavigation/Detour/Include/DetourCommon.h",
+      "source/recastnavigation/Detour/Include/DetourCommon.h"
+    ],
+    [
+      "source/recastnavigation/Detour/Include/DetourMath.h",
+      "source/recastnavigation/Detour/Include/DetourMath.h"
+    ],
+    [
+      "source/recastnavigation/Detour/Include/DetourNavMesh.h",
+      "source/recastnavigation/Detour/Include/DetourNavMesh.h"
+    ],
+    [
+      "source/recastnavigation/Detour/Include/DetourNavMeshBuilder.h",
+      "source/recastnavigation/Detour/Include/DetourNavMeshBuilder.h"
+    ],
+    [
+      "source/recastnavigation/Detour/Include/DetourNavMeshQuery.h",
+      "source/recastnavigation/Detour/Include/DetourNavMeshQuery.h"
+    ],
+    [
+      "source/recastnavigation/Detour/Include/DetourNode.h",
+      "source/recastnavigation/Detour/Include/DetourNode.h"
+    ],
+    [
+      "source/recastnavigation/Detour/Include/DetourStatus.h",
+      "source/recastnavigation/Detour/Include/DetourStatus.h"
+    ],
+    [
+      "source/recastnavigation/Detour/Source/DetourAlloc.cpp",
+      "source/recastnavigation/Detour/Source/DetourAlloc.cpp"
+    ],
+    [
+      "source/recastnavigation/Detour/Source/DetourAssert.cpp",
+      "source/recastnavigation/Detour/Source/DetourAssert.cpp"
+    ],
+    [
+      "source/recastnavigation/Detour/Source/DetourCommon.cpp",
+      "source/recastnavigation/Detour/Source/DetourCommon.cpp"
+    ],
+    [
+      "source/recastnavigation/Detour/Source/DetourNavMesh.cpp",
+      "source/recastnavigation/Detour/Source/DetourNavMesh.cpp"
+    ],
+    [
+      "source/recastnavigation/Detour/Source/DetourNavMeshBuilder.cpp",
+      "source/recastnavigation/Detour/Source/DetourNavMeshBuilder.cpp"
+    ],
+    [
+      "source/recastnavigation/Detour/Source/DetourNavMeshQuery.cpp",
+      "source/recastnavigation/Detour/Source/DetourNavMeshQuery.cpp"
+    ],
+    [
+      "source/recastnavigation/Detour/Source/DetourNode.cpp",
+      "source/recastnavigation/Detour/Source/DetourNode.cpp"
+    ],
+    [
+      "source/recastnavigation/Recast/Include/Recast.h",
+      "source/recastnavigation/Recast/Include/Recast.h"
+    ],
+    [
+      "source/recastnavigation/Recast/Include/RecastAlloc.h",
+      "source/recastnavigation/Recast/Include/RecastAlloc.h"
+    ],
+    [
+      "source/recastnavigation/Recast/Include/RecastAssert.h",
+      "source/recastnavigation/Recast/Include/RecastAssert.h"
+    ],
+    [
+      "source/recastnavigation/Recast/Source/Recast.cpp",
+      "source/recastnavigation/Recast/Source/Recast.cpp"
+    ],
+    [
+      "source/recastnavigation/Recast/Source/RecastAlloc.cpp",
+      "source/recastnavigation/Recast/Source/RecastAlloc.cpp"
+    ],
+    [
+      "source/recastnavigation/Recast/Source/RecastArea.cpp",
+      "source/recastnavigation/Recast/Source/RecastArea.cpp"
+    ],
+    [
+      "source/recastnavigation/Recast/Source/RecastAssert.cpp",
+      "source/recastnavigation/Recast/Source/RecastAssert.cpp"
+    ],
+    [
+      "source/recastnavigation/Recast/Source/RecastContour.cpp",
+      "source/recastnavigation/Recast/Source/RecastContour.cpp"
+    ],
+    [
+      "source/recastnavigation/Recast/Source/RecastFilter.cpp",
+      "source/recastnavigation/Recast/Source/RecastFilter.cpp"
+    ],
+    [
+      "source/recastnavigation/Recast/Source/RecastLayers.cpp",
+      "source/recastnavigation/Recast/Source/RecastLayers.cpp"
+    ],
+    [
+      "source/recastnavigation/Recast/Source/RecastMesh.cpp",
+      "source/recastnavigation/Recast/Source/RecastMesh.cpp"
+    ],
+    [
+      "source/recastnavigation/Recast/Source/RecastMeshDetail.cpp",
+      "source/recastnavigation/Recast/Source/RecastMeshDetail.cpp"
+    ],
+    [
+      "source/recastnavigation/Recast/Source/RecastRasterization.cpp",
+      "source/recastnavigation/Recast/Source/RecastRasterization.cpp"
+    ],
+    [
+      "source/recastnavigation/Recast/Source/RecastRegion.cpp",
+      "source/recastnavigation/Recast/Source/RecastRegion.cpp"
+    ],
+    [
       "source/entity/entity_local_player.c",
       "source/entity/entity_local_player.c"
     ],
@@ -2662,6 +2850,14 @@
     [
       "source/entity/entity_minecart.c",
       "source/entity/entity_minecart.c"
+    ],
+    [
+      "source/entity/entity_boat.c",
+      "source/entity/entity_boat.c"
+    ],
+    [
+      "source/entity/entity_fishing_hook.c",
+      "source/entity/entity_fishing_hook.c"
     ],
     [
       "source/entity/entity.c",
@@ -3370,6 +3566,18 @@
     [
       "source/network/server_interface.c",
       "source/network/server_interface.c"
+    ],
+    [
+      "source/network/gen_world.c",
+      "source/network/gen_world.c"
+    ],
+    [
+      "source/network/gen_world.h",
+      "source/network/gen_world.h"
+    ],
+    [
+      "source/network/test_world.c",
+      "source/network/test_world.c"
     ],
     [
       "source/network/inventory_iron_chest.c",
@@ -4241,7 +4449,7 @@
       "../init.py"
     ],
     [
-      "ready_wii/boot.dol",
+      "boot.dol",
       "../boot.dol"
     ],
     [
@@ -4250,7 +4458,7 @@
     ],
     [
       "LICENSE",
-      "LICENSE"
+      "../LICENSE"
     ],
     [
       "icon.png",
@@ -4483,6 +4691,38 @@
     [
       "assets/sound/sound/mob/villager/idle2.pcm",
       "../assets/sound/sound/mob/villager/idle2.pcm"
+    ],
+    [
+      "assets/sound/bg/bg1.mp3",
+      "../assets/sound/bg/bg1.mp3"
+    ],
+    [
+      "assets/sound/bg/bg2.mp3",
+      "../assets/sound/bg/bg2.mp3"
+    ],
+    [
+      "assets/sound/bg/bg3.mp3",
+      "../assets/sound/bg/bg3.mp3"
+    ],
+    [
+      "assets/sound/bg/bg4.mp3",
+      "../assets/sound/bg/bg4.mp3"
+    ],
+    [
+      "assets/sound/bg/bg5.mp3",
+      "../assets/sound/bg/bg5.mp3"
+    ],
+    [
+      "assets/sound/bg/bg6.mp3",
+      "../assets/sound/bg/bg6.mp3"
+    ],
+    [
+      "assets/sound/bg/bg7.mp3",
+      "../assets/sound/bg/bg7.mp3"
+    ],
+    [
+      "assets/sound/bg/bg8.mp3",
+      "../assets/sound/bg/bg8.mp3"
     ],
     [
       "assets/sound/sound/ambient/cave/cave1.pcm",

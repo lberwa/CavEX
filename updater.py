@@ -10,8 +10,14 @@ version_code = None
 
 
 def git(arg, platform):
-    return sub.run(f"git --git-dir=.version-{platform} --work-tree=. {arg}",
-                   shell=True, capture_output=True, text=True)
+    result = sub.run(f"git --git-dir=.version-{platform} --work-tree=. {arg}",
+                     shell=True, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"Git-Befehl fehlgeschlagen ({platform}): {arg}\n"
+            + result.stderr.strip()
+        )
+    return result
 
 
 def read_define(lines, name):
@@ -80,14 +86,16 @@ pc  = "pc"
 def gwii():
     git("reset", wii)
     for file in data["wii"]:
-        git(f"add {file[0]}", wii)
+        # Build-Artefakte wie boot.dol stehen absichtlich in .gitignore,
+        # muessen aber trotzdem ins Versions-Repository.
+        git(f'add -f -- "{file[0]}"', wii)
 
     git(f'commit -m "{version_code}"', wii)
 
 def gpc():
     git("reset", pc)
     for file in data["pc"]:
-        git(f"add {file[0]}", pc)
+        git(f'add -f -- "{file[0]}"', pc)
 
     git(f'commit -m "{version_code}"', pc)
 
@@ -99,6 +107,5 @@ def gpush():
 gwii()
 gpc()
 gpush()
-
 
 

@@ -681,8 +681,8 @@ void server_local_collapse_portal(struct server_local* s, int x, int y, int z) {
 		if(rx >= min_x - 1 && rx <= max_x + 1
 		   && rz >= min_z - 1 && rz <= max_z + 1) {
 #ifdef PORTAL_DEBUG
-			CAVEX_DEBUG_PRINTF("[PORTAL] collapse: entferne slot=%d x=%d y=%d z=%d dim=%s "
-			       "(in kollabierter Region x[%d..%d] z[%d..%d])\n",
+			CAVEX_DEBUG_PRINTF("[PORTAL] collapse: removing slot=%d x=%d y=%d z=%d dim=%s "
+			       "(in collapsed region x[%d..%d] z[%d..%d])\n",
 			       i, rx, s->portal_registry[di][i].y, rz, di ? "NETHER" : "OW",
 			       min_x, max_x, min_z, max_z);
 #endif
@@ -701,7 +701,7 @@ void server_local_dump_portal_registry(struct server_local* s, const char* tag) 
 	const char* dim_name[2] = {"OW    ", "NETHER"};
 
 #ifdef PORTAL_DEBUG
-	CAVEX_DEBUG_PRINTF("[PORTAL] ===== Registry-Dump (%s) =====\n", tag ? tag : "");
+	CAVEX_DEBUG_PRINTF("[PORTAL] ===== Registry dump (%s) =====\n", tag ? tag : "");
 #endif
 
 	for(int di = 0; di < 2; di++) {
@@ -719,7 +719,7 @@ void server_local_dump_portal_registry(struct server_local* s, const char* tag) 
 		}
 #ifdef PORTAL_DEBUG
 		if(count == 0)
-			CAVEX_DEBUG_PRINTF("[PORTAL]   %s (leer)\n", dim_name[di]);
+			CAVEX_DEBUG_PRINTF("[PORTAL]   %s (empty)\n", dim_name[di]);
 #endif
 	}
 #ifdef PORTAL_DEBUG
@@ -737,8 +737,8 @@ void server_local_register_portal(struct server_local* s,
 		if(abs(s->portal_registry[di][i].x - x) <= 4
 		   && abs(s->portal_registry[di][i].z - z) <= 4) {
 #ifdef PORTAL_DEBUG
-			CAVEX_DEBUG_PRINTF("[PORTAL] register SKIP (Duplikat von x=%d z=%d) "
-			       "neu x=%d y=%d z=%d dim=%s\n",
+			CAVEX_DEBUG_PRINTF("[PORTAL] register SKIP (duplicate of x=%d z=%d) "
+			       "new x=%d y=%d z=%d dim=%s\n",
 			       s->portal_registry[di][i].x, s->portal_registry[di][i].z,
 			       x, y, z, di ? "NETHER" : "OW");
 #endif
@@ -760,7 +760,7 @@ void server_local_register_portal(struct server_local* s,
 		}
 	}
 #ifdef PORTAL_DEBUG
-	CAVEX_DEBUG_PRINTF("[PORTAL] register FEHLGESCHLAGEN (kein freier Slot) "
+			CAVEX_DEBUG_PRINTF("[PORTAL] register FAILED (no free slot) "
 	       "x=%d y=%d z=%d dim=%s\n", x, y, z, di ? "NETHER" : "OW");
 #endif
 }
@@ -1026,7 +1026,7 @@ static int server_local_place_destination_portal(struct server_local* s,
 				break;
 			server_world_set_block(s, best_x, fy, best_z, platform);
 		}
-		CAVEX_DEBUG_PRINTF("[PORTAL] kein Untergrund bei x=%d z=%d (r=%d) — Plattform bei y=%d\n",
+		CAVEX_DEBUG_PRINTF("[PORTAL] no ground at x=%d z=%d (r=%d) — platform at y=%d\n",
 		       origin_x, origin_z, PORTAL_PLACE_RADIUS, py);
 	}
 
@@ -1110,11 +1110,11 @@ static void server_local_switch_dimension(struct server_local* s, int player_id)
 
 #ifdef PORTAL_DEBUG
 	if(reg_found)
-		CAVEX_DEBUG_PRINTF("[PORTAL] Registry-Treffer bei x=%d y=%d z=%d "
+		CAVEX_DEBUG_PRINTF("[PORTAL] registry hit at x=%d y=%d z=%d "
 		       "(wird beim Ankommen verifiziert)\n", found_x, found_y, found_z);
 	else
-		CAVEX_DEBUG_PRINTF("[PORTAL] kein registriertes Portal im Radius -> "
-		       "neues wird am Zielpunkt (%d,%d) gebaut\n", dest_x, dest_z);
+		CAVEX_DEBUG_PRINTF("[PORTAL] no registered portal in radius -> "
+		       "building a new one at destination (%d,%d)\n", dest_x, dest_z);
 #endif
 
 	/* WICHTIG: Spieler AN die Pending-Zielposition setzen (nicht an den
@@ -3055,7 +3055,7 @@ static void server_local_update(struct server_local* s) {
 			 * zu kuerzen. */
 			g_effective_view_distance--;
 			vd_cooldown = 60; /* 3 s Sperre -> kein Pumpen */
-			CDBG("[VD] RAM-Druck (%zu/%d, %uMB frei, MEM2=%uMB) -> vd=%d\n",
+			CDBG("[VD] RAM pressure (%zu/%d, %uMB free, MEM2=%uMB) -> vd=%d\n",
 				 lc, g_chunk_cap, free_mb, mem2_mb, g_effective_view_distance);
 		} else if(free_mb >= 10
 				  && lc < (size_t)(g_chunk_cap * 60 / 100)
@@ -3773,7 +3773,7 @@ unload_done:
 			int fall_blocks = (int)player->fall_distance;
 
 #ifdef FALL_HEALTH_DEBUG
-			if(i == 0) CAVEX_DEBUG_PRINTF("[LAND p%d] fall_dist=%.2f (%d Bloecke) wasser=%s -> schaden=%d Herzen\n",
+			if(i == 0) CAVEX_DEBUG_PRINTF("[LAND p%d] fall_dist=%.2f (%d blocks) water=%s -> damage=%d hearts\n",
 				i, player->fall_distance, fall_blocks,
 				landed_in_water ? "JA" : "nein",
 				(fall_blocks >= 4 && !landed_in_water) ? fall_blocks-3 : 0);
@@ -3802,7 +3802,7 @@ unload_done:
 		}
 
 #ifdef FALL_HEALTH_DEBUG
-		if(i == 0) CAVEX_DEBUG_PRINTF("[FALL p%d] pos=(%.2f,%.2f,%.2f) feet_y=%d blk=%d/%d vel_y=%.3f fall_dist=%.2f | falle=%s leiter=%s wasser=%s\n",
+		if(i == 0) CAVEX_DEBUG_PRINTF("[FALL p%d] pos=(%.2f,%.2f,%.2f) feet_y=%d blk=%d/%d vel_y=%.3f fall_dist=%.2f | falling=%s ladder=%s water=%s\n",
 			i, player->x, player->y, player->z,
 			feet_y, blk_climb.type, blk_climb2.type,
 			player->vel_y, player->fall_distance,
@@ -3851,12 +3851,12 @@ unload_done:
 #ifdef PORTAL_DEBUG
 					/* Jede volle Sekunde (20 Ticks) hochzählen: 1,2,3,4 */
 					if(player->portal_ticks % 20 == 0)
-						CAVEX_DEBUG_PRINTF("[PORTAL] p%d Teleport-Zähler: %d/4 s\n",
+						CAVEX_DEBUG_PRINTF("[PORTAL] p%d teleport timer: %d/4 s\n",
 						       i, player->portal_ticks / 20);
 #endif
 					if(player->portal_ticks >= 80) {
 #ifdef PORTAL_DEBUG
-						CAVEX_DEBUG_PRINTF("[PORTAL] p%d -> teleportiert!\n", i);
+						CAVEX_DEBUG_PRINTF("[PORTAL] p%d -> teleported!\n", i);
 #endif
 						server_local_switch_dimension(s, i);
 						break;

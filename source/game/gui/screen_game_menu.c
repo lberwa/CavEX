@@ -117,10 +117,10 @@ static void screen_gmenu_render2D(struct screen* s, int width, int height) {
 		int wx = width / 2 - window_width / 2;
 		int wy = height/2 - 60;
 
-		gutil_window(wx, wy, window_width, 100, "Verbindungsfehler");
+		gutil_window(wx, wy, window_width, 100, "Connection Error");
 
-		gutil_text(wx + 20, wy + 40, "Versuchen sie es", 16, false);
-		gutil_text(wx + 20, wy + 60, "später erneut.", 16, false);
+		gutil_text(wx + 20, wy + 40, "Please try again", 16, false);
+		gutil_text(wx + 20, wy + 60, "later.", 16, false);
 	}
 
 	int icon_offset = 32;

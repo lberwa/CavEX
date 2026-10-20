@@ -404,6 +404,7 @@ static void splitscreen_viewport_rect(int player_index, int player_count,
 
 int load_config(void) {
     char config_path[512];
+    bool config_exists = false;
 
 	#ifdef _WIN32
 	const char* home = getenv("USERPROFILE");
@@ -415,12 +416,43 @@ int load_config(void) {
         return 0;
     }
 
-    snprintf(config_path, sizeof(config_path), "%s/.cavex/config.json", home);
+    snprintf(config_path, sizeof(config_path), "%s/.cavex/config_pc.json", home);
+
+    {
+        FILE* existing = fopen(config_path, "rb");
+        if(existing) {
+            config_exists = true;
+            fclose(existing);
+        }
+    }
 
     // config laden
     if (!config_create(&gstate.config_user, config_path)) {
         CAVEX_DEBUG_PRINTF("Failed to load config: %s\n", config_path);
         return 0;
+    }
+
+    /* Die Frozen-Config enthaelt relative Entwicklungs-Pfade. Bei einer
+       fehlenden PC-Konfiguration werden sie einmalig auf ~/.cavex umgesetzt,
+       damit die installierte Version ohne kopierte JSON-Datei startet. */
+    if(!config_exists) {
+        JSON_Object* root = json_object(gstate.config_user.root);
+        char path[512];
+        snprintf(path, sizeof(path), "%s/.cavex/assets", home);
+        json_object_dotset_string(root, "paths.texturepack", path);
+        snprintf(path, sizeof(path), "%s/.cavex/saves", home);
+        json_object_dotset_string(root, "paths.worlds", path);
+        snprintf(path, sizeof(path), "%s/.cavex/bg", home);
+        json_object_dotset_string(root, "paths.bg", path);
+        snprintf(path, sizeof(path), "%s/.cavex/assets/sound", home);
+        json_object_dotset_string(root, "paths.MP3", path);
+        snprintf(path, sizeof(path), "%s/.cavex/assets/sound/sound", home);
+        json_object_dotset_string(root, "paths.sounds", path);
+        snprintf(path, sizeof(path), "%s/.cavex/tmp", home);
+        json_object_dotset_string(root, "paths.tmp", path);
+        snprintf(path, sizeof(path), "%s/.cavex/init.py", home);
+        json_object_dotset_string(root, "paths.python_file", path);
+        json_serialize_to_file_pretty(gstate.config_user.root, config_path);
     }
 
     return 1;
@@ -949,7 +981,6 @@ int main(void) {
 		}
 #endif
 
-		sdlog("loop: top");
 #ifdef SPLITSCREEN
 		/* Nether-Welt nur verarbeiten wenn ein Spieler darin ist */
 		bool _has_nether = false;
@@ -981,13 +1012,11 @@ int main(void) {
 		}
 		hitch_world_prep_ms = time_diff_s(_prof_world_prep0, time_get()) * 1000.0f;
 
-		sdlog("loop: vor screen->update");
 		ptime_t _prof_screen0 = time_get();
 		if(gstate.current_screen->update)
 			gstate.current_screen->update(gstate.current_screen,
 											gstate.stats.dt);
 		hitch_screen_ms = time_diff_s(_prof_screen0, time_get()) * 1000.0f;
-		sdlog("loop: nach screen->update");
 		cdbg_flush(); /* Debug-Nachrichten vom Server-Thread senden */
 
 		render_world
@@ -1009,12 +1038,9 @@ int main(void) {
 				+= (target - gstate.config.fog_distance) * k;
 		}
 
-		sdlog("loop: vor gfx_flip_buffers");
 		ptime_t _prof_flip0 = time_get();
 		gfx_flip_buffers(&gstate.stats.dt_gpu, &gstate.stats.dt_vsync);
 		hitch_flip_ms = time_diff_s(_prof_flip0, time_get()) * 1000.0f;
-		sdlog("loop: nach gfx_flip_buffers");
-
 		ptime_t _prof_render0 = time_get();
 		bool rendered_2d = false;
 		if(!gstate.paused) {
@@ -1472,56 +1498,17 @@ int main(void) {
 		gstate.stats.prof_gui_ms = gstate.stats.prof_gui_ms * 0.9f
 			+ hitch_gui_ms * 0.1f;
 
-		sdlog("loop: vor sound_update");
 		ptime_t _prof_sound0 = time_get();
 		sound_update();
 		hitch_sound_ms = time_diff_s(_prof_sound0, time_get()) * 1000.0f;
-		sdlog("loop: vor input_poll");
 		ptime_t _prof_input0 = time_get();
 		input_poll();
 		hitch_input_ms = time_diff_s(_prof_input0, time_get()) * 1000.0f;
-		sdlog("loop: vor gfx_finish");
 		ptime_t _prof_finish0 = time_get();
 		gfx_finish(true);
 		hitch_finish_ms = time_diff_s(_prof_finish0, time_get()) * 1000.0f;
 		gstate.stats.prof_finish_ms = gstate.stats.prof_finish_ms * 0.9f
 			+ hitch_finish_ms * 0.1f;
-		sdlog("loop: nach gfx_finish (Frame-Ende)");
-
-#ifdef PLATFORM_PC
-		float hitch_frame_ms = time_diff_s(this_frame, time_get()) * 1000.0f;
-		if(hitch_frame_ms >= 120.0f) {
-			float hitch_known_ms = hitch_clin_ms + hitch_tick_ms
-				+ hitch_world_prep_ms + hitch_screen_ms + hitch_flip_ms
-				+ hitch_render_ms + hitch_gui_ms + hitch_sound_ms
-				+ hitch_input_ms + hitch_finish_ms;
-			float hitch_other_ms = hitch_frame_ms - hitch_known_ms;
-			CAVEX_DEBUG_PRINTF("[HITCH] frame=%.1f ms prev_dt=%.1f ms "
-				   "clin=%.1f tick=%.1f world=%.1f light=%.1f build=%.1f screen=%.1f "
-				   "flip=%.1f render=%.1f gui=%.1f "
-				   "sound=%.1f input=%.1f finish=%.1f other=%.1f "
-				   "server=%.1fms/%.1fTPS mesher=%.1fms %.1f/s q=%d "
-				   "sent=%lu fail=%lu built=%lu recv=%lu\n",
-				   hitch_frame_ms, gstate.stats.dt * 1000.0f,
-				   hitch_clin_ms, hitch_tick_ms, hitch_world_prep_ms,
-				   hitch_light_ms, hitch_build_ms, hitch_screen_ms,
-				   hitch_flip_ms, hitch_render_ms,
-				   hitch_gui_ms, hitch_sound_ms, hitch_input_ms,
-				   hitch_finish_ms, hitch_other_ms,
-				   gstate.stats.server_tick_ms, gstate.stats.server_tps,
-				   chunk_mesher_stat_ms_per_build,
-				   chunk_mesher_stat_builds_per_sec,
-				   chunk_mesher_stat_queue_depth,
-				   chunk_mesher_dbg_sent, chunk_mesher_dbg_failed,
-				   chunk_mesher_dbg_built, chunk_mesher_dbg_recv);
-			CAVEX_DEBUG_PRINTF("[HITCH_GUI] screen=%.1f split=%.1f screenshot=%.1f "
-				   "pc_update=%.1f gui_total=%.1f\n",
-				   hitch_gui_screen_ms, hitch_gui_split_ms,
-				   hitch_gui_screenshot_ms, hitch_gui_pc_update_ms,
-				   hitch_gui_ms);
-			fflush(stdout);
-		}
-#endif
 
 //--------------------------------------------------------------------
 	#if 0
@@ -1583,7 +1570,7 @@ int main(void) {
         
         free(big_block);
     } else {
-        snprintf(buffer, sizeof(buffer), "Fehler: Konnte 5MB nicht zuweisen.\n");
+        snprintf(buffer, sizeof(buffer), "Error: Could not allocate 5 MB.\n");
         debug_send(buffer);
     }
 	*/
@@ -1616,9 +1603,9 @@ int main(void) {
     // available_in_arena1 = a1_total - malloc_used
     // (Hinweis: das ist nur eine Näherung; malloc hat Overhead/Fragmentierung und andere Komponenten können Arena belegen)
     if (a1_total >= (u32)malloc_used)
-        CAVEX_DEBUG_PRINTF("geschätzter freier Platz in Arena1 = %u bytes\n", a1_total - (u32)malloc_used);
+        CAVEX_DEBUG_PRINTF("estimated free space in Arena1 = %u bytes\n", a1_total - (u32)malloc_used);
     else
-        debug_send("geschätzter freier Platz in Arena1 = 0 (oder malloc > arena)\n");
+        debug_send("estimated free space in Arena1 = 0 (or malloc > arena)\n");
 */
 
 // Arena 1 Adressen und Total
@@ -1655,17 +1642,17 @@ int main(void) {
 
     // Abschätzung
     if (a1_total >= (u32)malloc_used) {
-        snprintf(buf, sizeof(buf), "geschätzter freier Platz in Arena1 = %u bytes", 
+        snprintf(buf, sizeof(buf), "estimated free space in Arena1 = %u bytes", 
                  a1_total - (u32)malloc_used);
         debug_send(buf);
     } else {
-        snprintf(buf, sizeof(buf), "geschätzter freier Platz in Arena1 = 0 (oder malloc > arena)");
+        snprintf(buf, sizeof(buf), "estimated free space in Arena1 = 0 (or malloc > arena)");
         debug_send(buf);
     }
 
     // Für Arena2: wenn du MEM2 aktiv verwendest, tracke dortige Allocs separat.
     // Viele Programme legen große Buffers mit memalign/MEM2_alloc in MEM2 an; diese musst du zählen.
-    debug_send("\n(Hinweis: MEM2-Nutzung wird nicht automatisch durch mallinfo gemeldet — falls du MEM2 für große Buffers verwendest, musst du deren Größe selbst tracken.)\n");
+    debug_send("\n(Note: mallinfo does not report MEM2 usage automatically; track large MEM2 allocations separately.)\n");
 #endif
 		//debug_send(text2);
 //----------------------------------------------------------------------------

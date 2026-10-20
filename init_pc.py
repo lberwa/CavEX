@@ -226,7 +226,8 @@ try:
                  int(hgt / 2 - 10), txt, txt_size, True)
         gfx.finish()
 
-    with open("Cavex/config_pc.json", "r") as f:
+    config_path = os.path.join(os.path.expanduser("~"), ".cavex", "config_pc.json")
+    with open(config_path, "r") as f:
         config = json.load(f)
     os.makedirs(config["paths"]["tmp"], exist_ok=True)
 
@@ -238,7 +239,9 @@ try:
     for i, data in enumerate(data_info):
         loading_screen("loading data ... (" + str(i) + "/" + str(len(data_info)) + ")")
         content = http_get(data[0])
-        with open(config["paths"]["tmp"] + "/" + data[1], "wb") as f:
+        target = config["paths"]["tmp"] + "/" + data[1]
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        with open(target, "wb") as f:
             f.write(content)
         if gfx.input_pressed(IB_BACK) or gfx.input_pressed(IB_HOME):
             cancelled = True

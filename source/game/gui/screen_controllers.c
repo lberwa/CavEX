@@ -150,7 +150,7 @@ static void screen_controllerauswahl_render2D(struct screen* s, int width, int h
 
     gfx_bind_texture(&texture_gui2);
 
-    gutil_window(50, 50, width/2, height - 100, "Controller-Zuweisung");
+    gutil_window(50, 50, width/2, height - 100, "Controller Assignment");
 
     //slots
     for (int i=0; i<slot_count; i++) {
@@ -183,7 +183,7 @@ static void screen_controllerauswahl_render2D(struct screen* s, int width, int h
         }
         
         char text[64];
-        sprintf(text, "Spieler %d", i+1);
+		sprintf(text, "Player %d", i+1);
 
         gutil_window(slot_x, slot_y, slotwidth, slotheight, text);
 

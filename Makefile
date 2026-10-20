@@ -53,6 +53,7 @@ CAVEX       :=  Cavex
 INSTALL_USER := $(if $(SUDO_USER),$(SUDO_USER),$(USER))
 INSTALL_HOME := $(if $(SUDO_USER),$(shell getent passwd "$(SUDO_USER)" | cut -d: -f6),$(HOME))
 HOME_PATH   :=  $(INSTALL_HOME)/.cavex
+INSTALL_ROOT := $(HOME_PATH)
 CAVEX_DIR   :=  $(PC_BUILD)/$(CAVEX)
 WIN_CAVEX_DIR := $(WIN_BUILD)/$(CAVEX)
 WIN_CC      ?= x86_64-w64-mingw32-gcc
@@ -216,7 +217,7 @@ export LIBPATHS += $(PY_LIBDIRS)
 
 export OUTPUT	:=	$(CURDIR)/$(TARGET)
 .PHONY: $(BUILD) clean
-.PHONY: wii pc pc-clean win win-clean win-run mac mac-clean mac-run
+.PHONY: wii pc pc-clean win win-clean win-run mac mac-clean mac-run uninstall
 
 #---------------------------------------------------------------------------------
 pc:
@@ -333,15 +334,14 @@ install_desktop:
 		'Comment=Your favourite block game' \
 		'Exec=/usr/local/bin/cavex' \
 		'Icon=$(HOME_PATH)/icon.png' \
-		'Terminal=false' \t
-
+		'Terminal=false' \
 		'Type=Application' \
 		'Categories=Game;' \
 		'StartupNotify=true' \
 		> "$(INSTALL_HOME)/.local/share/applications/cavex.desktop"
 
 
-pc-install: pc config install_desktop
+pc-install: pc install_desktop
 	@if [ "$$(id -u)" != "0" ]; then \
 		echo ""; \
 		echo "please try "sudo make pc-install""; \
@@ -349,23 +349,32 @@ pc-install: pc config install_desktop
 		exit 1; \
 	fi
 
-	@cp -r $(CAVEX_DIR) /usr/local/bin
-	@cp $(PC_BUILD)/cavex /usr/local/bin
-	@chmod +x /usr/local/bin/cavex
 	@mkdir -p "$(HOME_PATH)"
-	@if [ ! -d "$(HOME_PATH)" ]; then \
-		mv /usr/local/bin/$(CAVEX)/saves $(HOME_PATH)/; \
-	fi
-	@rm -rf $(HOME_PATH)/assets
-	@rm -rf /usr/local/bin/$(CAVEX)/saves
-	@mv     /usr/local/bin/$(CAVEX)/assets $(HOME_PATH)/
-	@cp     $(PC_BUILD)/install_config_pc.json "$(HOME_PATH)/config.json"
-	@rm -f  /usr/local/bin/$(CAVEX)/config_pc.json
-	@cp     $(PC_BUILD)/init_pc.py /usr/local/bin/$(CAVEX)/init.py
+	@mkdir -p "$(INSTALL_ROOT)"
+	@cp -r $(CAVEX_DIR)/assets "$(HOME_PATH)/"
+	@cp -r $(CAVEX_DIR)/saves "$(HOME_PATH)/"
+	@cp     $(CAVEX_DIR)/init.py "$(HOME_PATH)/init.py"
+	@cp     $(PC_BUILD)/cavex "$(INSTALL_ROOT)/cavex"
+	@chmod +x "$(INSTALL_ROOT)/cavex"
+	@ln -sfn "$(INSTALL_ROOT)/cavex" /usr/local/bin/cavex
 	@cp     $(MAKEFILE_DIR)/pc-icon.png $(HOME_PATH)/icon.png
 	@chown -R "$(INSTALL_USER)" "$(HOME_PATH)"
 
 	@echo "installation complete!"
+
+
+uninstall:
+	@if [ "$$(id -u)" != "0" ]; then \
+		echo ""; \
+		echo "please try \"sudo make uninstall\""; \
+		echo ""; \
+		exit 1; \
+	fi
+	@rm -f /usr/local/bin/cavex
+	@rm -f "$(INSTALL_ROOT)/cavex"
+	@rmdir "$(INSTALL_ROOT)" 2>/dev/null || true
+	@rm -f "$(INSTALL_HOME)/.local/share/applications/cavex.desktop"
+	@echo "uninstallation complete; user data in $(HOME_PATH) was kept."
 
 
 pc-clean:

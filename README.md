@@ -13,7 +13,7 @@
 * Added sheep and pigs and fixed a crash related to the auto-jump feature.
 
 * Added local split-screen and multiplayer support
-  (in the PC version, you can change the inputs in config_pc.json or, if installed, in /usr/local/bin/Cavex/input_pc.json)
+  (in the PC version, you can change the inputs in *config_pc.json* or, if installed, in *~/.cavex/input_pc.json*)
 
 * Added a main menu with audio.
 
@@ -236,9 +236,7 @@ cd buildpc
 
 
 ### Wii:
-
-Please wait for the release!
-~~you can Download a ready boot.dol from [here](https://example.com/boot.dol) or the full app [here](https://example.com/last_release).~~ To copy the game to your `apps/` folder, it needs to look like this:
+you can Download a ready Homebrew-App from [here](https://cavexplorer.duckdns.org). To copy the game to your `apps/` folder, it needs to look like this:
 
 ```apps/cavex/
 cavex

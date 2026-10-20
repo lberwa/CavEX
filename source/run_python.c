@@ -21,6 +21,9 @@
    Leer, wenn init.py sauber lief. In allen Builds vorhanden. */
 char g_py_error[160] = "";
 bool g_py_error_show = false;
+/* Verhindert, dass ein Button vom Python-Overlay im direkt folgenden
+   CavEX-Menueframe nochmals verarbeitet wird. */
+bool g_python_returned = false;
 
 /* Basis-URL, von der der Loader (init.py / init_pc.py) nachgeladen wird, falls
    die lokale Datei fehlt. Struktur analog zum data_info-Download in init.py:
@@ -156,15 +159,12 @@ extern volatile bool g_python_running; /* Trace-Thread darf waehrenddessen kein 
 
 void cavex_run_python_file(const char *path, const char *arg) {
 	g_python_running = true;
-	sdlog("py: vor Py_Init_Custom");
 	size_t count = 2;
 	PyStatus status = Py_Init_Custom(
 		(const char *[]) {"usb:/python", "sd:/python"}, &count, NULL); //TODO: apps/cavex/python
 	if(status._type != _PyStatus_TYPE_OK) {
-		sdlog("py: Py_Init_Custom FEHLGESCHLAGEN");
 		return;
 	}
-	sdlog("py: Py_Init_Custom OK");
 
 	/* stdout/stderr auf No-op umlenken. In diesem Build zeigen sie sonst auf
 	   terminal_print -> render_text_ohne_bild, und das dereferenziert bei
@@ -357,15 +357,13 @@ void cavex_run_python_file(const char *path, const char *arg) {
 		}
 	}
 
-	sdlog("py: nach runpy, vor Py_Finalize");
 	Py_Finalize();
-	sdlog("py: nach Py_Finalize");
 
 	/* Python (rendering_adopt) hat Video/GX uebernommen -> CavEX-Grafik
 	   wiederherstellen, sonst bleibt der Bildschirm auf dem letzten Python-
 	   Frame stehen und das Menue ist unsichtbar. */
 	gfx_wii_restore();
-	sdlog("py: nach gfx_wii_restore");
+	g_python_returned = true;
 	g_python_running = false; /* ab jetzt darf der Trace-Thread flushen */
 }
 
