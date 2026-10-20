@@ -4,10 +4,6 @@
   "_comment3": "########################################################################################################",
   "pc": [
     [
-      "source/graphics/render_monster.c",
-      "source/graphics/render_monster.c"
-    ],
-    [
       "source/config_frozen.h",
       "source/config_frozen.h"
     ],
