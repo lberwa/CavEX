@@ -38,7 +38,18 @@ bool g_python_returned = false;
 #ifdef PLATFORM_WII
 
 #include <gctypes.h>
+#ifdef __BSD_VISIBLE
+#define CAVEX_SAVED_BSD_VISIBLE __BSD_VISIBLE
+#undef __BSD_VISIBLE
+#define CAVEX_RESTORE_BSD_VISIBLE 1
+#endif
 #include <Python.h>
+#ifdef CAVEX_RESTORE_BSD_VISIBLE
+#undef __BSD_VISIBLE
+#define __BSD_VISIBLE CAVEX_SAVED_BSD_VISIBLE
+#undef CAVEX_SAVED_BSD_VISIBLE
+#undef CAVEX_RESTORE_BSD_VISIBLE
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 

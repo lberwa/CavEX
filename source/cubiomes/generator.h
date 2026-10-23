@@ -12,6 +12,11 @@ enum
     FORCE_OCEAN_VARIANTS    = 0x4,
 };
 
+#if defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
+#endif
+
 STRUCT(Generator)
 {
     int mc;
@@ -37,6 +42,10 @@ STRUCT(Generator)
     NetherNoise nn; // MC 1.16
     EndNoise en; // MC 1.9
 };
+
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 
 
 #ifdef __cplusplus
@@ -141,4 +150,3 @@ int mapApproxHeight(float *y, int *ids, const Generator *g,
 #endif
 
 #endif /* GENERATOR_H_ */
-

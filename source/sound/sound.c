@@ -26,6 +26,14 @@
 #include <stdlib.h>
 #include <malloc.h>
 #include <math.h>
+
+#ifdef __XSI_VISIBLE
+ #undef __XSI_VISIBLE
+#endif
+#ifdef __POSIX_VISIBLE 
+ #undef __POSIX_VISIBLE
+#endif
+
 #define __XSI_VISIBLE 600
 #define __POSIX_VISIBLE 200112
 #include <unistd.h>
@@ -864,7 +872,7 @@ static void do_play_wii(int sound_id, u8 *data, u32 size,
     float vol_L = 1.0f, vol_R = 1.0f;
     if (has_pos) {
         vol_L = 0.0f; vol_R = 0.0f;
-        int actual = 0;
+        //int actual = 0;
 #ifdef SPLITSCREEN
         if(splitscreen_enabled() && splitscreen_player_count() > 1) {
             int cnt = splitscreen_player_count();
@@ -876,7 +884,7 @@ static void do_play_wii(int sound_id, u8 *data, u32 size,
                 sound_calc_spatial_wii(wx, wy, wz, cam, &pL, &pR);
                 if (pL > vol_L) vol_L = pL;
                 if (pR > vol_R) vol_R = pR;
-                actual++;
+                //actual++;
             }
         } else {
             sound_calc_spatial_wii(wx, wy, wz, &gstate.camera, &vol_L, &vol_R);

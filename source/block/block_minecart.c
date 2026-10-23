@@ -16,6 +16,11 @@
 	You should have received a copy of the GNU General Public License
 	along with CavEX.  If not, see <http://www.gnu.org/licenses/>.
 */
+
+/* Minecarts are entities, not blocks.  Keep this source file in the build
+ * without triggering -Wpedantic for an empty translation unit. */
+typedef int block_minecart_translation_unit_t;
+
 /*
 #include "blocks.h"
 

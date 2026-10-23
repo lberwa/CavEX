@@ -237,7 +237,9 @@ static bool world_create_level_dat(const char* folder, const char* name,
 
 	/* --- save as gzip NBT --- */
 	char file[512];
-	snprintf(file, sizeof(file), "%s/level.dat", out_path);
+	if(snprintf(file, sizeof(file), "%s/level.dat", out_path)
+	   >= (int)sizeof(file))
+		return false;
 	FILE* f = fopen(file, "wb");
 	if(!f)
 		return false;

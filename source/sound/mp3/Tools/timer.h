@@ -30,8 +30,15 @@
 extern "C" {
 #endif
 
+#if defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
+#endif
 #include <gctypes.h>
 #include <ogc/lwp_watchdog.h>
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 
 typedef struct _TimeStruct
 {

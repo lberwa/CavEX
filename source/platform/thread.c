@@ -22,12 +22,22 @@
 #include "thread.h"
 
 #ifdef USLEEP
-#ifdef PLATFORM_WII 
-#define __XSI_VISIBLE 600 // usleep
-#define __POSIX_VISIBLE 200112
-#include <unistd.h>
-#include <time.h>
-#endif /*PLATFORM_WII*/
+ #ifdef PLATFORM_WII 
+  #ifndef __XSI_VISIBLE
+   #define __XSI_VISIBLE 600 // usleep
+  #endif
+  #ifndef __POSIX_VISIBLE
+   #define __POSIX_VISIBLE 200112
+  #endif
+  #include <unistd.h>
+  #include <time.h>
+  #if defined(USLEEP)
+   /* libogc can hide this POSIX declaration depending on the feature macros
+    * already included by gccore.h, although the function is available at link
+    * time. */
+   extern int usleep(unsigned int usec);
+  #endif
+ #endif /*PLATFORM_WII*/
 #endif /*USLEEP*/
 
 #ifdef PLATFORM_PC

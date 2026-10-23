@@ -783,7 +783,7 @@ static void screen_ingame_render2D(struct screen* s, int width, int height) {
 		         block_side_name(gstate.camera_hit.side), quadrant,
 		         quadrant_name, gstate.camera_hit.x, gstate.camera_hit.y,
 		         gstate.camera_hit.z,
-		         (b && b->name) ? b->name : "<unknown>", bd.type,
+			         b ? b->name : "<unknown>", bd.type,
 		         bd.metadata);
 		gutil_text(4, 4 + (GFX_GUI_SCALE * 8 + 1) * 6, str, GFX_GUI_SCALE * 8, true);
 	}

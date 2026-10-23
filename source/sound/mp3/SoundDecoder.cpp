@@ -14,7 +14,14 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  ****************************************************************************/
+#if defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
+#endif
 #include <gccore.h>
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 #include <malloc.h>
 #include <string.h>
 #include <unistd.h>
@@ -206,4 +213,3 @@ void SoundDecoder::Decode()
 
 	Decoding = false;
 }
-

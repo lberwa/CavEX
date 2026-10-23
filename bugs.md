@@ -1,5 +1,8 @@
 # Bugs/Todos:
 
+<details>
+  <summary>Bug fixes before release</summary>
+
 * ~~Texture orientation for blocks that have a specific "direction"~~
   - ~~Bed placement isn't correct yet~~
   - ~~door placement isn't correct yet~~
@@ -95,8 +98,6 @@
 
 * ~~entities are able to going throw chunks and falling down~~
 
-* implement a minecraft terminal                                                                                                     ⭕
-
 * ~~the moon and sun are too little~~
 
 * ~~Implement a fallback boundary at Y = -50 to stop players falling under the world.~~
@@ -118,21 +119,13 @@
 
 * ~~IB_ANY doesn't ask all buttons~~
 
-* ~~shadow bugs on the wii~~
-
 * ~~gpu on the pc is too slowly so it runs with 20-55fps on fullscreen~~
 
 * ~~world generator needs too much cpu and is too slowly~~
 
 * ~~you don't see the cracks on the blocks on the wii~~
 
-* if player 2 goes into the nether portal he can't go out of the loading screen while player 1 doesn't go to the nether portal too ?? ⭕
-
-* if you go throw the portal, and you wait 5 sekonds you go again to the world ??                                                     ⭕
-
 * ~~the texture of the creative menu is broken on the wii~~
-
-* may load ogg files insead of pcm/wav                                                                                                ⭕
 
 * ~~config.json in ~/.cavex~~
 
@@ -168,7 +161,7 @@
 * ~~there is superfluous item in the creative inventory:~~
   - ~~boat motor~~
 
-* entities can't swim                                                                                                                   ⭕
+* ~~entities can't swim~~
 
 * ~~there is sound missing/broken:~~
   - ~~under water you hear footsteps~~
@@ -184,7 +177,7 @@
   - ~~piston~~
   - ~~pressure plate~~
 
-* bad mob AI                                                                                                                             ⭕
+* ~~bad mob AI~~
 
 * ~~tailgrass looks like dead bush~~
 
@@ -213,6 +206,29 @@
 
 * ~~2d problem:            [./docs/bug1.png](./docs/bug1.png) [./docs/bug2.png](./docs/bug2.png)~~
 
+</details>
+
+
+
+
+
+* implement a minecraft terminal
+
+* may load ogg files insead of pcm/wav 
+
+* if player 2 goes into the nether portal he can't go out of the loading screen while player 1 doesn't go to the nether portal too ??
+
+* if you go throw the portal, and you wait 5 sekonds you go again to the world ??
+
+* shadow bugs on the wii
+
+* the farmland should become to water-farmland if is water in the near
+
+* creeper spawn on day
+
+* you can't break stairs with an ax faster
+
+* tools can't take damage
 
 
 
@@ -257,5 +273,8 @@
   - fishing_hook = uint8=255 !!
   - armor
   - collor/dye
+
+
+
 
 

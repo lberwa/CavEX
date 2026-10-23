@@ -7,21 +7,29 @@
 #include <stddef.h>
 #include <inttypes.h>
 
+#if defined(PLATFORM_WII) || defined(__WII__)
+/* libogc already owns the short integer/float aliases below.  Include its
+ * type header before deciding whether cubiomes has to provide them. */
+#include <gctypes.h>
+#endif
+
 
 ///=============================================================================
 ///                      Compiler and Platform Features
 ///=============================================================================
 
 typedef int8_t      i8;
-typedef uint8_t     u8;
 typedef int16_t     i16;
-typedef uint16_t    u16;
 typedef int32_t     i32;
-typedef uint32_t    u32;
 typedef int64_t     i64;
+#if !defined(PLATFORM_WII) && !defined(__WII__)
+typedef uint8_t     u8;
+typedef uint16_t    u16;
+typedef uint32_t    u32;
 typedef uint64_t    u64;
 typedef float       f32;
 typedef double      f64;
+#endif
 
 
 #define STRUCT(S) typedef struct S S; struct S
@@ -401,6 +409,4 @@ uint64_t mulInv(uint64_t x, uint64_t m)
 
 
 #endif /* RNG_H_ */
-
-
 

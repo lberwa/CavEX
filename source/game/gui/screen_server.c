@@ -293,7 +293,7 @@ static void screen_server_update(struct screen* s, float dt) {
         server_send(new_json, strlen(new_json));
 
         int is_null = 0;
-        data_is_null:
+		data_is_null: {
 
         // -------------------------
         // Antwort empfangen (Timeout 1s)
@@ -320,8 +320,8 @@ static void screen_server_update(struct screen* s, float dt) {
             if (is_null < 2) {
                 return;
             }
-            goto data_is_null;
-        }
+			goto data_is_null;
+		}
 
         server_send("yes", 3);
     
@@ -331,7 +331,8 @@ static void screen_server_update(struct screen* s, float dt) {
 
         count = split_tilde((char*)data, liste);
 
-        data = NULL;
+		data = NULL;
+		}
     }
     // -------------------------
     // Speicher AUFRÄUMEN

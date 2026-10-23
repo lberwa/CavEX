@@ -29,6 +29,12 @@
 #include "client_interface.h"
 #include "server_local.h"
 #include "server_world.h"
+
+#if defined(__GNUC__)
+#define CAVEX_UNUSED __attribute__((unused))
+#else
+#define CAVEX_UNUSED
+#endif
 #include "../daytime.h"
 #include "../platform/time.h"
 #include "../cubiomes/generator.h"
@@ -289,16 +295,16 @@ static bool gen_is_ore_block(uint8_t block);
 
 #ifdef ALL_FALSE_FINISHER
 static const bool GEN_ENABLE_RIVER_LOWERING = 					false;
-static const bool GEN_ENABLE_NEIGHBOR_EDGE_BLEND = 				false;
+static const bool GEN_ENABLE_NEIGHBOR_EDGE_BLEND CAVEX_UNUSED = 				false;
 static const bool GEN_ENABLE_OCEAN_ISLAND_MASK = 				false;
-static const bool GEN_ENABLE_LOWLAND_NEIGHBOR_SMOOTHING = 		false;
+static const bool GEN_ENABLE_LOWLAND_NEIGHBOR_SMOOTHING CAVEX_UNUSED = 		false;
 static const bool GEN_ENABLE_WATER_FILL_TO_SEA_LEVEL = 			false;
 static const bool GEN_ENABLE_SNOW_SURFACE_LAYER = 				false;
 #else
 static const bool GEN_ENABLE_RIVER_LOWERING = 					true;
-static const bool GEN_ENABLE_NEIGHBOR_EDGE_BLEND = 				false;
+static const bool GEN_ENABLE_NEIGHBOR_EDGE_BLEND CAVEX_UNUSED = 				false;
 static const bool GEN_ENABLE_OCEAN_ISLAND_MASK = 				true;
-static const bool GEN_ENABLE_LOWLAND_NEIGHBOR_SMOOTHING = 		false;
+static const bool GEN_ENABLE_LOWLAND_NEIGHBOR_SMOOTHING CAVEX_UNUSED = 		false;
 static const bool GEN_ENABLE_WATER_FILL_TO_SEA_LEVEL = 			true;
 static const bool GEN_ENABLE_SNOW_SURFACE_LAYER = 				true;
 #endif
@@ -1525,7 +1531,7 @@ static void gen_carve_chunk_cave_local_network(struct server_chunk* sc, uint32_t
 	}
 
 	for(int i = 1; i + 2 < node_count; i++) {
-		if((int)(gen_hash3i(chunk_x, 1097 + i * 31, chunk_z, seed) % 100U) >= 8U)
+		if(gen_hash3i(chunk_x, 1097 + i * 31, chunk_z, seed) % 100U >= 8U)
 			continue;
 		int j = i + 1 + (int)(gen_hash3i(chunk_x, 1129 + i * 37, chunk_z, seed)
 							  % (unsigned int)(node_count - i - 1));
@@ -1729,7 +1735,7 @@ static void gen_carve_cave_entrance_to_worm(struct server_chunk* sc, uint32_t se
 	}
 }
 
-static void gen_carve_chunk_cave_entrance(struct server_chunk* sc, uint32_t seed,
+static void CAVEX_UNUSED gen_carve_chunk_cave_entrance(struct server_chunk* sc, uint32_t seed,
 										  int chunk_x, int chunk_z,
 										  const int* surface_map,
 										  Generator* biome_gen,
@@ -2207,7 +2213,7 @@ static void gen_cave_process_chunk(const struct gen_cave_tunnel* t, struct serve
 	}
 }
 
-static void gen_cave_generate_segments_and_process(
+static void CAVEX_UNUSED gen_cave_generate_segments_and_process(
 	struct server_chunk* sc, uint32_t seed, int cave_size, int chunk_x, int chunk_z,
 	int ox, int oy, int oz, int segments, int recursion_left, int* tunnel_budget) {
 	if((sc == NULL) || (segments <= 0) || (recursion_left <= 0)
@@ -2234,7 +2240,7 @@ static void gen_cave_generate_segments_and_process(
 	}
 }
 
-static void gen_carve_worm_nest_caves(struct server_chunk* sc, uint32_t seed,
+static void CAVEX_UNUSED gen_carve_worm_nest_caves(struct server_chunk* sc, uint32_t seed,
 									  int32_t world_x0, int32_t world_z0,
 									  const struct server_world_cuberite_config* cfg) {
 	(void)cfg;
@@ -2381,7 +2387,7 @@ static void gen_carve_density_canyon_bottom_caves(struct server_chunk* sc,
 	}
 }
 
-static void gen_carve_density_caves(struct server_chunk* sc, uint32_t seed,
+static void CAVEX_UNUSED gen_carve_density_caves(struct server_chunk* sc, uint32_t seed,
 									int32_t world_x0, int32_t world_z0,
 									const int* surface_map, int sea_level) {
 	if(sc == NULL || surface_map == NULL)
@@ -2568,11 +2574,11 @@ struct gen_chunk_ravine_connector {
 	uint32_t seed;
 };
 
-static int gen_noise_int2d(uint32_t seed, int x, int z) {
+static int CAVEX_UNUSED gen_noise_int2d(uint32_t seed, int x, int z) {
 	return (int)gen_hash3i(x, 0, z, seed);
 }
 
-static float gen_noise_range2d(uint32_t seed, int x, int z, float minv, float maxv) {
+static float CAVEX_UNUSED gen_noise_range2d(uint32_t seed, int x, int z, float minv, float maxv) {
 	float t = gen_rand01_from_hash(gen_hash3i(x, 0, z, seed));
 	return minv + (maxv - minv) * t;
 }
@@ -2746,7 +2752,7 @@ static void gen_carve_ravine_segment(struct server_chunk* sc, int chunk_x, int c
 	}
 }
 
-static void gen_carve_ravine_pass(struct server_chunk* sc, uint32_t seed,
+static void CAVEX_UNUSED gen_carve_ravine_pass(struct server_chunk* sc, uint32_t seed,
 								  int32_t world_x0, int32_t world_z0,
 								  const struct gen_cuberite_runtime_args* args,
 								  const struct server_world_cuberite_config* cfg) {
@@ -2924,7 +2930,7 @@ static const struct gen_coord2i GEN_BIG_O1[] = {{-1,0},{1,0},{0,-1},{0,1}};
 static const struct gen_coord2i GEN_BIG_O2[] = {
 	{-2,0},{-1,-1},{-1,0},{-1,1},{0,-2},{0,-1},{0,0},{0,1},{0,2},{1,-1},{1,0},{1,1},{2,0}
 };
-static const struct gen_coord2i GEN_BIG_O3[] = {
+static const struct gen_coord2i GEN_BIG_O3[] CAVEX_UNUSED = {
 	{-2,-1},{-2,0},{-2,1},{-1,-2},{-1,-1},{-1,0},{-1,1},{-1,2},{0,-2},{0,-1},{0,0},
 	{0,1},{0,2},{1,-2},{1,-1},{1,0},{1,1},{1,2},{2,-1},{2,0},{2,1}
 };
@@ -3235,6 +3241,7 @@ static void gen_try_place_tree(struct server_chunk* sc, int lx, int lz, int y,
 	}
 }
 
+#if 0 // not used
 static bool gen_tree_density_rule(int biome_id, int world_x, int world_z,
 								  uint32_t seed, float deco,
 								  float* out_threshold) {
@@ -3280,6 +3287,7 @@ static bool gen_tree_density_rule(int biome_id, int world_x, int world_z,
 	int pick_z = cell_z * spacing + (int)((h >> 8) % (uint32_t)spacing);
 	return abs(world_x - pick_x) <= 1 && abs(world_z - pick_z) <= 1;
 }
+#endif
 
 static void gen_try_place_dungeon(struct server_chunk* sc, uint32_t seed,
 								  int world_x0, int world_z0) {
@@ -3515,7 +3523,7 @@ static void gen_place_mineshaft(struct server_chunk* sc, uint32_t seed,
 	}
 }
 
-static void gen_place_small_house(struct server_chunk* sc, int cx, int y, int cz,
+static void CAVEX_UNUSED gen_place_small_house(struct server_chunk* sc, int cx, int y, int cz,
 								  uint8_t wall, uint8_t roof, uint8_t floor,
 								  uint8_t glass) {
 	gen_flatten_surface_patch(sc, cx, cz, 3, y, floor, floor);
@@ -3664,6 +3672,7 @@ static void gen_place_plains_fountain(struct server_chunk* sc, int ox, int oy, i
     gen_set_block(sc, ox+4, oy+2, oz+2, BLOCK_STONE);
 }
 
+#if 0 // not used
 /* plains_small_house: Groesse 7x7x7 */
 static void gen_place_plains_small_house(struct server_chunk* sc, int ox, int oy, int oz) {
     /* Innenraum leeren (Dirt/Stein durch Luft ersetzen) */
@@ -3826,9 +3835,10 @@ static void gen_place_plains_small_house(struct server_chunk* sc, int ox, int oy
     gen_set_block_with_meta(sc, ox+3, oy+1, oz+2, BLOCK_BED, 3);
     gen_set_block_with_meta(sc, ox+4, oy+1, oz+2, BLOCK_BED, 11);
 }
+#endif
 
 /* plains_medium_house: Groesse 13x8x11 */
-static void gen_place_plains_medium_house(struct server_chunk* sc, int ox, int oy, int oz) {
+static void CAVEX_UNUSED gen_place_plains_medium_house(struct server_chunk* sc, int ox, int oy, int oz) {
     /* Innenraum leeren (Dirt/Stein durch Luft ersetzen) */
     for(int iy=1; iy<=5; iy++)
       for(int ix=1; ix<=11; ix++)
@@ -4369,7 +4379,7 @@ static void gen_place_plains_medium_house(struct server_chunk* sc, int ox, int o
 /* ---- Dorfhaus-Strukturen ---- */
 
 /* Hilfsfunktion: Hohlbox (Rand=block_wall, Innen=block_fill) */
-static void gen_fill_box_hollow(struct server_chunk* sc,
+static void CAVEX_UNUSED gen_fill_box_hollow(struct server_chunk* sc,
                                 int x1, int y1, int z1,
                                 int x2, int y2, int z2,
                                 uint8_t block_wall, uint8_t block_fill) {
@@ -4610,7 +4620,7 @@ static void gen_place_plains_lamp(struct server_chunk* sc, int ox, int oy, int o
 }
 
 /* plains_small_farm: Groesse 7x6x9 */
-static void gen_place_plains_small_farm(struct server_chunk* sc, int ox, int oy, int oz) {
+static void CAVEX_UNUSED gen_place_plains_small_farm(struct server_chunk* sc, int ox, int oy, int oz) {
     gen_set_block_with_meta(sc, ox+0, oy+0, oz+0, BLOCK_LOG, 0);
     gen_set_block_with_meta(sc, ox+0, oy+0, oz+1, BLOCK_LOG, 0);
     gen_set_block_with_meta(sc, ox+0, oy+0, oz+2, BLOCK_LOG, 0);
@@ -4880,7 +4890,7 @@ static void gen_place_plains_large_farm(struct server_chunk* sc, int ox, int oy,
 }
 
 /* plains_library: Groesse 11x10x17 */
-static void gen_place_plains_library(struct server_chunk* sc, int ox, int oy, int oz) {
+static void CAVEX_UNUSED gen_place_plains_library(struct server_chunk* sc, int ox, int oy, int oz) {
     /* Innenraum leeren (Dirt/Stein durch Luft ersetzen) */
     for(int iy=1; iy<=7; iy++)
       for(int ix=1; ix<=9; ix++)
@@ -5522,7 +5532,7 @@ static void gen_place_plains_library(struct server_chunk* sc, int ox, int oy, in
 }
 
 /* plains_butcher: Groesse 11x8x12 */
-static void gen_place_plains_butcher(struct server_chunk* sc, int ox, int oy, int oz) {
+static void CAVEX_UNUSED gen_place_plains_butcher(struct server_chunk* sc, int ox, int oy, int oz) {
     /* Innenraum leeren (Dirt/Stein durch Luft ersetzen) */
     for(int iy=1; iy<=5; iy++)
       for(int ix=1; ix<=9; ix++)
@@ -5881,7 +5891,7 @@ static void gen_place_plains_butcher(struct server_chunk* sc, int ox, int oy, in
 
 
 
-static void gen_fill_village_chest(struct server_chunk* sc, int lx, int ly, int lz,
+static void CAVEX_UNUSED gen_fill_village_chest(struct server_chunk* sc, int lx, int ly, int lz,
                                     int64_t world_seed) {
 	/* Pruefen ob an dieser Position eine Truhe ist */
 	if(lx < 0 || lx >= CHUNK_SIZE || lz < 0 || lz >= CHUNK_SIZE) return;
@@ -5965,7 +5975,7 @@ static void gen_place_village_house(struct server_chunk* sc,
 }
 
 /* MC-Farm: zwei Streifen Farmland mit Wasserkanal in der Mitte */
-static void gen_place_mc_farm(struct server_chunk* sc, int cx, int y, int cz) {
+static void CAVEX_UNUSED gen_place_mc_farm(struct server_chunk* sc, int cx, int y, int cz) {
 	/* Farmland: 9 breit, 5 tief (z: -2..+2) mit Wasserkanal in der Mitte (z=0) */
 	for(int x = -4; x <= 4; x++) {
 		for(int z = -3; z <= 3; z++) {
@@ -6100,9 +6110,9 @@ static void gen_place_village(struct server_chunk* sc, struct server_world* w,
 			int cell_z = base_cell_z + dcell_z;
 
 			/* Deterministischer Zell-RNG: worldSeed ^ cellHash */
-			uint64_t cell_rng = (uint64_t)((int64_t)cell_x * 341873128712LL
+			uint64_t cell_rng = (uint64_t)(((int64_t)cell_x * 341873128712LL
 			                  + (int64_t)cell_z * 132897987541LL
-			                  + (int64_t)(int32_t)seed ^ 10387312LL)
+			                  + (int64_t)(int32_t)seed) ^ 10387312LL)
 			                  & 0xFFFFFFFFFFFFULL;
 			cell_rng = (cell_rng ^ 25214903917LL) & 0xFFFFFFFFFFFFULL;
 
@@ -6123,7 +6133,6 @@ static void gen_place_village(struct server_chunk* sc, struct server_world* w,
 
 			int biome_id = gen_biome_at_safe(biome_gen, v_world_x, v_world_z);
 			bool is_desert = (biome_id == desert || biome_id == desert_hills);
-			bool is_taiga  = (biome_id == taiga  || biome_id == taiga_hills);
 			bool is_snowy_village = isSnowy(biome_id);
 
 			uint8_t wall = is_desert ? BLOCK_SANDSTONE : BLOCK_PLANKS;
@@ -6255,7 +6264,7 @@ static void gen_place_village(struct server_chunk* sc, struct server_world* w,
 						/* Durchschnittliche Terrain-Höhe unter dem Haus
 						 * (Summe / Anzahl).
 						 * Kein Kopfstein-Fundament — Haus sitzt auf dem Terrain. */
-						int sum_h = 0, cnt_h = 0;
+						int cnt_h = 0;
 						int min_h = WORLD_HEIGHT, max_h = 0;
 						for(int dx2 = 0; dx2 < sx; dx2++)
 							for(int dz2 = 0; dz2 < sz; dz2++) {
@@ -6263,7 +6272,7 @@ static void gen_place_village(struct server_chunk* sc, struct server_world* w,
 								if(flx<0||flx>=CHUNK_SIZE||flz<0||flz>=CHUNK_SIZE) continue;
 								int h = gen_chunk_actual_surface_height(sc, flx, flz);
 								if(h > sea_level) {
-									sum_h += h; cnt_h++;
+									cnt_h++;
 									if(h < min_h) min_h = h;
 									if(h > max_h) max_h = h;
 								}
@@ -6686,7 +6695,7 @@ static void gen_place_lava_lake(struct server_chunk* sc, uint32_t seed,
 	}
 }
 
-static bool gen_is_local_fluid(uint8_t block) {
+static bool CAVEX_UNUSED gen_is_local_fluid(uint8_t block) {
 	return block == BLOCK_WATER_STILL || block == BLOCK_WATER_FLOW
 		|| block == BLOCK_LAVA_STILL || block == BLOCK_LAVA_FLOW;
 }
@@ -6976,7 +6985,7 @@ static void gen_cleanup_floating_ores(struct server_chunk* sc) {
 	}
 }
 
-static void gen_cleanup_floating_cave_blocks(struct server_chunk* sc) {
+static void CAVEX_UNUSED gen_cleanup_floating_cave_blocks(struct server_chunk* sc) {
 	if(sc == NULL)
 		return;
 	for(int lx = 1; lx < CHUNK_SIZE - 1; lx++) {
@@ -7078,7 +7087,7 @@ static int gen_chunk_actual_surface_height(const struct server_chunk* sc, int lx
 	return -1;
 }
 
-static bool gen_sample_neighbor_edge_height(struct server_world* w, w_coord_t cx,
+static bool CAVEX_UNUSED gen_sample_neighbor_edge_height(struct server_world* w, w_coord_t cx,
 											w_coord_t cz, int dir, int index,
 											int* out_height) {
 	w_coord_t nx = cx;
@@ -7120,7 +7129,7 @@ static bool gen_sample_neighbor_edge_height(struct server_world* w, w_coord_t cx
 	return true;
 }
 
-static int gen_smooth_surface_against_local_neighbors(
+static int CAVEX_UNUSED gen_smooth_surface_against_local_neighbors(
 	const int* surface_map, int lx, int lz, int surface,
 	const struct gen_biome_profile* profile, int sea_level) {
 	if(surface_map == NULL || profile == NULL || profile->riverine)
@@ -7166,7 +7175,7 @@ static int gen_sample_raw_surface(Generator* biome_gen,
 	return gen_apply_river_channel(&profile, gen_args, seed, wx, wz, surface);
 }
 
-static int gen_smooth_surface_against_terrain_shape_area(
+static int CAVEX_UNUSED gen_smooth_surface_against_terrain_shape_area(
 	Generator* biome_gen, const struct gen_cuberite_runtime_args* gen_args,
 	uint32_t seed, int choice_octaves, int32_t wx, int32_t wz,
 	const struct gen_biome_profile* profile, int surface) {
@@ -7356,7 +7365,7 @@ static int gen_apply_region_shore_lowering(Generator* biome_gen,
 	return surface;
 }
 
-static float gen_terrain_shape_density(const struct gen_biome_profile* profile,
+static float CAVEX_UNUSED gen_terrain_shape_density(const struct gen_biome_profile* profile,
 								   const struct gen_cuberite_runtime_args* gen_args,
 								   uint32_t seed, int32_t wx, int y, int32_t wz,
 								   int surface) {
@@ -7508,8 +7517,8 @@ static bool gen_alloc_chunk_buffers(struct server_chunk* sc) {
 static wgen_gen_t* server_world_wgen_gen(struct server_world* w); /* forward decl */
 
 static void gen_generate_terrain_columns(struct server_world* w,
-										 struct server_chunk* sc, int* surface_map,
-										 const uint8_t (*cached_wgen_heights)[CHUNK_SIZE],
+											 struct server_chunk* sc, int* surface_map,
+											 uint8_t (*cached_wgen_heights)[CHUNK_SIZE],
 										 const uint8_t* cached_height_cache,
 										 int cache_origin_x, int cache_origin_z,
 										 Generator* biome_gen,
@@ -7529,7 +7538,7 @@ static void gen_generate_terrain_columns(struct server_world* w,
 	uint8_t local_wgen_heights[CHUNK_SIZE][CHUNK_SIZE];
 	uint8_t local_height_cache[SERVER_WORLD_WGEN_HEIGHT_WIDTH]
 		[SERVER_WORLD_WGEN_HEIGHT_WIDTH];
-	const uint8_t (*wgen_heights)[CHUNK_SIZE] = cached_wgen_heights;
+	uint8_t (*wgen_heights)[CHUNK_SIZE] = cached_wgen_heights;
 	const uint8_t* height_cache = cached_height_cache;
 	if(!wgen_heights) {
 		wgen_gen_surface_heights(wg, (int)chunk_x, (int)chunk_z,
@@ -8038,7 +8047,7 @@ static int gen_mc_feat_int(uint64_t* s, int n) {
 }
 
 static void gen_generate_deco_columns(struct server_world* w, struct server_chunk* sc,
-									  const uint8_t (*cached_wgen_heights)[CHUNK_SIZE],
+									  uint8_t (*cached_wgen_heights)[CHUNK_SIZE],
 									  Generator* biome_gen,
 									  const struct gen_cuberite_runtime_args* gen_args,
 									  uint32_t seed, int32_t world_x0, int32_t world_z0,
@@ -8059,7 +8068,8 @@ static void gen_generate_deco_columns(struct server_world* w, struct server_chun
 	uint64_t lcg = (uint64_t)(ws ^ (int64_t)25214903917LL) & 0xFFFFFFFFFFFFULL;
 	int64_t S = gen_mc_legacy_next_long(&lcg) | 1;
 	int64_t T = gen_mc_legacy_next_long(&lcg) | 1;
-	int64_t dec_seed = (int64_t)(chunk_x * 16) * S + (int64_t)(chunk_z * 16) * T ^ ws;
+	int64_t dec_seed = ((int64_t)(chunk_x * 16) * S
+						 + (int64_t)(chunk_z * 16) * T) ^ ws;
 
 	/* Makro: Feature-RNG initialisieren und nextInt(n) aufrufen */
 #define FEAT_RNG_INIT(step, fi) \
@@ -8068,7 +8078,7 @@ static void gen_generate_deco_columns(struct server_world* w, struct server_chun
 #define FEAT_INT(n) gen_mc_feat_int(&feat_rng, (n))
 
 	uint8_t hh[CHUNK_SIZE][CHUNK_SIZE];
-	const uint8_t (*wgen_heights)[CHUNK_SIZE] = cached_wgen_heights;
+	uint8_t (*wgen_heights)[CHUNK_SIZE] = cached_wgen_heights;
 	if(!wgen_heights) {
 		wgen_gen_t* wg = server_world_wgen_gen(w);
 		wgen_gen_surface_heights(wg, chunk_x, chunk_z, hh);
@@ -8607,7 +8617,7 @@ static Generator* server_world_biome_gen(struct server_world* w) {
 	return &g_biome_gen;
 }
 
-static bool server_world_generate_chunk(struct server_world* w, w_coord_t x,
+static bool CAVEX_UNUSED server_world_generate_chunk(struct server_world* w, w_coord_t x,
 										w_coord_t z, struct server_chunk** out) {
 	assert(w && out);
 
@@ -9347,8 +9357,9 @@ bool server_world_set_block(struct server_local* s, w_coord_t x, w_coord_t y, w_
 
     // if the block we just placed is water itself, wake it too so it starts
     // flowing (bucket placement, or a freshly-spread flow cell)
-    if (blk.type == BLOCK_WATER_STILL || blk.type == BLOCK_WATER_FLOW)
-        server_local_schedule_fluid(s, x, y, z);
+	if (blk.type == BLOCK_WATER_STILL || blk.type == BLOCK_WATER_FLOW) {
+		server_local_schedule_fluid(s, x, y, z);
+	}
 
 	/* A real block edit happened (sc != NULL, and an unchanged block returned
 	 * earlier): drop the covering navmesh tile of any chasing mob so it is
@@ -9805,7 +9816,7 @@ void server_world_explode(struct server_local *s, vec3 center, float power) {
 }
 
 
-bool server_world_find_empty_spot_nearby(const float pos[3], const struct server_world *world, float out_pos[3]){
+bool server_world_find_empty_spot_nearby(const float pos[3], struct server_world *world, float out_pos[3]){
 	const float offs[][3] = {
         { 1.0f, 0.0f,  0.0f }, { -1.0f, 0.0f,  0.0f },
         { 0.0f, 0.0f,  1.0f }, {  0.0f, 0.0f, -1.0f },

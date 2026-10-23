@@ -84,7 +84,7 @@ static int clamp_n(int x, int n) {
 	return x;
 }
 
-static const uint8_t redstone_colors[16][3] = {
+static const uint8_t redstone_colors[16][3] __attribute__((unused)) = {
     {111,   0,  0},  // 0: off
     {120,   3,  0},  // 1
     {130,   7,  0},  // 2

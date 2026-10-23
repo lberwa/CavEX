@@ -474,6 +474,13 @@ void cavex_request_reboot(void) {
 	gstate.quit = true;
 }
 
+static bool main_held_waterlily(void) {
+	struct item_data held;
+	return inventory_get_hotbar_item(
+		windowc_get_latest(gstate_windows()[WINDOWC_INVENTORY]), &held)
+		&& held.id == BLOCK_WATERLILY;
+}
+
 int main(void) {
 #ifdef PLATFORM_PC
 	#ifndef _WIN32
@@ -506,7 +513,7 @@ int main(void) {
     framebuffer3 = MEM_K0_TO_K1(SYS_AllocateFramebuffer(rmode3));
 #endif
 
-	float daytime, tick_delta;
+	float daytime = 0.0f, tick_delta;
 	bool render_world;
 
 	gstate.quit   = false;
@@ -637,7 +644,7 @@ int main(void) {
     LWP_CreateThread(
         &thread,
         net_thread,       // normale C-Funktion
-        &net_ready,       // Argument
+		(void*)&net_ready, // Argument
         NULL,             // Stackbase (NULL für automatisch)
         0,                // Stackgröße (0 = default)
         50                // Priorität
@@ -709,19 +716,23 @@ int main(void) {
 		last_frame = this_frame;
 		float hitch_clin_ms = 0.0f;
 		float hitch_tick_ms = 0.0f;
+#ifdef PLATFORM_PC
 		float hitch_world_prep_ms = 0.0f;
 		float hitch_light_ms = 0.0f;
 		float hitch_build_ms = 0.0f;
 		float hitch_screen_ms = 0.0f;
 		float hitch_flip_ms = 0.0f;
+#endif
 		float hitch_render_ms = 0.0f;
 		float hitch_gui_ms = 0.0f;
+#ifdef PLATFORM_PC
 		float hitch_gui_screen_ms = 0.0f;
 		float hitch_gui_split_ms = 0.0f;
 		float hitch_gui_screenshot_ms = 0.0f;
 		float hitch_gui_pc_update_ms = 0.0f;
 		float hitch_sound_ms = 0.0f;
 		float hitch_input_ms = 0.0f;
+#endif
 		float hitch_finish_ms = 0.0f;
 
 		if(gstate.paused) {
@@ -871,13 +882,7 @@ int main(void) {
 											+ cosf(gstate.camera.rx)
 											  * sinf(gstate.camera.ry) * 4.5F,
 										&gstate.camera_hit,
-										({
-											struct item_data held;
-											inventory_get_hotbar_item(
-												windowc_get_latest(gstate_windows()[WINDOWC_INVENTORY]),
-												&held)
-												&& held.id == BLOCK_WATERLILY;
-										}));
+										main_held_waterlily());
 					}
 				}
 
@@ -968,13 +973,7 @@ int main(void) {
 										gstate.camera.y +            cosf(gstate.camera.ry) * 4.5F,
 										gstate.camera.z + cosf(gstate.camera.rx) * sinf(gstate.camera.ry) * 4.5F,
 										&gstate.camera_hit,
-										({
-											struct item_data held;
-											inventory_get_hotbar_item(
-												windowc_get_latest(gstate_windows()[WINDOWC_INVENTORY]),
-												&held)
-												&& held.id == BLOCK_WATERLILY;
-										}));
+										main_held_waterlily());
 					}
 				}
 			} else {
@@ -1000,30 +999,50 @@ int main(void) {
 		 * world_pre_render wird erst im Render-Loop aufgerufen. Bis dahin kann
 		 * die ilist Zeiger auf freigegene Chunks enthalten (z.B. nach retire
 		 * wenn kein Spieler mehr in dieser Dimension ist). */
+		#ifdef PLATFORM_PC
 		ptime_t _prof_world_prep0 = time_get();
+		#endif
 		world_pre_render_clear(&gstate.world);
+		#ifdef PLATFORM_PC
 		ptime_t _prof_light0 = time_get();
+		#endif
 		world_update_lighting(&gstate.world);
+		#ifdef PLATFORM_PC
 		hitch_light_ms += time_diff_s(_prof_light0, time_get()) * 1000.0f;
 		ptime_t _prof_build0 = time_get();
+		#endif
 		world_build_chunks(&gstate.world, CHUNK_MESHER_QLENGTH);
+		#ifdef PLATFORM_PC
 		hitch_build_ms += time_diff_s(_prof_build0, time_get()) * 1000.0f;
+		#endif
 		if(_has_nether) {
 			world_pre_render_clear(&gstate.world_nether);
+			#ifdef PLATFORM_PC
 			_prof_light0 = time_get();
+			#endif
 			world_update_lighting(&gstate.world_nether);
+			#ifdef PLATFORM_PC
 			hitch_light_ms += time_diff_s(_prof_light0, time_get()) * 1000.0f;
 			_prof_build0 = time_get();
+			#endif
 			world_build_chunks(&gstate.world_nether, CHUNK_MESHER_QLENGTH);
+			#ifdef PLATFORM_PC
 			hitch_build_ms += time_diff_s(_prof_build0, time_get()) * 1000.0f;
+			#endif
 		}
+		#ifdef PLATFORM_PC
 		hitch_world_prep_ms = time_diff_s(_prof_world_prep0, time_get()) * 1000.0f;
+		#endif
 
+		#ifdef PLATFORM_PC
 		ptime_t _prof_screen0 = time_get();
+		#endif
 		if(gstate.current_screen->update)
 			gstate.current_screen->update(gstate.current_screen,
 											gstate.stats.dt);
+		#ifdef PLATFORM_PC
 		hitch_screen_ms = time_diff_s(_prof_screen0, time_get()) * 1000.0f;
+		#endif
 		cdbg_flush(); /* Debug-Nachrichten vom Server-Thread senden */
 
 		render_world
@@ -1045,9 +1064,13 @@ int main(void) {
 				+= (target - gstate.config.fog_distance) * k;
 		}
 
+		#ifdef PLATFORM_PC
 		ptime_t _prof_flip0 = time_get();
+		#endif
 		gfx_flip_buffers(&gstate.stats.dt_gpu, &gstate.stats.dt_vsync);
+		#ifdef PLATFORM_PC
 		hitch_flip_ms = time_diff_s(_prof_flip0, time_get()) * 1000.0f;
+		#endif
 		ptime_t _prof_render0 = time_get();
 		bool rendered_2d = false;
 		if(!gstate.paused) {
@@ -1424,7 +1447,9 @@ int main(void) {
 
 		ptime_t _prof_gui0 = time_get();
 		if(!rendered_2d) {
+			#ifdef PLATFORM_PC
 			ptime_t _prof_gui_screen0 = time_get();
+			#endif
 			struct screen* active_screen = gstate.current_screen == &screen_ingame ?
 				screen_get_player(0) :
 				gstate.current_screen;
@@ -1451,21 +1476,29 @@ int main(void) {
 				active_screen->render2D(active_screen, gfx_width(),
 										gfx_height());
 			}
+			#ifdef PLATFORM_PC
 			hitch_gui_screen_ms
 				= time_diff_s(_prof_gui_screen0, time_get()) * 1000.0f;
+			#endif
 		}
 
 #ifdef SPLITSCREEN
 		if(splitscreen_enabled() && render_world) {
+			#ifdef PLATFORM_PC
 			ptime_t _prof_gui_split0 = time_get();
+			#endif
 			splitscreen_load_player(0);
+			#ifdef PLATFORM_PC
 			hitch_gui_split_ms
 				= time_diff_s(_prof_gui_split0, time_get()) * 1000.0f;
+			#endif
 		}
 #endif
 
 		if(input_pressed(IB_SCREENSHOT, 0)) {
+			#ifdef PLATFORM_PC
 			ptime_t _prof_gui_screenshot0 = time_get();
+			#endif
 			size_t width, height;
 			gfx_copy_framebuffer(NULL, &width, &height);
 
@@ -1491,8 +1524,10 @@ int main(void) {
 				lodepng_encode32_file(name, image, width, height);
 				free(image);
 			}
+			#ifdef PLATFORM_PC
 			hitch_gui_screenshot_ms
 				= time_diff_s(_prof_gui_screenshot0, time_get()) * 1000.0f;
+			#endif
 		}
 
 #ifdef PLATFORM_PC
@@ -1505,12 +1540,20 @@ int main(void) {
 		gstate.stats.prof_gui_ms = gstate.stats.prof_gui_ms * 0.9f
 			+ hitch_gui_ms * 0.1f;
 
+		#ifdef PLATFORM_PC
 		ptime_t _prof_sound0 = time_get();
+		#endif
 		sound_update();
+		#ifdef PLATFORM_PC
 		hitch_sound_ms = time_diff_s(_prof_sound0, time_get()) * 1000.0f;
+		#endif
+		#ifdef PLATFORM_PC
 		ptime_t _prof_input0 = time_get();
+		#endif
 		input_poll();
+		#ifdef PLATFORM_PC
 		hitch_input_ms = time_diff_s(_prof_input0, time_get()) * 1000.0f;
+		#endif
 		ptime_t _prof_finish0 = time_get();
 		gfx_finish(true);
 		hitch_finish_ms = time_diff_s(_prof_finish0, time_get()) * 1000.0f;

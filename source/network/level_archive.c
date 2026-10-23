@@ -475,7 +475,11 @@ bool level_archive_read_player(struct level_archive* la, vec3 position,
 	if(!level_archive_read(la, LEVEL_PLAYER_ROTATION, &rot, 0))
 		return false;
 
-	int32_t dim;
+	/* Keep a valid default for callers that request the dimension.  The
+	 * conditional read below is skipped when dimension == NULL, so without an
+	 * initializer the compiler cannot prove that dim was assigned before the
+	 * final conversion. */
+	int32_t dim = 0;
 	if(dimension && !level_archive_read(la, LEVEL_PLAYER_DIMENSION, &dim, 0))
 		return false;
 

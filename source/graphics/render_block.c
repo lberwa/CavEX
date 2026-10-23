@@ -557,6 +557,7 @@ static size_t render_cuboid_side(struct displaylist* d, struct block_info* this,
 	return 1;
 }
 
+#if 0 // not used
 static size_t render_cuboid_side_tex(struct displaylist* d,
 									 struct block_info* this, enum side side,
 									 uint8_t* vertex_light, bool count_only,
@@ -631,6 +632,7 @@ static size_t render_cuboid_side_tex(struct displaylist* d,
 
 	return 1;
 }
+#endif
 
 static size_t render_cuboid_side_texrect(struct displaylist* d,
 										 struct block_info* this, enum side side,
@@ -1298,6 +1300,7 @@ size_t render_block_button(struct displaylist* d, struct block_info* this,
 	}
 }
 
+#if 0 // not used
 static bool pane_connects_to(struct block_info* this, enum side side) {
 	if(!this->neighbours)
 		return false;
@@ -1311,6 +1314,7 @@ static bool pane_connects_to(struct block_info* this, enum side side) {
 
 	return !blocks[neighbour.type]->can_see_through;
 }
+#endif
 
 static size_t render_pane_box_uv(struct displaylist* d, struct block_info* this,
 								 enum side side, uint8_t* vertex_light,
@@ -1755,7 +1759,7 @@ static size_t render_iron_bars_plane_x(struct displaylist* d,
 	uint16_t tex_y = TEX_OFFSET(TEXTURE_Y(tex));
 	uint8_t luminance = blocks[this->block->type]->luminance;
 	const int16_t z0 = 127;
-	const int16_t z1 = 129;
+	//const int16_t z1 = 129;
 
 	if(!count_only) {
 		render_block_side_adv_v2(d, bx + x0, by, bz + z0, x1 - x0, BLK_LEN, 0, 0,
@@ -1773,7 +1777,7 @@ static size_t render_iron_bars_plane_x_texrect(struct displaylist* d,
 												   int16_t x1, uint16_t tex_u0,
 												   uint8_t tex_w) {
 	uint16_t tex = blocks[this->block->type]->getTextureIndex(this, SIDE_FRONT);
-	size_t count = 0;
+	//size_t count = 0;
 
 	return render_cuboid_side_texrect(d, this, SIDE_FRONT, vertex_light,
 									   count_only, x0, 0, 127, x1, BLK_LEN, 129,
@@ -1792,7 +1796,7 @@ static size_t render_iron_bars_plane_z(struct displaylist* d,
 	uint16_t tex_y = TEX_OFFSET(TEXTURE_Y(tex));
 	uint8_t luminance = blocks[this->block->type]->luminance;
 	const int16_t x0 = 127;
-	const int16_t x1 = 129;
+	//const int16_t x1 = 129;
 
 	if(!count_only) {
 		render_block_side_adv_v2(d, bx + x0, by, bz + z0, z1 - z0, BLK_LEN, 0, 0,
@@ -1810,7 +1814,7 @@ static size_t render_iron_bars_plane_z_texrect(struct displaylist* d,
 												   int16_t z1, uint16_t tex_u0,
 												   uint8_t tex_w) {
 	uint16_t tex = blocks[this->block->type]->getTextureIndex(this, SIDE_LEFT);
-	size_t count = 0;
+	//size_t count = 0;
 
 	return render_cuboid_side_texrect(d, this, SIDE_LEFT, vertex_light,
 									   count_only, 127, 0, z0, 129, BLK_LEN, z1,
@@ -2227,6 +2231,7 @@ size_t render_block_iron_bars_always(struct displaylist* d,
 	return count;
 }
 
+# if 0 // not used
 static void repeater_orient_box(uint8_t dir, int16_t* x0, int16_t* z0,
 								int16_t* x1, int16_t* z1) {
 	int16_t ax0 = *x0, az0 = *z0, ax1 = *x1, az1 = *z1;
@@ -2266,6 +2271,7 @@ static void repeater_orient_box(uint8_t dir, int16_t* x0, int16_t* z0,
 	*x1 = max_x;
 	*z1 = max_z;
 }
+#endif
 
 static size_t render_repeater_box(struct displaylist* d, struct block_info* this,
 								  enum side side, uint8_t* vertex_light,
@@ -3051,7 +3057,7 @@ static inline uint8_t redstone_vertex_light(uint8_t base, uint8_t level) {
 
 static void render_redstone(struct displaylist* dl, int16_t x, int16_t y, int16_t z,
 							uint16_t a, uint16_t b, uint16_t c, uint16_t d,
-							uint8_t level, const uint16_t (*tex_coords)[2],
+							uint8_t level, uint16_t (*tex_coords)[2],
 							uint8_t* vertex_light, int tex_rotate, bool backface)
 	{
 	const int order[4] = {backface ? 3 : 0, backface ? 2 : 1,
@@ -3086,9 +3092,10 @@ static void render_redstone(struct displaylist* dl, int16_t x, int16_t y, int16_
 	}
 	}
 
+#if 0 // not used
 static void render_redstone_offset(struct displaylist* dl, int16_t x, int16_t y, int16_t z,
 								   uint16_t a, uint16_t b, uint16_t c, uint16_t d,
-								   uint8_t level, const uint16_t (*tex_coords)[2],
+										 uint8_t level, uint16_t (*tex_coords)[2],
 								   uint8_t* vertex_light, int tex_rotate,
 								   int16_t ox, int16_t oz)
 	{
@@ -3115,10 +3122,10 @@ static void render_redstone_offset(struct displaylist* dl, int16_t x, int16_t y,
 		DIM_LIGHT(vertex_light[7], NULL, false, 0), level));
 	displaylist_texcoord(dl, tex_coords[(tex_rotate + 3) % 4][0],
 							tex_coords[(tex_rotate + 3) % 4][1]);
-	}
-
+}
+#endif
 static void render_redstone_vertical(struct displaylist* dl, int16_t x, int16_t y, int16_t z,
-									 uint8_t level, const uint16_t (*tex_coords)[2],
+										 uint8_t level, uint16_t (*tex_coords)[2],
 									 uint8_t* vertex_light, int tex_rotate, int dir)
 	{
 	const int16_t offset = -4;
@@ -3207,9 +3214,7 @@ size_t render_block_redstone_wire(struct displaylist* dl, struct block_info* thi
 		return 0;
 	}
 
-		bool has_near = false;
-		uint8_t near_mask = 0; // bit0=+X, bit1=-X, bit2=+Z, bit3=-Z
-
+		//bool has_near = false;
 		struct block_data above;
 		bool above_air = neighbours_ext_get(this, 0, +1, 0, &above)
 			&& above.type == BLOCK_AIR;
@@ -3269,10 +3274,11 @@ size_t render_block_redstone_wire(struct displaylist* dl, struct block_info* thi
 				}
 			}
 
-			if (dir_near) {
+			// unused
+			/*if (dir_near) {
 				has_near = true;
 				near_mask |= dirs[i].bit;
-			}
+			}*/
 		}
 		
 		// Zusatzliste: 0 = nix, 1 = direkt/unter, 2 = oben (bei Luft ueber dem Block)
@@ -3327,11 +3333,12 @@ size_t render_block_redstone_wire(struct displaylist* dl, struct block_info* thi
 		int16_t x = W2C_COORD(this->x);
 		int16_t y = W2C_COORD(this->y);
 		int16_t z = W2C_COORD(this->z);
-
-		bool zero = false;
+		
+		// not used
+		/*bool zero = false;
 		for (int i = 0; i < 4; i++) {
 			if (dir_state[i] == 0) zero = true;
-		}
+		}*/
 
 		#ifdef REDSTONE_CASE_DEBUG
 		CAVEX_DEBUG_PRINTF("%d    %d    %d    %d\n", dir_state[0], dir_state[1], dir_state[2], dir_state[3]);
@@ -3342,26 +3349,22 @@ size_t render_block_redstone_wire(struct displaylist* dl, struct block_info* thi
 		int tex_rotate = 0;
 		
 		// straight
-		if   (dir_state[0] != 0 && dir_state[1] != 0
-		   && dir_state[2] == 0 && dir_state[3] == 0
-		   
-		   || dir_state[0] != 0 && dir_state[1] == 0
-		   && dir_state[2] == 0 && dir_state[3] == 0 
-		   
-		   || dir_state[0] == 0 && dir_state[1] != 0
+		if   ((dir_state[0] != 0 && dir_state[1] != 0
 		   && dir_state[2] == 0 && dir_state[3] == 0)
+		   || (dir_state[0] != 0 && dir_state[1] == 0
+		   && dir_state[2] == 0 && dir_state[3] == 0)
+		   || (dir_state[0] == 0 && dir_state[1] != 0
+		   && dir_state[2] == 0 && dir_state[3] == 0))
 	   {
 			cases      = 0;
 			tex_rotate = 0;
 		} else 
-		if   (dir_state[0] == 0 && dir_state[1] == 0
-		   && dir_state[2] != 0 && dir_state[3] != 0
-		   
-		   || dir_state[0] == 0 && dir_state[1] == 0
-		   && dir_state[2] != 0 && dir_state[3] == 0 
-		   
-		   || dir_state[0] == 0 && dir_state[1] == 0
-		   && dir_state[2] == 0 && dir_state[3] != 0) 
+		if   ((dir_state[0] == 0 && dir_state[1] == 0
+		   && dir_state[2] != 0 && dir_state[3] != 0)
+		   || (dir_state[0] == 0 && dir_state[1] == 0
+		   && dir_state[2] != 0 && dir_state[3] == 0)
+		   || (dir_state[0] == 0 && dir_state[1] == 0
+		   && dir_state[2] == 0 && dir_state[3] != 0))
 		{
 			cases      = 0;
 			tex_rotate = 1;
@@ -3624,12 +3627,6 @@ size_t render_block_redstone_wire(struct displaylist* dl, struct block_info* thi
 									side == SIDE_BOTTOM);
 			}
 		}
-			uint16_t tex_coords[4][2] = {
-				{TEX_OFFSET(TEXTURE_X(tex)), TEX_OFFSET(TEXTURE_Y(tex))},
-				{TEX_OFFSET(TEXTURE_X(tex)) + 16, TEX_OFFSET(TEXTURE_Y(tex))},
-				{TEX_OFFSET(TEXTURE_X(tex)) + 16, TEX_OFFSET(TEXTURE_Y(tex)) + 16},
-				{TEX_OFFSET(TEXTURE_X(tex)), TEX_OFFSET(TEXTURE_Y(tex)) + 16},
-			};
 			/*render_redstone(dl, x, y, z, a, b, c, d, lvl, tex_coords,
 							vertex_light, tex_rotate);*/
 			if (side == SIDE_TOP && above_air) {
@@ -5347,7 +5344,7 @@ size_t render_block_chest(struct displaylist* d, struct block_info* this,
 
 	(void)it;
 	if(metadata & 0x0c) {
-		bool left = metadata & 0x08;
+		//bool left = metadata & 0x08;
 
 		if(side == SIDE_TOP || side == SIDE_BOTTOM) {
 				switch(direction) {
@@ -5595,8 +5592,8 @@ size_t render_block_brewing_stand(struct displaylist* d, struct block_info* this
 			const int16_t bz = W2C_COORD(this->z) * BLK_LEN;
 			const int16_t arm_y0 = base_y1;
 			const int16_t arm_y1 = base_y1 + 192; // 12 px tall (top 4 px removed)
-			const int16_t cx = 128;
-			const int16_t cz = 128;
+			//const int16_t cx = 128;
+			//const int16_t cz = 128;
 			const uint8_t light = (MAX_U8(this->block->torch_light, blocks[this->block->type]->luminance) << 4)
 				| this->block->sky_light;
 

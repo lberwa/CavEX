@@ -232,7 +232,14 @@ int which_controller(int chan) {
 
 #ifdef PLATFORM_WII
 
+#if defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
+#endif
 #include <wiiuse/wpad.h>
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 #include <ogc/pad.h>
 
 #define MAX_CONTROLLERS 3
@@ -763,18 +770,19 @@ bool input_pressed(enum input_button b, int player) {
 		return false;
 
 	bool any_pressed = false;
-	bool any_held = false;
-	bool any_released = false;
+	// not used
+	//bool any_held = false;
+	//bool any_released = false;
 
 	for(size_t k = 0; k < length; k++) {
 		bool pressed, released, held;
 		input_native_key_status(mapping[k], vplayer, &pressed, &released, &held);
 		if(pressed)
 			any_pressed = true;
-		if(released)
+		/*if(released)
 			any_released = true;
 		if(held)
-			any_held = true;
+			any_held = true;*/
 	}
 
 	return any_pressed;
@@ -978,18 +986,18 @@ bool rinput_pressed(enum input_button b, int player) {
 		return false;
 
 	bool any_pressed = false;
-	bool any_held = false;
-	bool any_released = false;
+	//bool any_held = false;
+	//bool any_released = false;
 
 	for(size_t k = 0; k < length; k++) {
 		bool pressed, released, held;
 		input_native_key_status(mapping[k], player, &pressed, &released, &held);
 		if(pressed)
 			any_pressed = true;
-		if(released)
+		/*if(released)
 			any_released = true;
 		if(held)
-			any_held = true;
+			any_held = true;*/
 	}
 
 	return any_pressed;

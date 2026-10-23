@@ -422,7 +422,9 @@ void entity_try_move(struct entity* e, vec3 pos, vec3 vel, struct AABB* bbox,
 
 	float threshold;
 	if(entity_intersection_threshold(e, bbox, pos, tmp, &threshold)) {
+#if ENTITY_COLLISION_PRINTF
 		const char* axis = coord == 0 ? "x" : coord == 1 ? "y" : "z";
+#endif
 		if(e->type == ENTITY_LOCAL_PLAYER && vel == e->vel
 		   && entity_collision_log_changed(e, pos, vel, tmp, coord, threshold,
 		                                    *on_ground))
@@ -657,7 +659,7 @@ bool entity_try_auto_jump(struct entity* e, float jump_force, float threshold) {
     bool space_above   = true;  // Default: Luft / durchlässig
 
     // Prüfen, ob blk1 gültig ist
-    if (blk1.type >= 0 && blk1.type < 256 && blocks[blk1.type]) {
+	if (blocks[blk1.type]) {
         blocked_ahead = has_front && !blocks[blk1.type]->can_see_through;
     } else {
         // Ungültig: als „nicht blockiert“ behandeln
@@ -665,7 +667,7 @@ bool entity_try_auto_jump(struct entity* e, float jump_force, float threshold) {
     }
 
     // Prüfen, ob blk2 gültig ist
-    if (blk2.type >= 0 && blk2.type < 256 && blocks[blk2.type]) {
+	if (blocks[blk2.type]) {
         space_above = !has_top || blocks[blk2.type]->can_see_through;
     } else {
         // Ungültig: Standardwert Luft/kein Block → durchlässig

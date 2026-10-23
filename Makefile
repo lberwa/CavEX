@@ -134,7 +134,9 @@ PY_LIBS     := -lpython3.15 -lcurl -lmbedtls -lmbedx509 -lmbedcrypto -ltfpsacryp
                -lz -lgdbm_compat -lgdbm -llzma -lbz2 -luuid -lfatpy -lbitmap \
                -lwiidl -lwiikeyboard
 
-CXXFLAGS	+=	$(CFLAGS)
+# CFLAGS contains the C-only -std=c99 flag.  Passing it to g++ is harmless
+# but noisy and can hide real C++ diagnostics in the build log.
+CXXFLAGS	+=	$(filter-out -std=c99,$(CFLAGS))
 CPPFLAGS	+=	-Ofast -DSPLITSCREEN=2 -g
 CFLAGS		+=	-Ofast -g -std=c99 -pedantic -Wextra -Wno-unused-parameter -Wall \
 				-DSPLITSCREEN=2  -DPLATFORM_WII -D_POSIX_THREADS \

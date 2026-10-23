@@ -1159,12 +1159,14 @@ static double wgen_fold_factor(double r) {
  * offset = Basis-Offset + spline(cont, eros, fold_factor(rugged))
  * Typischer Wertebereich: ca. -0.7 bis +0.7
  */
+#ifdef WGEN_TESTING
 static double wgen_gen_offset(wgen_gen_t* g, double wx, double wz) {
     double cont, eros, rugged;
     wgen_gen_climate(g, wx, wz, &cont, &eros, NULL, NULL, &rugged);
     double rf = wgen_fold_factor(rugged);
     return -0.5 + wgen_eval_spline(OFFSET_SPLINES, 0, cont, eros, rf);
 }
+#endif
 
 /*
  * wgen_offset_to_cavex_height: rechnet den Terrain-Offset in eine CavEX-Hoehe um.

@@ -893,6 +893,7 @@ static void world_render_enchanting_books(struct world* w, struct camera* c) {
 	// - page 1: x 2..13,  y 112..128
 	// - page 2: x 13..14, y 112..128
 	const float inv = 1.0f / 128.0f;
+	/* // not used
 	const float cover_u0 = 0.0f * inv;
 	const float cover_u1 = 68.0f * inv;
 	const float cover_um = 34.0f * inv;
@@ -904,6 +905,7 @@ static void world_render_enchanting_books(struct world* w, struct camera* c) {
 	const float pages_u21 = 14.0f * inv;
 	const float v_pages0 = 112.0f * inv;
 	const float v_pages1 = 128.0f * inv;
+	*/
 
 	gfx_matrix_modelview(c->view);
 	// Use the raw particles.png. The normal particle system uses an atlased
@@ -983,8 +985,6 @@ static void world_render_enchanting_books(struct world* w, struct camera* c) {
 		}
 
 		const float open_base = (open_base_anim);
-		const float lift = 0.015f;   // outer edge lift
-		const float bend = 0.010f;   // inner edge lift
 
 		for(c_coord_t cy = 0; cy < CHUNK_SIZE; cy++) {
 			for(c_coord_t cz = 0; cz < CHUNK_SIZE; cz++) {
@@ -1016,13 +1016,6 @@ static void world_render_enchanting_books(struct world* w, struct camera* c) {
 						0xD8, 0xD8, 0xD8, 0xFF,
 						0xD8, 0xD8, 0xD8, 0xFF,
 					};
-						const uint8_t color_cover[16] = {
-							0xB8, 0xB8, 0xB8, 0xFF,
-						0xB8, 0xB8, 0xB8, 0xFF,
-						0xB8, 0xB8, 0xB8, 0xFF,
-							0xB8, 0xB8, 0xB8, 0xFF,
-						};
-
 					// Helper: transform local (lx,lz) with a Y rotation and an overall tilt
 					// into world coordinates, and give us a "page-like" varying Y.
 					#define BOOK_PT3D(outx, outy, outz, lx, ly, lz, yaw, fold, base_lift) do { \
@@ -1039,15 +1032,14 @@ static void world_render_enchanting_books(struct world* w, struct camera* c) {
 						float wz = cz0 + tz2; \
 						/* fold around spine at lx=0 (rotate in X-Y plane around world point at same (ly,lz) but lx=0) */ \
 						{ \
-							float hx, hy, hz; \
+							float hx, hy/*, hz*/; \
 							/* hinge point */ \
 							const float txh = (0.0f) * ca - (lz) * sa; \
 							const float tzh = (0.0f) * sa + (lz) * ca; \
-							const float tzh2 = tzh * ct - ty0 * st; \
 							const float tyh2 = tzh * st + ty0 * ct; \
 							hx = cx0 + txh; \
 							hy = (y_base + (y_top - y_base)) + tyh2 + (base_lift); \
-							hz = cz0 + tzh2; \
+							/*hz = cz0 + tzh2;*/ \
 							const float cu = cosf((fold)); \
 							const float su = sinf((fold)); \
 							const float dx = wx - hx; \

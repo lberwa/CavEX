@@ -91,7 +91,7 @@ static int g_chunk_cap = SERVER_CHUNK_HARD_CAP;
 #else
 #define WORLD_GEN_LOG(...) ((void)0)
 #endif
-#if CHUNK_MESHER_DEBUG
+#if CHUNK_MESHER_DEBUG && defined(PLATFORM_PC)
 #include <stdio.h>
 #include <stdarg.h>
 #include "../network/server_comunication.h"
@@ -698,14 +698,16 @@ void server_local_collapse_portal(struct server_local* s, int x, int y, int z) {
  * Doppeleinträge im Umkreis von 4 Blöcken werden übersprungen. */
 /* Debug: gesamte Portal-Registry beider Dimensionen ausgeben. */
 void server_local_dump_portal_registry(struct server_local* s, const char* tag) {
+#ifdef PORTAL_DEBUG
 	const char* dim_name[2] = {"OW    ", "NETHER"};
 
-#ifdef PORTAL_DEBUG
 	CAVEX_DEBUG_PRINTF("[PORTAL] ===== Registry dump (%s) =====\n", tag ? tag : "");
 #endif
 
 	for(int di = 0; di < 2; di++) {
+#ifdef PORTAL_DEBUG
 		int count = 0;
+#endif
 		for(int i = 0; i < MAX_PORTAL_ENTRIES; i++) {
 			if(!s->portal_registry[di][i].valid) continue;
 #ifdef PORTAL_DEBUG
@@ -714,8 +716,9 @@ void server_local_dump_portal_registry(struct server_local* s, const char* tag) 
 			       s->portal_registry[di][i].x,
 			       s->portal_registry[di][i].y,
 			       s->portal_registry[di][i].z);
-#endif
+
 			count++;
+#endif
 		}
 #ifdef PORTAL_DEBUG
 		if(count == 0)
@@ -789,7 +792,7 @@ void server_local_unregister_portal(struct server_local* s,
 
 /* Sucht das nächste registrierte Portal in der Zieldimension
  * im Umkreis 'radius' Blöcke (XZ) um (dest_x, dest_z).
- * Gibt 1 zurück und setzt *out_x/*out_y/*out_z wenn gefunden. */
+ * Gibt 1 zurück und setzt *out_x / *out_y / *out_z wenn gefunden. */
 static int server_local_find_registered_portal(struct server_local* s,
                                                 int dest_x, int dest_z,
                                                 enum world_dim dim,
@@ -905,8 +908,9 @@ static bool server_local_is_solid_ground(uint8_t type) {
 
 /* Sucht in geladenen Chunks nach dem nächsten BLOCK_PORTAL im Umkreis
  * 'radius' Blöcke (XZ-Euklid) um (dest_x, ?, dest_z).
- * Gibt 1 zurück und setzt *out_x/*out_y/*out_z wenn ein Portal gefunden. */
-static int server_local_find_portal_near(struct server_world* w,
+ * Gibt 1 zurück und setzt *out_x / *out_y / *out_z wenn ein Portal gefunden. */
+static int __attribute__((unused)) server_local_find_portal_near(
+                                          struct server_world* w,
                                           int dest_x, int dest_z,
                                           int radius,
                                           int* out_x, int* out_y, int* out_z) {
@@ -964,7 +968,7 @@ static int server_local_find_portal_near(struct server_world* w,
  * Sucht zuerst einen 16-Block-XZ-Radius nach der nächsten gültigen Spalte.
  * Wenn nirgends Untergrund gefunden wird, baut es eine Netherrack/Erde-Plattform.
  * Gibt die Y-Koordinate der untersten Portal-Blöcke zurück.
- * *px_io/*pz_io werden auf die tatsächliche Bauposition aktualisiert. */
+ * *px_io / *pz_io werden auf die tatsächliche Bauposition aktualisiert. */
 #define PORTAL_PLACE_RADIUS 16
 static int server_local_place_destination_portal(struct server_local* s,
                                                   int* px_io, int* pz_io,
@@ -1079,8 +1083,6 @@ static void server_local_switch_dimension(struct server_local* s, int player_id)
 
 	int dest_x = (int)floor(sp->x * scale);
 	int dest_z = (int)floor(sp->z * scale);
-
-	struct server_world* dw = &s->worlds[WDIM_IDX(dest_dim)];
 
 	sp->dimension = dest_dim;
 	sp->portal_ticks = 0;
@@ -1697,6 +1699,10 @@ void play_dig_sound_at(enum block_type type, float x, float y, float z, float vo
                                              pcm_dig_cloth3, pcm_dig_cloth4};
     static const enum pcm_sound gravel[] = {pcm_dig_gravel1, pcm_dig_gravel2,
                                              pcm_dig_gravel3, pcm_dig_gravel4};
+    static const enum pcm_sound snow[] = {pcm_step_snow1, pcm_step_snow2,
+                                          pcm_step_snow3, pcm_step_snow4};
+    static const enum pcm_sound sand[] = {pcm_dig_sand1, pcm_dig_sand1,
+                                          pcm_dig_sand1, pcm_dig_sand1};
 
     const enum pcm_sound *tbl = stone;
     int cnt = 4;
@@ -1704,8 +1710,7 @@ void play_dig_sound_at(enum block_type type, float x, float y, float z, float vo
     if(type == BLOCK_GRAVEL) {
         tbl = gravel; cnt = 4;
     } else if(type == BLOCK_SNOW || type == BLOCK_SNOW_BLOCK) {
-        tbl = (const enum pcm_sound[]){pcm_step_snow1, pcm_step_snow2,
-                                      pcm_step_snow3, pcm_step_snow4};
+        tbl = snow;
         cnt = 4;
     } else if(type != BLOCK_AIR && blocks[type] && blocks[type]->getMaterial) {
         struct block_data bd = {.type = type, .metadata = 0};
@@ -1715,10 +1720,7 @@ void play_dig_sound_at(enum block_type type, float x, float y, float z, float vo
             case MATERIAL_WOOD:    tbl = wood;   cnt = 4; break;
             case MATERIAL_WOOL:    tbl = cloth;  cnt = 4; break;
             case MATERIAL_ORGANIC: tbl = grass;  cnt = 4; break;
-            case MATERIAL_SAND:    tbl = (const enum pcm_sound[]){
-                                      pcm_dig_sand1, pcm_dig_sand1,
-                                      pcm_dig_sand1, pcm_dig_sand1};
-                                      cnt = 4; break;
+            case MATERIAL_SAND:    tbl = sand; cnt = 4; break;
             case MATERIAL_GLASS:
                 sound_play_at_vol((enum pcm_sound)(pcm_glass1 + rand() % 3),
                                   x, y, z, vol_scale);
@@ -2410,7 +2412,7 @@ static void server_local_process(struct server_rpc* call, void* user) {
 				s->paused = false;
 				break;
 
-		case SRPC_ENTITY_ATTACK:
+		case SRPC_ENTITY_ATTACK: {
 		  uint32_t id = call->payload.entity_attack.entity_id;
 		  struct entity **ptr = dict_entity_get(s->entities, id);
 		  if (ptr && *ptr) {
@@ -2449,6 +2451,7 @@ static void server_local_process(struct server_rpc* call, void* user) {
 		    }
 		  }
 		  break;
+		}
 		case SRPC_BOAT_CONTROL: {
 		  // Apply the rider's steer/throttle to the server boat. The boat's own
 		  // tick_server integrates it; here we just latch the inputs so the
@@ -2982,11 +2985,15 @@ static void server_local_update(struct server_local* s) {
 	server_local_try_spawn_nearby_dark_monster(s, player_x, player_y,
 												player_z);
 
+#ifndef SPLITSCREEN
 	w_coord_t cx, cz;
+#endif
 	/* Langsame Erholung: alle 200 Ticks (10 s bei 20 TPS) Sichtweite um 1
 	 * erhöhen, falls sie unter MAX_VIEW_DISTANCE liegt. */
 	static int vd_prev = MAX_VIEW_DISTANCE;
+	#if CHUNK_MESHER_DEBUG && defined(PLATFORM_PC)
 	static int dbg_tick = 0;
+	#endif
 
 #ifdef PLATFORM_WII
 	/* Adaptive Chunk-Grenze + Sichtweiten-Governor (alle 20 Ticks ~1s).
@@ -3016,7 +3023,9 @@ static void server_local_update(struct server_local* s) {
 		u32 mem2_free = (u32)SYS_GetArena2Hi() - (u32)SYS_GetArena2Lo();
 		u32 mem1_free = (u32)mallinfo().fordblks + SYS_GetArena1Size();
 		u32 free_mb = (mem2_free + mem1_free) / (1024u * 1024u);
+#if CHUNK_MESHER_DEBUG && defined(PLATFORM_PC)
 		u32 mem2_mb = mem2_free / (1024u * 1024u);
+#endif
 
 		/* free_mb = GESAMTER wiederverwendbarer Speicher (Free-List + Arenen).
 		 * Das ist das relevante Mass: nach den Pools (Server-Chunk, Client-Block,
@@ -3081,6 +3090,7 @@ static void server_local_update(struct server_local* s) {
 	vd_prev = g_effective_view_distance;
 
 	/* Alle 40 Ticks (~2s) Gesamtstatus ausgeben */
+	#if CHUNK_MESHER_DEBUG && defined(PLATFORM_PC)
 	if(++dbg_tick >= 40) {
 		dbg_tick = 0;
 		extern volatile unsigned long chunk_mesher_dbg_sent;
@@ -3113,6 +3123,7 @@ static void server_local_update(struct server_local* s) {
 			 chunk_mesher_dbg_built);
 
 		/* Pro Spieler: geladene und fehlende Chunks im Sichtbereich */
+		#if CHUNK_MESHER_DEBUG && defined(PLATFORM_PC)
 		w_coord_t ppos[2][2] = { {px, pz}, {px1, pz1} };
 		bool pactive[2] = { true, p1_active };
 		for(int pi = 0; pi < 2; pi++) {
@@ -3132,7 +3143,9 @@ static void server_local_update(struct server_local* s) {
 			CDBG("[P%d] pos=(%d,%d) loaded=%d missing=%d\n",
 				 pi + 1, (int)ppx, (int)ppz, loaded, missing);
 		}
+		#endif
 	}
+	#endif
 
 	/* Overworld-Chunks nur laden/generieren wenn ein Spieler dort ist.
 	 * Wenn alle Spieler im Nether sind, wird keine Overworld-Generation
@@ -3211,13 +3224,24 @@ static void server_local_update(struct server_local* s) {
 			dict_server_chunks_next(u_it);
 		}
 
+		#if CHUNK_MESHER_DEBUG && defined(PLATFORM_PC)
 		static unsigned long evict_total = 0;
+		#endif
 		if(evict_count > 0) {
+			#if CHUNK_MESHER_DEBUG && defined(PLATFORM_PC)
 			evict_total += evict_count;
+			#endif
+			#if CHUNK_MESHER_DEBUG && defined(PLATFORM_PC)
 			CDBG("[EVICT] %d chunks (total=%lu loaded=%zu->%zu max=%zu vd=%d)\n",
 				 evict_count, evict_total, loaded_chunks,
 				 loaded_chunks - evict_count, max_allowed,
 				 g_effective_view_distance);
+			#else
+			CDBG("[EVICT] %d chunks (total=%lu loaded=%zu->%zu max=%zu vd=%d)\n",
+				 evict_count, 0UL, loaded_chunks,
+				 loaded_chunks - evict_count, max_allowed,
+				 g_effective_view_distance);
+			#endif
 		}
 		for(int i = 0; i < evict_count; i++) {
 			/* erste 2 Chunks pro Tick einzeln loggen (Ringpuffer nicht fluten) */
@@ -3233,7 +3257,7 @@ static void server_local_update(struct server_local* s) {
 			});
 		}
 	}
-unload_done:
+unload_done: ;
 #else
 	if(server_world_furthest_chunk(&s->worlds[0], vd, px, pz, &cx, &cz)) {
 		CDBG("[EVICT] chunk (%d,%d) loaded=%zu vd=%d\n",
@@ -3500,6 +3524,7 @@ unload_done:
 			break;
 		}
 	}
+	#if WORLD_GENERATOR_DEBUG && defined(PLATFORM_PC)
 	{
 		static ptime_t last_generator_log;
 		ptime_t now = time_get();
@@ -3520,6 +3545,10 @@ unload_done:
 			last_generator_log = now;
 		}
 	}
+	#endif
+	#if !(WORLD_GENERATOR_DEBUG && defined(PLATFORM_PC))
+	(void)chunk_loop_break;
+	#endif
 
 	/* debug overlay: report current chunk generation progress */
 	{

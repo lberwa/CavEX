@@ -101,6 +101,7 @@ void _panic(u32 file, u32 line)
 	int lines;
 	char guru[] = "Guru Meditation #00000000.00000000";
 	_CPU_ISR_Disable(level);
+	(void)level;
 
 	fbr = read32(0xc00201c) & 0x1fffffff;
 	if (fbr&0x10000000)

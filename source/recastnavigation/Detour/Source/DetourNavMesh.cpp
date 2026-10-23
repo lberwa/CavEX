@@ -307,12 +307,12 @@ int dtNavMesh::findConnectingPolys(const float* va, const float* vb,
 {
 	if (!tile) return 0;
 	
-	float amin[2], amax[2];
+	float amin[2] = {0.0f, 0.0f}, amax[2] = {0.0f, 0.0f};
 	calcSlabEndPoints(va, vb, amin, amax, side);
 	const float apos = getSlabCoord(va, side);
 
 	// Remove links pointing to 'side' and compact the links array. 
-	float bmin[2], bmax[2];
+	float bmin[2] = {0.0f, 0.0f}, bmax[2] = {0.0f, 0.0f};
 	unsigned short m = DT_EXT_LINK | (unsigned short)side;
 	int n = 0;
 	
@@ -1594,4 +1594,3 @@ dtStatus dtNavMesh::getPolyArea(dtPolyRef ref, unsigned char* resultArea) const
 	
 	return DT_SUCCESS;
 }
-

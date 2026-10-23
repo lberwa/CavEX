@@ -22,6 +22,7 @@
 #include "../../network/server_interface.h"
 #include "../../block/blocks.h"
 
+#if 0 // not used?
 static bool onItemPlace(struct server_local* s, struct item_data* it,
                         struct block_info* where, struct block_info* on,
                         enum side on_side)
@@ -74,6 +75,7 @@ static bool onItemPlace(struct server_local* s, struct item_data* it,
     // IMPORTANT: return false so the engine does NOT consume the item again
     return false;
 }
+#endif
 
 struct item item_bucket_lava = {
 	.name = "Lava Bucket",
@@ -82,6 +84,7 @@ struct item item_bucket_lava = {
 	.max_stack = 1,
 	.fuel = 0,
 	.renderItem = render_item_flat,
+    // todo: add onItemPlace; find out why commented out
 	.onItemPlace = NULL, //onItemPlace,
 	.armor.is_armor = false,
 	.tool.type = TOOL_TYPE_ANY,

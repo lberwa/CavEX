@@ -322,8 +322,10 @@ void camera_attach(struct camera* c, struct entity* e, float tick_delta,
 	jdx = 0.0f;
 	jdy = 0.0f;
 
+#ifdef CAMERA_DEBUG
 	float rx_before = c->rx;
 	float ry_before = c->ry;
+#endif
 
 	if(e->data.local_player.capture_input
 	   && (joy_ok = input_joystick(dt, &jdx, &jdy, player_index))) {
@@ -331,7 +333,9 @@ void camera_attach(struct camera* c, struct entity* e, float tick_delta,
 		c->ry -= jdy * 2.0F;
 	}
 
+	#ifdef CAMERA_DEBUG
 	float ry_unclamped = c->ry;
+	#endif
 	c->ry = glm_clamp(c->ry, glm_rad(0.5F), GLM_PI - glm_rad(0.5F));
 
 	#ifdef CAMERA_DEBUG

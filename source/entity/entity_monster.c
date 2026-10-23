@@ -884,13 +884,19 @@ static bool server_tick_creeper(struct entity* e, struct server_local* s) {
 
     bool collision_xz = false;
     entity_try_move_axis(e, 1, make_creeper_bbox_ret, &collision_xz, &e->on_ground);
-
+#ifdef FIND_MOB_PATH_DEBUG
     bool jumped = false;
+#endif
     if(e->on_ground)
-        jumped = entity_try_auto_jump(e, 4.0f, 0.01f);
-
+#ifdef FIND_MOB_PATH_DEBUG
+        jumped = 
+#endif
+            entity_try_auto_jump(e, 4.0f, 0.01f);
+        
+#ifdef FIND_MOB_PATH_DEBUG
     bool recentered = false;
     float pre_hvel = sqrtf(e->vel[0] * e->vel[0] + e->vel[2] * e->vel[2]);
+#endif
     entity_try_move_axis(e, 0, make_creeper_bbox_ret, &collision_xz, &e->on_ground);
     entity_try_move_axis(e, 2, make_creeper_bbox_ret, &collision_xz, &e->on_ground);
 
@@ -912,7 +918,9 @@ static bool server_tick_creeper(struct entity* e, struct server_local* s) {
        && mob_block_is_solid(e, ahead_x, feet_y, ahead_z)) {
         e->vel[1] = 4.0f;
         step_jump = true;
+#ifdef FIND_MOB_PATH_DEBUG
         jumped = true;
+#endif
         /* Hold the current direction through the jump so the mob lands on the
          * step instead of being redirected mid-air (which made it fall back
          * and wander). */
@@ -932,7 +940,9 @@ static bool server_tick_creeper(struct entity* e, struct server_local* s) {
         if(rdx * rdx + rdz * rdz > 0.0001f) {
             mob_set_direction(rdx, rdz, e->data.monster.direction);
             e->data.monster.detour_time = 3;
+#ifdef FIND_MOB_PATH_DEBUG
             recentered = true;
+#endif
         }
     }
 

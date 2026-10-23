@@ -33,7 +33,7 @@
 
 static bool pointer_available[4];
 static float pointer_x[4], pointer_y[4], pointer_angle[4];
-static size_t slots_index;
+//static size_t slots_index;
 static size_t selected_slot[4];
 static uint8_t sign_container[4];
 static int gui_scale[4];

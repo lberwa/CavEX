@@ -27,7 +27,14 @@
 #define SOUNDHANDLER_H_
 
 #include <vector>
+#if defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
+#endif
 #include <gccore.h>
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 #include "SoundDecoder.hpp"
 
 #define MAX_DECODERS	16

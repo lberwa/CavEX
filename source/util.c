@@ -84,13 +84,16 @@ uint32_t hash_u32(uint32_t x) {
 void hsv2rgb(float* h, float* s, float* v) {
 	assert(h && s && v);
 
-	int i = floor((*h) * 6.0F);
-	float f = (*h) * 6.0F - i;
+	/* Normalize the hue first so negative hues also produce a valid sector. */
+	float hue = *h - floorf(*h);
+	float hue6 = hue * 6.0F;
+	int i = (int)floorf(hue6);
+	float f = hue6 - i;
 	float p = (*v) * (1.0F - *s);
 	float q = (*v) * (1.0F - f * (*s));
 	float t = (*v) * (1.0F - (1.0F - f) * (*s));
 
-	float r, g, b;
+	float r = 0.0F, g = 0.0F, b = 0.0F;
 	switch(i % 6) {
 		case 0: r = *v, g = t, b = p; break;
 		case 1: r = q, g = *v, b = p; break;
@@ -105,7 +108,7 @@ void hsv2rgb(float* h, float* s, float* v) {
 	*v = b;
 }
 
-inline uint8_t nibble_read(uint8_t* base, size_t idx) {
+inline uint8_t nibble_read(const uint8_t* base, size_t idx) {
 	return (base[idx / 2] >> ((idx % 2) * 4)) & 0xF;
 }
 

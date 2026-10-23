@@ -31,10 +31,6 @@
 #define GUI_WIDTH 176
 #define GUI_HEIGHT 167
 
-static bool pointer_has_item;
-static bool pointer_available;
-static float pointer_x, pointer_y, pointer_angle;
-
 static void screen_pause_reset(struct screen* s, int width, int height) {
 	gstate_set_capture_input_all(false);
 

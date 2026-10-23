@@ -48,8 +48,6 @@ static const char* menu_options[4] = {
 };
 
 extern struct screen screen_controllerauswahl;
-static int gui_selection = 0;
-
 static void player_count_select(int option) {
 	sound_play(pcm_click);
 	gstate.num_players = option + 1;

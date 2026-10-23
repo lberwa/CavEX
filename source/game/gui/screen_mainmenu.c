@@ -145,10 +145,10 @@ static void screen_mainmenu_update(struct screen* s, float dt) {
 #endif
 
 	if (server_failed) {
-
-	if (input_pressed(IB_ANY, 0))
+		if (input_pressed(IB_ANY, 0)) {
 		sound_play(pcm_click);
 		server_failed = false;
+		}
 
 	} else if (g_py_error_show) {
 

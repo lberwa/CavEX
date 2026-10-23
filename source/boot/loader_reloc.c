@@ -37,6 +37,14 @@
 #include "elf_abi.h"
 #include "asm.h"
 
+/* The Wii loader deliberately treats function addresses as raw code
+ * addresses.  This is required by the relocation/CRT0 patching code and is
+ * not portable ISO C, so keep the diagnostic local to this loader. */
+#if defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
+#endif
+
 #ifdef BUILD_LIBOGC31
 static inline void __exception_closeall(void) { }
 #else
@@ -216,12 +224,15 @@ static bool reloc_elf (entry_point *ep, const u8 *addr, u32 size,
 			         phdrs[i].p_offset, phdrs[i].p_filesz,
 			         phdrs[i].p_paddr, phdrs[i].p_memsz);
 
-			if(phdrs[i].p_flags & PF_R)
+			if(phdrs[i].p_flags & PF_R) {
 				gprintf("R");
-			if(phdrs[i].p_flags & PF_W)
+			}
+			if(phdrs[i].p_flags & PF_W) {
 				gprintf("W");
-			if(phdrs[i].p_flags & PF_X)
+			}
+			if(phdrs[i].p_flags & PF_X) {
 				gprintf("X");
+			}
 			gprintf(">\n");
 
 			if(phdrs[i].p_filesz > phdrs[i].p_memsz) {
@@ -318,3 +329,6 @@ void loader_exec (entry_point ep, void *arena2hi) {
 	gprintf ("this cant be good\n");
 }
 
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif

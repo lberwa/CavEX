@@ -449,10 +449,13 @@ bool block_place_default(struct server_local* s, struct item_data* it,
 
 	bool player_collision = block_place_collides_with_player(s, &blk_info);
 	bool entity_collision = block_place_collides_with_entity(s, &blk_info);
+
+#if BLOCK_PLACE_PRINTF
 	const char* decision = player_collision || entity_collision
 		? "SERVER_REJECT" : "SERVER_ACCEPT";
 	const char* reason = player_collision ? "player" :
 		(entity_collision ? "entity" : "none");
+#endif
 	BLOCK_PLACE_PRINTF("[PLACE_RESULT] decision=%s reason=%s item=%u "
 	                  "target=(%d,%d,%d) player=%d entity=%d allowed=%d\n",
 	                  decision, reason,

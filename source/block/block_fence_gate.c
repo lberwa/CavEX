@@ -27,7 +27,9 @@ static size_t fence_gate_boxes(struct block_info* this, struct AABB* x,
 	const float post_t = 2.0F / 16.0F;
 	const float post_z0 = 6.0F / 16.0F;
 	const float post_z1 = 10.0F / 16.0F;
-	const float leaf_t = 2.0F / 16.0F;
+	// unused variable
+	//const float leaf_t = 2.0F / 16.0F;
+	
 	// Match fence rail heights (see render_block_fence_always):
 	// 6/16..9/16 and 12/16..15/16
 	const float leaf_y0a = 6.0F / 16.0F;

@@ -214,7 +214,7 @@ void render_item_flat(struct item* item, struct item_data* stack, mat4 view,
 				}
 		#endif
 
-		mat4 model;
+		mat4 model = GLM_MAT4_IDENTITY_INIT;
 
 		switch(env) {
 			case R_ITEM_ENV_THIRDPERSON:

@@ -30,9 +30,10 @@ static uint8_t lever_attachment(const struct block_data* blk) {
 	return blk->metadata & 0x07;
 }
 
+/*
 static bool lever_is_on(const struct block_data* blk) {
 	return (blk->metadata & 0x08) != 0;
-}
+}*/
 
 static bool lever_support_pos(struct block_info* this, w_coord_t* sx, w_coord_t* sy,
 							  w_coord_t* sz) {

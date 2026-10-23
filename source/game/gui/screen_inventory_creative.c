@@ -1036,7 +1036,7 @@ static void screen_inventory_creative_render2D(struct screen* s, int width,
 		for(int armor_type = 0; armor_type < INVENTORY_SIZE_ARMOR; armor_type++) {
 			for(size_t k = 0; k < slots_index; k++) {
 				if(slots[k].is_virtual || slots[k].is_saved || slots[k].is_delete
-				   || slots[k].slot != INVENTORY_SLOT_ARMOR + armor_type)
+				   || slots[k].slot != (size_t)(INVENTORY_SLOT_ARMOR + armor_type))
 					continue;
 
 				struct item_data armor_item;

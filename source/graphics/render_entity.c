@@ -918,7 +918,7 @@ void render_entity_sheep(mat4 view, float bodyYawDeg, float headYawDeg,
             {12, 6, 6, 6}, // head right
             { 0, 6, 6, 6}  // head left
         };
-        static const int sheadDir[6] = {0,0,-90,-90,-90,-90};
+        //static const int sheadDir[6] = {0,0,-90,-90,-90,-90};
         //                          ↓↑     /\ \/   → ←
         render_entity_create_cube(head_wool_x, head_wool_y, head_wool_z,
                                   head_wool_size, head_wool_size,

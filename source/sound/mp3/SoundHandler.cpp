@@ -191,8 +191,6 @@ SoundDecoder * SoundHandler::GetSoundDecoder(const u8 * sound, int length)
 	if(counter >= length)
 		return NULL;
 
-	u32 * magic = (u32 *) check;
-
 	/*if(magic[0] == 'OggS')
 	{
 		return new OggDecoder(sound, length);
